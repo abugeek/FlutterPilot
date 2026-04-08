@@ -1,0 +1,37 @@
+# Dart/Flutter
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+.metadata
+*.lock
+pubspec_overrides.yaml
+
+# Platform-specific
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+macos/Pods/
+macos/Flutter/
+
+# VS Code Extension
+packages/flutterpilot_vscode/out/
+packages/flutterpilot_vscode/node_modules/
+packages/flutterpilot_vscode/.vscode-test/
+packages/flutterpilot_vscode/*.vsix
+
+# Coverage
+coverage/
+.test_coverage/
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+*~
+.env
+.env.*

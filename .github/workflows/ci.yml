@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      - name: Analyze
+        run: melos run analyze
+
+      - name: Format Check
+        run: dart format --set-exit-if-changed .
+
+      - name: Test SDK
+        run: |
+          cd packages/flutterpilot_sdk
+          flutter test
+
+      - name: Test Server
+        run: |
+          cd packages/flutterpilot_server
+          dart test
+
+      - name: Test Bloc Plugin
+        run: |
+          cd packages/plugins/flutterpilot_bloc
+          flutter test
+
+      - name: Test Riverpod Plugin
+        run: |
+          cd packages/plugins/flutterpilot_riverpod
+          flutter test

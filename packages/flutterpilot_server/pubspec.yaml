@@ -1,0 +1,27 @@
+name: flutterpilot_server
+description: "MCP server bridge for FlutterPilot — connects AI agents to Flutter app runtime."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - mcp
+  - ai
+  - debugging
+  - devtools
+
+environment:
+  sdk: ^3.11.0
+
+# Add regular dependencies here.
+dependencies:
+  args: ^2.7.0
+  mcp_dart: ^2.1.0
+  path: ^1.9.0
+  vm_service: ^15.0.2
+
+dev_dependencies:
+  lints: ^6.0.0
+  mocktail: ^1.0.4
+  test: ^1.25.6

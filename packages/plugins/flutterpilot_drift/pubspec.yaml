@@ -1,0 +1,21 @@
+name: flutterpilot_drift
+description: "Drift database inspector plugin for FlutterPilot — exposes SQL queries to AI agents."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - drift
+  - mcp
+  - ai
+  - database
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  drift: ">=2.0.0 <3.0.0"
+  flutterpilot_sdk: ^0.1.0

@@ -1,0 +1,42 @@
+name: flutter_pilot
+
+packages:
+  - packages/**
+  - examples/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+scripts:
+  analyze:
+    run: melos exec -c 1 -- "flutter analyze . || dart analyze ."
+    description: Run static analysis for all packages.
+
+  format:
+    run: melos exec -c 1 -- "flutter format . || dart format ."
+    description: Run dart format for all packages.
+
+  test:
+    run: melos exec -c 1 --fail-fast -- "test -d test && (flutter test || dart test) || echo 'No tests'"
+    description: Run tests for all packages.
+
+  server:run:
+    run: dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
+    description: Run the FlutterPilot MCP Server.
+
+  example:run:
+    run: cd examples/flutter_pilot_example && flutter run
+    description: Run the example reference app.
+
+  example:verify:
+    run: dart packages/flutterpilot_server/tool/e2e_verify.dart
+    description: Run end-to-end verification against the running example app.
+
+  vscode:compile:
+    run: cd packages/flutterpilot_vscode && npm install && npm run compile
+    description: Compile the VS Code extension.
+
+  fix:
+    run: melos exec -c 1 -- "flutter fix --apply || dart fix --apply"
+    description: Apply automated fixes to all packages.

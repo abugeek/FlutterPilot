@@ -1,0 +1,43 @@
+name: flutter_pilot_example
+description: "Example app for FlutterPilot."
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  flutter_bloc: ^8.1.6
+  dio: ^5.7.0
+  drift: ^2.23.0
+  sqlite3_flutter_libs: ^0.5.24
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5
+  
+  flutterpilot_sdk:
+    path: ../../packages/flutterpilot_sdk
+  flutterpilot_riverpod:
+    path: ../../packages/plugins/flutterpilot_riverpod
+  flutterpilot_bloc:
+    path: ../../packages/plugins/flutterpilot_bloc
+  flutterpilot_dio:
+    path: ../../packages/plugins/flutterpilot_dio
+  flutterpilot_drift:
+    path: ../../packages/plugins/flutterpilot_drift
+  flutterpilot_hive:
+    path: ../../packages/plugins/flutterpilot_hive
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  drift_dev: ^2.23.0
+  build_runner: ^2.4.15
+
+flutter:
+  uses-material-design: true
