@@ -511,6 +511,265 @@ class FlutterPilotServer {
     );
 
     server.registerTool(
+      'double_tap_widget',
+      description:
+          'Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.',
+      inputSchema: ToolInputSchema(
+        properties: {'key': JsonSchema.string()},
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.doubleTapWidget',
+          p,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Double-tapped. Use capture_screenshot to verify.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'long_press_widget',
+      description:
+          'Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+          'durationMs': JsonSchema.integer(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'key': p['key'] as String,
+          if (p['durationMs'] != null) 'durationMs': p['durationMs'].toString(),
+        };
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.longPressWidget',
+          args,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Long press complete. Use capture_screenshot to verify the context menu or action.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'swipe_widget',
+      description:
+          'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+          'direction': JsonSchema.string(
+            enumValues: ['up', 'down', 'left', 'right'],
+          ),
+          'distance': JsonSchema.number(),
+        },
+        required: ['key', 'direction'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'key': p['key'] as String,
+          'direction': p['direction'] as String,
+          if (p['distance'] != null) 'distance': p['distance'].toString(),
+        };
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.swipeWidget',
+          args,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Swipe complete. Use capture_screenshot or get_widget_tree to verify.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'drag_widget',
+      description:
+          'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'fromKey': JsonSchema.string(),
+          'toKey': JsonSchema.string(),
+        },
+        required: ['fromKey', 'toKey'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.dragWidget', p);
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Drag complete. Use capture_screenshot to verify the new position.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'wait_for_widget',
+      description:
+          'Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+          'timeoutMs': JsonSchema.integer(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'key': p['key'] as String,
+          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+        };
+        return _callExtensionRaw(
+          'ext.flutterpilot.waitForWidget',
+          args,
+        ).then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'wait_for_route',
+      description:
+          'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'route': JsonSchema.string(),
+          'timeoutMs': JsonSchema.integer(),
+        },
+        required: ['route'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'route': p['route'] as String,
+          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+        };
+        return _callExtensionRaw(
+          'ext.flutterpilot.waitForRoute',
+          args,
+        ).then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'wait_for_animation',
+      description:
+          'Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.',
+      inputSchema: ToolInputSchema(
+        properties: {'timeoutMs': JsonSchema.integer()},
+      ),
+      callback: (p, e) async {
+        final args = {
+          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+        };
+        return _callExtensionRaw(
+          'ext.flutterpilot.waitForAnimation',
+          args,
+        ).then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'assert_widget_visible',
+      description:
+          'Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.',
+      inputSchema: ToolInputSchema(
+        properties: {'key': JsonSchema.string()},
+        required: ['key'],
+      ),
+      callback: (p, e) => _callExtensionRaw(
+        'ext.flutterpilot.assertWidgetVisible',
+        p,
+      ).then((res) => res.toCallToolResult()),
+    );
+
+    server.registerTool(
+      'assert_text_visible',
+      description:
+          'Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'text': JsonSchema.string(),
+          'exact': JsonSchema.boolean(),
+        },
+        required: ['text'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'text': p['text'] as String,
+          if (p['exact'] != null) 'exact': p['exact'].toString(),
+        };
+        return _callExtensionRaw(
+          'ext.flutterpilot.assertTextVisible',
+          args,
+        ).then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'assert_widget_count',
+      description:
+          'Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'type': JsonSchema.string(),
+          'count': JsonSchema.integer(),
+        },
+        required: ['type', 'count'],
+      ),
+      callback: (p, e) async {
+        final args = {
+          'type': p['type'] as String,
+          'count': p['count'].toString(),
+        };
+        return _callExtensionRaw(
+          'ext.flutterpilot.assertWidgetCount',
+          args,
+        ).then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'simulate_network',
+      description:
+          'Simulates a network condition for all Dio HTTP requests. Use to test offline states, loading skeletons, and slow-connection UX. Conditions: normal | slow_3g | fast_4g | offline.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'condition': JsonSchema.string(
+            enumValues: ['normal', 'slow_3g', 'fast_4g', 'offline'],
+          ),
+        },
+        required: ['condition'],
+      ),
+      callback: (p, e) => _callExtensionRaw(
+        'ext.flutterpilot.simulateNetwork',
+        p,
+      ).then((res) => res.toCallToolResult()),
+    );
+
+    server.registerTool(
       'navigate_to',
       description:
           'Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.',
@@ -820,7 +1079,9 @@ class FlutterPilotServer {
           if (e.code == -32601) {
             continue;
           }
-          return _ExtensionResult.error('Extension error: ${e.message}');
+          return _ExtensionResult.error(
+            e.data?['details'] as String? ?? 'Extension error: ${e.message}',
+          );
         } on TimeoutException {
           return _ExtensionResult.error(
             'Extension call timed out. The app may be unresponsive.',

@@ -652,6 +652,393 @@ class FlutterPilot {
         );
       }
     });
+
+    // -- ext.flutterpilot.doubleTapWidget -------------------------------------
+    registerExtension('ext.flutterpilot.doubleTapWidget', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final ro = element.renderObject;
+      if (ro is RenderBox && ro.hasSize) {
+        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+        if (_isRecording) _recordAction('doubleTapWidget', {'key': key});
+        await InteractionManager.doubleTapAt(pos);
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success'}),
+        );
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'No layout for widget: $key',
+      );
+    });
+
+    // -- ext.flutterpilot.longPressWidget -------------------------------------
+    registerExtension('ext.flutterpilot.longPressWidget', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      final ms = int.tryParse(parameters['durationMs'] ?? '600') ?? 600;
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final ro = element.renderObject;
+      if (ro is RenderBox && ro.hasSize) {
+        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+        if (_isRecording) {
+          _recordAction('longPressWidget', {'key': key, 'durationMs': ms});
+        }
+        await InteractionManager.longPressAt(
+          pos,
+          duration: Duration(milliseconds: ms),
+        );
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success'}),
+        );
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'No layout for widget: $key',
+      );
+    });
+
+    // -- ext.flutterpilot.swipeWidget -----------------------------------------
+    // Swipes from the center of a widget in a given direction.
+    // direction: up | down | left | right
+    // distance: pixels to travel (default 200)
+    registerExtension('ext.flutterpilot.swipeWidget', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      final direction = parameters['direction'] ?? 'up';
+      final distance =
+          double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final ro = element.renderObject;
+      if (ro is! RenderBox || !ro.hasSize) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No layout for widget: $key',
+        );
+      }
+      final start = ro.localToGlobal(ro.size.center(Offset.zero));
+      final Offset end;
+      switch (direction) {
+        case 'up':
+          end = start.translate(0, -distance);
+        case 'down':
+          end = start.translate(0, distance);
+        case 'left':
+          end = start.translate(-distance, 0);
+        case 'right':
+          end = start.translate(distance, 0);
+        default:
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.invalidParams,
+            'direction must be up|down|left|right',
+          );
+      }
+      if (_isRecording) {
+        _recordAction('swipeWidget', {
+          'key': key,
+          'direction': direction,
+          'distance': distance,
+        });
+      }
+      await InteractionManager.swipeFromTo(start, end);
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
+    });
+
+    // -- ext.flutterpilot.dragWidget ------------------------------------------
+    // Drags from one widget (by key) to another (by key).
+    registerExtension('ext.flutterpilot.dragWidget', (
+      method,
+      parameters,
+    ) async {
+      final fromKey = parameters['fromKey'];
+      final toKey = parameters['toKey'];
+      if (fromKey == null || toKey == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing fromKey or toKey',
+        );
+      }
+      final fromEl = PilotWidgetInspector.findElementByKey(fromKey);
+      final toEl = PilotWidgetInspector.findElementByKey(toKey);
+      if (fromEl == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $fromKey',
+        );
+      }
+      if (toEl == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $toKey',
+        );
+      }
+      final fromRo = fromEl.renderObject;
+      final toRo = toEl.renderObject;
+      if (fromRo is! RenderBox ||
+          !fromRo.hasSize ||
+          toRo is! RenderBox ||
+          !toRo.hasSize) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No layout for one or both widgets',
+        );
+      }
+      final from = fromRo.localToGlobal(fromRo.size.center(Offset.zero));
+      final to = toRo.localToGlobal(toRo.size.center(Offset.zero));
+      if (_isRecording) {
+        _recordAction('dragWidget', {'fromKey': fromKey, 'toKey': toKey});
+      }
+      await InteractionManager.dragFromTo(from, to);
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
+    });
+
+    // -- ext.flutterpilot.waitForWidget ---------------------------------------
+    // Polls every 100ms until a widget with `key` is found or `timeoutMs` elapses.
+    registerExtension('ext.flutterpilot.waitForWidget', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
+        );
+      }
+      final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+      while (DateTime.now().isBefore(deadline)) {
+        final element = PilotWidgetInspector.findElementByKey(key);
+        if (element != null) {
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'found', 'key': key}),
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'Timeout: widget "$key" not found within ${timeoutMs}ms',
+      );
+    });
+
+    // -- ext.flutterpilot.waitForRoute ----------------------------------------
+    // Polls until the current route matches `route` or timeout.
+    registerExtension('ext.flutterpilot.waitForRoute', (
+      method,
+      parameters,
+    ) async {
+      final route = parameters['route'];
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+      if (route == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing route',
+        );
+      }
+      final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+      while (DateTime.now().isBefore(deadline)) {
+        final current = NavigationTracker.currentRoute;
+        if (current == route) {
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'reached', 'route': route}),
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      final current = NavigationTracker.currentRoute;
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'Timeout: route "$route" not reached within ${timeoutMs}ms (currently on "$current")',
+      );
+    });
+
+    // -- ext.flutterpilot.waitForAnimation ------------------------------------
+    // Waits until the scheduler has no pending frames (all animations settled).
+    registerExtension('ext.flutterpilot.waitForAnimation', (
+      method,
+      parameters,
+    ) async {
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
+      final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+      while (DateTime.now().isBefore(deadline)) {
+        if (!SchedulerBinding.instance.hasScheduledFrame) {
+          // Wait one more frame to be sure the last frame has been painted.
+          await Future.delayed(const Duration(milliseconds: 16));
+          if (!SchedulerBinding.instance.hasScheduledFrame) {
+            return ServiceExtensionResponse.result(
+              json.encode({'status': 'settled'}),
+            );
+          }
+        }
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'timeout',
+          'note': 'Animation may still be running',
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.assertWidgetVisible ---------------------------------
+    // Returns success if a widget with `key` exists and has layout, error otherwise.
+    registerExtension('ext.flutterpilot.assertWidgetVisible', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'ASSERTION FAILED: widget "$key" not found in tree',
+        );
+      }
+      final ro = element.renderObject;
+      if (ro is! RenderBox || !ro.hasSize) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'ASSERTION FAILED: widget "$key" found but has no layout (off-screen?)',
+        );
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'passed', 'key': key}),
+      );
+    });
+
+    // -- ext.flutterpilot.assertTextVisible -----------------------------------
+    // Returns success if any Text/RichText widget in the tree contains `text`.
+    registerExtension('ext.flutterpilot.assertTextVisible', (
+      method,
+      parameters,
+    ) async {
+      final text = parameters['text'];
+      final exact = parameters['exact'] == 'true';
+      if (text == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing text',
+        );
+      }
+      bool found = false;
+      void findText(Element e) {
+        if (found) return;
+        if (e.widget is Text) {
+          final data = (e.widget as Text).data ?? '';
+          found = exact ? data == text : data.contains(text);
+        } else if (e.widget is RichText) {
+          final plain = (e.widget as RichText).text.toPlainText();
+          found = exact ? plain == text : plain.contains(text);
+        }
+        if (!found) e.visitChildren(findText);
+      }
+
+      final root = WidgetsBinding.instance.rootElement;
+      if (root != null) findText(root);
+      if (found) {
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'passed', 'text': text}),
+        );
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'ASSERTION FAILED: text "$text" not visible on screen',
+      );
+    });
+
+    // -- ext.flutterpilot.assertWidgetCount -----------------------------------
+    // Returns success if the count of widgets of `type` matches `count`.
+    registerExtension('ext.flutterpilot.assertWidgetCount', (
+      method,
+      parameters,
+    ) async {
+      final type = parameters['type'];
+      final expectedStr = parameters['count'];
+      if (type == null || expectedStr == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing type or count',
+        );
+      }
+      final expected = int.tryParse(expectedStr);
+      if (expected == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'count must be an integer',
+        );
+      }
+      int actual = 0;
+      void countWidgets(Element e) {
+        if (e.widget.runtimeType.toString() == type) actual++;
+        e.visitChildren(countWidgets);
+      }
+
+      final root = WidgetsBinding.instance.rootElement;
+      if (root != null) countWidgets(root);
+      if (actual == expected) {
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'passed', 'type': type, 'count': actual}),
+        );
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'ASSERTION FAILED: expected $expected "$type" widgets but found $actual',
+      );
+    });
   }
 
   static dynamic _safeJsonEncode(dynamic object) {

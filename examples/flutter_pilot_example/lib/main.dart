@@ -19,8 +19,7 @@ import 'src/screens/network_screen.dart';
 import 'src/screens/storage_screen.dart';
 import 'src/state/bloc_state.dart';
 
-/// Shared Dio instance with the FlutterPilot interceptor attached.
-final dio = Dio()..interceptors.add(DioPilotInterceptor());
+late final Dio dio;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,13 +30,17 @@ void main() async {
   // 2. Set up Bloc observer for FlutterPilot
   Bloc.observer = BlocPilotObserver();
 
-  // 3. Initialize Hive and register with FlutterPilot
+  // 3. Initialize Dio eagerly so DioPilotInterceptor registers its extensions
+  //    before any MCP tool calls arrive (lazy init would delay until first use).
+  dio = Dio()..interceptors.add(DioPilotInterceptor());
+
+  // 4. Initialize Hive and register with FlutterPilot
   await Hive.initFlutter();
   final settingsBox = await Hive.openBox('settings');
   HivePilotInspector.registerBox('settings');
 
   runApp(
-    // 4. Wrap with Riverpod and Bloc providers
+    // 5. Wrap with Riverpod and Bloc providers
     ProviderScope(
       observers: [RiverpodPilotObserver()],
       child: BlocProvider(

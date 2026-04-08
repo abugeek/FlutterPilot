@@ -89,6 +89,53 @@ class InteractionManager {
     await Future.delayed(const Duration(milliseconds: 50));
     GestureBinding.instance.handlePointerEvent(pointer.up());
   }
+
+  /// Simulates a double-tap at [position].
+  static Future<void> doubleTapAt(Offset position) async {
+    await tapAt(position);
+    await Future.delayed(const Duration(milliseconds: 40));
+    await tapAt(position);
+  }
+
+  /// Simulates a long-press (pointer down held for [duration], then up).
+  static Future<void> longPressAt(
+    Offset position, {
+    Duration duration = const Duration(milliseconds: 600),
+  }) async {
+    final pointer = TestPointer(1, PointerDeviceKind.touch);
+    GestureBinding.instance.handlePointerEvent(pointer.down(position));
+    await Future.delayed(duration);
+    GestureBinding.instance.handlePointerEvent(pointer.up());
+  }
+
+  /// Simulates a swipe from [start] to [end] over [duration].
+  ///
+  /// Moves the pointer in [steps] intermediate positions to trigger scroll
+  /// and drag gesture recognizers.
+  static Future<void> swipeFromTo(
+    Offset start,
+    Offset end, {
+    Duration duration = const Duration(milliseconds: 300),
+    int steps = 20,
+  }) async {
+    final pointer = TestPointer(1, PointerDeviceKind.touch);
+    GestureBinding.instance.handlePointerEvent(pointer.down(start));
+    final stepDelay = duration ~/ steps;
+    for (int i = 1; i <= steps; i++) {
+      final t = i / steps;
+      final pos = Offset.lerp(start, end, t)!;
+      await Future.delayed(stepDelay);
+      GestureBinding.instance.handlePointerEvent(pointer.move(pos));
+    }
+    GestureBinding.instance.handlePointerEvent(pointer.up());
+  }
+
+  /// Drags the widget at [from] to the position of the widget at [to].
+  static Future<void> dragFromTo(
+    Offset from,
+    Offset to, {
+    Duration duration = const Duration(milliseconds: 400),
+  }) => swipeFromTo(from, to, duration: duration, steps: 30);
 }
 
 /// Lightweight helper for constructing [PointerDownEvent] / [PointerUpEvent]
@@ -128,6 +175,21 @@ class TestPointer {
       pointer: pointer,
       kind: kind,
       position: location,
+      timeStamp: timeStamp,
+    );
+  }
+
+  /// Creates a [PointerMoveEvent] to [location].
+  ///
+  /// Throws if called before [down].
+  PointerEvent move(Offset location, {Duration timeStamp = Duration.zero}) {
+    final delta = location - _location!;
+    _location = location;
+    return PointerMoveEvent(
+      pointer: pointer,
+      kind: kind,
+      position: location,
+      delta: delta,
       timeStamp: timeStamp,
     );
   }
