@@ -7,7 +7,7 @@
 
 **FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, and AI-native development workflows.
 
-> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **67+ tools** for screenshots, UI automation, state inspection, error recovery, and more—all designed specifically for how AI agents work.
+> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **82 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, and full DevTools-level deep inspection — all designed specifically for how AI agents work.
 
 ## 🚀 Quick Start (3 Steps)
 
@@ -43,7 +43,7 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 
 ## 📋 What You Get
 
-### 67 MCP Tools Across 4 Categories
+### 82 MCP Tools Across 6 Categories
 
 #### 🎬 **Screenshots & Layout** (5 tools)
 - `capture_screenshot` — PNG screenshot as MCP Image
@@ -100,15 +100,34 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 - `get_build_config` — pubspec.yaml + build metadata
 - `read_dart_file(path)` — Read source files
 
+#### 🖥️ **Debug Console** (3 tools) ✨ *New*
+AI agents can read your app's console output automatically — no copy-pasting from VS Code.
+- `get_debug_logs` — Captured `print()`, `debugPrint()`, `developer.log()` with level/logger filters
+- `clear_debug_logs` — Reset the log buffer before a test scenario
+- `set_log_filter` — Clear both server + in-app log buffers
+
+#### 🔬 **DevTools Deep Inspection** (12 tools) ✨ *New*
+Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
+- `get_memory_details` — Heap used/capacity/external per isolate
+- `get_allocation_profile` — Top Dart classes by heap bytes (memory leak detection)
+- `get_gc_stats` — GC heap pressure across isolates
+- `get_http_profile` — All HTTP requests with URL/method/status/timing
+- `clear_http_profile` — Reset network tracking baseline
+- `get_render_tree` — Render object tree dump (layout debugging)
+- `get_layer_tree` — GPU compositing layer tree
+- `get_vm_info` — Dart VM version, PID, all isolates
+- `toggle_repaint_rainbow` — Visual repaint layer highlighting
+- `toggle_debug_paint` — Layout bounds, padding, hit areas overlay
+- `toggle_slow_animations` — 5× slow-motion animation inspection
+- `enable_widget_rebuild_tracking` — Per-widget rebuild counting
+
 #### 🩹 **Self-Heal & Testing** (20+ tools)
 - `get_latest_crash_report` — Auto-intercepted crash with context
 - `start_recording` — Record user interactions
 - `stop_and_generate_test` — Generate test code from recording
 - `list_custom_tools` — App-specific tools registered
 - `call_custom_tool` — Execute app-specific tool
-- `show_performance_overlay` — Toggle Flutter DevTools overlay
-- `jump_to_source` — Editor integration for widget locations
-- And 10+ more...
+- And 15+ more...
 
 ---
 
@@ -120,8 +139,8 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 └──────────────────────┬──────────────────────────────┘
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
-│          flutterpilot_server (~1800 lines)           │
-│  • 67 MCP tools with full schemas                    │
+│          flutterpilot_server (~2100 lines)           │
+│  • 82 MCP tools with full schemas + param descriptions│
 │  • Parallel data gathering (Future.wait)             │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge                                 │

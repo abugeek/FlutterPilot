@@ -1,6 +1,6 @@
 # FlutterPilot Tools Reference
 
-Complete reference of all 67 MCP tools available through FlutterPilot Server.
+Complete reference of all **82 MCP tools** available through FlutterPilot Server.
 
 **Table of Contents:**
 - [Screenshots & Layout](#screenshots--layout) (5 tools)
@@ -10,6 +10,8 @@ Complete reference of all 67 MCP tools available through FlutterPilot Server.
 - [Recording & Testing](#recording--testing) (6 tools)
 - [Custom Tools](#custom-tools) (3 tools)
 - [Performance & DevTools](#performance--devtools) (11 tools)
+- [Debug Console](#debug-console) (3 tools)
+- [DevTools Deep Inspection](#devtools-deep-inspection) (12 tools)
 
 ---
 
@@ -1788,6 +1790,270 @@ Wait for animation frames. See [UI Automation](#pump_frames) section.
 
 ---
 
-**Last Updated:** April 2024  
-**Total Tools:** 67  
+**Last Updated:** April 2026  
+**Total Tools:** 82  
 **Documentation Status:** Complete ✅
+
+---
+
+## Debug Console
+
+*Automatically captures `print()`, `debugPrint()`, and `dart:developer log()` from the running app — no manual copy-paste from VS Code needed.*
+
+### `get_debug_logs`
+
+Returns captured console output from the running app.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `level` | string | No | Filter: `"debug"`, `"info"`, `"warning"`, `"error"`. Omit for all. |
+| `logger` | string | No | Filter by logger name (partial match, e.g. `"stdout"`, `"debugPrint"`). |
+| `limit` | integer | No | Max entries to return (default: 100). |
+
+**Returns:**
+```
+10 log entries (buffer total: 42):
+[2026-04-08T20:52:16.965Z] [info] (debugPrint) FlutterPilot initialized 🚀
+[2026-04-08T20:52:17.123Z] [info] (stdout) User tapped login button
+[2026-04-08T20:52:17.890Z] [error] (debugPrint) API call failed: 401 Unauthorized
+```
+
+**Use Cases:**
+- See what the app is printing without opening VS Code debug console
+- Debug API responses by checking logged output
+- Catch errors the app printed during a test sequence
+
+---
+
+### `clear_debug_logs`
+
+Clears the server-side log capture buffer.
+
+**Parameters:** None
+
+**Use Cases:** Clean baseline before a specific test scenario.
+
+---
+
+### `set_log_filter`
+
+Clears both the server-side and in-app SDK log buffers at once.
+
+**Parameters:** None
+
+**Use Cases:** Full reset before starting a new debug session.
+
+---
+
+## DevTools Deep Inspection
+
+*These tools use the same VM Service Protocol as Flutter DevTools. No browser needed — AI agents can read memory, network, render trees directly.*
+
+### `get_memory_details`
+
+Detailed memory breakdown per isolate: heap used, heap capacity, external (native) memory.
+
+**Parameters:** None
+
+**Returns:**
+```
+Memory details:
+  main (id=isolates/123): heap=45.23/128.00 MB  external=2.10 MB
+
+Totals: heap=45.23/128.00 MB  external=2.10 MB
+```
+
+**Use Cases:**
+- Detect memory leaks (heap growing over time)
+- Check if external memory (images, platform channels) is unexpectedly large
+- Compare memory before/after a navigation or operation
+
+---
+
+### `get_allocation_profile`
+
+Top Dart classes by current heap allocation (like DevTools Memory tab class list).
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `limit` | integer | No | Number of top classes to show (default: 30). |
+
+**Returns:**
+```
+Top 30 classes by heap usage (from 412 total):
+Class                                           Bytes     Instances
+----------------------------------------------------------------------
+_CompactLinkedHashMap                         384.0KB           42
+Image                                         128.5KB            8
+Uint8List                                      96.2KB          156
+```
+
+**Use Cases:**
+- Find memory leaks — which class is accumulating instances?
+- Detect large image buffers
+- Identify unexpected object retention
+
+---
+
+### `get_http_profile`
+
+All HTTP requests made by the app (DevTools Network tab equivalent).
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `limit` | integer | No | Max requests to return, most recent first (default: 50). |
+| `status_filter` | integer | No | Filter by HTTP status code (e.g. `404`, `500`). |
+
+**Returns:**
+```
+12 HTTP requests (showing last 12):
+[200] GET https://api.example.com/users  ⏱234ms  ↑0B ↓1842B
+[201] POST https://api.example.com/auth  ⏱89ms  ↑256B ↓512B
+[404] GET https://api.example.com/missing  ⏱45ms  ↑0B ↓128B
+```
+
+**Use Cases:**
+- Confirm the app actually sent an API request
+- Debug auth failures (check request headers, response body size)
+- Find slow requests (>2s) without opening a browser
+
+---
+
+### `clear_http_profile`
+
+Resets the HTTP request history.
+
+**Parameters:** None
+
+**Use Cases:** Clean baseline before testing a specific user flow's network calls.
+
+---
+
+### `get_render_tree`
+
+Dumps the render object tree — how Flutter sizes and positions widgets (DevTools Layout Explorer equivalent).
+
+**Parameters:** None
+
+**Returns:** Full render tree as text (truncated at 8000 chars if very large).
+
+**Use Cases:**
+- Debug layout issues and overflow errors
+- Understand exact sizing constraints
+- Find unexpected padding or clipping
+
+---
+
+### `get_layer_tree`
+
+Dumps the compositing layer tree — the GPU-level scene representation.
+
+**Parameters:** None
+
+**Use Cases:**
+- Debug why widgets are causing unnecessary GPU layers
+- Check compositing efficiency
+- Investigate transparency/opacity rendering
+
+---
+
+### `get_vm_info`
+
+Dart VM version, process ID, and all running isolates.
+
+**Parameters:** None
+
+**Returns:**
+```
+VM version: 3.4.0 (stable) ...
+PID: 12345
+Isolates (1):
+  main (id=isolates/7684015)
+```
+
+---
+
+### `toggle_repaint_rainbow`
+
+Enables/disables the repaint rainbow overlay — each layer that repaints cycles through colors.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` to enable, `false` to disable. |
+
+**Use Cases:**
+- Identify widgets repainting every frame (performance issue)
+- Confirm that `const` widgets are NOT repainting
+- Find unnecessary `setState()` calls
+
+---
+
+### `toggle_debug_paint`
+
+Shows layout padding (blue), widget boundaries (orange), baselines (green), pointer hit areas.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` to show debug paint, `false` to hide. |
+
+**Use Cases:**
+- Debug unexpected padding or margin
+- Check widget alignment and boundary issues
+- Verify touch target sizes meet accessibility guidelines
+
+---
+
+### `toggle_slow_animations`
+
+Slows all animations to 1/5 speed for detailed inspection.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` for 5x slow-motion, `false` to restore normal speed. |
+
+**Use Cases:**
+- Inspect animation curves and easing
+- Catch jank frames in complex transitions
+- Verify animation correctness before recording
+
+---
+
+### `enable_widget_rebuild_tracking`
+
+Enables per-widget rebuild counting (DevTools "Track Widget Builds").
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` to start tracking, `false` to stop. |
+
+**Use Cases:**
+- Find widgets rebuilding more than expected
+- Verify that `const` or memoized widgets are not rebuilding
+- Identify `setState()` calls that trigger excessive subtree rebuilds
+
+---
+
+### `get_gc_stats`
+
+Garbage collection heap pressure statistics across isolates.
+
+**Parameters:** None
+
+**Use Cases:**
+- Detect heap pressure causing GC-induced jank
+- Compare heap before/after an operation
+- Identify memory not being released
