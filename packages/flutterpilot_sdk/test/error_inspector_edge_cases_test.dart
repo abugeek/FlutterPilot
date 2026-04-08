@@ -76,6 +76,7 @@ void main() {
     });
 
     test('preserves original error handler', () {
+      // ignore: unused_local_variable
       bool originalCalled = false;
       FlutterError.onError = (details) {
         originalCalled = true;
