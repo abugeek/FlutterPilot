@@ -12,10 +12,10 @@ import 'dart:io';
 /// This exercises all major MCP tool categories and reports results.
 void main(List<String> args) async {
   if (args.isEmpty) {
+    stderr.writeln('Usage: dart run tool/smoke_test.dart <vm-service-uri>');
     stderr.writeln(
-        'Usage: dart run tool/smoke_test.dart <vm-service-uri>');
-    stderr.writeln(
-        'Example: dart run tool/smoke_test.dart ws://127.0.0.1:12345/abc=/ws');
+      'Example: dart run tool/smoke_test.dart ws://127.0.0.1:12345/abc=/ws',
+    );
     exit(1);
   }
 
@@ -52,9 +52,9 @@ void main(List<String> args) async {
   );
 
   // Log server stderr
-  process.stderr.transform(utf8.decoder).listen(
-    (data) => stderr.write('[server] $data'),
-  );
+  process.stderr
+      .transform(utf8.decoder)
+      .listen((data) => stderr.write('[server] $data'));
 
   Future<Map<String, dynamic>> callTool(
     String name, [
@@ -76,8 +76,11 @@ void main(List<String> args) async {
     );
   }
 
-  Future<void> test(String label, String toolName,
-      [Map<String, dynamic> toolArgs = const {}]) async {
+  Future<void> test(
+    String label,
+    String toolName, [
+    Map<String, dynamic> toolArgs = const {},
+  ]) async {
     stdout.write('  $label ... ');
     try {
       final result = await callTool(toolName, toolArgs);
@@ -109,8 +112,9 @@ void main(List<String> args) async {
   // Category 2: Widget Inspection
   print('── Widget Inspection ──');
   await test('get_widget_tree', 'get_widget_tree');
-  await test('find_widget_by_key', 'find_widget_by_key',
-      {'key': 'test_key_that_may_not_exist'});
+  await test('find_widget_by_key', 'find_widget_by_key', {
+    'key': 'test_key_that_may_not_exist',
+  });
 
   // Category 3: Navigation
   print('── Navigation ──');
