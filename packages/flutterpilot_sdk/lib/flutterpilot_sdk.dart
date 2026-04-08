@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Checkbox, Radio, Slider, Switch;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -73,6 +74,8 @@ class FlutterPilot {
   static final Map<String, String? Function(String name)> _stateReaders = {};
   static bool _isRecording = false;
   static final List<Map<String, dynamic>> _recordedActions = [];
+  // Held to keep the semantics tree alive once enabled.
+  static SemanticsHandle? _semanticsHandle;
 
   /// A [ValueNotifier] that broadcasts locale overrides to the widget tree.
   ///
@@ -91,6 +94,29 @@ class FlutterPilot {
   /// )
   /// ```
   static final ValueNotifier<ui.Locale?> localeNotifier = ValueNotifier(null);
+
+  /// A [ValueNotifier] that broadcasts text-scale overrides.
+  ///
+  /// Wrap your `MaterialApp` (or any widget) with a [MediaQuery] that reads
+  /// this notifier to support accessibility testing via `set_text_scale_factor`:
+  ///
+  /// ```dart
+  /// ValueListenableBuilder<double?>(
+  ///   valueListenable: FlutterPilot.textScaleNotifier,
+  ///   builder: (ctx, scale, child) {
+  ///     return MediaQuery(
+  ///       data: MediaQuery.of(ctx).copyWith(
+  ///         textScaler: scale != null
+  ///             ? TextScaler.linear(scale)
+  ///             : MediaQuery.of(ctx).textScaler,
+  ///       ),
+  ///       child: child!,
+  ///     );
+  ///   },
+  ///   child: MaterialApp(...),
+  /// )
+  /// ```
+  static final ValueNotifier<double?> textScaleNotifier = ValueNotifier(null);
 
   static double _lastFps = 0;
   static int _frameCount = 0;
@@ -1144,6 +1170,614 @@ class FlutterPilot {
         json.encode({'status': 'success', 'orientation': orientation}),
       );
     });
+
+    // -- ext.flutterpilot.pressBack -------------------------------------------
+    // Pops the current route from the Navigator (equivalent to pressing the
+    // hardware back button). Reports whether a route was actually popped.
+    registerExtension('ext.flutterpilot.pressBack', (
+      method,
+      parameters,
+    ) async {
+      try {
+        bool popped = false;
+        final nav = NavigationTracker.navigatorState;
+        if (nav != null && nav.mounted) {
+          popped = await nav.maybePop();
+        }
+        if (!popped) {
+          final context = WidgetsBinding.instance.rootElement;
+          if (context != null) {
+            popped = await Navigator.of(
+              context,
+              rootNavigator: true,
+            ).maybePop();
+          }
+        }
+        if (_isRecording) _recordAction('pressBack', {});
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'popped': popped}),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Pop failed: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.clearTextField --------------------------------------
+    // Clears the text of the first [EditableText] found under the widget
+    // identified by [key]. Equivalent to selecting-all then deleting.
+    registerExtension('ext.flutterpilot.clearTextField', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      bool found = false;
+      void clearText(Element e) {
+        if (found) return;
+        if (e is StatefulElement && e.state is EditableTextState) {
+          try {
+            (e.state as dynamic).controller.clear();
+            found = true;
+            if (_isRecording) _recordAction('clearTextField', {'key': key});
+          } on NoSuchMethodError catch (_) {}
+          return;
+        }
+        e.visitChildren(clearText);
+      }
+
+      clearText(element);
+      return found
+          ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
+          : ServiceExtensionResponse.error(
+              ServiceExtensionResponse.extensionError,
+              'No text field found under key: $key',
+            );
+    });
+
+    // -- ext.flutterpilot.getWidgetProperties ---------------------------------
+    // Reads semantic and structural properties of the widget identified by
+    // [key]: text, isEnabled, isChecked, value (Slider/Switch), isFocused,
+    // and screen-space bounds. This allows the AI to inspect widget state
+    // without relying on screenshot analysis.
+    registerExtension('ext.flutterpilot.getWidgetProperties', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final props = <String, dynamic>{
+        'type': element.widget.runtimeType.toString(),
+        'key': key,
+      };
+      _extractWidgetProps(element, props);
+      return ServiceExtensionResponse.result(json.encode(props));
+    });
+
+    // -- ext.flutterpilot.assertWidgetEnabled / assertWidgetDisabled ----------
+    // Assert that the widget identified by [key] is enabled (has a non-null
+    // onPressed / onTap / onChanged callback) or disabled (callback is null).
+    registerExtension('ext.flutterpilot.assertWidgetEnabled', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final props = <String, dynamic>{};
+      _extractWidgetProps(element, props);
+      final isEnabled = props['isEnabled'] as bool? ?? true;
+      if (!isEnabled) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget "$key" is DISABLED',
+        );
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'pass', 'key': key, 'isEnabled': true}),
+      );
+    });
+
+    registerExtension('ext.flutterpilot.assertWidgetDisabled', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final props = <String, dynamic>{};
+      _extractWidgetProps(element, props);
+      final isEnabled = props['isEnabled'] as bool? ?? true;
+      if (isEnabled) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget "$key" is ENABLED (expected disabled)',
+        );
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'pass', 'key': key, 'isEnabled': false}),
+      );
+    });
+
+    // -- ext.flutterpilot.unfocusAll ------------------------------------------
+    // Removes focus from all widgets (dismisses the keyboard).
+    registerExtension('ext.flutterpilot.unfocusAll', (
+      method,
+      parameters,
+    ) async {
+      FocusManager.instance.primaryFocus?.unfocus();
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
+    });
+
+    // -- ext.flutterpilot.focusWidget -----------------------------------------
+    // Taps the centre of the widget identified by [key] to request focus
+    // (e.g., to open the software keyboard for a TextField).
+    registerExtension('ext.flutterpilot.focusWidget', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      final renderObject = element.renderObject;
+      if (renderObject is! RenderBox) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget "$key" has no renderable box',
+        );
+      }
+      final offset = renderObject.localToGlobal(Offset.zero);
+      final center = offset +
+          Offset(renderObject.size.width / 2, renderObject.size.height / 2);
+      await InteractionManager.tapAt(center);
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
+    });
+
+    // -- ext.flutterpilot.setTextScaleFactor ----------------------------------
+    // Overrides the text scale factor. Pass `scale` as a positive double
+    // (e.g., `1.5` for large text, `2.0` for extra-large). Pass `0` to reset.
+    // Apps must wrap MaterialApp with a MediaQuery that listens to
+    // [FlutterPilot.textScaleNotifier].
+    registerExtension('ext.flutterpilot.setTextScaleFactor', (
+      method,
+      parameters,
+    ) async {
+      final scaleStr = parameters['scale'];
+      if (scaleStr == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: scale',
+        );
+      }
+      final scale = double.tryParse(scaleStr);
+      if (scale == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'scale must be a numeric value',
+        );
+      }
+      textScaleNotifier.value = scale <= 0 ? null : scale;
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'scale': textScaleNotifier.value ?? 'default',
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.simulateDeepLink ------------------------------------
+    // Simulates opening a deep link URL (e.g., "myapp://product/123" or
+    // "/product/123"). Calls [WidgetsBinding.handlePushRoute] which triggers
+    // the same path as an OS-level deep link open.
+    registerExtension('ext.flutterpilot.simulateDeepLink', (
+      method,
+      parameters,
+    ) async {
+      final url = parameters['url'];
+      if (url == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: url',
+        );
+      }
+      try {
+        // Use the navigation platform channel — same path as OS deep links.
+        await SystemChannels.navigation.invokeMethod<void>('pushRoute', url);
+        if (_isRecording) _recordAction('simulateDeepLink', {'url': url});
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'url': url}),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Deep link failed: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.pumpFrames ------------------------------------------
+    // Waits for [count] animation frames to complete. Useful for waiting
+    // for animations or async widget builds to settle without using
+    // [wait_for_animation] (which waits for the transientCallbacks queue).
+    registerExtension('ext.flutterpilot.pumpFrames', (
+      method,
+      parameters,
+    ) async {
+      final count = int.tryParse(parameters['count'] ?? '1') ?? 1;
+      for (var i = 0; i < count.clamp(1, 120); i++) {
+        WidgetsBinding.instance.scheduleFrame();
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', 'frames': count}),
+      );
+    });
+
+    // -- ext.flutterpilot.getSemanticsTree ------------------------------------
+    // Returns the accessibility semantics tree. Enables semantics on first
+    // call (keeps a handle to prevent GC). The tree includes labels, values,
+    // hints, roles (isButton/isTextField/isSlider), enabled/focus states, and
+    // screen-space rects — everything a screen reader would see.
+    registerExtension('ext.flutterpilot.getSemanticsTree', (
+      method,
+      parameters,
+    ) async {
+      _semanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
+      // Give the framework a frame to build the semantics tree.
+      WidgetsBinding.instance.scheduleFrame();
+      await WidgetsBinding.instance.endOfFrame;
+
+      Map<String, dynamic> nodeToMap(SemanticsNode node) {
+        final children = <Map<String, dynamic>>[];
+        node.visitChildren((child) {
+          children.add(nodeToMap(child));
+          return true;
+        });
+        // ignore: unused_local_variable
+        final flags = node.flagsCollection;
+        // ignore: deprecated_member_use
+        bool f(SemanticsFlag flag) => node.hasFlag(flag);
+        return {
+          'id': node.id,
+          'label': node.label.isEmpty ? null : node.label,
+          'value': node.value.isEmpty ? null : node.value,
+          'hint': node.hint.isEmpty ? null : node.hint,
+          'tooltip': node.tooltip.isEmpty ? null : node.tooltip,
+          'isButton': f(SemanticsFlag.isButton),
+          'isTextField': f(SemanticsFlag.isTextField),
+          'isChecked': f(SemanticsFlag.isChecked),
+          'isEnabled': !f(SemanticsFlag.hasEnabledState) ||
+              f(SemanticsFlag.isEnabled),
+          'isFocused': f(SemanticsFlag.isFocused),
+          'isImage': f(SemanticsFlag.isImage),
+          'isSlider': f(SemanticsFlag.isSlider),
+          'isLink': f(SemanticsFlag.isLink),
+          'isLiveRegion': f(SemanticsFlag.isLiveRegion),
+          'rect': {
+            'l': node.rect.left.toStringAsFixed(1),
+            't': node.rect.top.toStringAsFixed(1),
+            'r': node.rect.right.toStringAsFixed(1),
+            'b': node.rect.bottom.toStringAsFixed(1),
+          },
+          if (children.isNotEmpty) 'children': children,
+        };
+      }
+
+      final root = RendererBinding
+          .instance.rootPipelineOwner.semanticsOwner?.rootSemanticsNode;
+      if (root == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Semantics tree not yet available — try again after one more frame',
+        );
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'tree': nodeToMap(root)}),
+      );
+    });
+
+    // -- ext.flutterpilot.setSliderValue --------------------------------------
+    // Sets a [Slider] widget's value by computing the tap x-coordinate for
+    // the target value and dispatching a pointer event. The widget identified
+    // by [key] must contain a [Slider] (directly or as a descendant).
+    registerExtension('ext.flutterpilot.setSliderValue', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      final valueStr = parameters['value'];
+      if (key == null || valueStr == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameters: key, value',
+        );
+      }
+      final targetValue = double.tryParse(valueStr);
+      if (targetValue == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'value must be a numeric string',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      Slider? sliderWidget;
+      Element? sliderElement;
+      void findSlider(Element e) {
+        if (sliderWidget != null) return;
+        if (e.widget is Slider) {
+          sliderWidget = e.widget as Slider;
+          sliderElement = e;
+          return;
+        }
+        e.visitChildren(findSlider);
+      }
+
+      // Check the element itself first, then descendants.
+      if (element.widget is Slider) {
+        sliderWidget = element.widget as Slider;
+        sliderElement = element;
+      } else {
+        findSlider(element);
+      }
+      if (sliderWidget == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No Slider found under key: $key',
+        );
+      }
+      final renderBox = sliderElement!.renderObject;
+      if (renderBox is! RenderBox) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Slider not rendered',
+        );
+      }
+      final slider = sliderWidget!;
+      final min = slider.min;
+      final max = slider.max;
+      if (max <= min) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Slider min ($min) >= max ($max)',
+        );
+      }
+      final clamped = targetValue.clamp(min, max);
+      final fraction = (clamped - min) / (max - min);
+      // Flutter Slider has ~24 dp of thumb padding on each side of the track.
+      const trackPadding = 24.0;
+      final trackWidth = renderBox.size.width - trackPadding * 2;
+      final globalOffset = renderBox.localToGlobal(Offset.zero);
+      final tapX = globalOffset.dx + trackPadding + fraction * trackWidth;
+      final tapY = globalOffset.dy + renderBox.size.height / 2;
+      await InteractionManager.tapAt(Offset(tapX, tapY));
+      if (_isRecording) {
+        _recordAction('setSliderValue', {'key': key, 'value': clamped});
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', 'value': clamped, 'fraction': fraction}),
+      );
+    });
+
+    // -- ext.flutterpilot.toggleCheckbox --------------------------------------
+    // Taps the centre of the first [Checkbox], [Switch], or [Radio] widget
+    // found under [key] to toggle its state.
+    registerExtension('ext.flutterpilot.toggleCheckbox', (
+      method,
+      parameters,
+    ) async {
+      final key = parameters['key'];
+      if (key == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: key',
+        );
+      }
+      final element = PilotWidgetInspector.findElementByKey(key);
+      if (element == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget not found: $key',
+        );
+      }
+      RenderBox? renderBox;
+      void findToggleable(Element e) {
+        if (renderBox != null) return;
+        final w = e.widget;
+        if (w is Checkbox || w is Switch || w is Radio) {
+          renderBox = e.renderObject as RenderBox?;
+          return;
+        }
+        e.visitChildren(findToggleable);
+      }
+
+      if (element.widget is Checkbox ||
+          element.widget is Switch ||
+          element.widget is Radio) {
+        renderBox = element.renderObject as RenderBox?;
+      } else {
+        findToggleable(element);
+      }
+      renderBox ??= element.renderObject as RenderBox?;
+      if (renderBox == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Widget "$key" has no renderable box',
+        );
+      }
+      final box = renderBox!;
+      final offset = box.localToGlobal(Offset.zero);
+      final center =
+          offset + Offset(box.size.width / 2, box.size.height / 2);
+      await InteractionManager.tapAt(center);
+      if (_isRecording) _recordAction('toggleCheckbox', {'key': key});
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
+    });
+  }
+
+  /// Extracts semantic properties from [element] into [props].
+  ///
+  /// Reads widget-type-specific properties via dynamic dispatch:
+  /// - [Text.data] → `text`
+  /// - [EditableTextState.controller.text] → `text`, `isFocused`
+  /// - [Checkbox.value] / [Switch.value] → `isChecked`
+  /// - [Slider.value] / [Slider.min] / [Slider.max] → `value`, `min`, `max`
+  /// - `onPressed` / `onTap` / `onChanged` → `isEnabled`
+  /// - [RenderBox] global bounds → `bounds`
+  static void _extractWidgetProps(
+    Element element,
+    Map<String, dynamic> props,
+  ) {
+    final widget = element.widget;
+    final dyn = widget as dynamic;
+
+    // Direct text content (Text widget)
+    try {
+      final t = dyn.data;
+      if (t is String) props['text'] = t;
+    } catch (_) {}
+
+    // Enabled/disabled via common callback names
+    try {
+      props['isEnabled'] = (dyn.onPressed as Object?) != null;
+    } catch (_) {}
+    if (!props.containsKey('isEnabled')) {
+      try {
+        props['isEnabled'] = (dyn.onTap as Object?) != null;
+      } catch (_) {}
+    }
+    // Checkbox / Switch — use onChanged for enabled check and value for state
+    try {
+      final v = dyn.value;
+      if (v is bool) props['isChecked'] = v;
+      if (!props.containsKey('isEnabled')) {
+        props['isEnabled'] = (dyn.onChanged as Object?) != null;
+      }
+    } catch (_) {}
+
+    // Slider
+    try {
+      final v = dyn.value;
+      if (v is double) {
+        props['value'] = v;
+        props['isEnabled'] = (dyn.onChanged as Object?) != null;
+      }
+    } catch (_) {}
+    try {
+      final mn = dyn.min;
+      if (mn is double) props['min'] = mn;
+    } catch (_) {}
+    try {
+      final mx = dyn.max;
+      if (mx is double) props['max'] = mx;
+    } catch (_) {}
+
+    // EditableText — current controller text and focus state
+    bool foundEditable = false;
+    void visitForEditable(Element e) {
+      if (foundEditable) return;
+      if (e is StatefulElement && e.state is EditableTextState) {
+        try {
+          final state = e.state as EditableTextState;
+          props['text'] = state.widget.controller.text;
+          props['isFocused'] = state.widget.focusNode.hasFocus;
+          if (!props.containsKey('isEnabled')) props['isEnabled'] = true;
+          foundEditable = true;
+        } catch (_) {}
+        return;
+      }
+      e.visitChildren(visitForEditable);
+    }
+
+    visitForEditable(element);
+
+    // Focus state fallback
+    if (!props.containsKey('isFocused')) {
+      props['isFocused'] =
+          FocusManager.instance.primaryFocus?.context == element;
+    }
+
+    // Screen-space bounding box
+    final renderObject = element.renderObject;
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      final offset = renderObject.localToGlobal(Offset.zero);
+      props['bounds'] = {
+        'x': offset.dx.toStringAsFixed(1),
+        'y': offset.dy.toStringAsFixed(1),
+        'width': renderObject.size.width.toStringAsFixed(1),
+        'height': renderObject.size.height.toStringAsFixed(1),
+      };
+    }
   }
 
   static dynamic _safeJsonEncode(dynamic object) {

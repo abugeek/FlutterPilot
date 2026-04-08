@@ -16,6 +16,9 @@ class FlutterPilotServer {
   final McpServer server;
   final String vmServiceUri;
   final bool allowDestructive;
+  /// Project root directory used by file-reading tools (read_dart_file etc).
+  /// Defaults to [Directory.current] when not specified.
+  final Directory _projectRoot;
   VmService? _vmService;
   final List<Map<String, dynamic>> _eventBuffer = [];
   late final SelfHealManager _selfHealManager;
@@ -34,12 +37,14 @@ class FlutterPilotServer {
   FlutterPilotServer({
     required this.vmServiceUri,
     this.allowDestructive = false,
-  }) : server = McpServer(
-         Implementation(name: 'FlutterPilot', version: '0.0.1'),
-         options: McpServerOptions(
-           capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
-         ),
-       ) {
+    Directory? projectRoot,
+  })  : _projectRoot = projectRoot ?? Directory.current,
+        server = McpServer(
+          Implementation(name: 'FlutterPilot', version: '0.0.1'),
+          options: McpServerOptions(
+            capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+          ),
+        ) {
     _selfHealManager = SelfHealManager(server: server);
     _registerTools();
   }
@@ -1256,6 +1261,469 @@ class FlutterPilotServer {
         return CallToolResult(
           content: [TextContent(text: report.toMarkdown())],
         );
+      },
+    );
+
+    // ── New interaction tools ────────────────────────────────────────────────
+
+    server.registerTool(
+      'press_back',
+      description:
+          'Simulates pressing the hardware/system back button. Pops the '
+          'current route from the Navigator. Reports whether a route was '
+          'actually popped (false if already at root).',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+        if (res.isError) return res.toCallToolResult();
+        final popped = res.data?['popped'] as bool? ?? false;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: popped
+                  ? 'Back pressed — route popped.'
+                  : 'Back pressed — already at root (nothing to pop).',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'clear_text_field',
+      description:
+          'Clears the text of a TextField / TextFormField identified by its '
+          'widget key. Equivalent to select-all then delete. '
+          'Use enter_text to type new content afterwards.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.clearTextField',
+          {'key': p['key'].toString()},
+        );
+        return res.isError
+            ? res.toCallToolResult()
+            : CallToolResult(
+                content: [TextContent(text: 'Text field cleared.')],
+              );
+      },
+    );
+
+    server.registerTool(
+      'get_widget_properties',
+      description:
+          'Reads the semantic properties of a widget identified by its key. '
+          'Returns: type, text (Text/TextField content), isEnabled '
+          '(onPressed/onTap/onChanged non-null), isChecked (Checkbox/Switch), '
+          'value/min/max (Slider), isFocused, and screen-space bounds. '
+          'Use this instead of screenshots to verify widget state.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getWidgetProperties',
+          {'key': p['key'].toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'assert_widget_enabled',
+      description:
+          'Asserts that the widget identified by key is ENABLED '
+          '(has a non-null onPressed / onTap / onChanged callback). '
+          'Returns error if the widget is disabled or not found.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.assertWidgetEnabled',
+          {'key': p['key'].toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'assert_widget_disabled',
+      description:
+          'Asserts that the widget identified by key is DISABLED '
+          '(onPressed / onTap / onChanged is null). '
+          'Returns error if the widget is enabled or not found.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.assertWidgetDisabled',
+          {'key': p['key'].toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'unfocus_all',
+      description:
+          'Removes focus from all widgets and dismisses the software keyboard. '
+          'Call this after finishing text input to close the keyboard before '
+          'taking screenshots or tapping other elements.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.unfocusAll', {});
+        return res.isError
+            ? res.toCallToolResult()
+            : CallToolResult(
+                content: [TextContent(text: 'Keyboard dismissed.')],
+              );
+      },
+    );
+
+    server.registerTool(
+      'focus_widget',
+      description:
+          'Taps the centre of the widget identified by key to request focus '
+          '(opens the software keyboard for a TextField). '
+          'Use unfocus_all to close the keyboard afterwards.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.focusWidget',
+          {'key': p['key'].toString()},
+        );
+        return res.isError
+            ? res.toCallToolResult()
+            : CallToolResult(
+                content: [TextContent(text: 'Widget focused.')],
+              );
+      },
+    );
+
+    server.registerTool(
+      'set_text_scale_factor',
+      description:
+          'Overrides the app-wide text scale factor for accessibility testing. '
+          'Common values: 1.0 (default), 1.5 (large), 2.0 (extra-large), '
+          '3.0 (maximum). Pass 0 to reset to system default. '
+          'Requires the app to wrap MaterialApp with a MediaQuery that '
+          'listens to FlutterPilot.textScaleNotifier.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'scale': JsonSchema.number(),
+        },
+        required: ['scale'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.setTextScaleFactor',
+          {'scale': p['scale'].toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'simulate_deep_link',
+      description:
+          'Simulates opening a deep link URL, triggering the same routing '
+          'path as an OS-level deep link (e.g., "myapp://product/123" or '
+          '"/product/123"). Use this to test deep link handlers, share links, '
+          'and notification tap flows.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'url': JsonSchema.string(),
+        },
+        required: ['url'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.simulateDeepLink',
+          {'url': p['url'].toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'pump_frames',
+      description:
+          'Waits for a specified number of vsync animation frames to complete. '
+          'Use this to let animations, timers, or async widget builds settle '
+          'without needing a full wait_for_animation call. '
+          'Max 120 frames.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'count': JsonSchema.integer(),
+        },
+      ),
+      callback: (p, e) async {
+        final count = p['count'] ?? 1;
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.pumpFrames',
+          {'count': count.toString()},
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'get_semantics_tree',
+      description:
+          'Returns the full accessibility semantics tree as seen by screen '
+          'readers (VoiceOver/TalkBack). Each node has: id, label, value, '
+          'hint, tooltip, role flags (isButton/isTextField/isSlider/isImage/'
+          'isLink/isLiveRegion), isChecked, isEnabled, isFocused, and '
+          'screen-space rect. Use this for accessibility audits.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getSemanticsTree',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: jsonEncode(res.data),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'set_slider_value',
+      description:
+          'Sets the value of a Slider widget identified by key. Computes '
+          'the correct tap position for the target value based on the '
+          'slider\'s min/max range and dispatches a pointer event. '
+          'The value is clamped to [min, max].',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+          'value': JsonSchema.number(),
+        },
+        required: ['key', 'value'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.setSliderValue',
+          {
+            'key': p['key'].toString(),
+            'value': p['value'].toString(),
+          },
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'toggle_checkbox',
+      description:
+          'Taps the centre of the first Checkbox, Switch, or Radio widget '
+          'found under the given key to toggle its state. '
+          'Use get_widget_properties to read the resulting isChecked value.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.toggleCheckbox',
+          {'key': p['key'].toString()},
+        );
+        return res.isError
+            ? res.toCallToolResult()
+            : CallToolResult(
+                content: [TextContent(text: 'Toggled.')],
+              );
+      },
+    );
+
+    // ── Server-only file/project tools ───────────────────────────────────────
+
+    server.registerTool(
+      'read_dart_file',
+      description:
+          'Reads a Dart source file from the connected Flutter project. '
+          'The path is relative to the project root (where pubspec.yaml is). '
+          'Use this to give the AI agent codebase context: read widgets, '
+          'models, routes, or test files before making changes.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'path': JsonSchema.string(),
+        },
+        required: ['path'],
+      ),
+      callback: (p, e) async {
+        final relativePath = p['path'].toString();
+        if (relativePath.contains('..')) {
+          return CallToolResult(
+            content: [
+              TextContent(text: 'Error: path traversal not allowed.'),
+            ],
+            isError: true,
+          );
+        }
+        final file = File(
+          '${_projectRoot.path}${Platform.pathSeparator}$relativePath',
+        );
+        if (!await file.exists()) {
+          return CallToolResult(
+            content: [TextContent(text: 'File not found: $relativePath')],
+            isError: true,
+          );
+        }
+        final content = await file.readAsString();
+        return CallToolResult(
+          content: [TextContent(text: content)],
+        );
+      },
+    );
+
+    server.registerTool(
+      'list_dart_files',
+      description:
+          'Lists all .dart files in the Flutter project under the given '
+          'directory (defaults to "lib"). Returns relative paths from the '
+          'project root. Use to explore project structure before reading files.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'directory': JsonSchema.string(),
+        },
+      ),
+      callback: (p, e) async {
+        final dir =
+            p['directory']?.toString().replaceAll('..', '') ?? 'lib';
+        final searchDir = Directory(
+          '${_projectRoot.path}${Platform.pathSeparator}$dir',
+        );
+        if (!await searchDir.exists()) {
+          return CallToolResult(
+            content: [TextContent(text: 'Directory not found: $dir')],
+            isError: true,
+          );
+        }
+        final files = <String>[];
+        await for (final entity in searchDir.list(recursive: true)) {
+          if (entity is File && entity.path.endsWith('.dart')) {
+            final relative = entity.path
+                .replaceFirst(_projectRoot.path, '')
+                .replaceFirst(RegExp(r'^[/\\]'), '');
+            files.add(relative);
+          }
+        }
+        files.sort();
+        return CallToolResult(
+          content: [TextContent(text: files.join('\n'))],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_build_config',
+      description:
+          'Reads the project\'s pubspec.yaml and returns the app name, '
+          'version, Flutter/Dart SDK constraints, and dependency list. '
+          'Use this to understand what packages are available before '
+          'suggesting code that requires them.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final pubspec =
+            File('${_projectRoot.path}${Platform.pathSeparator}pubspec.yaml');
+        if (!await pubspec.exists()) {
+          return CallToolResult(
+            content: [TextContent(text: 'pubspec.yaml not found.')],
+            isError: true,
+          );
+        }
+        // Return raw pubspec.yaml — YAML parsing would add a dependency.
+        // The AI agent can parse it directly from the raw text.
+        final content = await pubspec.readAsString();
+        return CallToolResult(
+          content: [TextContent(text: content)],
+        );
+      },
+    );
+
+    // ── SharedPreferences tools ──────────────────────────────────────────────
+
+    _registerAppTool(
+      name: 'get_shared_preferences',
+      description:
+          'Returns all SharedPreferences keys and their typed values '
+          '(String, int, double, bool, List<String>). '
+          'Requires the flutterpilot_shared_preferences plugin.',
+      extension: 'ext.flutterpilot.getSharedPreferences',
+    );
+
+    server.registerTool(
+      'set_shared_preference',
+      description:
+          'Writes a key-value pair to SharedPreferences. '
+          'Specify type as: string (default), int, double, bool, or '
+          'stringList (JSON array, e.g. \'["a","b"]\').',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(),
+          'value': JsonSchema.string(),
+          'type': JsonSchema.string(),
+        },
+        required: ['key', 'value'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.setSharedPreference',
+          {
+            'key': p['key'].toString(),
+            'value': p['value'].toString(),
+            if (p['type'] != null) 'type': p['type'].toString(),
+          },
+        );
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'clear_shared_preferences',
+      description:
+          'Clears SharedPreferences. If key is specified, only that key is '
+          'removed. If omitted, ALL preferences are cleared. '
+          'Use with caution — clear all is irreversible.',
+      inputSchema: ToolInputSchema(
+        properties: {'key': JsonSchema.string()},
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.clearSharedPreferences',
+          {if (p['key'] != null) 'key': p['key'].toString()},
+        );
+        return res.toCallToolResult();
       },
     );
   }

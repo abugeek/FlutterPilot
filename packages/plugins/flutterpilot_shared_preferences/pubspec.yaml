@@ -1,0 +1,25 @@
+name: flutterpilot_shared_preferences
+description: "SharedPreferences inspector plugin for FlutterPilot — exposes SharedPreferences data to AI agents at runtime."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - shared-preferences
+  - mcp
+  - ai
+  - storage
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.0
+  flutterpilot_sdk: ^0.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

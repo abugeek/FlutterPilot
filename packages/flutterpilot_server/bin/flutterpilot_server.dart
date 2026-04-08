@@ -17,6 +17,14 @@ void main(List<String> args) async {
       negatable: false,
     )
     ..addOption(
+      'project-root',
+      abbr: 'p',
+      help:
+          'Path to the Flutter project root (where pubspec.yaml lives). '
+          'Used by read_dart_file, list_dart_files, and get_build_config. '
+          'Defaults to the current working directory.',
+    )
+    ..addOption(
       'log-level',
       help: 'Log level (fine, info, warning, severe).',
       defaultsTo: 'info',
@@ -25,13 +33,18 @@ void main(List<String> args) async {
   final results = parser.parse(args);
   final uri = results['uri'];
   final allowDestructive = results['allow-destructive'] as bool;
+  final projectRootArg = results['project-root'] as String?;
+  final projectRoot =
+      projectRootArg != null ? Directory(projectRootArg) : null;
 
   // Configure structured logging — all output goes to stderr (stdout is MCP JSON-RPC).
   _setupLogging(results['log-level'] as String);
 
   if (uri == null) {
     stderr.writeln(
-      'Usage: flutterpilot_server --uri <vm-service-uri> [--allow-destructive] [--log-level fine|info|warning|severe]',
+      'Usage: flutterpilot_server --uri <vm-service-uri> '
+      '[--project-root <path>] [--allow-destructive] '
+      '[--log-level fine|info|warning|severe]',
     );
     exit(1);
   }
@@ -39,6 +52,7 @@ void main(List<String> args) async {
   final server = FlutterPilotServer(
     vmServiceUri: uri,
     allowDestructive: allowDestructive,
+    projectRoot: projectRoot,
   );
 
   // Handle graceful shutdown
