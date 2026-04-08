@@ -1,19 +1,30 @@
 import 'dart:developer';
 import 'dart:convert';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
 /// Allowed SQL statement prefixes for read-only mode.
 const _readOnlyPrefixes = ['SELECT', 'EXPLAIN', 'PRAGMA'];
 
-/// A helper class to inspect Drift databases for FlutterPilot.
+/// Inspects Drift [GeneratedDatabase] instances for FlutterPilot.
+///
+/// Exposes `ext.flutterpilot.queryDrift` (read-only SQL) and
+/// `ext.flutterpilot.listDriftTables` service extensions.
+///
+/// ## Setup
+/// ```dart
+/// final db = AppDatabase();
+/// DriftPilotInspector.registerDatabase('main', db);
+/// ```
 class DriftPilotInspector {
   static final Map<String, GeneratedDatabase> _databases = {};
-  static bool _extensionsRegistered = false;
+  static bool _initialized = false;
 
   static void registerDatabase(String name, GeneratedDatabase db) {
     _databases[name] = db;
-    if (!_extensionsRegistered) {
-      _extensionsRegistered = true;
+    if (!_initialized) {
+      _initialized = true;
       _registerExtensions();
     }
   }
@@ -25,6 +36,11 @@ class DriftPilotInspector {
   }
 
   static void _registerExtensions() {
+    if (!FlutterPilot.isInitialized) {
+      debugPrint('FlutterPilot: DriftPilotInspector registered before '
+          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+    }
+
     registerExtension('ext.flutterpilot.queryDrift', (method, parameters) async {
       final dbName = parameters['dbName'];
       final sql = parameters['sql'];

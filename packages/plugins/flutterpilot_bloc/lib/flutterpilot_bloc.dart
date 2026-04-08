@@ -1,25 +1,47 @@
 import 'dart:convert';
 import 'dart:developer';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-/// A Bloc observer that tracks state transitions and enables state injection.
+/// A [BlocObserver] that tracks Bloc/Cubit state transitions for FlutterPilot.
+///
+/// Registers a `bloc` state setter with [FlutterPilot] and exposes a
+/// `ext.flutterpilot.getBlocStates` service extension for reading current
+/// Bloc states.
+///
+/// ## Setup
+/// ```dart
+/// void main() {
+///   FlutterPilot.initialize();
+///   Bloc.observer = BlocPilotObserver();
+///   runApp(const MyApp());
+/// }
+/// ```
 class BlocPilotObserver extends BlocObserver {
   static final Map<String, dynamic> _blocStates = {};
   static final Map<String, BlocBase> _activeBlocs = {};
+  static bool _initialized = false;
 
   BlocPilotObserver() {
-    _registerExtension();
+    if (!_initialized) {
+      _initialized = true;
+      _registerExtension();
+    }
   }
 
   void _registerExtension() {
+    if (!FlutterPilot.isInitialized) {
+      debugPrint('FlutterPilot: BlocPilotObserver registered before '
+          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+    }
+
     FlutterPilot.registerStateSetter('bloc', (name, value) async {
       final bloc = _activeBlocs[name];
       if (bloc == null) throw 'Bloc "$name" not found or not yet active.';
 
       try {
-        // Blocs don't allow direct state emission from outside easily.
-        // We use dynamic access to call the protected 'emit' method.
+        // Use dynamic access to call the protected 'emit' method.
         final dynamic dynamicBloc = bloc;
         dynamicBloc.emit(value);
         return {'status': 'success', 'name': name, 'newState': value};
@@ -28,13 +50,9 @@ class BlocPilotObserver extends BlocObserver {
       }
     });
 
-    try {
-      registerExtension('ext.flutterpilot.getBlocStates', (method, parameters) async {
-        return ServiceExtensionResponse.result(json.encode({'states': _blocStates}));
-      });
-    } catch (e) {
-      // Extension already registered (e.g., multiple observer instances).
-    }
+    registerExtension('ext.flutterpilot.getBlocStates', (method, parameters) async {
+      return ServiceExtensionResponse.result(json.encode({'states': _blocStates}));
+    });
   }
 
   @override
