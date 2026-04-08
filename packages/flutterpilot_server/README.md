@@ -1,6 +1,6 @@
 # FlutterPilot Server
 
-The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes 67 tools via the VM service.
+The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes 82 tools via the VM service.
 
 > **What is MCP?** The Model Context Protocol is an open standard for connecting AI models (Claude, Gemini, etc.) to external tools. FlutterPilot Server implements MCP to let AI agents see and control your Flutter app in real-time.
 
@@ -96,7 +96,9 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ---
 
-## 67 MCP Tools Reference
+## 82 MCP Tools Reference
+
+> **Tip for AI Agents:** Call the `flutterpilot_guide` MCP prompt at the start of your session to get a structured cheat sheet covering all tools, recommended workflows, and key rules.
 
 ### 🎬 Screenshots & Layout (5 tools)
 
@@ -531,7 +533,155 @@ Invoke an app-registered custom tool.
 
 ---
 
-## How It Works
+### 🖥️ Debug Console (3 tools)
+
+#### `get_debug_logs` `level?: string, logger?: string, limit?: number`
+Retrieve captured `print()` / `debugPrint()` / `developer.log()` output from the app. Replaces manual copy-paste from VS Code Debug Console.
+- `level`: filter by severity — `"verbose"`, `"info"`, `"warning"`, `"error"`, `"severe"`
+- `logger`: filter by logger name (from `dart:developer log(name:...)`)
+- `limit`: max entries to return (default 100)
+```json
+{
+  "count": 5,
+  "logs": [
+    { "level": "info", "message": "User tapped login", "logger": "AuthBloc", "timestamp": "14:32:01.123" },
+    { "level": "error", "message": "Network request failed: 401", "logger": "DioInterceptor", "timestamp": "14:32:02.456" }
+  ]
+}
+```
+
+#### `clear_debug_logs`
+Clear the debug log buffer on both the server and the app.
+```json
+{ "cleared": true }
+```
+
+#### `set_log_filter`
+Clear both the server and app debug log buffers (same as clear_debug_logs).
+```json
+{ "cleared": true }
+```
+
+---
+
+### 🔬 DevTools Deep Inspection (12 tools)
+
+#### `get_memory_details`
+Get heap memory usage per isolate (like Flutter DevTools Memory tab).
+```json
+{
+  "isolates": [
+    {
+      "id": "isolates/1",
+      "name": "main",
+      "heapUsage": 14680064,
+      "heapCapacity": 33554432,
+      "externalUsage": 2097152,
+      "heapUsageMB": "14.00 MB",
+      "heapCapacityMB": "32.00 MB"
+    }
+  ]
+}
+```
+
+#### `get_allocation_profile` `limit?: number`
+Show top Dart classes by current heap allocation (find memory leaks).
+- `limit`: number of top classes to return (default 20)
+```json
+{
+  "topClasses": [
+    { "name": "_Uint8List", "instances": 1234, "bytes": 5242880 },
+    { "name": "Image", "instances": 42, "bytes": 2097152 }
+  ]
+}
+```
+
+#### `get_gc_stats`
+Get garbage collection pressure and heap stats.
+```json
+{
+  "isolateId": "isolates/1",
+  "heapUsage": 14680064,
+  "heapCapacity": 33554432,
+  "gcOldSpaceUsed": 8388608,
+  "gcOldSpaceCapacity": 16777216
+}
+```
+
+#### `get_http_profile` `limit?: number, status_filter?: string`
+Get all HTTP requests from the Dart runtime (not just Dio — includes all `dart:io` HttpClient calls).
+- `limit`: max requests to return (default 50)
+- `status_filter`: filter by status — `"complete"`, `"pending"`, `"error"`
+```json
+{
+  "count": 3,
+  "requests": [
+    {
+      "method": "POST",
+      "uri": "https://api.example.com/login",
+      "statusCode": 200,
+      "startTime": "14:32:01.000",
+      "duration": "145ms"
+    }
+  ]
+}
+```
+
+#### `clear_http_profile`
+Reset the HTTP request profile. Call before testing a specific API flow.
+```json
+{ "cleared": true }
+```
+
+#### `get_render_tree`
+Get the Flutter render object tree (layout constraints, sizes, positions). Equivalent to DevTools Render Tree tab.
+```json
+{ "renderTree": "RenderView\n  RenderPositionedBox\n    RenderPadding..." }
+```
+
+#### `get_layer_tree`
+Get the Flutter compositing layer tree (GPU layer structure). Useful for finding unnecessary compositing.
+```json
+{ "layerTree": "TransformLayer\n  PictureLayer\n  TextLayer..." }
+```
+
+#### `get_vm_info`
+Get Dart VM version, architecture, and list of all isolates.
+```json
+{
+  "version": "3.4.0",
+  "pid": 12345,
+  "isolates": ["main", "worker1"]
+}
+```
+
+#### `toggle_repaint_rainbow` `enabled: boolean`
+Highlight layers that repaint with cycling rainbow colors (DevTools Repaint Rainbow).
+```json
+{ "enabled": true }
+```
+
+#### `toggle_debug_paint` `enabled: boolean`
+Show layout bounds, padding, and alignment guides (DevTools Debug Paint).
+```json
+{ "enabled": true }
+```
+
+#### `toggle_slow_animations` `enabled: boolean`
+Slow animations to 5× speed for inspection.
+```json
+{ "enabled": true }
+```
+
+#### `enable_widget_rebuild_tracking` `enabled: boolean`
+Count how many times each widget rebuilds (find excessive rebuild issues).
+```json
+{ "enabled": true }
+```
+
+---
+
+
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
