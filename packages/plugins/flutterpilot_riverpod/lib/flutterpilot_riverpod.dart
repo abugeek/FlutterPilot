@@ -71,6 +71,12 @@ base class RiverpodPilotObserver extends ProviderObserver {
       }
     });
 
+    FlutterPilot.registerStateReader('riverpod', (name) {
+      final entry = _states[name];
+      if (entry == null) return null;
+      return entry['value']?.toString();
+    });
+
     registerExtension('ext.flutterpilot.getRiverpodStates', (
       method,
       parameters,

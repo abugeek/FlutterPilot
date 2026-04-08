@@ -37,6 +37,7 @@ class DioPilotInterceptor extends Interceptor {
   static final List<Map<String, dynamic>> _logs = [];
   static bool _initialized = false;
   static NetworkCondition _condition = NetworkCondition.normal;
+  static final Map<String, Map<String, dynamic>> _mocks = {};
 
   DioPilotInterceptor() {
     if (!_initialized) {
@@ -86,6 +87,62 @@ class DioPilotInterceptor extends Interceptor {
         json.encode({'status': 'success', 'condition': conditionStr}),
       );
     });
+
+    // -- ext.flutterpilot.addHttpMock ------------------------------------------
+    // Registers a URL pattern mock. Any request whose URI contains [urlPattern]
+    // will be intercepted and a synthetic Response returned.
+    registerExtension('ext.flutterpilot.addHttpMock', (
+      method,
+      parameters,
+    ) async {
+      final urlPattern = parameters['urlPattern'];
+      final statusCodeStr = parameters['statusCode'];
+      final body = parameters['body'];
+
+      if (urlPattern == null || statusCodeStr == null || body == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing urlPattern, statusCode, or body',
+        );
+      }
+      final statusCode = int.tryParse(statusCodeStr);
+      if (statusCode == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'statusCode must be an integer',
+        );
+      }
+      final delayMs = int.tryParse(parameters['delayMs'] ?? '0') ?? 0;
+      _mocks[urlPattern] = {
+        'statusCode': statusCode,
+        'body': body,
+        'delayMs': delayMs,
+      };
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'urlPattern': urlPattern,
+          'statusCode': statusCode,
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.clearHttpMocks ---------------------------------------
+    // Removes a specific URL pattern mock, or all mocks if urlPattern is absent.
+    registerExtension('ext.flutterpilot.clearHttpMocks', (
+      method,
+      parameters,
+    ) async {
+      final urlPattern = parameters['urlPattern'];
+      if (urlPattern != null) {
+        _mocks.remove(urlPattern);
+      } else {
+        _mocks.clear();
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', 'remaining': _mocks.length}),
+      );
+    });
   }
 
   @override
@@ -99,6 +156,34 @@ class DioPilotInterceptor extends Interceptor {
       'uri': options.uri.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     });
+
+    // Check mocks first — mocks take priority over network condition simulation.
+    final uri = options.uri.toString();
+    final mockEntry = _mocks.entries.cast<MapEntry<String, Map<String, dynamic>>?>().firstWhere(
+      (e) => uri.contains(e!.key),
+      orElse: () => null,
+    );
+    if (mockEntry != null) {
+      final mock = mockEntry.value;
+      final delayMs = (mock['delayMs'] as int?) ?? 0;
+      if (delayMs > 0) {
+        await Future.delayed(Duration(milliseconds: delayMs));
+      }
+      dynamic decodedBody;
+      try {
+        decodedBody = json.decode(mock['body'] as String);
+      } catch (_) {
+        decodedBody = mock['body'];
+      }
+      handler.resolve(
+        Response(
+          requestOptions: options,
+          statusCode: mock['statusCode'] as int,
+          data: decodedBody,
+        ),
+      );
+      return;
+    }
 
     switch (_condition) {
       case NetworkCondition.offline:

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/error_inspector.dart';
@@ -69,6 +70,7 @@ class FlutterPilot {
   static final Map<String, Function> _customTools = {};
   static final Map<String, Future<dynamic> Function(String name, dynamic value)>
   _stateSetters = {};
+  static final Map<String, String? Function(String name)> _stateReaders = {};
   static bool _isRecording = false;
   static final List<Map<String, dynamic>> _recordedActions = [];
 
@@ -200,6 +202,25 @@ class FlutterPilot {
     Future<dynamic> Function(String name, dynamic value) setter,
   ) {
     _stateSetters[type] = setter;
+  }
+
+  /// Registers a state reader for a state-management type (e.g. `'riverpod'`,
+  /// `'bloc'`). The [reader] receives a state [name] and returns the current
+  /// value as a string, or null if not found.
+  ///
+  /// Used by `ext.flutterpilot.waitForState` to poll state without coupling
+  /// the core SDK to any specific state-management library.
+  ///
+  /// ```dart
+  /// FlutterPilot.registerStateReader('riverpod', (name) {
+  ///   return RiverpodPilotObserver.currentValueString(name);
+  /// });
+  /// ```
+  static void registerStateReader(
+    String type,
+    String? Function(String name) reader,
+  ) {
+    _stateReaders[type] = reader;
   }
 
   /// Logs a state change event when session recording is active.
@@ -1037,6 +1058,90 @@ class FlutterPilot {
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
         'ASSERTION FAILED: expected $expected "$type" widgets but found $actual',
+      );
+    });
+
+    // -- ext.flutterpilot.waitForState ----------------------------------------
+    // Polls until the named provider/cubit's current value string contains
+    // `expectedValue`, or until `timeoutMs` elapses.
+    // type: riverpod | bloc
+    registerExtension('ext.flutterpilot.waitForState', (
+      method,
+      parameters,
+    ) async {
+      final type = parameters['type'];
+      final name = parameters['name'];
+      final expectedValue = parameters['expectedValue'];
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+
+      if (type == null || name == null || expectedValue == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing type, name, or expectedValue',
+        );
+      }
+      final reader = _stateReaders[type];
+      if (reader == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No state reader registered for type: $type. '
+          'Ensure the plugin is initialised (e.g. RiverpodPilotObserver / BlocPilotObserver).',
+        );
+      }
+
+      final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+      String? lastValue;
+      while (DateTime.now().isBefore(deadline)) {
+        lastValue = reader(name);
+        if (lastValue != null && lastValue.contains(expectedValue)) {
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'matched',
+              'type': type,
+              'name': name,
+              'value': lastValue,
+            }),
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'Timeout: $type "$name" did not reach "$expectedValue" within '
+        '${timeoutMs}ms (last value: "$lastValue")',
+      );
+    });
+
+    // -- ext.flutterpilot.setOrientation --------------------------------------
+    // Switches device orientation. orientation: portrait | landscape
+    registerExtension('ext.flutterpilot.setOrientation', (
+      method,
+      parameters,
+    ) async {
+      final orientation = parameters['orientation'];
+      final List<DeviceOrientation> preferred;
+      switch (orientation) {
+        case 'portrait':
+          preferred = [
+            DeviceOrientation.portraitUp,
+            DeviceOrientation.portraitDown,
+          ];
+        case 'landscape':
+          preferred = [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ];
+        case 'all':
+          preferred = DeviceOrientation.values;
+        default:
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.invalidParams,
+            'orientation must be: portrait | landscape | all',
+          );
+      }
+      await SystemChrome.setPreferredOrientations(preferred);
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', 'orientation': orientation}),
       );
     });
   }

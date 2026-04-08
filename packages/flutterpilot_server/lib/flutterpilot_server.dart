@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
@@ -17,6 +19,7 @@ class FlutterPilotServer {
   VmService? _vmService;
   final List<Map<String, dynamic>> _eventBuffer = [];
   late final SelfHealManager _selfHealManager;
+  final Map<String, Uint8List> _screenshotBaselines = {};
 
   // Reconnection state
   bool _isReconnecting = false;
@@ -767,6 +770,249 @@ class FlutterPilotServer {
         'ext.flutterpilot.simulateNetwork',
         p,
       ).then((res) => res.toCallToolResult()),
+    );
+
+    server.registerTool(
+      'mock_http_response',
+      description:
+          'Registers a URL pattern mock so that any Dio request whose URL contains '
+          'urlPattern returns a synthetic response instead of hitting the network. '
+          'Use to test error states, empty states, or edge-case API responses. '
+          'Call clear_http_mocks to remove mocks when done.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'urlPattern': JsonSchema.string(
+            description: 'Substring of the URL to match (e.g. "/api/users")',
+          ),
+          'statusCode': JsonSchema.integer(description: 'HTTP status code (e.g. 200, 404, 500)'),
+          'body': JsonSchema.string(
+            description: 'Response body as a JSON string (e.g. \'{"error":"not found"}\')',
+          ),
+          'delayMs': JsonSchema.integer(
+            description: 'Artificial delay in milliseconds before returning the mock (default 0)',
+          ),
+        },
+        required: ['urlPattern', 'statusCode', 'body'],
+      ),
+      callback: (p, e) {
+        final mapped = {
+          'urlPattern': p['urlPattern']?.toString(),
+          'statusCode': p['statusCode']?.toString(),
+          'body': p['body']?.toString(),
+          if (p['delayMs'] != null) 'delayMs': p['delayMs'].toString(),
+        };
+        return _callExtensionRaw('ext.flutterpilot.addHttpMock', mapped)
+            .then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'clear_http_mocks',
+      description:
+          'Removes a specific URL pattern mock, or all mocks if urlPattern is omitted. '
+          'Always call this after testing a mocked flow to restore real network behaviour.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'urlPattern': JsonSchema.string(
+            description:
+                'Pattern to remove. Omit to clear ALL mocks.',
+          ),
+        },
+      ),
+      callback: (p, e) {
+        final mapped = <String, String?>{
+          if (p['urlPattern'] != null) 'urlPattern': p['urlPattern'].toString(),
+        };
+        return _callExtensionRaw('ext.flutterpilot.clearHttpMocks', mapped)
+            .then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'wait_for_state',
+      description:
+          'Polls a Riverpod provider or Bloc/Cubit until its current value string contains '
+          'expectedValue, or until timeoutMs elapses. Use after triggering async operations '
+          'to assert that state has settled. Requires the matching plugin to be active '
+          '(RiverpodPilotObserver or BlocPilotObserver).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'type': JsonSchema.string(enumValues: ['riverpod', 'bloc']),
+          'name': JsonSchema.string(
+            description:
+                'State identifier. For Riverpod: the provider\'s runtimeType string '
+                '(e.g. "StateProvider<int>"). For Bloc: the bloc\'s runtimeType string '
+                '(e.g. "CounterCubit").',
+          ),
+          'expectedValue': JsonSchema.string(
+            description: 'Substring expected in the state\'s toString() output',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Milliseconds to wait before timing out (default 5000)',
+          ),
+        },
+        required: ['type', 'name', 'expectedValue'],
+      ),
+      callback: (p, e) {
+        final mapped = {
+          'type': p['type']?.toString(),
+          'name': p['name']?.toString(),
+          'expectedValue': p['expectedValue']?.toString(),
+          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+        };
+        return _callExtensionRaw('ext.flutterpilot.waitForState', mapped)
+            .then((res) => res.toCallToolResult());
+      },
+    );
+
+    server.registerTool(
+      'set_device_rotation',
+      description:
+          'Rotates the device to portrait or landscape orientation. Use to test responsive layouts, '
+          'orientation-locked screens, and rotation animations.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'orientation': JsonSchema.string(
+            enumValues: ['portrait', 'landscape', 'all'],
+          ),
+        },
+        required: ['orientation'],
+      ),
+      callback: (p, e) => _callExtensionRaw(
+        'ext.flutterpilot.setOrientation',
+        p,
+      ).then((res) => res.toCallToolResult()),
+    );
+
+    server.registerTool(
+      'save_screenshot_baseline',
+      description:
+          'Captures the current screen and stores it as a named baseline image for future '
+          'visual regression comparisons. Call this once to establish a golden image, then '
+          'use compare_screenshot after code changes.',
+      inputSchema: ToolInputSchema(
+        properties: {'name': JsonSchema.string()},
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final name = p['name']?.toString();
+        if (name == null || name.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'name is required')],
+            isError: true,
+          );
+        }
+        final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+        if (res.isError) return res.toCallToolResult();
+        final base64Str = res.data?['data'] as String?;
+        if (base64Str == null) {
+          return CallToolResult(
+            content: [TextContent(text: 'Screenshot returned no data')],
+            isError: true,
+          );
+        }
+        _screenshotBaselines[name] = base64Decode(base64Str);
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Baseline "$name" saved (${_screenshotBaselines[name]!.length} bytes). '
+                  'HINT: Run compare_screenshot after making visual changes.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'compare_screenshot',
+      description:
+          'Captures the current screen and compares it pixel-by-pixel with a previously saved '
+          'baseline. Returns the percentage of changed pixels. Use for visual regression testing.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(description: 'Baseline name set by save_screenshot_baseline'),
+          'threshold': JsonSchema.number(
+            description: 'Allowed diff % before test fails (default 1.0 = 1%)',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final name = p['name']?.toString();
+        if (name == null || name.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'name is required')],
+            isError: true,
+          );
+        }
+        final baseline = _screenshotBaselines[name];
+        if (baseline == null) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'No baseline named "$name". '
+                    'Call save_screenshot_baseline first.',
+              ),
+            ],
+            isError: true,
+          );
+        }
+        final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+        if (res.isError) return res.toCallToolResult();
+        final base64Str = res.data?['data'] as String?;
+        if (base64Str == null) {
+          return CallToolResult(
+            content: [TextContent(text: 'Screenshot returned no data')],
+            isError: true,
+          );
+        }
+        final currentBytes = base64Decode(base64Str);
+        final threshold = (p['threshold'] as num?)?.toDouble() ?? 1.0;
+
+        // Decode both PNGs and compare pixel-by-pixel.
+        final baselineImg = img.decodePng(baseline);
+        final currentImg = img.decodePng(currentBytes);
+
+        if (baselineImg == null || currentImg == null) {
+          return CallToolResult(
+            content: [TextContent(text: 'Failed to decode PNG images for comparison')],
+            isError: true,
+          );
+        }
+
+        double diffPercent;
+        if (baselineImg.width != currentImg.width ||
+            baselineImg.height != currentImg.height) {
+          diffPercent = 100.0;
+        } else {
+          int diffPixels = 0;
+          final total = baselineImg.width * baselineImg.height;
+          for (int y = 0; y < baselineImg.height; y++) {
+            for (int x = 0; x < baselineImg.width; x++) {
+              final bp = baselineImg.getPixel(x, y);
+              final cp = currentImg.getPixel(x, y);
+              if (bp.r != cp.r || bp.g != cp.g || bp.b != cp.b) {
+                diffPixels++;
+              }
+            }
+          }
+          diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
+        }
+
+        final passed = diffPercent <= threshold;
+        final diffStr = diffPercent.toStringAsFixed(2);
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: passed
+                  ? 'Visual regression PASSED ✅ — diff: $diffStr% (threshold: $threshold%)'
+                  : 'Visual regression FAILED ❌ — diff: $diffStr% exceeds threshold $threshold%',
+            ),
+          ],
+          isError: !passed,
+        );
+      },
     );
 
     server.registerTool(

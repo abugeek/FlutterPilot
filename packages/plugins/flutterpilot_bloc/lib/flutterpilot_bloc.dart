@@ -52,6 +52,12 @@ class BlocPilotObserver extends BlocObserver {
       }
     });
 
+    FlutterPilot.registerStateReader('bloc', (name) {
+      final entry = _blocStates[name];
+      if (entry == null) return null;
+      return entry['state']?.toString();
+    });
+
     registerExtension('ext.flutterpilot.getBlocStates', (
       method,
       parameters,
