@@ -21,6 +21,8 @@ class FlutterPilotServer {
   final Directory _projectRoot;
   VmService? _vmService;
   final List<Map<String, dynamic>> _eventBuffer = [];
+  final List<Map<String, dynamic>> _debugLogBuffer = [];
+  static const int _debugLogBufferMax = 500;
   late final SelfHealManager _selfHealManager;
   final Map<String, Uint8List> _screenshotBaselines = {};
 
@@ -29,6 +31,8 @@ class FlutterPilotServer {
   bool _disposed = false;
   Timer? _reconnectTimer;
   StreamSubscription<Event>? _eventStreamSubscription;
+  StreamSubscription<Event>? _loggingStreamSubscription;
+  StreamSubscription<Event>? _stdoutStreamSubscription;
   Duration _currentBackoff = const Duration(seconds: 1);
   static const Duration _minBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
@@ -125,6 +129,10 @@ class FlutterPilotServer {
     // Cancel any previous subscription before re-subscribing
     await _eventStreamSubscription?.cancel();
     _eventStreamSubscription = null;
+    await _loggingStreamSubscription?.cancel();
+    _loggingStreamSubscription = null;
+    await _stdoutStreamSubscription?.cancel();
+    _stdoutStreamSubscription = null;
 
     try {
       await _vmService!.streamListen(EventStreams.kExtension);
@@ -168,6 +176,80 @@ class FlutterPilotServer {
     } catch (e) {
       _log.warning('Could not subscribe to extension stream', e);
     }
+
+    // Subscribe to dart:developer log() events — these carry FlutterPilot
+    // console output as well as any developer.log() calls in the app.
+    try {
+      await _vmService!.streamListen(EventStreams.kLogging);
+      _loggingStreamSubscription = _vmService!.onLoggingEvent.listen(
+        (Event event) {
+          final record = event.logRecord;
+          if (record == null) return;
+          _appendDebugLog(
+            message: record.message?.valueAsString ?? '',
+            level: _levelToString(record.level ?? 0),
+            logger: record.loggerName?.valueAsString ?? '',
+            timestamp: DateTime.now().toIso8601String(),
+          );
+        },
+        onError: (Object error) {
+          _log.fine('Logging stream error: $error');
+        },
+      );
+    } catch (e) {
+      _log.fine('Could not subscribe to Logging stream (may not be available): $e');
+    }
+
+    // Subscribe to the Stdout stream which captures plain print() output.
+    try {
+      await _vmService!.streamListen(EventStreams.kStdout);
+      _stdoutStreamSubscription = _vmService!.onStdoutEvent.listen(
+        (Event event) {
+          final bytes = event.bytes;
+          if (bytes == null || bytes.isEmpty) return;
+          // bytes is a base64-encoded string in the VM service protocol
+          final raw = String.fromCharCodes(
+            base64.decode(bytes),
+          ).trim();
+          if (raw.isEmpty) return;
+          _appendDebugLog(
+            message: raw,
+            level: 'info',
+            logger: 'stdout',
+            timestamp: DateTime.now().toIso8601String(),
+          );
+        },
+        onError: (Object error) {
+          _log.fine('Stdout stream error: $error');
+        },
+      );
+    } catch (e) {
+      _log.fine('Could not subscribe to Stdout stream (may not be available): $e');
+    }
+  }
+
+  void _appendDebugLog({
+    required String message,
+    required String level,
+    required String logger,
+    required String timestamp,
+  }) {
+    _debugLogBuffer.add({
+      'timestamp': timestamp,
+      'level': level,
+      'logger': logger,
+      'message': message,
+    });
+    if (_debugLogBuffer.length > _debugLogBufferMax) {
+      _debugLogBuffer.removeAt(0);
+    }
+  }
+
+  static String _levelToString(int level) {
+    if (level >= 1000) return 'error';
+    if (level >= 900) return 'warning';
+    if (level >= 800) return 'info';
+    return 'debug';
   }
 
   void _registerTools() {
@@ -373,6 +455,119 @@ class FlutterPilotServer {
                     (ev) => '[${ev['timestamp']}] ${ev['type']}: ${ev['data']}',
                   )
                   .join('\n'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // -- get_debug_logs -------------------------------------------------------
+    // Returns captured console output (print, debugPrint, developer.log).
+    server.registerTool(
+      'get_debug_logs',
+      description:
+          'Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. '
+          'This replaces the need to manually copy-paste from VS Code debug console. '
+          'Use level filter ("debug", "info", "warning", "error") and limit to narrow results. '
+          'Call this any time you need to see what the app is printing.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'level': JsonSchema.string(),
+          'limit': JsonSchema.integer(),
+          'logger': JsonSchema.string(),
+        },
+      ),
+      callback: (params, extra) async {
+        final levelFilter = params['level'] as String?;
+        final loggerFilter = params['logger'] as String?;
+        final limit = (params['limit'] as int?) ?? 100;
+        var entries = _debugLogBuffer.toList();
+        if (levelFilter != null && levelFilter.isNotEmpty) {
+          entries = entries
+              .where((e) => e['level'] == levelFilter)
+              .toList();
+        }
+        if (loggerFilter != null && loggerFilter.isNotEmpty) {
+          entries = entries
+              .where((e) => (e['logger'] as String).contains(loggerFilter))
+              .toList();
+        }
+        if (entries.length > limit) {
+          entries = entries.sublist(entries.length - limit);
+        }
+        if (entries.isEmpty) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'No console logs captured yet. '
+                    'Ensure FlutterPilot.initialize() is called before runApp().',
+              ),
+            ],
+          );
+        }
+        final lines = entries
+            .map(
+              (e) =>
+                  '[${e['timestamp']}] [${e['level']}] ${e['logger'].toString().isNotEmpty ? '(${e['logger']}) ' : ''}${e['message']}',
+            )
+            .join('\n');
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '${entries.length} log entries '
+                  '(buffer total: ${_debugLogBuffer.length}):\n$lines',
+            ),
+          ],
+        );
+      },
+    );
+
+    // -- clear_debug_logs -----------------------------------------------------
+    server.registerTool(
+      'clear_debug_logs',
+      description:
+          'Clears the captured console log buffer on the server side. '
+          'Use this before a specific test scenario so you get a clean baseline.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (params, extra) async {
+        final count = _debugLogBuffer.length;
+        _debugLogBuffer.clear();
+        return CallToolResult(
+          content: [TextContent(text: 'Cleared $count log entries.')],
+        );
+      },
+    );
+
+    // -- set_log_filter -------------------------------------------------------
+    // Delegates to the SDK extension to also clear the in-app buffer.
+    server.registerTool(
+      'set_log_filter',
+      description:
+          'Clears the in-app SDK debug log buffer. Call before a test run '
+          'to get a clean log window. '
+          'Tip: pair with get_debug_logs(level:"error") after the action.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (params, extra) async {
+        final serverCleared = _debugLogBuffer.length;
+        _debugLogBuffer.clear();
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.clearDebugLogs',
+          {},
+        );
+        if (res.isError) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'Server buffer cleared ($serverCleared entries). '
+                    'In-app buffer: ${res.errorMessage}',
+              ),
+            ],
+          );
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Log buffers cleared (server: $serverCleared entries, app: cleared).',
             ),
           ],
         );
@@ -1836,6 +2031,10 @@ class FlutterPilotServer {
     _reconnectTimer = null;
     await _eventStreamSubscription?.cancel();
     _eventStreamSubscription = null;
+    await _loggingStreamSubscription?.cancel();
+    _loggingStreamSubscription = null;
+    await _stdoutStreamSubscription?.cancel();
+    _stdoutStreamSubscription = null;
     await _vmService?.dispose();
   }
 }

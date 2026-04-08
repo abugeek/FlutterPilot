@@ -122,6 +122,16 @@ class FlutterPilot {
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
+  // -- Debug console capture -------------------------------------------------
+  static DebugPrintCallback? _originalDebugPrint;
+  static final List<Map<String, dynamic>> _consoleBuffer = [];
+  static const int _consoleBufferMax = 500;
+
+  /// Returns a copy of the captured console log buffer (up to 500 entries).
+  /// Each entry has keys: `timestamp`, `level`, `logger`, `message`.
+  static List<Map<String, dynamic>> get consoleBuffer =>
+      List.unmodifiable(_consoleBuffer);
+
   /// Initializes the FlutterPilot SDK.
   ///
   /// This is the main entry point and **must be called before `runApp`**.
@@ -145,6 +155,7 @@ class FlutterPilot {
     _setupModules();
     _registerServiceExtensions();
     _setupFpsCounter();
+    _setupDebugPrintCapture();
     debugPrint('FlutterPilot initialized 🚀');
   }
 
@@ -188,6 +199,35 @@ class FlutterPilot {
       _lastFpsUpdate = now;
     }
     SchedulerBinding.instance.addPostFrameCallback(_onFrame);
+  }
+
+  // Intercepts debugPrint so that every message is also routed through
+  // dart:developer log() — this makes it visible on the VM service Logging
+  // stream and in the FlutterPilot debug console buffer.
+  static void _setupDebugPrintCapture() {
+    _originalDebugPrint = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      final line = message ?? '';
+      _originalDebugPrint!(line, wrapWidth: wrapWidth);
+      _captureConsoleLine(line, level: 'info', logger: 'debugPrint');
+    };
+  }
+
+  static void _captureConsoleLine(
+    String message, {
+    String level = 'info',
+    String logger = '',
+  }) {
+    final entry = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'level': level,
+      'logger': logger,
+      'message': message,
+    };
+    _consoleBuffer.add(entry);
+    if (_consoleBuffer.length > _consoleBufferMax) _consoleBuffer.removeAt(0);
+    // Forward to dart:developer so the VM Logging stream carries it too.
+    log(message, name: logger.isEmpty ? 'flutterpilot' : logger);
   }
 
   /// Registers a custom tool that can be invoked remotely via the
@@ -314,6 +354,42 @@ class FlutterPilot {
     registerExtension('ext.flutterpilot.ping', (method, parameters) async {
       return ServiceExtensionResponse.result(
         json.encode({'status': 'ok', 'version': '0.0.1'}),
+      );
+    });
+
+    // -- ext.flutterpilot.getDebugLogs ----------------------------------------
+    // Returns the in-memory console capture buffer.
+    // Optional parameter `level` filters entries ('info', 'warning', 'error').
+    // Optional parameter `limit` caps the number of entries returned (default 100).
+    registerExtension('ext.flutterpilot.getDebugLogs', (
+      method,
+      parameters,
+    ) async {
+      final levelFilter = parameters['level'];
+      final limit = int.tryParse(parameters['limit'] ?? '') ?? 100;
+      var entries = _consoleBuffer.toList();
+      if (levelFilter != null && levelFilter.isNotEmpty) {
+        entries = entries
+            .where((e) => e['level'] == levelFilter)
+            .toList();
+      }
+      if (entries.length > limit) {
+        entries = entries.sublist(entries.length - limit);
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'logs': entries, 'total': _consoleBuffer.length}),
+      );
+    });
+
+    // -- ext.flutterpilot.clearDebugLogs --------------------------------------
+    // Clears the in-memory console capture buffer.
+    registerExtension('ext.flutterpilot.clearDebugLogs', (
+      method,
+      parameters,
+    ) async {
+      _consoleBuffer.clear();
+      return ServiceExtensionResponse.result(
+        json.encode({'cleared': true}),
       );
     });
 
