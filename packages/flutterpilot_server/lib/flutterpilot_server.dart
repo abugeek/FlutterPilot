@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 import 'src/self_heal_manager.dart';
+
+final _log = logging.Logger('FlutterPilotServer');
 
 class FlutterPilotServer {
   final McpServer server;
@@ -13,6 +17,16 @@ class FlutterPilotServer {
   VmService? _vmService;
   final List<Map<String, dynamic>> _eventBuffer = [];
   late final SelfHealManager _selfHealManager;
+
+  // Reconnection state
+  bool _isReconnecting = false;
+  bool _disposed = false;
+  Timer? _reconnectTimer;
+  StreamSubscription<Event>? _eventStreamSubscription;
+  Duration _currentBackoff = const Duration(seconds: 1);
+  static const Duration _minBackoff = Duration(seconds: 1);
+  static const Duration _maxBackoff = Duration(seconds: 30);
+  static final Random _random = Random();
 
   FlutterPilotServer({required this.vmServiceUri, this.allowDestructive = false})
       : server = McpServer(
@@ -28,23 +42,79 @@ class FlutterPilotServer {
   }
 
   Future<void> start() async {
-    stderr.writeln('Connecting to VM Service: $vmServiceUri');
-    _vmService = await vmServiceConnectUri(vmServiceUri);
-    stderr.writeln('Connected to VM Service!');
-
-    await _setupEventStreaming();
+    await _connectToVmService();
 
     // Start MCP server over stdio
     final stdioTransport = StdioServerTransport();
     await server.connect(stdioTransport);
-    stderr.writeln('FlutterPilot MCP Server started 🚀');
+    _log.info('FlutterPilot MCP Server started ��');
+  }
+
+  Future<void> _connectToVmService() async {
+    _log.info('Connecting to VM Service: $vmServiceUri');
+    _vmService = await vmServiceConnectUri(vmServiceUri);
+    _log.info('Connected to VM Service');
+
+    _currentBackoff = _minBackoff;
+
+    // Monitor connection lifecycle — triggers reconnect on disconnect
+    _vmService!.onDone.then((_) {
+      if (!_disposed) {
+        _log.warning('VM Service connection lost');
+        _scheduleReconnect();
+      }
+    });
+
+    await _setupEventStreaming();
+  }
+
+  void _scheduleReconnect() {
+    if (_isReconnecting || _disposed) return;
+    _isReconnecting = true;
+    _vmService = null;
+    _attemptReconnect();
+  }
+
+  void _attemptReconnect() {
+    if (_disposed) return;
+
+    // Add jitter: ±25% of current backoff
+    final jitter = (_currentBackoff.inMilliseconds * 0.25 * (2 * _random.nextDouble() - 1)).round();
+    final delay = Duration(milliseconds: _currentBackoff.inMilliseconds + jitter);
+
+    _log.info('Reconnecting to VM Service in ${delay.inMilliseconds}ms '
+        '(backoff: ${_currentBackoff.inSeconds}s)');
+
+    _reconnectTimer = Timer(delay, () async {
+      if (_disposed) return;
+      try {
+        await _connectToVmService();
+        _isReconnecting = false;
+        _log.info('VM Service reconnected successfully');
+      } catch (e) {
+        _log.warning('Reconnection attempt failed', e);
+        // Exponential backoff: double, capped at max
+        _currentBackoff = Duration(
+          milliseconds: (_currentBackoff.inMilliseconds * 2).clamp(
+            _minBackoff.inMilliseconds,
+            _maxBackoff.inMilliseconds,
+          ),
+        );
+        _attemptReconnect();
+      }
+    });
   }
 
   Future<void> _setupEventStreaming() async {
     if (_vmService == null) return;
+
+    // Cancel any previous subscription before re-subscribing
+    await _eventStreamSubscription?.cancel();
+    _eventStreamSubscription = null;
+
     try {
       await _vmService!.streamListen(EventStreams.kExtension);
-      _vmService!.onExtensionEvent.listen(
+      _eventStreamSubscription = _vmService!.onExtensionEvent.listen(
         (Event event) async {
         final timestamp = DateTime.now().toIso8601String();
         if (event.extensionKind == 'ext.flutterpilot.error') {
@@ -65,11 +135,15 @@ class FlutterPilotServer {
         if (_eventBuffer.length > 50) _eventBuffer.removeAt(0);
       },
       onError: (Object error) {
-        stderr.writeln('Extension event stream error: $error');
+        _log.warning('Extension event stream error', error);
+      },
+      onDone: () {
+        _log.info('Extension event stream closed');
+        if (!_disposed) _scheduleReconnect();
       },
       );
     } catch (e) {
-      stderr.writeln('Warning: Could not subscribe to extension stream: $e');
+      _log.warning('Could not subscribe to extension stream', e);
     }
   }
 
@@ -398,7 +472,10 @@ class FlutterPilotServer {
   }
 
   Future<_ExtensionResult> _callExtensionRaw(String extension, Map<String, dynamic> parameters) async {
-    if (_vmService == null) return _ExtensionResult.error('No VM Service connection.');
+    if (_vmService == null) {
+      if (_isReconnecting) return _ExtensionResult.error('VM Service is reconnecting. Please retry shortly.');
+      return _ExtensionResult.error('No VM Service connection.');
+    }
     try {
       final vm = await _vmService!.getVM().timeout(const Duration(seconds: 10));
       for (final isolateRef in vm.isolates ?? []) {
@@ -420,11 +497,30 @@ class FlutterPilotServer {
       }
     } on TimeoutException {
       return _ExtensionResult.error('VM Service timed out. The app may be unresponsive.');
+    } on StateError catch (e) {
+      _log.warning('VM Service connection error during call', e);
+      _scheduleReconnect();
+      return _ExtensionResult.error('VM Service connection lost. Reconnecting...');
+    } on WebSocketException catch (e) {
+      _log.warning('WebSocket error during VM Service call', e);
+      _scheduleReconnect();
+      return _ExtensionResult.error('VM Service connection lost. Reconnecting...');
+    } on IOException catch (e) {
+      _log.warning('IO error during VM Service call', e);
+      _scheduleReconnect();
+      return _ExtensionResult.error('VM Service connection lost. Reconnecting...');
     }
     return _ExtensionResult.error('Tool not found in any isolate. Ensure you registered the plugin.');
   }
 
-  Future<void> stop() async => await _vmService?.dispose();
+  Future<void> stop() async {
+    _disposed = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    await _eventStreamSubscription?.cancel();
+    _eventStreamSubscription = null;
+    await _vmService?.dispose();
+  }
 }
 
 class _ExtensionResult {

@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
+
+final _log = logging.Logger('SelfHealManager');
 
 /// Represents a structured diagnostic report of an application crash.
 class CrashReport {
@@ -103,13 +105,8 @@ class SelfHealManager {
   }
 
   void _sendProactiveAlert(String exception) {
-    // Log to stderr so the connected terminal/agent can see crashes immediately.
-    // MCP logging notifications are sent via the server when the protocol supports it.
-    stderr.writeln('\n${'=' * 60}');
-    stderr.writeln('🚨 CRITICAL APP CRASH: SELF-HEAL REQUEST');
-    stderr.writeln('Exception: $exception');
-    stderr.writeln('Action: Call `get_latest_crash_report` for full diagnostic context.');
-    stderr.writeln('${'=' * 60}\n');
+    // Log crash alert so terminal/agent sees it immediately.
+    _log.severe('🚨 CRITICAL APP CRASH — call `get_latest_crash_report` for diagnostics. Exception: $exception');
 
     try {
       server.sendLoggingMessage(
