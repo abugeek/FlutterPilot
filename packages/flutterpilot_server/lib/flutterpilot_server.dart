@@ -776,11 +776,11 @@ class FlutterPilotServer {
           'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to swipe.'),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
           ),
-          'distance': JsonSchema.number(),
+          'distance': JsonSchema.number(description: 'Scroll distance in logical pixels. Positive = down/right, negative = up/left.'),
         },
         required: ['key', 'direction'],
       ),
@@ -812,8 +812,8 @@ class FlutterPilotServer {
           'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
       inputSchema: ToolInputSchema(
         properties: {
-          'fromKey': JsonSchema.string(),
-          'toKey': JsonSchema.string(),
+          'fromKey': JsonSchema.string(description: 'The ValueKey string of the widget to drag from (drag source).'),
+          'toKey': JsonSchema.string(description: 'The ValueKey string of the target widget to drag to (drop target).'),
         },
         required: ['fromKey', 'toKey'],
       ),
@@ -837,8 +837,8 @@ class FlutterPilotServer {
           'Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
-          'timeoutMs': JsonSchema.integer(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to wait for to appear.'),
+          'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for the widget (default: 5000ms).'),
         },
         required: ['key'],
       ),
@@ -860,8 +860,8 @@ class FlutterPilotServer {
           'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',
       inputSchema: ToolInputSchema(
         properties: {
-          'route': JsonSchema.string(),
-          'timeoutMs': JsonSchema.integer(),
+          'route': JsonSchema.string(description: 'The route name to wait for (e.g. "/dashboard", "/settings").'),
+          'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for the route (default: 5000ms).'),
         },
         required: ['route'],
       ),
@@ -882,7 +882,7 @@ class FlutterPilotServer {
       description:
           'Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.',
       inputSchema: ToolInputSchema(
-        properties: {'timeoutMs': JsonSchema.integer()},
+        properties: {'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for all animations to settle (default: 5000ms.')},
       ),
       callback: (p, e) async {
         final args = {
@@ -900,7 +900,7 @@ class FlutterPilotServer {
       description:
           'Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is visible.')},
         required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -915,8 +915,8 @@ class FlutterPilotServer {
           'Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.',
       inputSchema: ToolInputSchema(
         properties: {
-          'text': JsonSchema.string(),
-          'exact': JsonSchema.boolean(),
+          'text': JsonSchema.string(description: 'The text string to assert is visible on screen.'),
+          'exact': JsonSchema.boolean(description: 'If true, requires an exact text match. If false (default), a substring match is used.'),
         },
         required: ['text'],
       ),
@@ -938,8 +938,8 @@ class FlutterPilotServer {
           'Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.',
       inputSchema: ToolInputSchema(
         properties: {
-          'type': JsonSchema.string(),
-          'count': JsonSchema.integer(),
+          'type': JsonSchema.string(description: 'Widget type name to count (e.g. "ElevatedButton", "Text", "ListTile").'),
+          'count': JsonSchema.integer(description: 'Expected number of widgets of the given type.'),
         },
         required: ['type', 'count'],
       ),
@@ -1092,7 +1092,7 @@ class FlutterPilotServer {
           'visual regression comparisons. Call this once to establish a golden image, then '
           'use compare_screenshot after code changes.',
       inputSchema: ToolInputSchema(
-        properties: {'name': JsonSchema.string()},
+        properties: {'name': JsonSchema.string(description: 'A unique name for this baseline image (e.g. "home_screen", "login_dark"). Used to reference it in compare_screenshot.')},
         required: ['name'],
       ),
       callback: (p, e) async {
@@ -1221,7 +1221,7 @@ class FlutterPilotServer {
       description:
           'Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.',
       inputSchema: ToolInputSchema(
-        properties: {'route': JsonSchema.string()},
+        properties: {'route': JsonSchema.string(description: 'The named route to navigate to (e.g. "/home", "/profile/123"). Must be registered in the app router.')},
         required: ['route'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -1403,7 +1403,7 @@ class FlutterPilotServer {
       description:
           'Switch app language (e.g., "en", "de_DE"). Use this to check for text overflows in different languages.',
       inputSchema: ToolInputSchema(
-        properties: {'locale': JsonSchema.string()},
+        properties: {'locale': JsonSchema.string(description: 'BCP-47 locale tag (e.g. "en", "fr", "ar", "zh-CN"). Use "system" to restore the device default.')},
         required: ['locale'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -1493,7 +1493,7 @@ class FlutterPilotServer {
           'Use enter_text to type new content afterwards.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the text field to clear.'),
         },
         required: ['key'],
       ),
@@ -1520,7 +1520,7 @@ class FlutterPilotServer {
           'Use this instead of screenshots to verify widget state.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to inspect.'),
         },
         required: ['key'],
       ),
@@ -1541,7 +1541,7 @@ class FlutterPilotServer {
           'Returns error if the widget is disabled or not found.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is enabled.'),
         },
         required: ['key'],
       ),
@@ -1562,7 +1562,7 @@ class FlutterPilotServer {
           'Returns error if the widget is enabled or not found.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is disabled.'),
         },
         required: ['key'],
       ),
@@ -1601,7 +1601,7 @@ class FlutterPilotServer {
           'Use unfocus_all to close the keyboard afterwards.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to focus.'),
         },
         required: ['key'],
       ),
@@ -1628,7 +1628,7 @@ class FlutterPilotServer {
           'listens to FlutterPilot.textScaleNotifier.',
       inputSchema: ToolInputSchema(
         properties: {
-          'scale': JsonSchema.number(),
+          'scale': JsonSchema.number(description: 'Text scale factor (1.0 = normal, 2.0 = double size, 0.5 = half size). Test accessibility at 2.0.'),
         },
         required: ['scale'],
       ),
@@ -1650,7 +1650,7 @@ class FlutterPilotServer {
           'and notification tap flows.',
       inputSchema: ToolInputSchema(
         properties: {
-          'url': JsonSchema.string(),
+          'url': JsonSchema.string(description: 'The URL pattern to intercept (exact match or prefix).'),
         },
         required: ['url'],
       ),
@@ -1672,7 +1672,7 @@ class FlutterPilotServer {
           'Max 120 frames.',
       inputSchema: ToolInputSchema(
         properties: {
-          'count': JsonSchema.integer(),
+          'count': JsonSchema.integer(description: 'Number of frames to pump. Use 1–5 for immediate animations, 60 for ~1 second of wall time.'),
         },
       ),
       callback: (p, e) async {
@@ -1719,8 +1719,8 @@ class FlutterPilotServer {
           'The value is clamped to [min, max].',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
-          'value': JsonSchema.number(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the Slider widget.'),
+          'value': JsonSchema.number(description: 'The new slider value. Must be within the slider min/max range.'),
         },
         required: ['key', 'value'],
       ),
@@ -1744,7 +1744,7 @@ class FlutterPilotServer {
           'Use get_widget_properties to read the resulting isChecked value.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the Checkbox, Switch, or Radio widget to toggle.'),
         },
         required: ['key'],
       ),
@@ -1772,7 +1772,7 @@ class FlutterPilotServer {
           'models, routes, or test files before making changes.',
       inputSchema: ToolInputSchema(
         properties: {
-          'path': JsonSchema.string(),
+          'path': JsonSchema.string(description: 'Relative or absolute path to the Dart file. Relative paths resolve from the project root.'),
         },
         required: ['path'],
       ),
@@ -1810,7 +1810,7 @@ class FlutterPilotServer {
           'project root. Use to explore project structure before reading files.',
       inputSchema: ToolInputSchema(
         properties: {
-          'directory': JsonSchema.string(),
+          'directory': JsonSchema.string(description: 'Subdirectory to search for Dart files (e.g. "lib", "test"). Defaults to project root if omitted.'),
         },
       ),
       callback: (p, e) async {
@@ -1886,9 +1886,9 @@ class FlutterPilotServer {
           'stringList (JSON array, e.g. \'["a","b"]\').',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
-          'value': JsonSchema.string(),
-          'type': JsonSchema.string(),
+          'key': JsonSchema.string(description: 'The SharedPreferences key to set.'),
+          'value': JsonSchema.string(description: 'The value to set as a string. Booleans: "true"/"false". Numbers: numeric string.'),
+          'type': JsonSchema.string(description: 'Value type: "string", "bool", "int", "double", or "stringList" (comma-separated).'),
         },
         required: ['key', 'value'],
       ),
@@ -1912,7 +1912,7 @@ class FlutterPilotServer {
           'removed. If omitted, ALL preferences are cleared. '
           'Use with caution — clear all is irreversible.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The specific key to remove. Omit to clear ALL preferences.')},
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -1993,7 +1993,7 @@ class FlutterPilotServer {
           'look for classes with unexpectedly high instance counts or byte sizes. '
           'Accepts optional limit (default 30) for number of classes to show.',
       inputSchema: ToolInputSchema(
-        properties: {'limit': JsonSchema.integer()},
+        properties: {'limit': JsonSchema.integer(description: 'Number of top classes to show, sorted by heap bytes (default: 30).')},
       ),
       callback: (params, extra) async {
         if (_vmService == null) {
@@ -2053,8 +2053,8 @@ class FlutterPilotServer {
           'Optional limit (default 50) caps the number of requests shown.',
       inputSchema: ToolInputSchema(
         properties: {
-          'limit': JsonSchema.integer(),
-          'status_filter': JsonSchema.integer(),
+          'limit': JsonSchema.integer(description: 'Maximum number of requests to return, most recent first (default: 50).'),
+          'status_filter': JsonSchema.integer(description: 'Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests.'),
         },
       ),
       callback: (params, extra) async {
@@ -2231,7 +2231,7 @@ class FlutterPilotServer {
           'which parts of the UI are repainting more than expected — '
           'a classic Flutter performance debugging technique.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean()},
+        properties: {'enabled': JsonSchema.boolean(description: 'true to enable the repaint rainbow overlay, false to disable.')},
         required: ['enabled'],
       ),
       callback: (params, extra) async {
@@ -2259,7 +2259,7 @@ class FlutterPilotServer {
           'widget boundaries (orange), baselines (green), and pointer hit areas. '
           'Use this to debug layout issues like unexpected padding or misaligned widgets.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean()},
+        properties: {'enabled': JsonSchema.boolean(description: 'true to show debug paint boundaries and padding, false to hide.')},
         required: ['enabled'],
       ),
       callback: (params, extra) async {
@@ -2288,7 +2288,7 @@ class FlutterPilotServer {
           'curves, catch jank frames, or verify transition correctness. '
           'Set enabled=false to restore normal speed.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean()},
+        properties: {'enabled': JsonSchema.boolean(description: 'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.')},
         required: ['enabled'],
       ),
       callback: (params, extra) async {
@@ -2321,7 +2321,7 @@ class FlutterPilotServer {
           'to see rebuild events, or check the performance overlay via '
           'get_perf_metrics. Set enabled=false to stop tracking.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean()},
+        properties: {'enabled': JsonSchema.boolean(description: 'true to start tracking per-widget rebuild counts, false to stop.')},
         required: ['enabled'],
       ),
       callback: (params, extra) async {
