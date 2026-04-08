@@ -41,14 +41,15 @@ class PilotWidgetInspector {
     void search(Element element) {
       if (found != null) return;
       final widgetKey = element.widget.key?.toString();
-      if (widgetKey == keyString || 
-          widgetKey == "['$keyString']" || 
+      if (widgetKey == keyString ||
+          widgetKey == "['$keyString']" ||
           widgetKey == "[<'$keyString'>]") {
         found = element;
         return;
       }
       element.visitChildren(search);
     }
+
     final root = WidgetsBinding.instance.rootElement;
     if (root != null) search(root);
     return found;
@@ -67,16 +68,16 @@ class PilotWidgetInspector {
   static Map<String, dynamic> _elementToJson(Element element) {
     final List<Map<String, dynamic>> children = [];
     element.visitChildren((child) => children.add(_elementToJson(child)));
-    
+
     Map<String, dynamic>? layout;
     final ro = element.renderObject;
     if (ro is RenderBox && ro.hasSize) {
       final pos = ro.localToGlobal(Offset.zero);
       layout = {
-        'x': pos.dx, 
-        'y': pos.dy, 
-        'w': ro.size.width, 
-        'h': ro.size.height
+        'x': pos.dx,
+        'y': pos.dy,
+        'w': ro.size.width,
+        'h': ro.size.height,
       };
     }
 
@@ -102,7 +103,7 @@ class PilotWidgetInspector {
       'key': element.widget.key?.toString(),
       'layout': layout,
       'location': location,
-      'children': children
+      'children': children,
     };
   }
 }

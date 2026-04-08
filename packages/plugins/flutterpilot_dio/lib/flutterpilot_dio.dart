@@ -28,30 +28,51 @@ class DioPilotInterceptor extends Interceptor {
 
   void _registerExtension() {
     if (!FlutterPilot.isInitialized) {
-      debugPrint('FlutterPilot: DioPilotInterceptor registered before '
-          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+      debugPrint(
+        'FlutterPilot: DioPilotInterceptor registered before '
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
+      );
     }
 
-    registerExtension('ext.flutterpilot.getNetworkLogs', (method, parameters) async {
+    registerExtension('ext.flutterpilot.getNetworkLogs', (
+      method,
+      parameters,
+    ) async {
       return ServiceExtensionResponse.result(json.encode({'logs': _logs}));
     });
   }
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    _addLog({'type': 'request', 'method': options.method, 'uri': options.uri.toString(), 'timestamp': DateTime.now().toIso8601String()});
+    _addLog({
+      'type': 'request',
+      'method': options.method,
+      'uri': options.uri.toString(),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
     super.onRequest(options, handler);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    _addLog({'type': 'response', 'statusCode': response.statusCode, 'uri': response.requestOptions.uri.toString(), 'timestamp': DateTime.now().toIso8601String()});
+    _addLog({
+      'type': 'response',
+      'statusCode': response.statusCode,
+      'uri': response.requestOptions.uri.toString(),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
     super.onResponse(response, handler);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    _addLog({'type': 'error', 'statusCode': err.response?.statusCode, 'uri': err.requestOptions.uri.toString(), 'message': err.message, 'timestamp': DateTime.now().toIso8601String()});
+    _addLog({
+      'type': 'error',
+      'statusCode': err.response?.statusCode,
+      'uri': err.requestOptions.uri.toString(),
+      'message': err.message,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
     super.onError(err, handler);
   }
 

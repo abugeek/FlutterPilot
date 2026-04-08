@@ -23,11 +23,11 @@ void main() {
       );
 
       final tree = PilotWidgetInspector.captureWidgetTree();
-      
+
       expect(tree, isNotNull);
       // In a test environment, the root might be RootWidget or View
       expect(tree.toString(), contains('MaterialApp'));
-      
+
       // Verify button exists in tree
       String treeString = tree.toString();
       expect(treeString, contains('ElevatedButton'));
@@ -47,7 +47,7 @@ void main() {
       );
 
       final element = PilotWidgetInspector.findElementByKey('my_container');
-      
+
       expect(element, isNotNull);
       expect(element!.widget, isA<Container>());
     });
@@ -56,18 +56,13 @@ void main() {
       await tester.pumpWidget(
         const Directionality(
           textDirection: TextDirection.ltr,
-          child: Column(
-            children: [
-              Text('1'),
-              Text('2'),
-            ],
-          ),
+          child: Column(children: [Text('1'), Text('2')]),
         ),
       );
 
       final root = tester.element(find.byType(Column));
       final count = PilotWidgetInspector.countElements(root);
-      
+
       // Column + 2 Text widgets + their internal children (RichText, etc.)
       expect(count, greaterThanOrEqualTo(3));
     });

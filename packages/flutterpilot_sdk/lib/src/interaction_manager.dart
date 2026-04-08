@@ -38,11 +38,11 @@ class InteractionManager {
   static Map<String, dynamic> _resolveWidgetAt(Offset position) {
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(
-      result, 
-      position, 
-      WidgetsBinding.instance.platformDispatcher.implicitView!.viewId
+      result,
+      position,
+      WidgetsBinding.instance.platformDispatcher.implicitView!.viewId,
     );
-    
+
     Element? bestElement;
     for (final entry in result.path) {
       final ro = entry.target;
@@ -51,8 +51,8 @@ class InteractionManager {
           if (bestElement != null) return;
           if (element.renderObject == ro) {
             // Favor elements with keys or specific types for meaningful tracking
-            if (element.widget.key != null || 
-                element.widget is Text || 
+            if (element.widget.key != null ||
+                element.widget is Text ||
                 element.widget.runtimeType.toString().contains('Button')) {
               bestElement = element;
             }
@@ -60,6 +60,7 @@ class InteractionManager {
             element.visitChildren(findElement);
           }
         }
+
         final root = WidgetsBinding.instance.rootElement;
         if (root != null) findElement(root);
       }
@@ -110,10 +111,10 @@ class TestPointer {
   PointerEvent down(Offset location, {Duration timeStamp = Duration.zero}) {
     _location = location;
     return PointerDownEvent(
-      pointer: pointer, 
-      kind: kind, 
-      position: location, 
-      timeStamp: timeStamp
+      pointer: pointer,
+      kind: kind,
+      position: location,
+      timeStamp: timeStamp,
     );
   }
 
@@ -124,10 +125,10 @@ class TestPointer {
     final Offset location = _location!;
     _location = null;
     return PointerUpEvent(
-      pointer: pointer, 
-      kind: kind, 
-      position: location, 
-      timeStamp: timeStamp
+      pointer: pointer,
+      kind: kind,
+      position: location,
+      timeStamp: timeStamp,
     );
   }
 }

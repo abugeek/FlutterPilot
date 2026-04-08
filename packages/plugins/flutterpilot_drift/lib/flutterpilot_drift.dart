@@ -37,15 +37,24 @@ class DriftPilotInspector {
 
   static void _registerExtensions() {
     if (!FlutterPilot.isInitialized) {
-      debugPrint('FlutterPilot: DriftPilotInspector registered before '
-          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+      debugPrint(
+        'FlutterPilot: DriftPilotInspector registered before '
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
+      );
     }
 
-    registerExtension('ext.flutterpilot.queryDrift', (method, parameters) async {
+    registerExtension('ext.flutterpilot.queryDrift', (
+      method,
+      parameters,
+    ) async {
       final dbName = parameters['dbName'];
       final sql = parameters['sql'];
-      if (dbName == null || sql == null) return ServiceExtensionResponse.error(ServiceExtensionResponse.invalidParams, 'Missing dbName/sql');
-      
+      if (dbName == null || sql == null)
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing dbName/sql',
+        );
+
       // Block destructive SQL unless the server was started with --allow-destructive.
       // The server-side check is the primary gate; this is defense-in-depth.
       if (!_isSafeReadOnly(sql)) {
@@ -57,21 +66,45 @@ class DriftPilotInspector {
       }
 
       final db = _databases[dbName];
-      if (db == null) return ServiceExtensionResponse.error(ServiceExtensionResponse.extensionError, 'DB not found');
+      if (db == null)
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'DB not found',
+        );
       try {
         final results = await db.customSelect(sql).get();
-        return ServiceExtensionResponse.result(json.encode({'results': results.map((r) => r.data).toList()}));
+        return ServiceExtensionResponse.result(
+          json.encode({'results': results.map((r) => r.data).toList()}),
+        );
       } catch (e) {
-        return ServiceExtensionResponse.error(ServiceExtensionResponse.extensionError, 'Query error: $e');
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Query error: $e',
+        );
       }
     });
 
-    registerExtension('ext.flutterpilot.listDriftTables', (method, parameters) async {
+    registerExtension('ext.flutterpilot.listDriftTables', (
+      method,
+      parameters,
+    ) async {
       final dbName = parameters['dbName'];
-      if (dbName == null) return ServiceExtensionResponse.error(ServiceExtensionResponse.invalidParams, 'Missing dbName');
+      if (dbName == null)
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing dbName',
+        );
       final db = _databases[dbName];
-      if (db == null) return ServiceExtensionResponse.error(ServiceExtensionResponse.extensionError, 'DB not found');
-      return ServiceExtensionResponse.result(json.encode({'tables': db.allTables.map((t) => t.actualTableName).toList()}));
+      if (db == null)
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'DB not found',
+        );
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'tables': db.allTables.map((t) => t.actualTableName).toList(),
+        }),
+      );
     });
   }
 }

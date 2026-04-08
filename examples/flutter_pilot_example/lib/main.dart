@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 // FlutterPilot Imports
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
-import 'package:flutterpilot_bloc/flutterpilot_bloc.dart';
 
 // App Imports
 import 'src/screens/dashboard_screen.dart';
@@ -49,7 +48,8 @@ class MainApp extends StatelessWidget {
         '/chaos': (context) => const ChaosScreen(),
         // Placeholder for other screens
         '/network': (context) => _PlaceholderScreen(title: 'Network Logs'),
-        '/storage': (context) => _PlaceholderScreen(title: 'Storage Inspection'),
+        '/storage': (context) =>
+            _PlaceholderScreen(title: 'Storage Inspection'),
       },
     );
   }
@@ -63,7 +63,9 @@ class _PlaceholderScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: const Center(child: Text('Coming soon... (Demo the existing features first!)')),
+      body: const Center(
+        child: Text('Coming soon... (Demo the existing features first!)'),
+      ),
     );
   }
 }

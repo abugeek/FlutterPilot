@@ -17,25 +17,47 @@ class DashboardScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Status: ${isLoggedIn ? "Authenticated" : "Guest"}', 
+            Text(
+              'Status: ${isLoggedIn ? "Authenticated" : "Guest"}',
               style: Theme.of(context).textTheme.headlineSmall,
               key: const Key('auth_status_text'),
             ),
             if (user != null) ...[
               const SizedBox(height: 10),
-              Text('User: ${user.name} (${user.email})', key: const Key('user_info_text')),
+              Text(
+                'User: ${user.name} (${user.email})',
+                key: const Key('user_info_text'),
+              ),
             ],
             const SizedBox(height: 20),
-            const Text('Welcome to the FlutterPilot reference app! This app is designed to be fully introspectable by AI agents.'),
+            const Text(
+              'Welcome to the FlutterPilot reference app! This app is designed to be fully introspectable by AI agents.',
+            ),
             const SizedBox(height: 20),
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                _NavButton(label: 'State Injection', route: '/state', icon: Icons.input),
-                _NavButton(label: 'Network & Logs', route: '/network', icon: Icons.network_check),
-                _NavButton(label: 'Storage (Drift/Hive)', route: '/storage', icon: Icons.storage),
-                _NavButton(label: 'Chaos (Self-Heal)', route: '/chaos', icon: Icons.bug_report),
+                _NavButton(
+                  label: 'State Injection',
+                  route: '/state',
+                  icon: Icons.input,
+                ),
+                _NavButton(
+                  label: 'Network & Logs',
+                  route: '/network',
+                  icon: Icons.network_check,
+                ),
+                _NavButton(
+                  label: 'Storage (Drift/Hive)',
+                  route: '/storage',
+                  icon: Icons.storage,
+                ),
+                _NavButton(
+                  label: 'Chaos (Self-Heal)',
+                  route: '/chaos',
+                  icon: Icons.bug_report,
+                ),
               ],
             ),
           ],
@@ -49,7 +71,11 @@ class _NavButton extends StatelessWidget {
   final String label;
   final String route;
   final IconData icon;
-  const _NavButton({required this.label, required this.route, required this.icon});
+  const _NavButton({
+    required this.label,
+    required this.route,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {

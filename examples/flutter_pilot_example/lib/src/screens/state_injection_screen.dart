@@ -10,7 +10,7 @@ class StateInjectionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final riverpodCount = ref.watch(counterProvider);
-    
+
     return Scaffold(
       appBar: AppBar(title: const Text('State Injection Testing')),
       body: SingleChildScrollView(
@@ -41,7 +41,10 @@ class StateInjectionScreen extends ConsumerWidget {
                 padding: EdgeInsets.all(12.0),
                 child: Text(
                   'AI DIRECTIVE: You can call set_riverpod_state("counterProvider", 99) or set_bloc_state("CounterCubit", 42) to change these values instantly.',
-                  style: TextStyle(color: Colors.white, fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ),
@@ -74,14 +77,15 @@ class _CounterCard extends StatelessWidget {
           children: [
             Text(title, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 10),
-            Text('$value', 
+            Text(
+              '$value',
               style: Theme.of(context).textTheme.headlineLarge,
               key: Key('${keyPrefix}_count_text'),
             ),
             const SizedBox(height: 10),
             ElevatedButton(
               key: Key('${keyPrefix}_increment_button'),
-              onPressed: onIncrement, 
+              onPressed: onIncrement,
               child: const Text('Increment Manually'),
             ),
           ],

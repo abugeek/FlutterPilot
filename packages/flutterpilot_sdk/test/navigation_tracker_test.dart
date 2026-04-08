@@ -18,9 +18,9 @@ void main() {
         settings: const RouteSettings(name: '/home'),
         builder: (_) => Container(),
       );
-      
+
       NavigationTracker().didPush(route, null);
-      
+
       expect(NavigationTracker.stack, ['/home']);
       expect(NavigationTracker.currentRoute, '/home');
     });
@@ -34,12 +34,12 @@ void main() {
         settings: const RouteSettings(name: '/details'),
         builder: (_) => Container(),
       );
-      
+
       final tracker = NavigationTracker();
       tracker.didPush(homeRoute, null);
       tracker.didPush(detailsRoute, homeRoute);
       expect(NavigationTracker.stack, ['/home', '/details']);
-      
+
       tracker.didPop(detailsRoute, homeRoute);
       expect(NavigationTracker.stack, ['/home']);
     });
@@ -59,9 +59,9 @@ void main() {
         settings: const RouteSettings(name: '/settings'),
         builder: (_) => Container(),
       );
-      
+
       NavigationTracker().didPush(route, null);
-      
+
       expect(caughtSource, 'navigation');
       expect(caughtName, 'push');
       expect(caughtValue, '/settings');

@@ -12,7 +12,7 @@ void main() {
       );
 
       final markdown = report.toMarkdown();
-      
+
       expect(markdown, contains('# 🚨 Critical App Crash Report'));
       expect(markdown, contains('**Timestamp:** 2026-04-06T12:00:00'));
       expect(markdown, contains('TestException: something went wrong'));

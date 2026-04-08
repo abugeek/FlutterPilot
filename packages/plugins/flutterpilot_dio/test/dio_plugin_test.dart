@@ -16,9 +16,7 @@ void main() {
   late DioPilotInterceptor interceptor;
 
   setUpAll(() {
-    registerFallbackValue(
-      RequestOptions(path: '/fallback'),
-    );
+    registerFallbackValue(RequestOptions(path: '/fallback'));
     registerFallbackValue(
       Response<dynamic>(requestOptions: RequestOptions(path: '/fallback')),
     );
@@ -166,34 +164,36 @@ void main() {
         verify(() => handler.next(any())).called(60);
       });
 
-      test('mixed request/response/error beyond buffer limit does not crash',
-          () {
-        final reqHandler = MockRequestInterceptorHandler();
-        final resHandler = MockResponseInterceptorHandler();
-        final errHandler = MockErrorInterceptorHandler();
+      test(
+        'mixed request/response/error beyond buffer limit does not crash',
+        () {
+          final reqHandler = MockRequestInterceptorHandler();
+          final resHandler = MockResponseInterceptorHandler();
+          final errHandler = MockErrorInterceptorHandler();
 
-        for (var i = 0; i < 20; i++) {
-          final options = RequestOptions(path: '/mix/$i', method: 'GET');
-          interceptor.onRequest(options, reqHandler);
+          for (var i = 0; i < 20; i++) {
+            final options = RequestOptions(path: '/mix/$i', method: 'GET');
+            interceptor.onRequest(options, reqHandler);
 
-          final response = Response<dynamic>(
-            requestOptions: options,
-            statusCode: 200,
-          );
-          interceptor.onResponse(response, resHandler);
+            final response = Response<dynamic>(
+              requestOptions: options,
+              statusCode: 200,
+            );
+            interceptor.onResponse(response, resHandler);
 
-          final error = DioException(
-            requestOptions: options,
-            message: 'error $i',
-          );
-          interceptor.onError(error, errHandler);
-        }
+            final error = DioException(
+              requestOptions: options,
+              message: 'error $i',
+            );
+            interceptor.onError(error, errHandler);
+          }
 
-        // 20 requests + 20 responses + 20 errors = 60 total log entries
-        verify(() => reqHandler.next(any())).called(20);
-        verify(() => resHandler.next(any())).called(20);
-        verify(() => errHandler.next(any())).called(20);
-      });
+          // 20 requests + 20 responses + 20 errors = 60 total log entries
+          verify(() => reqHandler.next(any())).called(20);
+          verify(() => resHandler.next(any())).called(20);
+          verify(() => errHandler.next(any())).called(20);
+        },
+      );
     });
 
     group('Dio integration', () {

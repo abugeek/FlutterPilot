@@ -32,8 +32,10 @@ class BlocPilotObserver extends BlocObserver {
 
   void _registerExtension() {
     if (!FlutterPilot.isInitialized) {
-      debugPrint('FlutterPilot: BlocPilotObserver registered before '
-          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+      debugPrint(
+        'FlutterPilot: BlocPilotObserver registered before '
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
+      );
     }
 
     FlutterPilot.registerStateSetter('bloc', (name, value) async {
@@ -50,8 +52,13 @@ class BlocPilotObserver extends BlocObserver {
       }
     });
 
-    registerExtension('ext.flutterpilot.getBlocStates', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({'states': _blocStates}));
+    registerExtension('ext.flutterpilot.getBlocStates', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({'states': _blocStates}),
+      );
     });
   }
 
@@ -60,7 +67,7 @@ class BlocPilotObserver extends BlocObserver {
     super.onChange(bloc, change);
     final name = bloc.runtimeType.toString();
     _activeBlocs[name] = bloc;
-    
+
     _blocStates[name] = {
       'state': change.nextState.toString(),
       'type': change.nextState.runtimeType.toString(),

@@ -31,7 +31,7 @@ class CrashReport {
     final buffer = StringBuffer()..writeln('# 🚨 Critical App Crash Report');
     buffer.writeln('\n**Timestamp:** $timestamp');
     buffer.writeln('\n## Exception\n$exception');
-    
+
     _addSection(buffer, 'Recent Errors', errorData);
     _addSection(buffer, 'Riverpod State', riverpodData);
     _addSection(buffer, 'Bloc State', blocData);
@@ -40,8 +40,10 @@ class CrashReport {
     _addSection(buffer, 'Widget Tree Snippet', _truncateTree(widgetTreeData));
 
     buffer.writeln('\n\n---');
-    buffer.writeln('\n**DIRECTIVE FOR AI:** Analyze the stack trace and states above. Propose a code fix, apply it using your filesystem tools, and call the `hot_reload` tool to verify.');
-    
+    buffer.writeln(
+      '\n**DIRECTIVE FOR AI:** Analyze the stack trace and states above. Propose a code fix, apply it using your filesystem tools, and call the `hot_reload` tool to verify.',
+    );
+
     return buffer.toString();
   }
 
@@ -85,10 +87,14 @@ class SelfHealManager {
     // Parallel data gathering — individual failures return 'N/A' instead of crashing the whole report.
     final results = await Future.wait([
       callExtension('ext.flutterpilot.getErrors').catchError((_) => 'N/A'),
-      callExtension('ext.flutterpilot.getRiverpodStates').catchError((_) => 'N/A'),
+      callExtension(
+        'ext.flutterpilot.getRiverpodStates',
+      ).catchError((_) => 'N/A'),
       callExtension('ext.flutterpilot.getBlocStates').catchError((_) => 'N/A'),
       callExtension('ext.flutterpilot.getNetworkLogs').catchError((_) => 'N/A'),
-      callExtension('ext.flutterpilot.getNavigationStack').catchError((_) => 'N/A'),
+      callExtension(
+        'ext.flutterpilot.getNavigationStack',
+      ).catchError((_) => 'N/A'),
       callExtension('ext.flutterpilot.getWidgetTree').catchError((_) => 'N/A'),
     ]);
 
@@ -106,14 +112,17 @@ class SelfHealManager {
 
   void _sendProactiveAlert(String exception) {
     // Log crash alert so terminal/agent sees it immediately.
-    _log.severe('🚨 CRITICAL APP CRASH — call `get_latest_crash_report` for diagnostics. Exception: $exception');
+    _log.severe(
+      '🚨 CRITICAL APP CRASH — call `get_latest_crash_report` for diagnostics. Exception: $exception',
+    );
 
     try {
       server.sendLoggingMessage(
         LoggingMessageNotification(
           level: LoggingLevel.critical,
           logger: 'FlutterPilot.SelfHeal',
-          data: 'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_latest_crash_report` for full context.',
+          data:
+              'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_latest_crash_report` for full context.',
         ),
       );
     } catch (_) {

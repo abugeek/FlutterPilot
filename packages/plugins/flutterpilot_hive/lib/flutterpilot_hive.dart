@@ -28,16 +28,24 @@ class HivePilotInspector {
 
   static void _registerExtension() {
     if (!FlutterPilot.isInitialized) {
-      debugPrint('FlutterPilot: HivePilotInspector registered before '
-          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+      debugPrint(
+        'FlutterPilot: HivePilotInspector registered before '
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
+      );
     }
 
-    registerExtension('ext.flutterpilot.getHiveContents', (method, parameters) async {
+    registerExtension('ext.flutterpilot.getHiveContents', (
+      method,
+      parameters,
+    ) async {
       final Map<String, dynamic> allData = {};
       for (final boxName in _registeredBoxNames) {
-        if (Hive.isBoxOpen(boxName)) allData[boxName] = Hive.box(boxName).toMap();
+        if (Hive.isBoxOpen(boxName))
+          allData[boxName] = Hive.box(boxName).toMap();
       }
-      return ServiceExtensionResponse.result(json.encode({'contents': allData}));
+      return ServiceExtensionResponse.result(
+        json.encode({'contents': allData}),
+      );
     });
   }
 }

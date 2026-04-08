@@ -26,7 +26,8 @@ class NavigationTracker extends NavigatorObserver {
   /// Receives [source] (`'navigation'`), [name] (the event type such as
   /// `'push'`, `'pop'`, `'remove'`, `'replace'`), and the route name as
   /// [value].
-  static void Function(String source, String name, dynamic value)? onStateChange;
+  static void Function(String source, String name, dynamic value)?
+  onStateChange;
 
   /// Returns an unmodifiable snapshot of the current route name stack.
   ///
@@ -37,7 +38,8 @@ class NavigationTracker extends NavigatorObserver {
   /// The name of the currently active (top-most) route.
   ///
   /// Returns `'Unknown'` if the stack is empty or the route has no name.
-  static String get currentRoute => _stack.isNotEmpty ? (_stack.last ?? 'Unknown') : 'Unknown';
+  static String get currentRoute =>
+      _stack.isNotEmpty ? (_stack.last ?? 'Unknown') : 'Unknown';
 
   /// Clears the navigation stack and removes the [onStateChange] callback.
   ///

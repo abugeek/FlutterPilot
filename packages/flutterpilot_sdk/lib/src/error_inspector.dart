@@ -38,13 +38,15 @@ class ErrorInspector {
       originalOnError?.call(details);
     };
 
-    final originalOnPlatformError = WidgetsBinding.instance.platformDispatcher.onError;
-    WidgetsBinding.instance.platformDispatcher.onError = (Object error, StackTrace stack) {
-      final details = FlutterErrorDetails(exception: error, stack: stack);
-      _captureError(details);
-      onErrorCaptured?.call(details);
-      return originalOnPlatformError?.call(error, stack) ?? false;
-    };
+    final originalOnPlatformError =
+        WidgetsBinding.instance.platformDispatcher.onError;
+    WidgetsBinding.instance.platformDispatcher.onError =
+        (Object error, StackTrace stack) {
+          final details = FlutterErrorDetails(exception: error, stack: stack);
+          _captureError(details);
+          onErrorCaptured?.call(details);
+          return originalOnPlatformError?.call(error, stack) ?? false;
+        };
   }
 
   static void _captureError(FlutterErrorDetails details) {
@@ -66,5 +68,6 @@ class ErrorInspector {
   /// - `library` — The Flutter library that reported the error.
   /// - `context` — Additional error context from Flutter.
   /// - `timestamp` — ISO 8601 timestamp of when the error was captured.
-  static List<Map<String, dynamic>> get errors => List.unmodifiable(_errorBuffer);
+  static List<Map<String, dynamic>> get errors =>
+      List.unmodifiable(_errorBuffer);
 }

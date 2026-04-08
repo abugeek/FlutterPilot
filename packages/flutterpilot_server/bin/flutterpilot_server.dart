@@ -5,9 +5,22 @@ import 'package:flutterpilot_server/flutterpilot_server.dart';
 
 void main(List<String> args) async {
   final parser = ArgParser()
-    ..addOption('uri', abbr: 'u', help: 'The VM Service URI of the running Flutter app.')
-    ..addFlag('allow-destructive', abbr: 'd', help: 'Allow non-SELECT queries on databases.', negatable: false)
-    ..addOption('log-level', help: 'Log level (fine, info, warning, severe).', defaultsTo: 'info');
+    ..addOption(
+      'uri',
+      abbr: 'u',
+      help: 'The VM Service URI of the running Flutter app.',
+    )
+    ..addFlag(
+      'allow-destructive',
+      abbr: 'd',
+      help: 'Allow non-SELECT queries on databases.',
+      negatable: false,
+    )
+    ..addOption(
+      'log-level',
+      help: 'Log level (fine, info, warning, severe).',
+      defaultsTo: 'info',
+    );
 
   final results = parser.parse(args);
   final uri = results['uri'];
@@ -17,7 +30,9 @@ void main(List<String> args) async {
   _setupLogging(results['log-level'] as String);
 
   if (uri == null) {
-    stderr.writeln('Usage: flutterpilot_server --uri <vm-service-uri> [--allow-destructive] [--log-level fine|info|warning|severe]');
+    stderr.writeln(
+      'Usage: flutterpilot_server --uri <vm-service-uri> [--allow-destructive] [--log-level fine|info|warning|severe]',
+    );
     exit(1);
   }
 
@@ -51,7 +66,8 @@ void _setupLogging(String levelName) {
   logging.Logger.root.level = level;
   logging.Logger.root.onRecord.listen((record) {
     final time = record.time.toIso8601String().substring(11, 23);
-    final msg = '[$time] ${record.level.name} [${record.loggerName}] ${record.message}';
+    final msg =
+        '[$time] ${record.level.name} [${record.loggerName}] ${record.message}';
     if (record.error != null) {
       stderr.writeln('$msg\n  ${record.error}');
       if (record.stackTrace != null) stderr.writeln('  ${record.stackTrace}');

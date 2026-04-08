@@ -35,7 +35,7 @@ void main() {
       expect(manager.isUnstable, isTrue);
       expect(manager.lastCrashReport, isNotNull);
       expect(manager.lastCrashReport!.exception, 'TestException');
-      
+
       // Verify alert was "sent" (though we commented out the actual call in the implementation for safety)
       // If we uncomment it later, we can verify it here.
     });

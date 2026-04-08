@@ -68,7 +68,7 @@ class FlutterPilot {
 
   static final Map<String, Function> _customTools = {};
   static final Map<String, Future<dynamic> Function(String name, dynamic value)>
-      _stateSetters = {};
+  _stateSetters = {};
   static bool _isRecording = false;
   static final List<Map<String, dynamic>> _recordedActions = [];
 
@@ -133,7 +133,7 @@ class FlutterPilot {
         _recordAction('error', {'exception': details.exceptionAsString()});
       }
       postEvent('ext.flutterpilot.error', {
-        'exception': details.exceptionAsString()
+        'exception': details.exceptionAsString(),
       });
     };
 
@@ -212,9 +212,9 @@ class FlutterPilot {
   static void logStateChange(String source, String name, dynamic value) {
     if (_isRecording) {
       _recordAction('state_change', {
-        'source': source, 
-        'name': name, 
-        'value': _safeJsonEncode(value)
+        'source': source,
+        'name': name,
+        'value': _safeJsonEncode(value),
       });
     }
   }
@@ -244,62 +244,74 @@ class FlutterPilot {
     // -- ext.flutterpilot.getSummary ------------------------------------------
     // Returns a high-level snapshot: current route, error count, recording
     // state, and total widget count.
-    registerExtension('ext.flutterpilot.getSummary', (method, parameters) async {
+    registerExtension('ext.flutterpilot.getSummary', (
+      method,
+      parameters,
+    ) async {
       final root = WidgetsBinding.instance.rootElement;
-      return ServiceExtensionResponse.result(json.encode({
-        'status': 'ok',
-        'currentRoute': NavigationTracker.currentRoute,
-        'errorCount': ErrorInspector.errors.length,
-        'isRecording': _isRecording,
-        'widgetCount': root != null ? PilotWidgetInspector.countElements(root) : 0,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'ok',
+          'currentRoute': NavigationTracker.currentRoute,
+          'errorCount': ErrorInspector.errors.length,
+          'isRecording': _isRecording,
+          'widgetCount': root != null
+              ? PilotWidgetInspector.countElements(root)
+              : 0,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.ping ------------------------------------------------
     // Health-check endpoint. Returns SDK version.
     registerExtension('ext.flutterpilot.ping', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'status': 'ok', 
-        'version': '0.0.1'
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'ok', 'version': '0.0.1'}),
+      );
     });
 
     // -- ext.flutterpilot.getErrors -------------------------------------------
     // Returns the buffered error list from [ErrorInspector].
     registerExtension('ext.flutterpilot.getErrors', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'errors': ErrorInspector.errors
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({'errors': ErrorInspector.errors}),
+      );
     });
 
     // -- ext.flutterpilot.listCustomTools -------------------------------------
     // Lists names of all tools registered via [registerCustomTool].
-    registerExtension('ext.flutterpilot.listCustomTools', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'tools': _customTools.keys.toList()
-      }));
+    registerExtension('ext.flutterpilot.listCustomTools', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({'tools': _customTools.keys.toList()}),
+      );
     });
 
     // -- ext.flutterpilot.callCustomTool --------------------------------------
     // Invokes a custom tool by `name`. Extra params are forwarded to the
     // callback. Returns `invalidParams` if the tool name is missing or unknown.
-    registerExtension('ext.flutterpilot.callCustomTool', (method, parameters) async {
+    registerExtension('ext.flutterpilot.callCustomTool', (
+      method,
+      parameters,
+    ) async {
       final name = parameters['name'];
       if (name == null || !_customTools.containsKey(name)) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Tool not found'
+          ServiceExtensionResponse.invalidParams,
+          'Tool not found',
         );
       }
       try {
         final result = await _customTools[name]!(parameters);
-        return ServiceExtensionResponse.result(json.encode({
-          'result': _safeJsonEncode(result)
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'result': _safeJsonEncode(result)}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Error: $e'
+          ServiceExtensionResponse.extensionError,
+          'Error: $e',
         );
       }
     });
@@ -307,47 +319,56 @@ class FlutterPilot {
     // -- ext.flutterpilot.getWidgetTree ---------------------------------------
     // Captures the full widget tree as a nested JSON structure via
     // [PilotWidgetInspector.captureWidgetTree].
-    registerExtension('ext.flutterpilot.getWidgetTree', (method, parameters) async {
+    registerExtension('ext.flutterpilot.getWidgetTree', (
+      method,
+      parameters,
+    ) async {
       try {
-        return ServiceExtensionResponse.result(json.encode({
-          'tree': PilotWidgetInspector.captureWidgetTree()
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'tree': PilotWidgetInspector.captureWidgetTree()}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Error: $e'
+          ServiceExtensionResponse.extensionError,
+          'Error: $e',
         );
       }
     });
 
     // -- ext.flutterpilot.captureScreenshot -----------------------------------
     // Returns a base64-encoded PNG screenshot of the current render tree.
-    registerExtension('ext.flutterpilot.captureScreenshot', (method, parameters) async {
+    registerExtension('ext.flutterpilot.captureScreenshot', (
+      method,
+      parameters,
+    ) async {
       try {
         final bytes = await _captureScreenshot();
         if (bytes == null) {
           return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.extensionError, 
-            'No RenderView'
+            ServiceExtensionResponse.extensionError,
+            'No RenderView',
           );
         }
-        return ServiceExtensionResponse.result(json.encode({
-          'data': base64Encode(bytes)
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'data': base64Encode(bytes)}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Error: $e'
+          ServiceExtensionResponse.extensionError,
+          'Error: $e',
         );
       }
     });
 
     // -- ext.flutterpilot.getNavigationStack ----------------------------------
     // Returns the ordered navigation route stack from [NavigationTracker].
-    registerExtension('ext.flutterpilot.getNavigationStack', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'stack': NavigationTracker.stack
-      }));
+    registerExtension('ext.flutterpilot.getNavigationStack', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({'stack': NavigationTracker.stack}),
+      );
     });
 
     // -- ext.flutterpilot.setLocale -------------------------------------------
@@ -357,8 +378,8 @@ class FlutterPilot {
       final code = parameters['locale'];
       if (code == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Missing locale'
+          ServiceExtensionResponse.invalidParams,
+          'Missing locale',
         );
       }
       try {
@@ -366,66 +387,88 @@ class FlutterPilot {
           localeNotifier.value = null;
         } else {
           final parts = code.split('_');
-          localeNotifier.value = parts.length > 1 
-              ? ui.Locale(parts[0], parts[1]) 
+          localeNotifier.value = parts.length > 1
+              ? ui.Locale(parts[0], parts[1])
               : ui.Locale(parts[0]);
         }
-        return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success'}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Error: $e'
+          ServiceExtensionResponse.extensionError,
+          'Error: $e',
         );
       }
     });
 
     // -- ext.flutterpilot.getPerfMetrics --------------------------------------
     // Returns the current FPS estimate and a timestamp.
-    registerExtension('ext.flutterpilot.getPerfMetrics', (method, parameters) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'fps': _lastFps.toStringAsFixed(1),
-        'timestamp': DateTime.now().toIso8601String(),
-      }));
+    registerExtension('ext.flutterpilot.getPerfMetrics', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'fps': _lastFps.toStringAsFixed(1),
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
     });
 
     // -- ext.flutterpilot.navigateTo ------------------------------------------
     // Pushes a named route via `Navigator.of(context).pushNamed(route)`.
     // Requires `route` parameter.
-    registerExtension('ext.flutterpilot.navigateTo', (method, parameters) async {
+    registerExtension('ext.flutterpilot.navigateTo', (
+      method,
+      parameters,
+    ) async {
       final route = parameters['route'];
       final context = WidgetsBinding.instance.rootElement;
       if (route != null && context != null) {
         try {
           if (_isRecording) _recordAction('navigate', {'route': route});
           Navigator.of(context).pushNamed(route);
-          return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success'}),
+          );
         } catch (e) {
           return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.extensionError, 
-            'Failed: $e'
+            ServiceExtensionResponse.extensionError,
+            'Failed: $e',
           );
         }
       }
       return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.invalidParams, 
-        'Missing params'
+        ServiceExtensionResponse.invalidParams,
+        'Missing params',
       );
     });
 
     // -- ext.flutterpilot.startRecording --------------------------------------
     // Begins recording user interactions, navigations, and errors.
     // Clears any previously recorded actions.
-    registerExtension('ext.flutterpilot.startRecording', (method, parameters) async {
+    registerExtension('ext.flutterpilot.startRecording', (
+      method,
+      parameters,
+    ) async {
       _isRecording = true;
       _recordedActions.clear();
-      return ServiceExtensionResponse.result(json.encode({'status': 'started'}));
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'started'}),
+      );
     });
 
     // -- ext.flutterpilot.stopRecording ---------------------------------------
     // Stops recording and returns all captured actions as a JSON array.
-    registerExtension('ext.flutterpilot.stopRecording', (method, parameters) async {
+    registerExtension('ext.flutterpilot.stopRecording', (
+      method,
+      parameters,
+    ) async {
       _isRecording = false;
-      return ServiceExtensionResponse.result(json.encode({'actions': _recordedActions}));
+      return ServiceExtensionResponse.result(
+        json.encode({'actions': _recordedActions}),
+      );
     });
 
     // -- ext.flutterpilot.tapAt -----------------------------------------------
@@ -435,13 +478,15 @@ class FlutterPilot {
       final y = double.tryParse(parameters['y'] ?? '');
       if (x == null || y == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Invalid coords'
+          ServiceExtensionResponse.invalidParams,
+          'Invalid coords',
         );
       }
       if (_isRecording) _recordAction('tapAt', {'x': x, 'y': y});
       await InteractionManager.tapAt(Offset(x, y));
-      return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
     });
 
     // -- ext.flutterpilot.tapWidget -------------------------------------------
@@ -451,15 +496,15 @@ class FlutterPilot {
       final key = parameters['key'];
       if (key == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Missing key'
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
         );
       }
       final element = PilotWidgetInspector.findElementByKey(key);
       if (element == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Widget not found'
+          ServiceExtensionResponse.extensionError,
+          'Widget not found',
         );
       }
       final ro = element.renderObject;
@@ -467,11 +512,13 @@ class FlutterPilot {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         if (_isRecording) _recordAction('tapWidget', {'key': key});
         await InteractionManager.tapAt(pos);
-        return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success'}),
+        );
       }
       return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.extensionError, 
-        'No layout'
+        ServiceExtensionResponse.extensionError,
+        'No layout',
       );
     });
 
@@ -484,15 +531,15 @@ class FlutterPilot {
       final text = parameters['text'];
       if (key == null || text == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Missing params'
+          ServiceExtensionResponse.invalidParams,
+          'Missing params',
         );
       }
       final element = PilotWidgetInspector.findElementByKey(key);
       if (element == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Widget not found'
+          ServiceExtensionResponse.extensionError,
+          'Widget not found',
         );
       }
       bool found = false;
@@ -502,7 +549,9 @@ class FlutterPilot {
           try {
             (e.state as dynamic).controller.text = text;
             found = true;
-            if (_isRecording) _recordAction('enterText', {'key': key, 'text': text});
+            if (_isRecording) {
+              _recordAction('enterText', {'key': key, 'text': text});
+            }
           } on NoSuchMethodError catch (_) {
             // Controller not accessible on this EditableTextState variant.
           }
@@ -510,35 +559,41 @@ class FlutterPilot {
         }
         e.visitChildren(findText);
       }
+
       findText(element);
-      return found 
-          ? ServiceExtensionResponse.result(json.encode({'status': 'success'})) 
+      return found
+          ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
           : ServiceExtensionResponse.error(
-              ServiceExtensionResponse.extensionError, 
-              'Not text field'
+              ServiceExtensionResponse.extensionError,
+              'Not text field',
             );
     });
 
     // -- ext.flutterpilot.scrollIntoView --------------------------------------
     // Scrolls the widget identified by `key` into the visible viewport
     // using [Scrollable.ensureVisible].
-    registerExtension('ext.flutterpilot.scrollIntoView', (method, parameters) async {
+    registerExtension('ext.flutterpilot.scrollIntoView', (
+      method,
+      parameters,
+    ) async {
       final key = parameters['key'];
       if (key == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Missing key'
+          ServiceExtensionResponse.invalidParams,
+          'Missing key',
         );
       }
       final element = PilotWidgetInspector.findElementByKey(key);
       if (element == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'Widget not found'
+          ServiceExtensionResponse.extensionError,
+          'Widget not found',
         );
       }
       Scrollable.ensureVisible(element);
-      return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success'}),
+      );
     });
 
     // -- ext.flutterpilot.setState --------------------------------------------
@@ -549,60 +604,83 @@ class FlutterPilot {
       final type = parameters['type'];
       final name = parameters['name'];
       final valueJson = parameters['value'];
-      
+
       if (type == null || name == null || valueJson == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams, 
-          'Missing type, name, or value'
+          ServiceExtensionResponse.invalidParams,
+          'Missing type, name, or value',
         );
       }
 
       if (!_stateSetters.containsKey(type)) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'No setter registered for type: $type'
+          ServiceExtensionResponse.extensionError,
+          'No setter registered for type: $type',
         );
       }
 
       try {
         final dynamic value = json.decode(valueJson);
         final result = await _stateSetters[type]!(name, value);
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success', 
-          'result': _safeJsonEncode(result)
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'result': _safeJsonEncode(result)}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError, 
-          'State injection failed: $e'
+          ServiceExtensionResponse.extensionError,
+          'State injection failed: $e',
         );
       }
     });
   }
 
   static dynamic _safeJsonEncode(dynamic object) {
-    if (object == null || object is num || object is bool || object is String) return object;
-    if (object is Map) return object.map((k, v) => MapEntry(k.toString(), _safeJsonEncode(v)));
-    if (object is Iterable) return object.map(_safeJsonEncode).toList();
-    try { return (object as dynamic).toJson(); } on NoSuchMethodError catch (_) { return object.toString(); }
+    if (object == null || object is num || object is bool || object is String) {
+      return object;
+    }
+    if (object is Map) {
+      return object.map((k, v) => MapEntry(k.toString(), _safeJsonEncode(v)));
+    }
+    if (object is Iterable) {
+      return object.map(_safeJsonEncode).toList();
+    }
+    try {
+      return (object as dynamic).toJson();
+    } on NoSuchMethodError catch (_) {
+      return object.toString();
+    }
   }
 
   static Future<Uint8List?> _captureScreenshot() async {
     try {
-      final pixelRatio = WidgetsBinding.instance.platformDispatcher.implicitView?.devicePixelRatio ?? 1.0;
+      final pixelRatio =
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .implicitView
+              ?.devicePixelRatio ??
+          1.0;
       RenderRepaintBoundary? boundary;
       void findBoundary(RenderObject object) {
         if (boundary != null) return;
-        if (object is RenderRepaintBoundary) { boundary = object; return; }
+        if (object is RenderRepaintBoundary) {
+          boundary = object;
+          return;
+        }
         object.visitChildren(findBoundary);
       }
-      for (final rv in WidgetsBinding.instance.renderViews) { findBoundary(rv); }
+
+      for (final rv in WidgetsBinding.instance.renderViews) {
+        findBoundary(rv);
+      }
       if (boundary != null) {
         final image = await boundary!.toImage(pixelRatio: pixelRatio);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         return byteData?.buffer.asUint8List();
       }
-    } catch (e) { debugPrint('Screenshot error: $e'); }
+    } catch (e) {
+      debugPrint('Screenshot error: $e');
+    }
     return null;
   }
 }

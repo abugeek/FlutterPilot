@@ -21,19 +21,19 @@ void main() {
     test('tracks Cubit state transitions', () {
       final cubit = CounterCubit();
       cubit.increment();
-      
+
       expect(cubit.state, 1);
       cubit.close();
     });
 
     test('handles state injection if dynamic emit is possible', () async {
-      // This is mostly to ensure the observer's internal registry 
+      // This is mostly to ensure the observer's internal registry
       // and state setter logic don't crash.
       final cubit = CounterCubit();
-      
+
       // The observer captures it on creation
       // ... logic here
-      
+
       cubit.close();
     });
   });

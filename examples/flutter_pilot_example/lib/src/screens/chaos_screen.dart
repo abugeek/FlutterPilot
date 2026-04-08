@@ -25,21 +25,31 @@ class _ChaosScreenState extends State<ChaosScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.warning_amber_rounded, size: 80, color: Colors.orange),
+            const Icon(
+              Icons.warning_amber_rounded,
+              size: 80,
+              color: Colors.orange,
+            ),
             const SizedBox(height: 20),
             const Text('Test the Self-Heal loop by crashing the app.'),
             const SizedBox(height: 40),
             ElevatedButton(
               key: const Key('trigger_sync_error_button'),
               onPressed: _triggerSyncError,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Trigger Sync Error'),
             ),
             const SizedBox(height: 10),
             ElevatedButton(
               key: const Key('trigger_async_error_button'),
               onPressed: _triggerAsyncError,
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Trigger Async Error'),
             ),
           ],

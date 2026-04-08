@@ -35,23 +35,27 @@ base class RiverpodPilotObserver extends ProviderObserver {
 
   void _registerExtension() {
     if (!FlutterPilot.isInitialized) {
-      debugPrint('FlutterPilot: RiverpodPilotObserver registered before '
-          'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.');
+      debugPrint(
+        'FlutterPilot: RiverpodPilotObserver registered before '
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
+      );
     }
 
     FlutterPilot.registerStateSetter('riverpod', (name, value) async {
       final container = _lastContainer;
-      if (container == null) throw 'No ProviderContainer found. Is the app running?';
-      
+      if (container == null)
+        throw 'No ProviderContainer found. Is the app running?';
+
       final provider = _providers[name];
-      if (provider == null) throw 'Provider "$name" not found or not yet active.';
+      if (provider == null)
+        throw 'Provider "$name" not found or not yet active.';
 
       try {
         // Use dynamic to access 'notifier' which exists on most Riverpod
         // providers but is not defined on the base ProviderBase class.
         final dynamic dynamicProvider = provider;
         final dynamic notifier = container.read(dynamicProvider.notifier);
-        
+
         if (notifier is StateController) {
           notifier.state = value;
         } else {
@@ -67,17 +71,25 @@ base class RiverpodPilotObserver extends ProviderObserver {
       }
     });
 
-    registerExtension('ext.flutterpilot.getRiverpodStates', (method, parameters) async {
+    registerExtension('ext.flutterpilot.getRiverpodStates', (
+      method,
+      parameters,
+    ) async {
       return ServiceExtensionResponse.result(json.encode({'states': _states}));
     });
   }
 
   @override
-  void didUpdateProvider(ProviderBase<Object?> provider, Object? previousValue, Object? newValue, ProviderContainer container) {
+  void didUpdateProvider(
+    ProviderBase<Object?> provider,
+    Object? previousValue,
+    Object? newValue,
+    ProviderContainer container,
+  ) {
     _lastContainer = container;
     final name = provider.runtimeType.toString();
     _providers[name] = provider;
-    
+
     _states[name] = {
       'value': newValue.toString(),
       'type': newValue.runtimeType.toString(),
@@ -87,7 +99,11 @@ base class RiverpodPilotObserver extends ProviderObserver {
   }
 
   @override
-  void didAddProvider(ProviderBase<Object?> provider, Object? value, ProviderContainer container) {
+  void didAddProvider(
+    ProviderBase<Object?> provider,
+    Object? value,
+    ProviderContainer container,
+  ) {
     _lastContainer = container;
     final name = provider.runtimeType.toString();
     _providers[name] = provider;
