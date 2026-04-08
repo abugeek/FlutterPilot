@@ -2,6 +2,12 @@ import * as cp from 'child_process';
 import * as readline from 'readline';
 import * as path from 'path';
 
+export interface ServerOptions {
+    serverPath?: string;
+    logLevel?: string;
+    allowDestructive?: boolean;
+}
+
 export class McpClient {
     private process?: cp.ChildProcess;
     private rl?: readline.Interface;
@@ -10,15 +16,24 @@ export class McpClient {
 
     constructor(private extensionPath: string) {}
 
-    async start(uri: string): Promise<void> {
+    async start(uri: string, options: ServerOptions = {}): Promise<void> {
         if (this.process) {
             this.stop();
         }
 
-        const serverPath = path.join(this.extensionPath, '..', 'flutterpilot_server', 'bin', 'flutterpilot_server.dart');
+        const serverPath = options.serverPath ||
+            path.join(this.extensionPath, '..', 'flutterpilot_server', 'bin', 'flutterpilot_server.dart');
         
+        const args = ['run', serverPath, '--uri', uri];
+        if (options.logLevel) {
+            args.push('--log-level', options.logLevel);
+        }
+        if (options.allowDestructive) {
+            args.push('--allow-destructive');
+        }
+
         // Spawn server process
-        this.process = cp.spawn('dart', ['run', serverPath, '--uri', uri]);
+        this.process = cp.spawn('dart', args);
 
         this.rl = readline.createInterface({
             input: this.process.stdout!,

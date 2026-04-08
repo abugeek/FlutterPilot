@@ -2,8 +2,13 @@
   "name": "flutterpilot-vscode",
   "displayName": "FlutterPilot",
   "description": "AI-native runtime introspection and active control for Flutter.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "flutterpilot",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abugeek/FlutterPilot"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -33,6 +38,39 @@
         "category": "FlutterPilot"
       }
     ],
+    "configuration": {
+      "title": "FlutterPilot",
+      "properties": {
+        "flutterpilot.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom path to the flutterpilot_server executable. Leave empty to use the default (dart run)."
+        },
+        "flutterpilot.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the MCP server when a Flutter debug session begins."
+        },
+        "flutterpilot.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": ["fine", "info", "warning", "severe"],
+          "description": "Log level for the MCP server output."
+        },
+        "flutterpilot.dashboardRefreshInterval": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Dashboard auto-refresh interval in milliseconds."
+        },
+        "flutterpilot.allowDestructive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow non-SELECT database queries (INSERT, UPDATE, DELETE) via the Drift plugin."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

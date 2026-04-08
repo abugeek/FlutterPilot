@@ -6,6 +6,10 @@ import { StatusBarManager } from './status_bar';
 let mcpClient: McpClient;
 let statusBar: StatusBarManager;
 
+function getConfig() {
+    return vscode.workspace.getConfiguration('flutterpilot');
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('FlutterPilot extension is now active!');
 
@@ -28,7 +32,12 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (uri) {
             try {
-                await mcpClient.start(uri);
+                const config = getConfig();
+                await mcpClient.start(uri, {
+                    serverPath: config.get<string>('serverPath') || undefined,
+                    logLevel: config.get<string>('logLevel') || 'info',
+                    allowDestructive: config.get<boolean>('allowDestructive') || false,
+                });
                 statusBar.update(true);
                 vscode.window.showInformationMessage(`FlutterPilot Connected to: ${uri}`);
                 dashboardProvider.updateState();
@@ -66,14 +75,17 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // Automatically detect debug sessions
-    vscode.debug.onDidStartDebugSession(async (session) => {
-        if (session.type === 'dart') {
-            const vmUri = (session.configuration as any).vmServiceUri;
-            if (vmUri) {
-                vscode.commands.executeCommand('flutterpilot.startServer', vmUri);
+    const autoStart = getConfig().get<boolean>('autoStart', true);
+    if (autoStart) {
+        vscode.debug.onDidStartDebugSession(async (session) => {
+            if (session.type === 'dart') {
+                const vmUri = (session.configuration as any).vmServiceUri;
+                if (vmUri) {
+                    vscode.commands.executeCommand('flutterpilot.startServer', vmUri);
+                }
             }
-        }
-    });
+        });
+    }
 
     context.subscriptions.push(startServerCmd, captureScreenshotCmd, openDashboardCmd, statusBar);
 }
