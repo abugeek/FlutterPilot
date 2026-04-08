@@ -51,6 +51,7 @@ class FlutterPilotServer {
         ) {
     _selfHealManager = SelfHealManager(server: server);
     _registerTools();
+    _registerPrompts();
   }
 
   Future<void> start() async {
@@ -376,8 +377,8 @@ class FlutterPilotServer {
           'Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\\"hello\\"").',
       inputSchema: ToolInputSchema(
         properties: {
-          'provider': JsonSchema.string(),
-          'value': JsonSchema.string(),
+          'provider': JsonSchema.string(description: 'The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider").'),
+          'value': JsonSchema.string(description: 'The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings.'),
         },
         required: ['provider', 'value'],
       ),
@@ -394,8 +395,8 @@ class FlutterPilotServer {
           'Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_bloc_state`. The `state` should be a JSON string (e.g. "42", "true").',
       inputSchema: ToolInputSchema(
         properties: {
-          'cubit': JsonSchema.string(),
-          'state': JsonSchema.string(),
+          'cubit': JsonSchema.string(description: 'The Bloc/Cubit class name as registered (e.g. "CounterCubit", "AuthBloc").'),
+          'state': JsonSchema.string(description: 'The new state value to inject. Use JSON-serializable representation.'),
         },
         required: ['cubit', 'state'],
       ),
@@ -426,7 +427,7 @@ class FlutterPilotServer {
       name: 'list_drift_tables',
       description: 'List all tables in the SQLite (Drift) database.',
       extension: 'ext.flutterpilot.listDriftTables',
-      properties: {'dbName': JsonSchema.string()},
+      properties: {'dbName': JsonSchema.string(description: 'The Drift database name registered via FlutterPilot.')},
     );
 
     _registerAppTool(
@@ -472,9 +473,9 @@ class FlutterPilotServer {
           'Call this any time you need to see what the app is printing.',
       inputSchema: ToolInputSchema(
         properties: {
-          'level': JsonSchema.string(),
-          'limit': JsonSchema.integer(),
-          'logger': JsonSchema.string(),
+          'level': JsonSchema.string(description: 'Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels.'),
+          'limit': JsonSchema.integer(description: 'Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only.'),
+          'logger': JsonSchema.string(description: 'Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name.'),
         },
       ),
       callback: (params, extra) async {
@@ -579,7 +580,7 @@ class FlutterPilotServer {
       description:
           'Execute a raw SQL SELECT query on the local database. CALL THIS to verify complex data relationships or transaction history.',
       inputSchema: ToolInputSchema(
-        properties: {'dbName': JsonSchema.string(), 'sql': JsonSchema.string()},
+        properties: {'dbName': JsonSchema.string(description: 'The Drift database name registered via FlutterPilot.'), 'sql': JsonSchema.string(description: 'A SQL SELECT, EXPLAIN, or WITH query. Write-operations (INSERT/UPDATE/DELETE) are blocked.')},
         required: ['dbName', 'sql'],
       ),
       callback: (params, extra) async {
@@ -622,7 +623,7 @@ class FlutterPilotServer {
           'Executes an app-specific tool defined by the developer. CALL THIS if you see a relevant tool listed in `list_custom_tools`.',
       inputSchema: ToolInputSchema(
         properties: {
-          'name': JsonSchema.string(),
+          'name': JsonSchema.string(description: 'The custom tool name as registered via FlutterPilot.registerCustomTool().'),
           'params': JsonSchema.object(),
         },
         required: ['name'],
@@ -638,7 +639,7 @@ class FlutterPilotServer {
       description:
           'Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if you have a Key.',
       inputSchema: ToolInputSchema(
-        properties: {'x': JsonSchema.number(), 'y': JsonSchema.number()},
+        properties: {'x': JsonSchema.number(description: 'X screen coordinate in logical pixels. Screen origin is top-left.'), 'y': JsonSchema.number(description: 'Y screen coordinate in logical pixels. Screen origin is top-left.')},
         required: ['x', 'y'],
       ),
       callback: (p, e) async {
@@ -660,7 +661,7 @@ class FlutterPilotServer {
       description:
           'Finds a widget by its Key and taps its center. HINT: Use `get_widget_tree` to find the Key first. After tapping, you should verify state changes.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.')},
         required: ['key'],
       ),
       callback: (p, e) async {
@@ -682,7 +683,7 @@ class FlutterPilotServer {
       description:
           'Types text into a TextField identified by a Key. Automatically handles controller updates and change notifications.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(), 'text': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.'), 'text': JsonSchema.string(description: 'The text label of the widget to tap (e.g. button label). Alternative to key.')},
         required: ['key', 'text'],
       ),
       callback: (p, e) async {
@@ -704,7 +705,7 @@ class FlutterPilotServer {
       description:
           'Ensures a widget is visible by scrolling its parent list. Use this before tapping a widget that might be off-screen.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to scroll into view.')},
         required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -718,7 +719,7 @@ class FlutterPilotServer {
       description:
           'Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string()},
+        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys.')},
         required: ['key'],
       ),
       callback: (p, e) async {
@@ -743,8 +744,8 @@ class FlutterPilotServer {
           'Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(),
-          'durationMs': JsonSchema.integer(),
+          'key': JsonSchema.string(description: 'The ValueKey string of the widget to long-press.'),
+          'durationMs': JsonSchema.integer(description: 'How long to wait for the widget (default: 5000ms). Throws if widget not found.'),
         },
         required: ['key'],
       ),
@@ -2390,6 +2391,153 @@ class FlutterPilotServer {
             isError: true,
           );
         }
+      },
+    );
+  }
+
+  void _registerPrompts() {
+    server.registerPrompt(
+      'flutterpilot_guide',
+      title: 'FlutterPilot Usage Guide',
+      description:
+          'Complete guide on how to use FlutterPilot tools effectively. '
+          'Call this prompt at the start of a session to understand all 82 tools, '
+          'when to use each one, and recommended workflows.',
+      callback: (args, extra) async {
+        return GetPromptResult(
+          description: 'FlutterPilot complete usage guide',
+          messages: [
+            PromptMessage(
+              role: PromptMessageRole.user,
+              content: TextContent(
+                text: '''# FlutterPilot — AI Agent Guide
+
+You are connected to a live Flutter app via FlutterPilot (82 MCP tools).
+Use this guide to understand what tools to call, when, and in what order.
+
+## First Steps (always start here)
+1. `get_app_summary` — Understand current state: route, errors, widget count
+2. `capture_screenshot` — See what the user sees right now
+3. `get_widget_tree` — Discover widget keys and structure for interactions
+
+## Interaction Tools
+- `tap_widget(key)` — Tap by ValueKey string (find keys via get_widget_tree)
+- `tap_at(x, y)` — Tap at pixel coordinates (use screenshot to determine coords)
+- `enter_text(key, text)` — Type into a text field
+- `swipe_widget(key, direction, durationMs)` — Swipe gesture
+- `long_press_widget(key)` — Long press
+- `double_tap_widget(key)` — Double tap
+- `set_slider_value(key, value)` — Move a slider
+- `toggle_checkbox(key)` — Toggle checkbox/switch/radio
+- `press_back` — Hardware back button
+
+## Navigation
+- `navigate_to(route)` — Go to a named route (e.g. "/home")
+- `get_navigation_stack` — See current route stack
+- `wait_for_route(route, timeoutMs)` — Wait for navigation to complete
+
+## Waiting & Synchronization
+- `wait_for_widget(key, timeoutMs)` — Wait for a widget to appear
+- `wait_for_animation(timeoutMs)` — Wait for all animations to settle
+- `wait_for_state(condition, timeoutMs)` — Wait for custom condition
+- `pump_frames(count)` — Advance N animation frames manually
+
+## Reading App State
+- `get_errors` — Runtime errors caught by the app
+- `get_riverpod_state(provider)` — Read a Riverpod provider value
+- `get_bloc_state(cubit)` — Read a Bloc/Cubit state
+- `get_shared_preferences` — Read all SharedPreferences
+- `get_hive_contents` — Read Hive box data
+- `get_network_logs` — Dio HTTP request/response history (requires Dio plugin)
+- `get_semantics_tree` — Accessibility tree (for a11y testing)
+
+## Debug Console (replaces manual VS Code copy-paste)
+- `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
+- `clear_debug_logs` — Clear buffer before a test
+- `set_log_filter` — Clear both server + app buffers
+
+## DevTools-Level Deep Inspection
+- `get_memory_details` — Heap used/capacity/external per isolate
+- `get_allocation_profile(limit)` — Top Dart classes by heap bytes (find leaks)
+- `get_gc_stats` — GC heap pressure
+- `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
+- `clear_http_profile` — Reset before testing a specific API call
+- `get_render_tree` — Render object layout tree
+- `get_layer_tree` — GPU compositing layers
+- `get_vm_info` — Dart VM version, all isolates
+- `toggle_repaint_rainbow(enabled)` — Highlight layers that repaint (perf debugging)
+- `toggle_debug_paint(enabled)` — Show layout bounds and padding
+- `toggle_slow_animations(enabled)` — 5x slow motion for animation inspection
+- `enable_widget_rebuild_tracking(enabled)` — Count per-widget rebuilds
+
+## Visual Testing
+- `capture_screenshot` — Get current screen as image
+- `save_screenshot_baseline(filename)` — Save reference image
+- `compare_screenshot(filename)` — Pixel-diff against reference
+- `get_widget_properties(key)` — Read widget text, enabled state, bounds
+
+## Assertions
+- `assert_widget_visible(key)` — Assert widget is on screen
+- `assert_widget_enabled(key)` — Assert widget is tappable
+- `assert_widget_disabled(key)` — Assert widget is disabled
+- `assert_text_visible(text, exact)` — Assert text appears on screen
+- `assert_widget_count(type, count)` — Assert N widgets of given type
+
+## Performance & Overlays
+- `get_perf_metrics` — FPS + heap summary
+- `hot_reload` — Apply code changes without restarting
+- `hot_restart` — Full app restart
+
+## State Management Tools
+- `set_riverpod_state(provider, value)` — Inject Riverpod state
+- `set_bloc_state(cubit, state)` — Inject Bloc state
+- `set_locale(locale)` — Switch language (e.g. "ar", "fr", "en")
+- `set_theme(theme)` — Switch light/dark mode
+- `set_text_scale_factor(scale)` — Test accessibility (try 2.0)
+
+## Custom / App-Specific Tools
+- `list_custom_tools` — Discover tools the developer registered
+- `call_custom_tool(name, ...params)` — Execute an app-specific tool
+
+## Recommended Workflows
+
+### Debugging an issue
+1. get_app_summary → get_errors → get_debug_logs(level:"error")
+2. capture_screenshot → get_widget_tree
+3. Reproduce the issue → get_debug_logs → get_http_profile
+
+### Testing a user flow
+1. clear_debug_logs → clear_http_profile (clean baseline)
+2. Perform interactions with tap_widget / enter_text
+3. wait_for_animation or wait_for_widget after each step
+4. assert_widget_visible / assert_text_visible to verify outcome
+5. capture_screenshot for visual record
+
+### Memory leak investigation
+1. get_memory_details (record baseline)
+2. Navigate through the suspected screen
+3. press_back to return
+4. get_memory_details (compare — heap should not grow)
+5. get_allocation_profile (find which class is accumulating)
+
+### Performance debugging
+1. enable_widget_rebuild_tracking(true)
+2. toggle_repaint_rainbow(true)
+3. Interact with the app
+4. get_perf_metrics → look for FPS drops
+5. toggle_slow_animations(true) to inspect animations visually
+
+## Key Rules
+- Always call get_widget_tree BEFORE tap_widget to discover correct keys
+- Widget keys are ValueKey strings — they look like "loginButton", "emailField"
+- After any navigation, call wait_for_animation before the next interaction
+- Use get_debug_logs after any complex operation to see what the app printed
+- Use get_http_profile to verify API calls actually happened
+''',
+              ),
+            ),
+          ],
+        );
       },
     );
   }
