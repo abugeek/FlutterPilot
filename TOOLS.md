@@ -1,0 +1,1793 @@
+# FlutterPilot Tools Reference
+
+Complete reference of all 67 MCP tools available through FlutterPilot Server.
+
+**Table of Contents:**
+- [Screenshots & Layout](#screenshots--layout) (5 tools)
+- [UI Automation](#ui-automation) (15 tools)
+- [Navigation & Routing](#navigation--routing) (8 tools)
+- [State & Inspection](#state--inspection) (19 tools)
+- [Recording & Testing](#recording--testing) (6 tools)
+- [Custom Tools](#custom-tools) (3 tools)
+- [Performance & DevTools](#performance--devtools) (11 tools)
+
+---
+
+## Screenshots & Layout
+
+### `capture_screenshot`
+
+Capture the current screen as a PNG image.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "type": "resource",
+  "resource": {
+    "uri": "data:image/png;base64,iVBORw0KGgoAAAANS...",
+    "mimeType": "image/png"
+  }
+}
+```
+
+**Use Cases:**
+- AI visual debugging (layout, colors, spacing)
+- Test screenshot baselines
+- Bug documentation
+- Accessibility validation
+
+**Performance:** ~500ms for typical app
+
+---
+
+### `get_widget_tree`
+
+Return the full widget hierarchy as a nested JSON structure.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "tree": {
+    "type": "MaterialApp",
+    "key": null,
+    "props": {
+      "title": "My App",
+      "theme": "ThemeData(...)"
+    },
+    "children": [
+      {
+        "type": "Scaffold",
+        "key": null,
+        "props": { "appBar": "AppBar(...)" },
+        "children": [
+          { "type": "FloatingActionButton", "key": "submitBtn", ... }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Includes:**
+- Widget type name
+- Keys (for targeting)
+- Properties (text, colors, sizes)
+- Full nesting hierarchy
+- Creation location (file path + line)
+
+**Use Cases:**
+- Understand widget structure
+- Locate widgets by key
+- Debug layout hierarchy
+- Automated UI analysis
+
+---
+
+### `get_widget_properties` `key: string`
+
+Read state from a specific widget by key.
+
+**Parameters:**
+```json
+{
+  "key": "submitButton"
+}
+```
+
+**Returns:**
+```json
+{
+  "text": "Submit",
+  "isEnabled": true,
+  "isChecked": null,
+  "value": null,
+  "isFocused": false,
+  "bounds": {
+    "x": 100.5,
+    "y": 200.0,
+    "width": 150.0,
+    "height": 50.0
+  }
+}
+```
+
+**Supports Reading:**
+- `Text.data` for Text widgets
+- `enabled` for buttons/tappables
+- `value`/`selected` for Checkbox, Radio, Slider
+- `controller.text` for TextFields
+- `min`/`max` for Sliders
+- Focus state (is this widget focused?)
+- Bounds in screen space
+
+**Use Cases:**
+- Assert widget state before/after action
+- Read form values
+- Verify enabled/disabled state
+- Get positions for custom interactions
+
+---
+
+### `save_screenshot_baseline` `filename: string`
+
+Save current screenshot as a baseline for regression testing.
+
+**Parameters:**
+```json
+{
+  "filename": "home_screen.png"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "path": "/path/to/baselines/home_screen.png",
+  "size": 125432
+}
+```
+
+**Use Cases:**
+- Visual regression testing setup
+- Golden master images
+- Before/after comparison
+
+---
+
+### `compare_screenshot` `filename: string`
+
+Compare current screenshot to a saved baseline.
+
+**Parameters:**
+```json
+{
+  "filename": "home_screen.png"
+}
+```
+
+**Returns:**
+```json
+{
+  "match": true,
+  "percentage": 100.0,
+  "diff": null,
+  "baseline": "/path/to/baselines/home_screen.png",
+  "current": "data:image/png;base64,..."
+}
+```
+
+**If differences found:**
+```json
+{
+  "match": false,
+  "percentage": 94.2,
+  "diff": "data:image/png;base64,...",
+  "changes": {
+    "pixelsChanged": 5821,
+    "areaChanged": "top-right button area"
+  }
+}
+```
+
+**Use Cases:**
+- Visual regression detection
+- Layout change verification
+- Baseline updates
+
+---
+
+## UI Automation
+
+### `tap_at` `x: number, y: number`
+
+Tap at absolute screen coordinates.
+
+**Parameters:**
+```json
+{
+  "x": 250.5,
+  "y": 450.0
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Notes:**
+- Coordinates are in logical pixels (device-independent)
+- Use `capture_screenshot` to identify tap locations visually
+- Consider using `tap_widget` for device-independent taps
+
+**Use Cases:**
+- Tap custom widgets without keys
+- Tap at precise coordinates for testing
+- Interaction that requires exact position
+
+---
+
+### `tap_widget` `key: string`
+
+Tap a widget at its center by key.
+
+**Parameters:**
+```json
+{
+  "key": "submitButton"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "widgetFound": true,
+  "bounds": { "x": 100, "y": 200, "width": 150, "height": 50 }
+}
+```
+
+**Advantages over `tap_at`:**
+- Works on any screen size (device-independent)
+- Finds center automatically
+- Fails gracefully if widget not found
+
+**Use Cases:**
+- Tap buttons, FABs, menu items
+- Device-independent test automation
+- Form submission
+
+**Widget Key Format:**
+```dart
+// In your app:
+ElevatedButton(
+  key: const Key('submitButton'),
+  onPressed: () { ... },
+  child: Text('Submit'),
+)
+
+// In MCP call:
+{
+  "key": "submitButton"
+}
+```
+
+---
+
+### `double_tap_widget` `key: string`
+
+Double-tap a widget.
+
+**Parameters:**
+```json
+{
+  "key": "imageGallery"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Use Cases:**
+- Zoom in/out
+- Select/deselect items in gallery views
+- Custom double-tap handlers
+
+---
+
+### `long_press_widget` `key: string`
+
+Long-press a widget (0.5 second hold).
+
+**Parameters:**
+```json
+{
+  "key": "contextMenuItem"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Use Cases:**
+- Context menus
+- Long-press handlers
+- Selection gestures
+
+---
+
+### `enter_text` `key: string, text: string`
+
+Fill a text field with the given text.
+
+**Parameters:**
+```json
+{
+  "key": "emailField",
+  "text": "user@example.com"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "finalText": "user@example.com"
+}
+```
+
+**Notes:**
+- Clears existing text first
+- Triggers `onChanged` callbacks
+- Handles multiline text (with `\n`)
+
+**Use Cases:**
+- Form filling
+- Text input testing
+- Search field entry
+
+---
+
+### `clear_text_field` `key: string`
+
+Clear a text field by key.
+
+**Parameters:**
+```json
+{
+  "key": "searchField"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Use Cases:**
+- Reset search/filter
+- Clear form before resubmit
+- Test empty field validation
+
+---
+
+### `scroll_into_view` `key: string, duration?: number`
+
+Scroll until a widget is visible in the viewport.
+
+**Parameters:**
+```json
+{
+  "key": "bottomItem",
+  "duration": 500
+}
+```
+
+**Returns:**
+```json
+{
+  "scrolled": true,
+  "visible": true,
+  "scrollDistance": 350.5
+}
+```
+
+**Parameters:**
+- `key` — Widget to scroll to
+- `duration` — Animation duration in milliseconds (optional, default 300ms)
+
+**Use Cases:**
+- Navigate within scrollable lists
+- Ensure widget visible before tap
+- Scroll to bottom/top of page
+
+---
+
+### `scroll_by` `dx: number, dy: number, duration?: number`
+
+Scroll by pixel amount (relative, not absolute).
+
+**Parameters:**
+```json
+{
+  "dx": 0,
+  "dy": 300,
+  "duration": 500
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Parameters:**
+- `dx` — Horizontal scroll (positive = right, negative = left)
+- `dy` — Vertical scroll (positive = down, negative = up)
+- `duration` — Animation duration in milliseconds (optional)
+
+**Use Cases:**
+- Scroll down a feed
+- Horizontal scrolling (carousels)
+- Multiple scroll steps in a list
+
+---
+
+### `press_back`
+
+Pop the current route (simulate hardware back button).
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "popped": true,
+  "previousRoute": "/home"
+}
+```
+
+**Returns `false` if:**
+- Already at root route
+- Back navigation disabled
+- App custom navigation logic blocked pop
+
+**Use Cases:**
+- Navigate back
+- Test back button behavior
+- Pop modals/dialogs
+
+---
+
+### `set_slider_value` `key: string, value: number`
+
+Set a Slider to a specific numeric value.
+
+**Parameters:**
+```json
+{
+  "key": "brightnessSlider",
+  "value": 0.75
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "finalValue": 0.75
+}
+```
+
+**How it works:**
+- Computes tap position based on slider range (min/max)
+- Simulates tap at computed position
+- Clamps value to min/max range
+
+**Use Cases:**
+- Test brightness/volume controls
+- Slider range validation
+- Settings configuration
+
+---
+
+### `toggle_checkbox` `key: string`
+
+Toggle a Checkbox, Switch, or Radio widget.
+
+**Parameters:**
+```json
+{
+  "key": "rememberMeCheckbox"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "newValue": false
+}
+```
+
+**Supported Widgets:**
+- Checkbox
+- Switch
+- Radio (toggles selection)
+
+**Use Cases:**
+- Test checkbox state changes
+- Settings toggles
+- Form validation with required checkboxes
+
+---
+
+### `focus_widget` `key: string`
+
+Request focus on a widget (opens keyboard if TextField).
+
+**Parameters:**
+```json
+{
+  "key": "passwordField"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "focused": true
+}
+```
+
+**Use Cases:**
+- Focus text field to show keyboard
+- Test focus-related UI changes
+- Trigger focus callbacks
+
+---
+
+### `unfocus_all`
+
+Dismiss the keyboard by unfocusing all widgets.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "success": true
+}
+```
+
+**Use Cases:**
+- Close keyboard after text entry
+- Reset focus state
+- Clear input UI
+
+---
+
+### `set_text_scale_factor` `scale: number`
+
+Set accessibility text scale (1.0 = normal).
+
+**Parameters:**
+```json
+{
+  "scale": 2.0
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "appliedScale": 2.0
+}
+```
+
+**Scale Values:**
+- `0.8` — Small text
+- `1.0` — Normal (default)
+- `1.5` — Large text
+- `2.0` — Very large text (accessibility)
+
+**IMPORTANT:** Requires app to listen to `FlutterPilot.textScaleNotifier`:
+```dart
+MaterialApp(
+  builder: (context, child) {
+    return ValueListenableBuilder<double?>(
+      valueListenable: FlutterPilot.textScaleNotifier,
+      builder: (context, scale, _) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: scale != null
+              ? TextScaler.linear(scale)
+              : MediaQuery.textScalerOf(context),
+          ),
+          child: child,
+        );
+      },
+    );
+  },
+)
+```
+
+**Use Cases:**
+- Accessibility testing
+- WCAG compliance (test at 2.0×)
+- Large text UX validation
+
+---
+
+### `pump_frames` `count: number`
+
+Wait for N vsync frames (useful for animations).
+
+**Parameters:**
+```json
+{
+  "count": 60
+}
+```
+
+**Returns:**
+```json
+{
+  "framesWaited": 60,
+  "duration": "1016ms"
+}
+```
+
+**Use Cases:**
+- Wait for animation to complete
+- Wait for state updates
+- Verify animation behavior
+
+**Frame counts:**
+- 1-5 frames = Instant UI updates
+- 10-20 frames = Quick animations
+- 30-60 frames = Full-second animations
+
+---
+
+## Navigation & Routing
+
+### `navigate_to` `route: string`
+
+Push a named route.
+
+**Parameters:**
+```json
+{
+  "route": "/home/profile"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "previousRoute": "/home",
+  "currentRoute": "/home/profile"
+}
+```
+
+**Requirements:**
+- Route must be registered in MaterialApp routes
+- Or use named route with `onGenerateRoute`
+
+**Use Cases:**
+- Navigation testing
+- Multi-screen flow automation
+- Deep navigation
+
+---
+
+### `get_navigation_stack`
+
+Get the current route stack.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "stack": ["/", "/home", "/home/profile"],
+  "currentRoute": "/home/profile",
+  "count": 3
+}
+```
+
+**Stack shows:**
+- Root route at index 0
+- Current route at end
+- Full navigation history
+
+**Use Cases:**
+- Verify navigation flow
+- Check route order
+- Test navigation stack cleanup
+
+---
+
+### `simulate_deep_link` `url: string`
+
+Trigger deep link routing (e.g., `myapp://product/123`).
+
+**Parameters:**
+```json
+{
+  "url": "myapp://product/123?promo=summer"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "routeResolved": "/product/123"
+}
+```
+
+**URL Formats:**
+- `myapp://home`
+- `https://myapp.com/product/123`
+- `myapp://user/alice?tab=settings`
+
+**Use Cases:**
+- Test deep link handling
+- Push notification routing
+- Share link testing
+
+---
+
+### `set_locale` `locale: string`
+
+Switch app language at runtime.
+
+**Parameters:**
+```json
+{
+  "locale": "es"
+}
+```
+
+**Supported Locales:**
+- `'en'` — English
+- `'es'` — Spanish
+- `'fr'` — French
+- `'pt_BR'` — Brazilian Portuguese
+- `'de'` — German
+- `'zh'` — Chinese
+- `'ja'` — Japanese
+- `'default'` — System default
+
+**Returns:**
+```json
+{
+  "success": true,
+  "appliedLocale": "es"
+}
+```
+
+**IMPORTANT:** Requires app to listen to `FlutterPilot.localeNotifier`:
+```dart
+MaterialApp(
+  builder: (context, child) {
+    return ValueListenableBuilder<Locale?>(
+      valueListenable: FlutterPilot.localeNotifier,
+      builder: (context, locale, _) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            locale: locale ?? Locale('en'),
+          ),
+          child: child,
+        );
+      },
+    );
+  },
+)
+```
+
+**Use Cases:**
+- Internationalization (i18n) testing
+- Multi-language validation
+- RTL language testing
+
+---
+
+### `set_theme` `theme: 'light' | 'dark'`
+
+Switch light/dark theme.
+
+**Parameters:**
+```json
+{
+  "theme": "dark"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "appliedTheme": "dark"
+}
+```
+
+**Use Cases:**
+- Test dark mode UI
+- Contrast validation
+- Theme switching behavior
+
+---
+
+### `set_device_rotation` `rotation: 'portrait' | 'landscape'`
+
+Change device orientation.
+
+**Parameters:**
+```json
+{
+  "rotation": "landscape"
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "appliedRotation": "landscape"
+}
+```
+
+**Use Cases:**
+- Responsive layout testing
+- Rotation handling validation
+- Tablet/landscape UX testing
+
+---
+
+### `wait_for_state` `condition: string, timeout?: number`
+
+Wait until a condition is true (polling).
+
+**Parameters:**
+```json
+{
+  "condition": "route.contains('success')",
+  "timeout": 5000
+}
+```
+
+**Available conditions:**
+- `route == '/home'`
+- `route.contains('success')`
+- `!hasErrors`
+- `errorCount == 0`
+- `widgetCount > 100`
+
+**Returns:**
+```json
+{
+  "success": true,
+  "conditionMet": true,
+  "checkCount": 12
+}
+```
+
+**Use Cases:**
+- Wait for async operations
+- Test loading states
+- Verify app transitions
+
+---
+
+### `hot_reload`
+
+Trigger hot reload on the app.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "success": true,
+  "reloadTime": "523ms"
+}
+```
+
+**Use Cases:**
+- Apply code changes
+- Verify hot reload behavior
+- Code change testing
+
+---
+
+## State & Inspection
+
+### `get_app_summary`
+
+Snapshot of app state.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "currentRoute": "/home/dashboard",
+  "errorCount": 0,
+  "widgetCount": 254,
+  "recordingActive": false,
+  "fpsEstimate": 59.8,
+  "memoryUsage": 45600000,
+  "sdkVersion": "0.1.0"
+}
+```
+
+**Use Cases:**
+- Health check
+- Quick app state overview
+- FPS monitoring
+
+---
+
+### `get_errors`
+
+Return all buffered Flutter errors.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "errors": [
+    {
+      "message": "NoSuchMethodError: The method 'add' was called on null.",
+      "stackTrace": "packages/myapp/main.dart:42:15\npackages/flutter/...",
+      "timestamp": "2024-04-08T20:00:00.123Z",
+      "type": "NoSuchMethodError"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Buffer:** Last 10 errors (FIFO)
+
+**Use Cases:**
+- Error monitoring
+- Debugging
+- Error-triggered testing
+
+---
+
+### `diagnose_last_error`
+
+Full diagnostic report of the most recent error.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "error": {
+    "message": "NoSuchMethodError: ...",
+    "type": "NoSuchMethodError",
+    "timestamp": "2024-04-08T20:00:00.123Z"
+  },
+  "stackTrace": "packages/myapp/...",
+  "screenshot": "data:image/png;base64,...",
+  "widgetTree": { ... },
+  "appState": {
+    "currentRoute": "/home",
+    "navigationStack": [...],
+    "errors": [...]
+  },
+  "appSummary": { ... }
+}
+```
+
+**Includes:**
+- Error details + stack trace
+- Screenshot at time of error
+- Widget tree at error time
+- Full app state snapshot
+
+**Use Cases:**
+- Deep debugging
+- Error context analysis
+- Self-heal AI analysis
+
+---
+
+### `get_perf_metrics`
+
+Real-time performance metrics.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "fpsEstimate": 59.8,
+  "frameTimes": [16.2, 16.1, 16.0, 16.1, 16.2],
+  "memory": {
+    "heapUsage": 45600000,
+    "externalMemory": 12340000,
+    "totalMemory": 57940000
+  },
+  "refreshRate": 60.0,
+  "averageFrameTime": "16.1ms"
+}
+```
+
+**Use Cases:**
+- Performance monitoring
+- Jank detection
+- Memory usage tracking
+- Optimize rendering
+
+---
+
+### `get_semantics_tree`
+
+Full accessibility tree (VoiceOver/TalkBack compatible).
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "root": {
+    "label": "Home Screen",
+    "role": "button",
+    "enabled": true,
+    "bounds": { "x": 0, "y": 0, "width": 414, "height": 896 },
+    "actions": ["activate"],
+    "children": [
+      {
+        "label": "Login Button",
+        "role": "button",
+        "enabled": true,
+        "bounds": { "x": 100, "y": 400, "width": 214, "height": 50 },
+        "actions": ["activate"]
+      }
+    ]
+  }
+}
+```
+
+**Includes:**
+- Semantic labels
+- Roles (button, text, slider, etc.)
+- Enabled state
+- Bounds in screen space
+- Available actions
+- Full nesting
+
+**Use Cases:**
+- Accessibility testing (a11y)
+- VoiceOver/TalkBack validation
+- Screen reader testing
+- WCAG compliance
+
+---
+
+### `assert_widget_enabled` `key: string`
+
+Assert that a widget is interactive (enabled, tappable).
+
+**Parameters:**
+```json
+{
+  "key": "submitButton"
+}
+```
+
+**Returns:**
+```json
+{
+  "enabled": true
+}
+```
+
+**Fails if:**
+- Widget is disabled
+- Widget is not found
+- Widget doesn't support interaction
+
+**Use Cases:**
+- Form validation (submit button enabled after fill)
+- State-dependent UI (disable during loading)
+- Test preconditions
+
+---
+
+### `assert_widget_disabled` `key: string`
+
+Assert that a widget is disabled.
+
+**Parameters:**
+```json
+{
+  "key": "deleteButton"
+}
+```
+
+**Returns:**
+```json
+{
+  "disabled": true
+}
+```
+
+**Use Cases:**
+- Verify loading states (disable during fetch)
+- Test permission denial (button disabled for non-admin)
+- Precondition validation
+
+---
+
+### `get_riverpod_states` *(requires flutterpilot_riverpod)*
+
+Current state of all active Riverpod providers.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "providers": {
+    "userProvider": {
+      "id": 1,
+      "name": "Alice",
+      "email": "alice@example.com"
+    },
+    "counterProvider": 42,
+    "isLoadingProvider": false
+  },
+  "count": 3
+}
+```
+
+**Use Cases:**
+- Inspect provider state
+- Verify state after action
+- State mutation validation
+
+---
+
+### `get_bloc_states` *(requires flutterpilot_bloc)*
+
+Current state of all active Bloc/Cubit instances.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "blocs": {
+    "counterCubit": 42,
+    "authBloc": "authenticated",
+    "themeBloc": "dark"
+  },
+  "count": 3
+}
+```
+
+**Use Cases:**
+- Inspect bloc state
+- Verify state after action
+- State mutation validation
+
+---
+
+### `get_network_logs` *(requires flutterpilot_dio)*
+
+All HTTP requests/responses captured by Dio.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "requests": [
+    {
+      "method": "GET",
+      "url": "https://api.example.com/users",
+      "statusCode": 200,
+      "responseTime": 125,
+      "requestTime": "2024-04-08T20:00:00.123Z",
+      "headers": {
+        "Authorization": "Bearer token",
+        "Content-Type": "application/json"
+      },
+      "response": [
+        { "id": 1, "name": "Alice" },
+        { "id": 2, "name": "Bob" }
+      ]
+    },
+    {
+      "method": "POST",
+      "url": "https://api.example.com/login",
+      "statusCode": 401,
+      "responseTime": 89,
+      "error": "Unauthorized"
+    }
+  ],
+  "count": 2
+}
+```
+
+**Captured:**
+- Method, URL, status code
+- Request/response times
+- Headers
+- Response body
+- Errors
+
+**Use Cases:**
+- Network debugging
+- API response validation
+- Mocking server responses
+- Load testing
+
+---
+
+### `query_drift_db` `sql: string` *(requires flutterpilot_drift)*
+
+Execute SQL query on Drift database.
+
+**Parameters:**
+```json
+{
+  "sql": "SELECT * FROM users WHERE id = 1"
+}
+```
+
+**Returns:**
+```json
+{
+  "rows": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "email": "alice@example.com",
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+**Query Types:**
+- `SELECT` — Always allowed (read-only)
+- `INSERT`, `UPDATE`, `DELETE` — Requires `--allow-destructive` flag
+
+**Use Cases:**
+- Database inspection
+- Data validation
+- Test data setup/teardown
+- Schema debugging
+
+---
+
+### `get_hive_contents` *(requires flutterpilot_hive)*
+
+All key-value pairs from registered Hive boxes.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "boxes": {
+    "userBox": {
+      "currentUserId": "user123",
+      "userName": "Alice",
+      "preferences": {
+        "theme": "dark",
+        "language": "en"
+      }
+    },
+    "cacheBox": {
+      "api_response_v1": "{...}"
+    }
+  }
+}
+```
+
+**Use Cases:**
+- Local storage inspection
+- Cache validation
+- Persistent state debugging
+
+---
+
+### `get_shared_preferences` *(requires flutterpilot_shared_preferences)*
+
+Current SharedPreferences key-value map.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "prefs": {
+    "username": "alice",
+    "email": "alice@example.com",
+    "notification_enabled": true,
+    "notification_count": 5,
+    "theme": "dark",
+    "last_login": "2024-04-08T19:30:00Z"
+  }
+}
+```
+
+**Use Cases:**
+- User preferences inspection
+- Settings validation
+- Persistent data debugging
+
+---
+
+### `set_shared_preference` `key: string, value: any, type?: string` *(requires flutterpilot_shared_preferences)*
+
+Write a value to SharedPreferences.
+
+**Parameters:**
+```json
+{
+  "key": "theme",
+  "value": "dark",
+  "type": "string"
+}
+```
+
+**Supported Types:**
+- `string` (default)
+- `int`
+- `double`
+- `bool`
+- `stringList` (JSON array of strings)
+
+**Returns:**
+```json
+{
+  "success": true,
+  "key": "theme",
+  "value": "dark",
+  "type": "string"
+}
+```
+
+**Use Cases:**
+- Test preferences UI
+- Settings state injection
+- Persistent data setup
+
+---
+
+### `clear_shared_preferences` *(requires flutterpilot_shared_preferences)*
+
+Clear all SharedPreferences data.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "success": true,
+  "cleared": true
+}
+```
+
+**Use Cases:**
+- Reset app state for tests
+- Clean up between test runs
+- Debug preferences issues
+
+---
+
+### `get_build_config`
+
+Return pubspec.yaml and build metadata.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "pubspec": {
+    "name": "my_app",
+    "version": "1.0.0",
+    "description": "My Flutter App",
+    "environment": {
+      "sdk": ">=3.11.0"
+    },
+    "dependencies": {
+      "flutter": { "sdk": "flutter" },
+      "riverpod": "^2.0.0"
+    }
+  },
+  "buildInfo": {
+    "buildNumber": "1",
+    "buildName": "1.0.0"
+  }
+}
+```
+
+**Use Cases:**
+- Verify app version
+- Check dependency versions
+- Build metadata inspection
+
+---
+
+### `read_dart_file` `path: string` *(requires `--project-root`)*
+
+Read a Dart source file from your project.
+
+**Parameters:**
+```json
+{
+  "path": "lib/main.dart"
+}
+```
+
+**Returns:**
+```json
+{
+  "path": "lib/main.dart",
+  "content": "import 'package:flutter/material.dart';\n\nvoid main() {\n  ...",
+  "lines": 42
+}
+```
+
+**Path Format:**
+- Relative to project root
+- Example: `"lib/screens/home.dart"`
+- Example: `"test/mocks/mock_api.dart"`
+
+**Use Cases:**
+- AI code analysis
+- Source code inspection
+- Test implementation reference
+
+---
+
+### `list_dart_files` `pattern?: string` *(requires `--project-root`)*
+
+List Dart files in your project.
+
+**Parameters:**
+```json
+{
+  "pattern": "lib/screens/**/*.dart"
+}
+```
+
+**Returns:**
+```json
+{
+  "files": [
+    "lib/screens/home.dart",
+    "lib/screens/profile.dart",
+    "lib/screens/settings.dart"
+  ],
+  "count": 3
+}
+```
+
+**Pattern Syntax:**
+- `*` — any characters
+- `**` — recursive directories
+- `?` — single character
+- `{a,b}` — alternatives
+
+**Use Cases:**
+- Project structure discovery
+- File listing for AI
+- Pattern-based filtering
+
+---
+
+## Recording & Testing
+
+### `start_recording`
+
+Begin recording user interactions.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "recording": true,
+  "startTime": "2024-04-08T20:00:00.123Z"
+}
+```
+
+**Records:**
+- Taps (location, widget)
+- Text entry
+- Scrolls
+- Navigation
+- Assertions
+
+**Use Cases:**
+- Manual test flow recording
+- AI test generation setup
+
+---
+
+### `stop_and_generate_test`
+
+Stop recording and generate a testWidgets block.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "testCode": "testWidgets('user flow', (WidgetTester tester) async {\n  await tester.pumpWidget(const MyApp());\n  expect(find.text('Home'), findsOneWidget);\n  \n  await tester.tap(find.byKey(const Key('loginBtn')));\n  await tester.pumpAndSettle();\n  \n  await tester.enterText(find.byKey(const Key('emailField')), 'user@example.com');\n  await tester.tap(find.byKey(const Key('submitBtn')));\n  await tester.pumpAndSettle();\n  \n  expect(find.text('Welcome'), findsOneWidget);\n});",
+  "actionsRecorded": 4,
+  "duration": "45 seconds"
+}
+```
+
+**Generated test:**
+- Uses Flutter `testWidgets` pattern
+- Includes `find.byKey` for widget location
+- Includes `pumpAndSettle` for async operations
+- Includes expectations for assertions
+
+**Use Cases:**
+- Autonomous test generation
+- Manual flow → test code
+- Integration test creation
+
+---
+
+### `get_latest_crash_report`
+
+Get the most recent crash diagnostic.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "crash": {
+    "timestamp": "2024-04-08T20:00:00.123Z",
+    "error": {
+      "type": "NoSuchMethodError",
+      "message": "The method 'add' was called on null."
+    },
+    "stackTrace": "packages/myapp/main.dart:42:15\n...",
+    "screenshot": "data:image/png;base64,iVBORw0KGgoAAAANS...",
+    "widgetTree": { ... },
+    "appState": { ... }
+  }
+}
+```
+
+**Captured at crash time:**
+- Full error + stack trace
+- Screenshot
+- Widget tree
+- App state
+
+**Use Cases:**
+- Self-heal crash analysis
+- Bug reproduction
+- Error context debugging
+
+---
+
+### `show_performance_overlay` `show: boolean`
+
+Toggle the Flutter performance overlay.
+
+**Parameters:**
+```json
+{
+  "show": true
+}
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "visible": true
+}
+```
+
+**Shows:**
+- FPS graph
+- GPU/UI thread times
+- Frame raster times
+- Janky frame indicators
+
+**Use Cases:**
+- Performance debugging
+- Jank detection
+- Rendering analysis
+
+---
+
+### `list_custom_tools`
+
+List all app-registered custom tools.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "tools": [
+    {
+      "name": "clearCache",
+      "description": "Clear app image cache"
+    },
+    {
+      "name": "resetDatabase",
+      "description": "Reset local database"
+    },
+    {
+      "name": "simulateBadNetwork",
+      "description": "Simulate slow/offline network"
+    }
+  ],
+  "count": 3
+}
+```
+
+**Use Cases:**
+- Discover available tools
+- Test custom tool registration
+
+---
+
+### `call_custom_tool` `name: string, ...args`
+
+Invoke an app-registered custom tool.
+
+**Parameters:**
+```json
+{
+  "name": "clearCache"
+}
+```
+
+**Returns:**
+```json
+{
+  "cleared": true,
+  "freedMemory": 45000000
+}
+```
+
+**With arguments:**
+```json
+{
+  "name": "simulateBadNetwork",
+  "latency": 5000,
+  "packetLoss": 0.25
+}
+```
+
+**Use Cases:**
+- Call app-specific logic
+- Custom testing scenarios
+- State manipulation
+
+---
+
+## Performance & DevTools
+
+### Additional Performance Tools
+
+**Note:** These tools are implemented in the server and app integration patterns.
+
+#### `wait_for_state`
+Wait for async operations, state changes, navigation. See [Navigation](#wait_for_state) section.
+
+#### `hot_reload`
+Apply code changes. See [Navigation](#hot_reload) section.
+
+#### `pump_frames`
+Wait for animation frames. See [UI Automation](#pump_frames) section.
+
+---
+
+## Common Patterns
+
+### Form Filling
+```json
+[
+  { "enter_text": { "key": "emailField", "text": "user@example.com" } },
+  { "enter_text": { "key": "passwordField", "text": "password123" } },
+  { "tap_widget": { "key": "rememberCheckbox" } },
+  { "tap_widget": { "key": "submitButton" } },
+  { "wait_for_state": { "condition": "route.contains('success')" } }
+]
+```
+
+### Navigation Testing
+```json
+[
+  { "navigate_to": { "route": "/settings" } },
+  { "assert_widget_enabled": { "key": "themeToggle" } },
+  { "tap_widget": { "key": "themeToggle" } },
+  { "press_back": {} },
+  { "get_navigation_stack": {} }
+]
+```
+
+### Visual Regression
+```json
+[
+  { "set_device_rotation": { "rotation": "landscape" } },
+  { "capture_screenshot": {} },
+  { "compare_screenshot": { "filename": "landscape_layout.png" } }
+]
+```
+
+### Accessibility Testing
+```json
+[
+  { "set_text_scale_factor": { "scale": 2.0 } },
+  { "capture_screenshot": {} },
+  { "get_semantics_tree": {} },
+  { "set_locale": { "locale": "ar" } },
+  { "capture_screenshot": {} }
+]
+```
+
+---
+
+## Tool Availability
+
+| Tool | Core SDK | Server | Riverpod Plugin | Bloc Plugin | Dio Plugin | Drift Plugin | Hive Plugin | SharedPref Plugin |
+|------|----------|--------|-----------------|-------------|-----------|-------------|-----------|-------------------|
+| capture_screenshot | ✅ | ✅ | — | — | — | — | — | — |
+| get_widget_tree | ✅ | ✅ | — | — | — | — | — | — |
+| get_widget_properties | ✅ | ✅ | — | — | — | — | — | — |
+| tap_at / tap_widget | ✅ | ✅ | — | — | — | — | — | — |
+| enter_text | ✅ | ✅ | — | — | — | — | — | — |
+| navigate_to | ✅ | ✅ | — | — | — | — | — | — |
+| get_riverpod_states | — | ✅ | ✅ | — | — | — | — | — |
+| get_bloc_states | — | ✅ | — | ✅ | — | — | — | — |
+| get_network_logs | — | ✅ | — | — | ✅ | — | — | — |
+| query_drift_db | — | ✅ | — | — | — | ✅ | — | — |
+| get_hive_contents | — | ✅ | — | — | — | — | ✅ | — |
+| get_shared_preferences | — | ✅ | — | — | — | — | — | ✅ |
+
+---
+
+**Last Updated:** April 2024  
+**Total Tools:** 67  
+**Documentation Status:** Complete ✅
