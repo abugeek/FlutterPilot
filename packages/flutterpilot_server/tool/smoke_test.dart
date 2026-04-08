@@ -7,7 +7,7 @@ import 'dart:io';
 /// Usage:
 ///   1. Run your Flutter app in debug mode
 ///   2. Copy the VM Service URI from the console
-///   3. Run: dart run tool/smoke_test.dart <vm-service-uri>
+///   3. Run: `dart run tool/smoke_test.dart <vm-service-uri>`
 ///
 /// This exercises all major MCP tool categories and reports results.
 void main(List<String> args) async {
@@ -149,7 +149,7 @@ void main(List<String> args) async {
       print('  ❌ $f');
     }
   }
-  print('${'=' * 50}');
+  print('=' * 50);
 
   process.kill();
   exit(failed > 0 ? 1 : 0);
