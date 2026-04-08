@@ -64,16 +64,14 @@ void main() {
 
   group('StateInjectionScreen', () {
     testWidgets('renders Riverpod and Bloc counters', (tester) async {
-      await tester
-          .pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
+      await tester.pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
 
       expect(find.byKey(const Key('riverpod_count_text')), findsOneWidget);
       expect(find.byKey(const Key('bloc_count_text')), findsOneWidget);
     });
 
     testWidgets('Bloc counter increments on tap', (tester) async {
-      await tester
-          .pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
+      await tester.pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
 
       // Value is in its own Text widget (keyPrefix_count_text)
       final blocText = find.byKey(const Key('bloc_count_text'));
@@ -86,8 +84,7 @@ void main() {
     });
 
     testWidgets('Riverpod counter increments on tap', (tester) async {
-      await tester
-          .pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
+      await tester.pumpWidget(_wrapWithProviders(const StateInjectionScreen()));
 
       final riverpodText = find.byKey(const Key('riverpod_count_text'));
       expect(tester.widget<Text>(riverpodText).data, '0');
