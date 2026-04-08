@@ -1,15 +1,41 @@
 import 'package:flutter/widgets.dart';
 
-/// Provides introspection into the Flutter widget tree.
+/// Provides read-only introspection into the live Flutter widget tree.
+///
+/// [PilotWidgetInspector] can serialize the entire element tree to JSON,
+/// look up individual widgets by key, and count elements — all used by
+/// the `ext.flutterpilot.getWidgetTree`, `ext.flutterpilot.tapWidget`,
+/// `ext.flutterpilot.enterText`, and `ext.flutterpilot.scrollIntoView`
+/// service extensions.
+///
+/// This class is stateless and exposes only static methods.
 class PilotWidgetInspector {
-  /// Captures the complete widget tree starting from the root.
+  /// Captures the widget tree as a nested JSON-compatible map.
+  ///
+  /// Returns a recursive structure where each node contains:
+  /// - `type` — the widget's `runtimeType`.
+  /// - `key` — the widget's key (if any).
+  /// - `layout` — bounding box (`x`, `y`, `w`, `h`) when available.
+  /// - `location` — source file, line, and column (best-effort; relies
+  ///   on a private Flutter API that may not be available in all builds).
+  /// - `children` — child nodes.
+  ///
+  /// Returns `{'error': 'No root element found'}` if the root element is
+  /// not yet available (e.g., before [runApp]).
   static Map<String, dynamic> captureWidgetTree() {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return {'error': 'No root element found'};
     return _elementToJson(root);
   }
 
-  /// Finds a widget by its Key.
+  /// Finds an [Element] in the tree whose widget key matches [keyString].
+  ///
+  /// Supports plain string keys, `ValueKey` (`['keyString']`), and
+  /// `GlobalKey` (`[<'keyString'>]`) representations. Returns `null` if
+  /// no matching element is found.
+  ///
+  /// This is the lookup mechanism used by `ext.flutterpilot.tapWidget`,
+  /// `ext.flutterpilot.enterText`, and `ext.flutterpilot.scrollIntoView`.
   static Element? findElementByKey(String keyString) {
     Element? found;
     void search(Element element) {
@@ -28,7 +54,8 @@ class PilotWidgetInspector {
     return found;
   }
 
-  /// Counts the total number of elements in the tree.
+  /// Recursively counts all [Element] nodes in the subtree rooted at
+  /// [element], including [element] itself.
   static int countElements(Element element) {
     int count = 1;
     element.visitChildren((child) {
@@ -55,19 +82,19 @@ class PilotWidgetInspector {
 
     Map<String, dynamic>? location;
     try {
-      // Accessing private _location via dynamic for source mapping.
-      // This uses a private Flutter API that may change between versions.
-      final dynamic widget = element.widget;
-      final dynamic loc = widget._location;
+      // In debug builds with --track-widget-creation (default), the compiler
+      // injects a private _location field on widgets. No public API exists
+      // for this, so we access it dynamically with a safety catch.
+      final dynamic loc = (element.widget as dynamic)._location;
       if (loc != null) {
         location = {
-          'file': loc.file?.toString(), 
-          'line': loc.line, 
-          'column': loc.column
+          'file': loc.file?.toString(),
+          'line': loc.line,
+          'column': loc.column,
         };
       }
-    } on NoSuchMethodError catch (_) {
-      // _location is a private API — expected to fail on some Flutter versions.
+    } catch (_) {
+      // Expected in release mode or without --track-widget-creation.
     }
 
     return {

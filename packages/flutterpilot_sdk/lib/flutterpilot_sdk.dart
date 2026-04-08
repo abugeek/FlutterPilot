@@ -16,24 +16,100 @@ export 'src/interaction_manager.dart';
 export 'src/navigation_tracker.dart';
 export 'src/widget_inspector.dart';
 
-/// The core class for FlutterPilot SDK.
+/// The core class for the FlutterPilot SDK — an AI-native runtime
+/// introspection toolkit for Flutter applications.
+///
+/// FlutterPilot exposes Dart VM [service extensions] that allow external
+/// tools (AI agents, IDEs, CLI) to inspect widget trees, capture
+/// screenshots, simulate user interactions, manage navigation, record
+/// sessions, and more — all at runtime over the VM service protocol.
+///
+/// ## Quick start
+///
+/// ```dart
+/// void main() {
+///   FlutterPilot.initialize();
+///   runApp(const MyApp());
+/// }
+/// ```
+///
+/// Add the [NavigationTracker] observer to enable route tracking:
+///
+/// ```dart
+/// MaterialApp(
+///   navigatorObservers: [NavigationTracker()],
+/// )
+/// ```
+///
+/// **Important:** This SDK relies on Dart service extensions and should
+/// only be included in **debug / profile** builds. It is a no-op when
+/// called after the first [initialize] invocation.
+///
+/// ## Service extensions
+///
+/// All registered extensions use the `ext.flutterpilot.*` namespace.
+/// See the individual extension registrations inside
+/// [_registerServiceExtensions] for the full protocol reference.
+///
+/// ## Extending FlutterPilot
+///
+/// * Register custom tools with [registerCustomTool].
+/// * Register state-management setters with [registerStateSetter].
 class FlutterPilot {
   FlutterPilot._();
 
   static bool _initialized = false;
+
+  /// Whether the SDK has been initialized via [initialize].
+  ///
+  /// Plugins should check this before registering service extensions to ensure
+  /// the core SDK is ready.
+  static bool get isInitialized => _initialized;
+
   static final Map<String, Function> _customTools = {};
-  static final Map<String, Future<dynamic> Function(String name, dynamic value)> _stateSetters = {};
+  static final Map<String, Future<dynamic> Function(String name, dynamic value)>
+      _stateSetters = {};
   static bool _isRecording = false;
   static final List<Map<String, dynamic>> _recordedActions = [];
-  
-  /// Global notifier for locale overrides.
+
+  /// A [ValueNotifier] that broadcasts locale overrides to the widget tree.
+  ///
+  /// When a non-null [ui.Locale] is set via the `ext.flutterpilot.setLocale`
+  /// service extension, widgets listening to this notifier can rebuild with
+  /// the new locale. Setting the value back to `null` restores the
+  /// platform default.
+  ///
+  /// ```dart
+  /// ValueListenableBuilder<Locale?>(
+  ///   valueListenable: FlutterPilot.localeNotifier,
+  ///   builder: (context, locale, child) {
+  ///     // Use locale override or fall back to platform locale.
+  ///     return MaterialApp(locale: locale);
+  ///   },
+  /// )
+  /// ```
   static final ValueNotifier<ui.Locale?> localeNotifier = ValueNotifier(null);
 
   static double _lastFps = 0;
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
-  /// Initializes the FlutterPilot SDK and registers service extensions.
+  /// Initializes the FlutterPilot SDK.
+  ///
+  /// This is the main entry point and **must be called before `runApp`**.
+  /// It wires up internal modules ([ErrorInspector], [NavigationTracker],
+  /// [InteractionManager]), registers all `ext.flutterpilot.*` service
+  /// extensions, and starts the FPS counter.
+  ///
+  /// Calling [initialize] more than once is safe — subsequent calls are
+  /// silently ignored.
+  ///
+  /// ```dart
+  /// void main() {
+  ///   FlutterPilot.initialize();
+  ///   runApp(const MyApp());
+  /// }
+  /// ```
   static void initialize() {
     if (_initialized) return;
     _initialized = true;
@@ -86,17 +162,53 @@ class FlutterPilot {
     SchedulerBinding.instance.addPostFrameCallback(_onFrame);
   }
 
-  /// Registers a custom tool that can be called by the AI.
+  /// Registers a custom tool that can be invoked remotely via the
+  /// `ext.flutterpilot.callCustomTool` service extension.
+  ///
+  /// [name] is the unique identifier used to call the tool.
+  /// [callback] receives the service-extension parameters map and may
+  /// return a JSON-encodable result.
+  ///
+  /// ```dart
+  /// FlutterPilot.registerCustomTool('resetOnboarding', (params) async {
+  ///   await prefs.setBool('onboarded', false);
+  ///   return {'cleared': true};
+  /// });
+  /// ```
+  ///
+  /// Registered tools are listed by `ext.flutterpilot.listCustomTools`.
   static void registerCustomTool(String name, Function callback) {
     _customTools[name] = callback;
   }
 
-  /// Registers a state setter for a specific type (e.g., 'riverpod').
-  static void registerStateSetter(String type, Future<dynamic> Function(String name, dynamic value) setter) {
+  /// Registers a state setter for a specific state-management [type].
+  ///
+  /// The setter is invoked by the `ext.flutterpilot.setState` service
+  /// extension. [type] identifies the state-management system (e.g.,
+  /// `'riverpod'`, `'bloc'`, `'provider'`). [setter] receives a state
+  /// [name] and a decoded JSON [value], and should apply the state change.
+  ///
+  /// ```dart
+  /// FlutterPilot.registerStateSetter('riverpod', (name, value) async {
+  ///   final provider = lookupProviderByName(name);
+  ///   container.read(provider.notifier).state = value;
+  ///   return container.read(provider);
+  /// });
+  /// ```
+  static void registerStateSetter(
+    String type,
+    Future<dynamic> Function(String name, dynamic value) setter,
+  ) {
     _stateSetters[type] = setter;
   }
 
-  /// Logs a state change if recording is active.
+  /// Logs a state change event when session recording is active.
+  ///
+  /// Called internally by [NavigationTracker] and can also be called
+  /// directly from application code to log custom state transitions.
+  ///
+  /// [source] identifies the origin (e.g., `'navigation'`, `'riverpod'`).
+  /// [name] is the event name (e.g., `'push'`). [value] is the payload.
   static void logStateChange(String source, String name, dynamic value) {
     if (_isRecording) {
       _recordAction('state_change', {
@@ -117,7 +229,21 @@ class FlutterPilot {
     postEvent('ext.flutterpilot.action', {'type': type, 'data': data});
   }
 
+  // ---------------------------------------------------------------------------
+  // Service extensions
+  //
+  // Each extension is registered under the `ext.flutterpilot.*` namespace and
+  // can be called via the Dart VM service protocol (e.g., from DevTools, the
+  // FlutterPilot CLI, or any JSON-RPC client connected to the VM service).
+  //
+  // Parameters are passed as `Map<String, String>` — numeric values should be
+  // sent as string representations and are parsed internally.
+  // ---------------------------------------------------------------------------
+
   static void _registerServiceExtensions() {
+    // -- ext.flutterpilot.getSummary ------------------------------------------
+    // Returns a high-level snapshot: current route, error count, recording
+    // state, and total widget count.
     registerExtension('ext.flutterpilot.getSummary', (method, parameters) async {
       final root = WidgetsBinding.instance.rootElement;
       return ServiceExtensionResponse.result(json.encode({
@@ -129,6 +255,8 @@ class FlutterPilot {
       }));
     });
 
+    // -- ext.flutterpilot.ping ------------------------------------------------
+    // Health-check endpoint. Returns SDK version.
     registerExtension('ext.flutterpilot.ping', (method, parameters) async {
       return ServiceExtensionResponse.result(json.encode({
         'status': 'ok', 
@@ -136,18 +264,25 @@ class FlutterPilot {
       }));
     });
 
+    // -- ext.flutterpilot.getErrors -------------------------------------------
+    // Returns the buffered error list from [ErrorInspector].
     registerExtension('ext.flutterpilot.getErrors', (method, parameters) async {
       return ServiceExtensionResponse.result(json.encode({
         'errors': ErrorInspector.errors
       }));
     });
 
+    // -- ext.flutterpilot.listCustomTools -------------------------------------
+    // Lists names of all tools registered via [registerCustomTool].
     registerExtension('ext.flutterpilot.listCustomTools', (method, parameters) async {
       return ServiceExtensionResponse.result(json.encode({
         'tools': _customTools.keys.toList()
       }));
     });
 
+    // -- ext.flutterpilot.callCustomTool --------------------------------------
+    // Invokes a custom tool by `name`. Extra params are forwarded to the
+    // callback. Returns `invalidParams` if the tool name is missing or unknown.
     registerExtension('ext.flutterpilot.callCustomTool', (method, parameters) async {
       final name = parameters['name'];
       if (name == null || !_customTools.containsKey(name)) {
@@ -169,6 +304,9 @@ class FlutterPilot {
       }
     });
 
+    // -- ext.flutterpilot.getWidgetTree ---------------------------------------
+    // Captures the full widget tree as a nested JSON structure via
+    // [PilotWidgetInspector.captureWidgetTree].
     registerExtension('ext.flutterpilot.getWidgetTree', (method, parameters) async {
       try {
         return ServiceExtensionResponse.result(json.encode({
@@ -182,6 +320,8 @@ class FlutterPilot {
       }
     });
 
+    // -- ext.flutterpilot.captureScreenshot -----------------------------------
+    // Returns a base64-encoded PNG screenshot of the current render tree.
     registerExtension('ext.flutterpilot.captureScreenshot', (method, parameters) async {
       try {
         final bytes = await _captureScreenshot();
@@ -202,12 +342,17 @@ class FlutterPilot {
       }
     });
 
+    // -- ext.flutterpilot.getNavigationStack ----------------------------------
+    // Returns the ordered navigation route stack from [NavigationTracker].
     registerExtension('ext.flutterpilot.getNavigationStack', (method, parameters) async {
       return ServiceExtensionResponse.result(json.encode({
         'stack': NavigationTracker.stack
       }));
     });
 
+    // -- ext.flutterpilot.setLocale -------------------------------------------
+    // Overrides the app locale at runtime. Pass `locale` as a language code
+    // (e.g., `'fr'`, `'pt_BR'`). Use `'default'` to reset.
     registerExtension('ext.flutterpilot.setLocale', (method, parameters) async {
       final code = parameters['locale'];
       if (code == null) {
@@ -234,6 +379,8 @@ class FlutterPilot {
       }
     });
 
+    // -- ext.flutterpilot.getPerfMetrics --------------------------------------
+    // Returns the current FPS estimate and a timestamp.
     registerExtension('ext.flutterpilot.getPerfMetrics', (method, parameters) async {
       return ServiceExtensionResponse.result(json.encode({
         'fps': _lastFps.toStringAsFixed(1),
@@ -241,6 +388,9 @@ class FlutterPilot {
       }));
     });
 
+    // -- ext.flutterpilot.navigateTo ------------------------------------------
+    // Pushes a named route via `Navigator.of(context).pushNamed(route)`.
+    // Requires `route` parameter.
     registerExtension('ext.flutterpilot.navigateTo', (method, parameters) async {
       final route = parameters['route'];
       final context = WidgetsBinding.instance.rootElement;
@@ -262,17 +412,24 @@ class FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.startRecording --------------------------------------
+    // Begins recording user interactions, navigations, and errors.
+    // Clears any previously recorded actions.
     registerExtension('ext.flutterpilot.startRecording', (method, parameters) async {
       _isRecording = true;
       _recordedActions.clear();
       return ServiceExtensionResponse.result(json.encode({'status': 'started'}));
     });
 
+    // -- ext.flutterpilot.stopRecording ---------------------------------------
+    // Stops recording and returns all captured actions as a JSON array.
     registerExtension('ext.flutterpilot.stopRecording', (method, parameters) async {
       _isRecording = false;
       return ServiceExtensionResponse.result(json.encode({'actions': _recordedActions}));
     });
 
+    // -- ext.flutterpilot.tapAt -----------------------------------------------
+    // Simulates a tap at absolute screen coordinates (`x`, `y`).
     registerExtension('ext.flutterpilot.tapAt', (method, parameters) async {
       final x = double.tryParse(parameters['x'] ?? '');
       final y = double.tryParse(parameters['y'] ?? '');
@@ -287,6 +444,9 @@ class FlutterPilot {
       return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
     });
 
+    // -- ext.flutterpilot.tapWidget -------------------------------------------
+    // Taps the center of a widget identified by its `key` string.
+    // Looks up the element via [PilotWidgetInspector.findElementByKey].
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
       final key = parameters['key'];
       if (key == null) {
@@ -315,6 +475,10 @@ class FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.enterText -------------------------------------------
+    // Sets the text content of a text field identified by `key`.
+    // Walks descendants of the matched element to find an
+    // [EditableTextState] and writes `text` to its controller.
     registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
       final key = parameters['key'];
       final text = parameters['text'];
@@ -355,6 +519,9 @@ class FlutterPilot {
             );
     });
 
+    // -- ext.flutterpilot.scrollIntoView --------------------------------------
+    // Scrolls the widget identified by `key` into the visible viewport
+    // using [Scrollable.ensureVisible].
     registerExtension('ext.flutterpilot.scrollIntoView', (method, parameters) async {
       final key = parameters['key'];
       if (key == null) {
@@ -374,6 +541,10 @@ class FlutterPilot {
       return ServiceExtensionResponse.result(json.encode({'status': 'success'}));
     });
 
+    // -- ext.flutterpilot.setState --------------------------------------------
+    // Injects a state value using a setter previously registered via
+    // [registerStateSetter]. Requires `type`, `name`, and `value` (JSON
+    // string) parameters.
     registerExtension('ext.flutterpilot.setState', (method, parameters) async {
       final type = parameters['type'];
       final name = parameters['name'];

@@ -2,11 +2,25 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// Manages user interactions and simulated actions for FlutterPilot.
+/// Manages user-interaction tracking and programmatic gesture simulation.
+///
+/// [InteractionManager] installs a global pointer-event listener to
+/// detect taps and resolve which widget was tapped. It also provides
+/// [tapAt] for simulating touch events programmatically.
+///
+/// This class is initialized automatically by [FlutterPilot.initialize].
 class InteractionManager {
+  /// Optional callback invoked on every `PointerDownEvent`.
+  ///
+  /// The map contains `x`, `y` (screen coordinates), and — when a
+  /// meaningful widget is found — `key` and `type`.
   static void Function(Map<String, dynamic> info)? onPointerDown;
 
-  /// Initializes global pointer interception.
+  /// Installs a global pointer route that intercepts all
+  /// [PointerDownEvent]s and resolves the tapped widget.
+  ///
+  /// Safe to call multiple times — each call adds an additional listener,
+  /// so callers should ensure single initialization.
   static void initialize() {
     GestureBinding.instance.pointerRouter.addGlobalRoute((PointerEvent event) {
       if (event is PointerDownEvent) {
@@ -16,7 +30,11 @@ class InteractionManager {
     });
   }
 
-  /// Resolves the widget and its metadata at the given screen coordinates.
+  /// Resolves the most meaningful widget at [position] using hit-testing.
+  ///
+  /// Prefers elements that have a [Key] or are semantically significant
+  /// (e.g., `Text`, button-like widgets). Returns a map with `x`, `y`,
+  /// and optionally `key` and `type`.
   static Map<String, dynamic> _resolveWidgetAt(Offset position) {
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(
@@ -59,7 +77,11 @@ class InteractionManager {
     return {'x': position.dx, 'y': position.dy};
   }
 
-  /// Simulates a physical tap at specific (x, y) coordinates.
+  /// Simulates a physical tap (pointer down + 50 ms delay + pointer up) at
+  /// the given screen [position].
+  ///
+  /// Used by the `ext.flutterpilot.tapAt` and `ext.flutterpilot.tapWidget`
+  /// service extensions to drive the UI programmatically.
   static Future<void> tapAt(Offset position) async {
     final pointer = TestPointer(1, PointerDeviceKind.touch);
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
@@ -68,13 +90,23 @@ class InteractionManager {
   }
 }
 
-/// Helper class for simulating pointer events.
+/// Lightweight helper for constructing [PointerDownEvent] / [PointerUpEvent]
+/// pairs used by [InteractionManager.tapAt].
+///
+/// This is intentionally minimal — it does not track hover, move, or
+/// cancel events.
 class TestPointer {
+  /// Creates a [TestPointer] with an optional [pointer] id and [kind].
   TestPointer([this.pointer = 1, this.kind = PointerDeviceKind.touch]);
+
+  /// The pointer identifier passed to generated events.
   final int pointer;
+
+  /// The input device kind (defaults to [PointerDeviceKind.touch]).
   final PointerDeviceKind kind;
   Offset? _location;
 
+  /// Creates a [PointerDownEvent] at [location].
   PointerEvent down(Offset location, {Duration timeStamp = Duration.zero}) {
     _location = location;
     return PointerDownEvent(
@@ -85,6 +117,9 @@ class TestPointer {
     );
   }
 
+  /// Creates a [PointerUpEvent] at the last `down` location.
+  ///
+  /// Throws if called before [down].
   PointerEvent up({Duration timeStamp = Duration.zero}) {
     final Offset location = _location!;
     _location = null;
