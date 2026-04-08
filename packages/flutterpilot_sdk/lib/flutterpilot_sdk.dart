@@ -417,32 +417,52 @@ class FlutterPilot {
     });
 
     // -- ext.flutterpilot.navigateTo ------------------------------------------
-    // Pushes a named route via `Navigator.of(context).pushNamed(route)`.
+    // Pushes a named route. Uses [NavigationTracker.navigatorState] first
+    // (direct reference via NavigatorObserver), then falls back to the root
+    // element context if no tracker is registered.
     // Requires `route` parameter.
     registerExtension('ext.flutterpilot.navigateTo', (
       method,
       parameters,
     ) async {
       final route = parameters['route'];
-      final context = WidgetsBinding.instance.rootElement;
-      if (route != null && context != null) {
-        try {
+      if (route == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing required parameter: route',
+        );
+      }
+      try {
+        // Prefer navigator obtained directly from NavigationTracker observer
+        // (bypasses the need for a BuildContext inside the navigator scope).
+        final nav = NavigationTracker.navigatorState;
+        if (nav != null && nav.mounted) {
           if (_isRecording) _recordAction('navigate', {'route': route});
-          Navigator.of(context).pushNamed(route);
+          nav.pushNamed(route);
           return ServiceExtensionResponse.result(
-            json.encode({'status': 'success'}),
-          );
-        } catch (e) {
-          return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.extensionError,
-            'Failed: $e',
+            json.encode({'status': 'success', 'route': route}),
           );
         }
+        // Fallback: try rootElement (works when app is simple / no overlay)
+        final context = WidgetsBinding.instance.rootElement;
+        if (context != null) {
+          if (_isRecording) _recordAction('navigate', {'route': route});
+          Navigator.of(context, rootNavigator: true).pushNamed(route);
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success', 'route': route}),
+          );
+        }
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No Navigator available. Ensure NavigationTracker() is added to '
+          'navigatorObservers in your MaterialApp.',
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Navigation failed: $e',
+        );
       }
-      return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.invalidParams,
-        'Missing params',
-      );
     });
 
     // -- ext.flutterpilot.startRecording --------------------------------------

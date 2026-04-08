@@ -283,30 +283,36 @@ class FlutterPilotServer {
     server.registerTool(
       'set_riverpod_state',
       description:
-          'Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible representation of the new state.',
+          'Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\\"hello\\"").',
       inputSchema: ToolInputSchema(
-        properties: {'name': JsonSchema.string(), 'value': JsonSchema.object()},
-        required: ['name', 'value'],
+        properties: {
+          'provider': JsonSchema.string(),
+          'value': JsonSchema.string(),
+        },
+        required: ['provider', 'value'],
       ),
       callback: (p, e) => _callExtensionRaw('ext.flutterpilot.setState', {
         'type': 'riverpod',
-        'name': p['name'],
-        'value': json.encode(p['value']),
+        'name': p['provider'],
+        'value': p['value'],
       }).then((res) => res.toCallToolResult()),
     );
 
     server.registerTool(
       'set_bloc_state',
       description:
-          'Force a new state into a Bloc or Cubit. Use the Bloc name from `get_bloc_state`. The `state` should be a JSON representation of the new state.',
+          'Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_bloc_state`. The `state` should be a JSON string (e.g. "42", "true").',
       inputSchema: ToolInputSchema(
-        properties: {'name': JsonSchema.string(), 'state': JsonSchema.object()},
-        required: ['name', 'state'],
+        properties: {
+          'cubit': JsonSchema.string(),
+          'state': JsonSchema.string(),
+        },
+        required: ['cubit', 'state'],
       ),
       callback: (p, e) => _callExtensionRaw('ext.flutterpilot.setState', {
         'type': 'bloc',
-        'name': p['name'],
-        'value': json.encode(p['state']),
+        'name': p['cubit'],
+        'value': p['state'],
       }).then((res) => res.toCallToolResult()),
     );
 
@@ -808,9 +814,13 @@ class FlutterPilotServer {
             }
             return _ExtensionResult.success(response.json!);
           }
-        } on RPCError {
-          // Extension not registered in this isolate — try the next one.
-          continue;
+        } on RPCError catch (e) {
+          // -32601 = method not found: extension not registered in this isolate.
+          // Any other code is a real error from the extension — surface it.
+          if (e.code == -32601) {
+            continue;
+          }
+          return _ExtensionResult.error('Extension error: ${e.message}');
         } on TimeoutException {
           return _ExtensionResult.error(
             'Extension call timed out. The app may be unresponsive.',
@@ -862,7 +872,13 @@ class _ExtensionResult {
   _ExtensionResult.success(this.data) : errorMessage = null, isError = false;
   _ExtensionResult.error(this.errorMessage) : data = null, isError = true;
   CallToolResult toCallToolResult() => CallToolResult(
-    content: [TextContent(text: errorMessage ?? 'Unknown')],
+    content: [
+      TextContent(
+        text: isError
+            ? (errorMessage ?? 'Unknown error')
+            : jsonEncode(data ?? {}),
+      ),
+    ],
     isError: isError,
   );
 }

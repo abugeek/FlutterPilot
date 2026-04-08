@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 // FlutterPilot Imports
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
+import 'package:flutterpilot_bloc/flutterpilot_bloc.dart';
 import 'package:flutterpilot_dio/flutterpilot_dio.dart';
 import 'package:flutterpilot_hive/flutterpilot_hive.dart';
 
@@ -27,13 +28,16 @@ void main() async {
   // 1. Initialize FlutterPilot SDK
   FlutterPilot.initialize();
 
-  // 2. Initialize Hive and register with FlutterPilot
+  // 2. Set up Bloc observer for FlutterPilot
+  Bloc.observer = BlocPilotObserver();
+
+  // 3. Initialize Hive and register with FlutterPilot
   await Hive.initFlutter();
   final settingsBox = await Hive.openBox('settings');
   HivePilotInspector.registerBox('settings');
 
   runApp(
-    // 3. Wrap with Riverpod and Bloc providers
+    // 4. Wrap with Riverpod and Bloc providers
     ProviderScope(
       observers: [RiverpodPilotObserver()],
       child: BlocProvider(

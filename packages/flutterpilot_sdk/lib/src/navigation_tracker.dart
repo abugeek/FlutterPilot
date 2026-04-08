@@ -21,6 +21,24 @@ import 'package:flutter/widgets.dart';
 class NavigationTracker extends NavigatorObserver {
   static final List<String?> _stack = [];
 
+  /// The most-recently registered [NavigationTracker] instance.
+  ///
+  /// Used internally by the SDK to perform programmatic navigation via
+  /// `ext.flutterpilot.navigateTo` without requiring a user-supplied
+  /// `BuildContext`.
+  static NavigationTracker? _instance;
+
+  /// The [NavigatorState] this observer is attached to, if any.
+  ///
+  /// Exposed so the SDK can call [NavigatorState.pushNamed] programmatically
+  /// from outside the widget tree (e.g., from a VM service extension).
+  static NavigatorState? get navigatorState => _instance?.navigator;
+
+  /// Creates a [NavigationTracker] and registers it as the active instance.
+  NavigationTracker() {
+    _instance = this;
+  }
+
   /// Optional callback invoked on every navigation event.
   ///
   /// Receives [source] (`'navigation'`), [name] (the event type such as
