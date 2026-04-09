@@ -107,14 +107,15 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     children: [
                       Text('Current theme: ${isDark ? "dark 🌙" : "light ☀️"}'),
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           ElevatedButton(
                             key: const Key('set_light_theme_button'),
                             onPressed: isDark ? () => ctx.read<ThemeCubit>().toggle() : null,
                             child: const Text('Light'),
                           ),
-                          const SizedBox(width: 8),
                           ElevatedButton(
                             key: const Key('set_dark_theme_button'),
                             onPressed: !isDark ? () => ctx.read<ThemeCubit>().toggle() : null,
@@ -187,7 +188,9 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                         children: [
                           Text('Currently: ${_isPortrait ? "Portrait" : "Landscape"}'),
                           const SizedBox(height: 8),
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
                             children: [
                               ElevatedButton.icon(
                                 key: const Key('portrait_button'),
@@ -197,7 +200,6 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                                 icon: const Icon(Icons.stay_current_portrait, size: 16),
                                 label: const Text('Portrait'),
                               ),
-                              const SizedBox(width: 8),
                               ElevatedButton.icon(
                                 key: const Key('landscape_button'),
                                 onPressed: _isPortrait

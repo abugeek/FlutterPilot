@@ -70,14 +70,13 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                         style: TextStyle(fontSize: 14 * _textScale.clamp(0.8, 1.5)),
                       ),
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           _scalePreset('Small\n0.8x', 0.8),
-                          const SizedBox(width: 8),
                           _scalePreset('Normal\n1.0x', 1.0),
-                          const SizedBox(width: 8),
                           _scalePreset('Large\n1.5x', 1.5),
-                          const SizedBox(width: 8),
                           _scalePreset('XL\n2.0x', 2.0),
                         ],
                       ),
@@ -191,14 +190,15 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                         onChanged: (v) => setState(() => _formEnabled = v),
                       ),
                       const SizedBox(height: 8),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           ElevatedButton(
                             key: const Key('submit_button'),
                             onPressed: _formEnabled ? () {} : null,
                             child: const Text('Submit (key: submit_button)'),
                           ),
-                          const SizedBox(width: 8),
                           ElevatedButton(
                             key: const Key('locked_button'),
                             onPressed: !_formEnabled ? () {} : null,

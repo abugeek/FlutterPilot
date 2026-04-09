@@ -28,9 +28,9 @@ import 'src/state/bloc_state.dart';
 
 late final Dio dio;
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
+/// Initializes all plugins and returns the root widget.
+/// Exposed for integration tests so they can await full initialization.
+Future<Widget> initializeApp() async {
   // 1. Initialize FlutterPilot SDK
   FlutterPilot.initialize();
 
@@ -49,19 +49,21 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   SharedPrefsPilotInspector.register(prefs);
 
-  runApp(
-    // 6. Wrap with Riverpod + Bloc providers (ThemeCubit added for navigation demo)
-    ProviderScope(
-      observers: [RiverpodPilotObserver()],
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider(create: (_) => CounterCubit()),
-          BlocProvider(create: (_) => ThemeCubit()),
-        ],
-        child: MainApp(settingsBox: settingsBox),
-      ),
+  return ProviderScope(
+    observers: [RiverpodPilotObserver()],
+    child: MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => CounterCubit()),
+        BlocProvider(create: (_) => ThemeCubit()),
+      ],
+      child: MainApp(settingsBox: settingsBox),
     ),
   );
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(await initializeApp());
 }
 
 class MainApp extends StatelessWidget {
