@@ -122,10 +122,9 @@ void main(List<String> args) async {
     try {
       await completer.future.timeout(const Duration(seconds: 10));
       // Send initialized notification
-      process.stdin.writeln(jsonEncode({
-        'jsonrpc': '2.0',
-        'method': 'notifications/initialized',
-      }));
+      process.stdin.writeln(
+        jsonEncode({'jsonrpc': '2.0', 'method': 'notifications/initialized'}),
+      );
     } catch (_) {
       print('⚠️  MCP initialize handshake timed out');
     }

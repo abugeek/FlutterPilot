@@ -65,8 +65,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'suggesting code that requires them.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final pubspec =
-            File('${_projectRoot.path}${Platform.pathSeparator}pubspec.yaml');
+        final pubspec = File(
+          '${_projectRoot.path}${Platform.pathSeparator}pubspec.yaml',
+        );
         if (!await pubspec.exists()) {
           return CallToolResult(
             content: [TextContent(text: 'pubspec.yaml not found.')],
@@ -74,9 +75,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           );
         }
         final content = await pubspec.readAsString();
-        return CallToolResult(
-          content: [TextContent(text: content)],
-        );
+        return CallToolResult(content: [TextContent(text: content)]);
       },
     );
 
@@ -89,7 +88,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'models, routes, or test files before making changes.',
       inputSchema: ToolInputSchema(
         properties: {
-          'path': JsonSchema.string(description: 'Relative or absolute path to the Dart file. Relative paths resolve from the project root.'),
+          'path': JsonSchema.string(
+            description:
+                'Relative or absolute path to the Dart file. Relative paths resolve from the project root.',
+          ),
         },
         required: ['path'],
       ),
@@ -130,18 +132,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
               isError: true,
             );
           }
-        } catch (_) {
+        } catch (e) {
+          _log.fine('Path resolution failed: $e');
           return CallToolResult(
-            content: [
-              TextContent(text: 'Error: unable to resolve path.'),
-            ],
+            content: [TextContent(text: 'Error: unable to resolve path.')],
             isError: true,
           );
         }
         final content = await file.readAsString();
-        return CallToolResult(
-          content: [TextContent(text: content)],
-        );
+        return CallToolResult(content: [TextContent(text: content)]);
       },
     );
 
@@ -153,18 +152,52 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'project root. Use to explore project structure before reading files.',
       inputSchema: ToolInputSchema(
         properties: {
-          'directory': JsonSchema.string(description: 'Subdirectory to search for Dart files (e.g. "lib", "test"). Defaults to project root if omitted.'),
+          'directory': JsonSchema.string(
+            description:
+                'Subdirectory to search for Dart files (e.g. "lib", "test"). Defaults to project root if omitted.',
+          ),
         },
       ),
       callback: (p, e) async {
-        final dir =
-            p['directory']?.toString().replaceAll('..', '') ?? 'lib';
+        final rawDir = p['directory']?.toString() ?? 'lib';
+        // Block absolute paths
+        if (path.isAbsolute(rawDir)) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Error: absolute paths are not allowed. Use relative paths.',
+              ),
+            ],
+            isError: true,
+          );
+        }
         final searchDir = Directory(
-          '${_projectRoot.path}${Platform.pathSeparator}$dir',
+          '${_projectRoot.path}${Platform.pathSeparator}$rawDir',
         );
         if (!await searchDir.exists()) {
           return CallToolResult(
-            content: [TextContent(text: 'Directory not found: $dir')],
+            content: [TextContent(text: 'Directory not found: $rawDir')],
+            isError: true,
+          );
+        }
+        // Verify resolved path stays within project root
+        try {
+          final resolved = searchDir.resolveSymbolicLinksSync();
+          final projectCanonical = _projectRoot.resolveSymbolicLinksSync();
+          if (!resolved.startsWith(projectCanonical)) {
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text: 'Error: path must be within the project directory.',
+                ),
+              ],
+              isError: true,
+            );
+          }
+        } catch (e) {
+          return CallToolResult(
+            content: [TextContent(text: 'Error: unable to resolve path.')],
             isError: true,
           );
         }
@@ -178,9 +211,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           }
         }
         files.sort();
-        return CallToolResult(
-          content: [TextContent(text: files.join('\n'))],
-        );
+        return CallToolResult(content: [TextContent(text: files.join('\n'))]);
       },
     );
 
@@ -194,24 +225,35 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'Call this any time you need to see what the app is printing.',
       inputSchema: ToolInputSchema(
         properties: {
-          'level': JsonSchema.string(description: 'Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels.'),
-          'limit': JsonSchema.integer(description: 'Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only.'),
-          'logger': JsonSchema.string(description: 'Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name.'),
+          'level': JsonSchema.string(
+            description:
+                'Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels.',
+          ),
+          'limit': JsonSchema.integer(
+            description:
+                'Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only.',
+          ),
+          'logger': JsonSchema.string(
+            description:
+                'Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name.',
+          ),
         },
       ),
       callback: (params, extra) async {
         final levelFilter = params['level'] as String?;
         final loggerFilter = params['logger'] as String?;
-        final limit = (params['limit'] as int?) ?? 100;
+        final rawLimit = (params['limit'] as int?) ?? 100;
+        final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
         var entries = _debugLogBuffer.toList();
         if (levelFilter != null && levelFilter.isNotEmpty) {
-          entries = entries
-              .where((e) => e['level'] == levelFilter)
-              .toList();
+          entries = entries.where((e) => e['level'] == levelFilter).toList();
         }
         if (loggerFilter != null && loggerFilter.isNotEmpty) {
           entries = entries
-              .where((e) => (e['logger'] as String).contains(loggerFilter))
+              .where(
+                (e) =>
+                    (e['logger'] as String?)?.contains(loggerFilter) ?? false,
+              )
               .toList();
         }
         if (entries.length > limit) {
@@ -221,7 +263,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: 'No console logs captured yet. '
+                text:
+                    'No console logs captured yet. '
                     'Ensure FlutterPilot.initialize() is called before runApp().',
               ),
             ],
@@ -236,7 +279,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '${entries.length} log entries '
+              text:
+                  '${entries.length} log entries '
                   '(buffer total: ${_debugLogBuffer.length}):\n$lines',
             ),
           ],
@@ -279,7 +323,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: 'Server buffer cleared ($serverCleared entries). '
+                text:
+                    'Server buffer cleared ($serverCleared entries). '
                     'In-app buffer: ${res.errorMessage}',
               ),
             ],
@@ -288,7 +333,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Log buffers cleared (server: $serverCleared entries, app: cleared).',
+              text:
+                  'Log buffers cleared (server: $serverCleared entries, app: cleared).',
             ),
           ],
         );

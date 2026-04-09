@@ -1,6 +1,6 @@
 # FlutterPilot Tools Reference
 
-Complete reference of all **82 MCP tools** available through FlutterPilot Server.
+Complete reference of all **83 MCP tools** available through FlutterPilot Server.
 
 **Table of Contents:**
 - [Screenshots & Layout](#screenshots--layout) (5 tools)

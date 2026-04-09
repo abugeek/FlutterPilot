@@ -60,10 +60,7 @@ extension _NavigationExtensions on FlutterPilot {
     });
 
     // -- ext.flutterpilot.pressBack -------------------------------------------
-    registerExtension('ext.flutterpilot.pressBack', (
-      method,
-      parameters,
-    ) async {
+    registerExtension('ext.flutterpilot.pressBack', (method, parameters) async {
       try {
         bool popped = false;
         final nav = NavigationTracker.navigatorState;
@@ -109,8 +106,7 @@ extension _NavigationExtensions on FlutterPilot {
       parameters,
     ) async {
       final route = parameters['route'];
-      final timeoutMs =
-          int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
       if (route == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
@@ -140,8 +136,7 @@ extension _NavigationExtensions on FlutterPilot {
       parameters,
     ) async {
       final key = parameters['key'];
-      final timeoutMs =
-          int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
       if (key == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
@@ -176,8 +171,7 @@ extension _NavigationExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final timeoutMs =
-          int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
       while (DateTime.now().isBefore(deadline)) {
         if (!SchedulerBinding.instance.hasScheduledFrame) {

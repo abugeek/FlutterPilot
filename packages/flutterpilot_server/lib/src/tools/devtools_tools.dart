@@ -28,12 +28,12 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             if (iso.id == null) continue;
             try {
               final m = await _vmService!.getMemoryUsage(iso.id!);
-              final heapUsedMb =
-                  ((m.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(2);
-              final heapCapMb =
-                  ((m.heapCapacity ?? 0) / (1024 * 1024)).toStringAsFixed(2);
-              final extMb =
-                  ((m.externalUsage ?? 0) / (1024 * 1024)).toStringAsFixed(2);
+              final heapUsedMb = ((m.heapUsage ?? 0) / (1024 * 1024))
+                  .toStringAsFixed(2);
+              final heapCapMb = ((m.heapCapacity ?? 0) / (1024 * 1024))
+                  .toStringAsFixed(2);
+              final extMb = ((m.externalUsage ?? 0) / (1024 * 1024))
+                  .toStringAsFixed(2);
               buf.writeln(
                 '  ${iso.name ?? iso.id}: heap=$heapUsedMb/$heapCapMb MB  external=$extMb MB',
               );
@@ -49,9 +49,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             '${((totalHeapCapacity) / (1024 * 1024)).toStringAsFixed(2)} MB  '
             'external=${((totalExternal) / (1024 * 1024)).toStringAsFixed(2)} MB',
           );
-          return CallToolResult(
-            content: [TextContent(text: buf.toString())],
-          );
+          return CallToolResult(content: [TextContent(text: buf.toString())]);
         } catch (e) {
           return CallToolResult(
             content: [TextContent(text: 'Memory query failed: $e')],
@@ -70,7 +68,12 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'look for classes with unexpectedly high instance counts or byte sizes. '
           'Accepts optional limit (default 30) for number of classes to show.',
       inputSchema: ToolInputSchema(
-        properties: {'limit': JsonSchema.integer(description: 'Number of top classes to show, sorted by heap bytes (default: 30).')},
+        properties: {
+          'limit': JsonSchema.integer(
+            description:
+                'Number of top classes to show, sorted by heap bytes (default: 30).',
+          ),
+        },
       ),
       callback: (params, extra) async {
         if (_vmService == null) {
@@ -101,15 +104,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           for (final c in top) {
             if ((c.bytesCurrent ?? 0) == 0) continue;
             final name = (c.classRef?.name ?? '?').padRight(40);
-            final bytes =
-                ((c.bytesCurrent ?? 0) / 1024).toStringAsFixed(1).padLeft(11);
-            final instances =
-                '${c.instancesCurrent ?? 0}'.padLeft(12);
+            final bytes = ((c.bytesCurrent ?? 0) / 1024)
+                .toStringAsFixed(1)
+                .padLeft(11);
+            final instances = '${c.instancesCurrent ?? 0}'.padLeft(12);
             buf.writeln('$name ${bytes}KB $instances');
           }
-          return CallToolResult(
-            content: [TextContent(text: buf.toString())],
-          );
+          return CallToolResult(content: [TextContent(text: buf.toString())]);
         } catch (e) {
           return CallToolResult(
             content: [TextContent(text: 'Allocation profile failed: $e')],
@@ -130,8 +131,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Optional limit (default 50) caps the number of requests shown.',
       inputSchema: ToolInputSchema(
         properties: {
-          'limit': JsonSchema.integer(description: 'Maximum number of requests to return, most recent first (default: 50).'),
-          'status_filter': JsonSchema.integer(description: 'Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests.'),
+          'limit': JsonSchema.integer(
+            description:
+                'Maximum number of requests to return, most recent first (default: 50).',
+          ),
+          'status_filter': JsonSchema.integer(
+            description:
+                'Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests.',
+          ),
         },
       ),
       callback: (params, extra) async {
@@ -142,15 +149,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: 'HTTP profile unavailable: ${res.errorMessage}\n'
+                text:
+                    'HTTP profile unavailable: ${res.errorMessage}\n'
                     'Note: dart:io HTTP profiling is only available in debug builds.',
               ),
             ],
           );
         }
-        final requests =
-            (res.data?['requests'] as List<dynamic>?) ?? [];
-        var filtered = requests.cast<Map<String, dynamic>>();
+        final requests = (res.data?['requests'] as List<dynamic>?) ?? [];
+        var filtered =
+            requests.whereType<Map<String, dynamic>>().toList();
         if (statusFilter != null) {
           filtered = filtered
               .where(
@@ -174,18 +182,18 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
               (req['response'] as Map?)?['statusCode']?.toString() ?? '...';
           final start = req['startTime'] as int? ?? 0;
           final end = req['endTime'] as int? ?? 0;
-          final durationMs = end > 0 ? '${((end - start) / 1000).round()}ms' : 'pending';
-          final reqSize =
-              ((req['request'] as Map?)?['contentLength'] ?? 0).toString();
-          final respSize =
-              ((req['response'] as Map?)?['contentLength'] ?? 0).toString();
+          final durationMs = end > 0
+              ? '${((end - start) / 1000).round()}ms'
+              : 'pending';
+          final reqSize = ((req['request'] as Map?)?['contentLength'] ?? 0)
+              .toString();
+          final respSize = ((req['response'] as Map?)?['contentLength'] ?? 0)
+              .toString();
           buf.writeln(
             '[$status] $method $uri  ⏱$durationMs  ↑${reqSize}B ↓${respSize}B',
           );
         }
-        return CallToolResult(
-          content: [TextContent(text: buf.toString())],
-        );
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
       },
     );
 
@@ -197,10 +205,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'before triggering a specific API call. Pair with get_http_profile.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
-        final res = await _callExtensionRaw(
-          'ext.dart.io.clearHttpProfile',
-          {},
-        );
+        final res = await _callExtensionRaw('ext.dart.io.clearHttpProfile', {});
         if (res.isError) {
           return CallToolResult(
             content: [TextContent(text: 'Clear failed: ${res.errorMessage}')],
@@ -305,7 +310,12 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'which parts of the UI are repainting more than expected — '
           'a classic Flutter performance debugging technique.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean(description: 'true to enable the repaint rainbow overlay, false to disable.')},
+        properties: {
+          'enabled': JsonSchema.boolean(
+            description:
+                'true to enable the repaint rainbow overlay, false to disable.',
+          ),
+        },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
@@ -317,7 +327,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Repaint rainbow ${enabled ? 'enabled' : 'disabled'}. '
+              text:
+                  'Repaint rainbow ${enabled ? 'enabled' : 'disabled'}. '
                   '${enabled ? 'Look for rapidly cycling colors on screen — those widgets repaint every frame.' : ''}',
             ),
           ],
@@ -333,15 +344,19 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'widget boundaries (orange), baselines (green), and pointer hit areas. '
           'Use this to debug layout issues like unexpected padding or misaligned widgets.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean(description: 'true to show debug paint boundaries and padding, false to hide.')},
+        properties: {
+          'enabled': JsonSchema.boolean(
+            description:
+                'true to show debug paint boundaries and padding, false to hide.',
+          ),
+        },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugPaint',
-          {'enabled': enabled.toString()},
-        );
+        final res = await _callExtensionRaw('ext.flutter.debugPaint', {
+          'enabled': enabled.toString(),
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -362,16 +377,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'curves, catch jank frames, or verify transition correctness. '
           'Set enabled=false to restore normal speed.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean(description: 'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.')},
+        properties: {
+          'enabled': JsonSchema.boolean(
+            description:
+                'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.',
+          ),
+        },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
         final dilation = enabled ? '5.0' : '1.0';
-        final res = await _callExtensionRaw(
-          'ext.flutter.timeDilation',
-          {'timeDilation': dilation},
-        );
+        final res = await _callExtensionRaw('ext.flutter.timeDilation', {
+          'timeDilation': dilation,
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -395,20 +414,25 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'to see rebuild events, or check the performance overlay via '
           'get_perf_metrics. Set enabled=false to stop tracking.',
       inputSchema: ToolInputSchema(
-        properties: {'enabled': JsonSchema.boolean(description: 'true to start tracking per-widget rebuild counts, false to stop.')},
+        properties: {
+          'enabled': JsonSchema.boolean(
+            description:
+                'true to start tracking per-widget rebuild counts, false to stop.',
+          ),
+        },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw(
-          'ext.flutter.profileWidgetBuilds',
-          {'enabled': enabled.toString()},
-        );
+        final res = await _callExtensionRaw('ext.flutter.profileWidgetBuilds', {
+          'enabled': enabled.toString(),
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Widget rebuild tracking ${enabled ? 'enabled' : 'disabled'}. '
+              text:
+                  'Widget rebuild tracking ${enabled ? 'enabled' : 'disabled'}. '
                   '${enabled ? 'Interact with the app, then use get_debug_logs or capture_screenshot to observe rebuild activity.' : ''}',
             ),
           ],
@@ -446,9 +470,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
                     .toStringAsFixed(2);
                 final cap = ((newSpace.heapCapacity ?? 0) / (1024 * 1024))
                     .toStringAsFixed(2);
-                buf.writeln(
-                  '  ${iso.name ?? iso.id}: heap=$used/$cap MB',
-                );
+                buf.writeln('  ${iso.name ?? iso.id}: heap=$used/$cap MB');
               }
             } catch (e) {
               _log.fine('Failed to query isolate: $e');
@@ -458,9 +480,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             '\nTip: use get_allocation_profile to see which classes are '
             'consuming heap, or get_memory_details for a live snapshot.',
           );
-          return CallToolResult(
-            content: [TextContent(text: buf.toString())],
-          );
+          return CallToolResult(content: [TextContent(text: buf.toString())]);
         } catch (e) {
           return CallToolResult(
             content: [TextContent(text: 'GC stats failed: $e')],

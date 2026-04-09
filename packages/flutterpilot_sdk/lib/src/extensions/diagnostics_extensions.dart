@@ -41,10 +41,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
     });
 
     // -- ext.flutterpilot.getErrors -------------------------------------------
-    registerExtension('ext.flutterpilot.getErrors', (
-      method,
-      parameters,
-    ) async {
+    registerExtension('ext.flutterpilot.getErrors', (method, parameters) async {
       return ServiceExtensionResponse.result(
         json.encode({'errors': ErrorInspector.errors}),
       );
@@ -68,8 +65,8 @@ extension _DiagnosticsExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      FlutterPilot._semanticsHandle ??=
-          SemanticsBinding.instance.ensureSemantics();
+      FlutterPilot._semanticsHandle ??= SemanticsBinding.instance
+          .ensureSemantics();
       WidgetsBinding.instance.scheduleFrame();
       await WidgetsBinding.instance.endOfFrame;
 
@@ -92,8 +89,8 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'isButton': f(SemanticsFlag.isButton),
           'isTextField': f(SemanticsFlag.isTextField),
           'isChecked': f(SemanticsFlag.isChecked),
-          'isEnabled': !f(SemanticsFlag.hasEnabledState) ||
-              f(SemanticsFlag.isEnabled),
+          'isEnabled':
+              !f(SemanticsFlag.hasEnabledState) || f(SemanticsFlag.isEnabled),
           'isFocused': f(SemanticsFlag.isFocused),
           'isImage': f(SemanticsFlag.isImage),
           'isSlider': f(SemanticsFlag.isSlider),
@@ -110,7 +107,10 @@ extension _DiagnosticsExtensions on FlutterPilot {
       }
 
       final root = RendererBinding
-          .instance.rootPipelineOwner.semanticsOwner?.rootSemanticsNode;
+          .instance
+          .rootPipelineOwner
+          .semanticsOwner
+          ?.rootSemanticsNode;
       if (root == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -155,8 +155,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
       final limit = int.tryParse(parameters['limit'] ?? '') ?? 100;
       var entries = FlutterPilot._consoleBuffer.toList();
       if (levelFilter != null && levelFilter.isNotEmpty) {
-        entries =
-            entries.where((e) => e['level'] == levelFilter).toList();
+        entries = entries.where((e) => e['level'] == levelFilter).toList();
       }
       if (entries.length > limit) {
         entries = entries.sublist(entries.length - limit);
@@ -175,9 +174,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
       parameters,
     ) async {
       FlutterPilot._consoleBuffer.clear();
-      return ServiceExtensionResponse.result(
-        json.encode({'cleared': true}),
-      );
+      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
 
     // -- ext.flutterpilot.pumpFrames ------------------------------------------

@@ -38,7 +38,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'visual regression comparisons. Call this once to establish a golden image, then '
           'use compare_screenshot after code changes.',
       inputSchema: ToolInputSchema(
-        properties: {'name': JsonSchema.string(description: 'A unique name for this baseline image (e.g. "home_screen", "login_dark"). Used to reference it in compare_screenshot.')},
+        properties: {
+          'name': JsonSchema.string(
+            description:
+                'A unique name for this baseline image (e.g. "home_screen", "login_dark"). Used to reference it in compare_screenshot.',
+          ),
+        },
         required: ['name'],
       ),
       callback: (p, e) async {
@@ -49,7 +54,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.captureScreenshot',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         final base64Str = res.data?['data'] as String?;
         if (base64Str == null) {
@@ -59,10 +67,20 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
         // Evict oldest baseline when at capacity
-        if (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines) {
+        if (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines &&
+            _screenshotBaselines.isNotEmpty) {
           _screenshotBaselines.remove(_screenshotBaselines.keys.first);
         }
-        _screenshotBaselines[name] = base64Decode(base64Str);
+        final Uint8List decoded;
+        try {
+          decoded = base64Decode(base64Str);
+        } on FormatException {
+          return CallToolResult(
+            content: [TextContent(text: 'Invalid base64 screenshot data')],
+            isError: true,
+          );
+        }
+        _screenshotBaselines[name] = decoded;
         return CallToolResult(
           content: [
             TextContent(
@@ -82,7 +100,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'baseline. Returns the percentage of changed pixels. Use for visual regression testing.',
       inputSchema: ToolInputSchema(
         properties: {
-          'name': JsonSchema.string(description: 'Baseline name set by save_screenshot_baseline'),
+          'name': JsonSchema.string(
+            description: 'Baseline name set by save_screenshot_baseline',
+          ),
           'threshold': JsonSchema.number(
             description: 'Allowed diff % before test fails (default 1.0 = 1%)',
           ),
@@ -102,14 +122,18 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: 'No baseline named "$name". '
+                text:
+                    'No baseline named "$name". '
                     'Call save_screenshot_baseline first.',
               ),
             ],
             isError: true,
           );
         }
-        final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.captureScreenshot',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         final base64Str = res.data?['data'] as String?;
         if (base64Str == null) {
@@ -118,7 +142,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        final currentBytes = base64Decode(base64Str);
+        final Uint8List currentBytes;
+        try {
+          currentBytes = base64Decode(base64Str);
+        } on FormatException {
+          return CallToolResult(
+            content: [TextContent(text: 'Invalid base64 screenshot data')],
+            isError: true,
+          );
+        }
         final threshold = (p['threshold'] as num?)?.toDouble() ?? 1.0;
 
         // Decode both PNGs and compare pixel-by-pixel.
@@ -127,7 +159,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
 
         if (baselineImg == null || currentImg == null) {
           return CallToolResult(
-            content: [TextContent(text: 'Failed to decode PNG images for comparison')],
+            content: [
+              TextContent(text: 'Failed to decode PNG images for comparison'),
+            ],
             isError: true,
           );
         }
@@ -140,8 +174,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           int diffPixels = 0;
           final total = baselineImg.width * baselineImg.height;
           // Early-exit threshold: once we exceed this, stop comparing
-          final earlyExitThreshold =
-              (total * (threshold / 100.0) * 1.5).ceil();
+          final earlyExitThreshold = (total * (threshold / 100.0) * 1.5).ceil();
           bool earlyExit = false;
           for (int y = 0; y < baselineImg.height && !earlyExit; y++) {
             for (int x = 0; x < baselineImg.width; x++) {
@@ -193,7 +226,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'Use this instead of screenshots to verify widget state.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to inspect.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the widget to inspect.',
+          ),
         },
         required: ['key'],
       ),
@@ -222,11 +257,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
-          content: [
-            TextContent(
-              text: jsonEncode(res.data),
-            ),
-          ],
+          content: [TextContent(text: jsonEncode(res.data))],
         );
       },
     );

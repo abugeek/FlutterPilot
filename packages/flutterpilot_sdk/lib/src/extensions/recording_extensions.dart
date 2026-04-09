@@ -57,9 +57,7 @@ extension _RecordingExtensions on FlutterPilot {
       try {
         final result = await FlutterPilot._customTools[name]!(parameters);
         return ServiceExtensionResponse.result(
-          json.encode({
-            'result': FlutterPilot._safeJsonEncode(result),
-          }),
+          json.encode({'result': FlutterPilot._safeJsonEncode(result)}),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(

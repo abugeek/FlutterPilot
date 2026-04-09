@@ -40,10 +40,14 @@ class InteractionManager {
   /// and optionally `key` and `type`.
   static Map<String, dynamic> _resolveWidgetAt(Offset position) {
     final result = HitTestResult();
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (view == null) {
+      return {'x': position.dx, 'y': position.dy};
+    }
     WidgetsBinding.instance.hitTestInView(
       result,
       position,
-      WidgetsBinding.instance.platformDispatcher.implicitView!.viewId,
+      view.viewId,
     );
 
     Element? bestElement;
@@ -170,8 +174,11 @@ class TestPointer {
 
   /// Creates a [PointerUpEvent] at the last `down` location.
   ///
-  /// Throws if called before [down].
+  /// Throws [StateError] if called before [down].
   PointerEvent up({Duration timeStamp = Duration.zero}) {
+    if (_location == null) {
+      throw StateError('TestPointer.up() called before down()');
+    }
     final Offset location = _location!;
     _location = null;
     return PointerUpEvent(
@@ -184,8 +191,11 @@ class TestPointer {
 
   /// Creates a [PointerMoveEvent] to [location].
   ///
-  /// Throws if called before [down].
+  /// Throws [StateError] if called before [down].
   PointerEvent move(Offset location, {Duration timeStamp = Duration.zero}) {
+    if (_location == null) {
+      throw StateError('TestPointer.move() called before down()');
+    }
     final delta = location - _location!;
     _location = location;
     return PointerMoveEvent(

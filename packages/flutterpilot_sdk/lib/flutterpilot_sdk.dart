@@ -193,11 +193,16 @@ class FlutterPilot {
     };
   }
 
+  static bool _fpsCounterRunning = false;
+
   static void _setupFpsCounter() {
+    if (_fpsCounterRunning) return;
+    _fpsCounterRunning = true;
     SchedulerBinding.instance.addPostFrameCallback(_onFrame);
   }
 
   static void _onFrame(Duration timestamp) {
+    if (!_fpsCounterRunning) return;
     _frameCount++;
     final now = DateTime.now();
     final diff = now.difference(_lastFpsUpdate).inMilliseconds;
@@ -207,6 +212,16 @@ class FlutterPilot {
       _lastFpsUpdate = now;
     }
     SchedulerBinding.instance.addPostFrameCallback(_onFrame);
+  }
+
+  /// Stops the FPS counter and clears internal state.
+  ///
+  /// Call this during teardown or hot-restart cleanup to prevent
+  /// stale frame callbacks from accumulating.
+  static void dispose() {
+    _fpsCounterRunning = false;
+    _frameCount = 0;
+    _lastFps = 0;
   }
 
   // Intercepts debugPrint so that every message is also routed through
@@ -381,17 +396,14 @@ class FlutterPilot {
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
         json.encode({
-          'error': 'Widget "$key" is ${isEnabled ? 'enabled' : 'disabled'}, '
+          'error':
+              'Widget "$key" is ${isEnabled ? 'enabled' : 'disabled'}, '
               'expected ${shouldBeEnabled ? 'enabled' : 'disabled'}.',
         }),
       );
     }
     return ServiceExtensionResponse.result(
-      json.encode({
-        'status': 'passed',
-        'key': key,
-        'isEnabled': isEnabled,
-      }),
+      json.encode({'status': 'passed', 'key': key, 'isEnabled': isEnabled}),
     );
   }
 
@@ -404,10 +416,7 @@ class FlutterPilot {
   /// - [Slider.value] / [Slider.min] / [Slider.max] → `value`, `min`, `max`
   /// - `onPressed` / `onTap` / `onChanged` → `isEnabled`
   /// - [RenderBox] global bounds → `bounds`
-  static void _extractWidgetProps(
-    Element element,
-    Map<String, dynamic> props,
-  ) {
+  static void _extractWidgetProps(Element element, Map<String, dynamic> props) {
     final widget = element.widget;
     final dyn = widget as dynamic;
 
@@ -490,15 +499,18 @@ class FlutterPilot {
     }
   }
 
-  static dynamic _safeJsonEncode(dynamic object) {
+  static dynamic _safeJsonEncode(dynamic object, [int depth = 0]) {
+    if (depth > 10) return '<max depth exceeded>';
     if (object == null || object is num || object is bool || object is String) {
       return object;
     }
     if (object is Map) {
-      return object.map((k, v) => MapEntry(k.toString(), _safeJsonEncode(v)));
+      return object.map(
+        (k, v) => MapEntry(k.toString(), _safeJsonEncode(v, depth + 1)),
+      );
     }
     if (object is Iterable) {
-      return object.map(_safeJsonEncode).toList();
+      return object.map((e) => _safeJsonEncode(e, depth + 1)).toList();
     }
     try {
       return (object as dynamic).toJson();

@@ -14,7 +14,7 @@ scripts:
     description: Run static analysis for all packages.
 
   format:
-    run: melos exec -c 1 -- "flutter format . || dart format ."
+    run: melos exec -c 1 -- "dart format --set-exit-if-changed ."
     description: Run dart format for all packages.
 
   test:

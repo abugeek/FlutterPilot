@@ -112,8 +112,10 @@ class DioPilotInterceptor extends Interceptor {
           'statusCode must be an integer',
         );
       }
-      final delayMs = (int.tryParse(parameters['delayMs'] ?? '0') ?? 0)
-          .clamp(0, _maxDelayMs);
+      final delayMs = (int.tryParse(parameters['delayMs'] ?? '0') ?? 0).clamp(
+        0,
+        _maxDelayMs,
+      );
       _mocks[urlPattern] = {
         'statusCode': statusCode,
         'body': body,
@@ -147,6 +149,13 @@ class DioPilotInterceptor extends Interceptor {
 
   @override
   void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    _onRequestAsync(options, handler);
+  }
+
+  Future<void> _onRequestAsync(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
@@ -188,7 +197,9 @@ class DioPilotInterceptor extends Interceptor {
       return;
     }
 
-    switch (_condition) {
+    // Capture condition snapshot to avoid race with simulateNetwork
+    final condition = _condition;
+    switch (condition) {
       case NetworkCondition.offline:
         handler.reject(
           DioException(
@@ -206,7 +217,7 @@ class DioPilotInterceptor extends Interceptor {
       case NetworkCondition.normal:
         break;
     }
-    super.onRequest(options, handler);
+    handler.next(options);
   }
 
   @override

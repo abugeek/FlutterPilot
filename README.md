@@ -7,7 +7,7 @@
 
 **FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, and AI-native development workflows.
 
-> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **82 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, and full DevTools-level deep inspection — all designed specifically for how AI agents work.
+> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **83 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, and full DevTools-level deep inspection — all designed specifically for how AI agents work.
 
 ## 🚀 Quick Start (3 Steps)
 
@@ -43,7 +43,7 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 
 ## 📋 What You Get
 
-### 82 MCP Tools Across 6 Categories
+### 83 MCP Tools Across 6 Categories
 
 #### 🎬 **Screenshots & Layout** (5 tools)
 - `capture_screenshot` — PNG screenshot as MCP Image
@@ -140,7 +140,7 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │          flutterpilot_server (modular)               │
-│  • 82 MCP tools with full schemas + param descriptions│
+│  • 83 MCP tools with full schemas + param descriptions│
 │  • Organized into 9 tool categories (part files)     │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge with auto-reconnect             │

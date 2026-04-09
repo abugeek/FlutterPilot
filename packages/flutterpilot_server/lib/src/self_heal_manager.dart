@@ -125,8 +125,9 @@ class SelfHealManager {
               'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_latest_crash_report` for full context.',
         ),
       );
-    } catch (_) {
+    } catch (e) {
       // Notification delivery is best-effort; crash data is still available via get_latest_crash_report.
+      _log.warning('Failed to send crash notification: $e');
     }
   }
 

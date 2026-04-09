@@ -8,7 +8,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if you have a Key.',
       inputSchema: ToolInputSchema(
-        properties: {'x': JsonSchema.number(description: 'X screen coordinate in logical pixels. Screen origin is top-left.'), 'y': JsonSchema.number(description: 'Y screen coordinate in logical pixels. Screen origin is top-left.')},
+        properties: {
+          'x': JsonSchema.number(
+            description:
+                'X screen coordinate in logical pixels. Screen origin is top-left.',
+          ),
+          'y': JsonSchema.number(
+            description:
+                'Y screen coordinate in logical pixels. Screen origin is top-left.',
+          ),
+        },
         required: ['x', 'y'],
       ),
       callback: (p, e) async {
@@ -30,7 +39,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Finds a widget by its Key and taps its center. HINT: Use `get_widget_tree` to find the Key first. After tapping, you should verify state changes.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.',
+          ),
+        },
         required: ['key'],
       ),
       callback: (p, e) async {
@@ -52,7 +66,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Types text into a TextField identified by a Key. Automatically handles controller updates and change notifications.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.'), 'text': JsonSchema.string(description: 'The text label of the widget to tap (e.g. button label). Alternative to key.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.',
+          ),
+          'text': JsonSchema.string(
+            description:
+                'The text to enter into the text field.',
+          ),
+        },
         required: ['key', 'text'],
       ),
       callback: (p, e) async {
@@ -74,7 +97,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Ensures a widget is visible by scrolling its parent list. Use this before tapping a widget that might be off-screen.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to scroll into view.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to scroll into view.',
+          ),
+        },
         required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -88,7 +116,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys.',
+          ),
+        },
         required: ['key'],
       ),
       callback: (p, e) async {
@@ -113,8 +146,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to long-press.'),
-          'durationMs': JsonSchema.integer(description: 'How long to wait for the widget (default: 5000ms). Throws if widget not found.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the widget to long-press.',
+          ),
+          'durationMs': JsonSchema.integer(
+            description:
+                'How long to wait for the widget (default: 5000ms). Throws if widget not found.',
+          ),
         },
         required: ['key'],
       ),
@@ -145,11 +183,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to swipe.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the widget to swipe.',
+          ),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
           ),
-          'distance': JsonSchema.number(description: 'Scroll distance in logical pixels. Positive = down/right, negative = up/left.'),
+          'distance': JsonSchema.number(
+            description:
+                'Scroll distance in logical pixels. Positive = down/right, negative = up/left.',
+          ),
         },
         required: ['key', 'direction'],
       ),
@@ -181,8 +224,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
       inputSchema: ToolInputSchema(
         properties: {
-          'fromKey': JsonSchema.string(description: 'The ValueKey string of the widget to drag from (drag source).'),
-          'toKey': JsonSchema.string(description: 'The ValueKey string of the target widget to drag to (drop target).'),
+          'fromKey': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to drag from (drag source).',
+          ),
+          'toKey': JsonSchema.string(
+            description:
+                'The ValueKey string of the target widget to drag to (drop target).',
+          ),
         },
         required: ['fromKey', 'toKey'],
       ),
@@ -208,15 +257,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Use enter_text to type new content afterwards.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the text field to clear.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the text field to clear.',
+          ),
         },
         required: ['key'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.clearTextField',
-          {'key': p['key'].toString()},
-        );
+        final res = await _callExtensionRaw('ext.flutterpilot.clearTextField', {
+          'key': p['key'].toString(),
+        });
         return res.isError
             ? res.toCallToolResult()
             : CallToolResult(
@@ -233,20 +283,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Use unfocus_all to close the keyboard afterwards.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to focus.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the widget to focus.',
+          ),
         },
         required: ['key'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.focusWidget',
-          {'key': p['key'].toString()},
-        );
+        final res = await _callExtensionRaw('ext.flutterpilot.focusWidget', {
+          'key': p['key'].toString(),
+        });
         return res.isError
             ? res.toCallToolResult()
-            : CallToolResult(
-                content: [TextContent(text: 'Widget focused.')],
-              );
+            : CallToolResult(content: [TextContent(text: 'Widget focused.')]);
       },
     );
 
@@ -258,8 +307,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'taking screenshots or tapping other elements.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res =
-            await _callExtensionRaw('ext.flutterpilot.unfocusAll', {});
+        final res = await _callExtensionRaw('ext.flutterpilot.unfocusAll', {});
         return res.isError
             ? res.toCallToolResult()
             : CallToolResult(
@@ -278,7 +326,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'listens to FlutterPilot.textScaleNotifier.',
       inputSchema: ToolInputSchema(
         properties: {
-          'scale': JsonSchema.number(description: 'Text scale factor (1.0 = normal, 2.0 = double size, 0.5 = half size). Test accessibility at 2.0.'),
+          'scale': JsonSchema.number(
+            description:
+                'Text scale factor (1.0 = normal, 2.0 = double size, 0.5 = half size). Test accessibility at 2.0.',
+          ),
         },
         required: ['scale'],
       ),
@@ -300,19 +351,21 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'The value is clamped to [min, max].',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the Slider widget.'),
-          'value': JsonSchema.number(description: 'The new slider value. Must be within the slider min/max range.'),
+          'key': JsonSchema.string(
+            description: 'The ValueKey string of the Slider widget.',
+          ),
+          'value': JsonSchema.number(
+            description:
+                'The new slider value. Must be within the slider min/max range.',
+          ),
         },
         required: ['key', 'value'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.setSliderValue',
-          {
-            'key': p['key'].toString(),
-            'value': p['value'].toString(),
-          },
-        );
+        final res = await _callExtensionRaw('ext.flutterpilot.setSliderValue', {
+          'key': p['key'].toString(),
+          'value': p['value'].toString(),
+        });
         return res.toCallToolResult();
       },
     );
@@ -325,20 +378,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Use get_widget_properties to read the resulting isChecked value.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the Checkbox, Switch, or Radio widget to toggle.'),
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the Checkbox, Switch, or Radio widget to toggle.',
+          ),
         },
         required: ['key'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.toggleCheckbox',
-          {'key': p['key'].toString()},
-        );
+        final res = await _callExtensionRaw('ext.flutterpilot.toggleCheckbox', {
+          'key': p['key'].toString(),
+        });
         return res.isError
             ? res.toCallToolResult()
-            : CallToolResult(
-                content: [TextContent(text: 'Toggled.')],
-              );
+            : CallToolResult(content: [TextContent(text: 'Toggled.')]);
       },
     );
 
@@ -351,15 +404,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Max 120 frames.',
       inputSchema: ToolInputSchema(
         properties: {
-          'count': JsonSchema.integer(description: 'Number of frames to pump. Use 1–5 for immediate animations, 60 for ~1 second of wall time.'),
+          'count': JsonSchema.integer(
+            description:
+                'Number of frames to pump. Use 1–5 for immediate animations, 60 for ~1 second of wall time.',
+          ),
         },
       ),
       callback: (p, e) async {
-        final count = p['count'] ?? 1;
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.pumpFrames',
-          {'count': count.toString()},
-        );
+        final count = ((p['count'] as int?) ?? 1).clamp(1, 120);
+        final res = await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
+          'count': count.toString(),
+        });
         return res.toCallToolResult();
       },
     );
@@ -373,7 +428,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'and notification tap flows.',
       inputSchema: ToolInputSchema(
         properties: {
-          'url': JsonSchema.string(description: 'The URL pattern to intercept (exact match or prefix).'),
+          'url': JsonSchema.string(
+            description:
+                'The URL pattern to intercept (exact match or prefix).',
+          ),
         },
         required: ['url'],
       ),

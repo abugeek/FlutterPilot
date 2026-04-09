@@ -403,7 +403,8 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final offset = renderObject.localToGlobal(Offset.zero);
-      final center = offset +
+      final center =
+          offset +
           Offset(renderObject.size.width / 2, renderObject.size.height / 2);
       await InteractionManager.tapAt(center);
       return ServiceExtensionResponse.result(
@@ -457,8 +458,7 @@ extension _WidgetExtensions on FlutterPilot {
       }
       final box = renderBox!;
       final offset = box.localToGlobal(Offset.zero);
-      final center =
-          offset + Offset(box.size.width / 2, box.size.height / 2);
+      final center = offset + Offset(box.size.width / 2, box.size.height / 2);
       await InteractionManager.tapAt(center);
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('toggleCheckbox', {'key': key});

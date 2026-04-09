@@ -54,8 +54,7 @@ extension _StateExtensions on FlutterPilot {
       final type = parameters['type'];
       final name = parameters['name'];
       final expectedValue = parameters['expectedValue'];
-      final timeoutMs =
-          int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
 
       if (type == null || name == null || expectedValue == null) {
         return ServiceExtensionResponse.error(
@@ -96,10 +95,7 @@ extension _StateExtensions on FlutterPilot {
     });
 
     // -- ext.flutterpilot.setLocale -------------------------------------------
-    registerExtension('ext.flutterpilot.setLocale', (
-      method,
-      parameters,
-    ) async {
+    registerExtension('ext.flutterpilot.setLocale', (method, parameters) async {
       final code = parameters['locale'];
       if (code == null) {
         return ServiceExtensionResponse.error(

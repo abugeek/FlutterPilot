@@ -51,7 +51,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'Executes an app-specific tool defined by the developer. CALL THIS if you see a relevant tool listed in `list_custom_tools`.',
       inputSchema: ToolInputSchema(
         properties: {
-          'name': JsonSchema.string(description: 'The custom tool name as registered via FlutterPilot.registerCustomTool().'),
+          'name': JsonSchema.string(
+            description:
+                'The custom tool name as registered via FlutterPilot.registerCustomTool().',
+          ),
           'params': JsonSchema.object(),
         },
         required: ['name'],
@@ -67,7 +70,12 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       description:
           'Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is visible.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to assert is visible.',
+          ),
+        },
         required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -82,8 +90,13 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.',
       inputSchema: ToolInputSchema(
         properties: {
-          'text': JsonSchema.string(description: 'The text string to assert is visible on screen.'),
-          'exact': JsonSchema.boolean(description: 'If true, requires an exact text match. If false (default), a substring match is used.'),
+          'text': JsonSchema.string(
+            description: 'The text string to assert is visible on screen.',
+          ),
+          'exact': JsonSchema.boolean(
+            description:
+                'If true, requires an exact text match. If false (default), a substring match is used.',
+          ),
         },
         required: ['text'],
       ),
@@ -105,8 +118,13 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.',
       inputSchema: ToolInputSchema(
         properties: {
-          'type': JsonSchema.string(description: 'Widget type name to count (e.g. "ElevatedButton", "Text", "ListTile").'),
-          'count': JsonSchema.integer(description: 'Expected number of widgets of the given type.'),
+          'type': JsonSchema.string(
+            description:
+                'Widget type name to count (e.g. "ElevatedButton", "Text", "ListTile").',
+          ),
+          'count': JsonSchema.integer(
+            description: 'Expected number of widgets of the given type.',
+          ),
         },
         required: ['type', 'count'],
       ),
@@ -130,7 +148,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'Returns error if the widget is disabled or not found.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is enabled.'),
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to assert is enabled.',
+          ),
         },
         required: ['key'],
       ),
@@ -151,7 +172,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'Returns error if the widget is enabled or not found.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to assert is disabled.'),
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to assert is disabled.',
+          ),
         },
         required: ['key'],
       ),

@@ -97,13 +97,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     required this.vmServiceUri,
     this.allowDestructive = false,
     Directory? projectRoot,
-  })  : _projectRoot = projectRoot ?? Directory.current,
-        server = McpServer(
-          Implementation(name: 'FlutterPilot', version: '0.0.1'),
-          options: McpServerOptions(
-            capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
-          ),
-        ) {
+  }) : _projectRoot = projectRoot ?? Directory.current,
+       server = McpServer(
+         Implementation(name: 'FlutterPilot', version: '0.0.1'),
+         options: McpServerOptions(
+           capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+         ),
+       ) {
     _selfHealManager = SelfHealManager(server: server);
     _registerTools();
     _registerPrompts();
@@ -338,7 +338,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       title: 'FlutterPilot Usage Guide',
       description:
           'Complete guide on how to use FlutterPilot tools effectively. '
-          'Call this prompt at the start of a session to understand all 82 tools, '
+          'Call this prompt at the start of a session to understand all 83 tools, '
           'when to use each one, and recommended workflows.',
       callback: (args, extra) async {
         return GetPromptResult(
@@ -349,7 +349,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               content: TextContent(
                 text: '''# FlutterPilot — AI Agent Guide
 
-You are connected to a live Flutter app via FlutterPilot (82 MCP tools).
+You are connected to a live Flutter app via FlutterPilot (83 MCP tools).
 Use this guide to understand what tools to call, when, and in what order.
 
 ## First Steps (always start here)
@@ -525,9 +525,7 @@ Use this guide to understand what tools to call, when, and in what order.
       return _ExtensionResult.error('No VM Service connection.');
     }
     try {
-      final vm = await _vmService!
-          .getVM()
-          .timeout(_Constants.vmServiceTimeout);
+      final vm = await _vmService!.getVM().timeout(_Constants.vmServiceTimeout);
       for (final isolateRef in vm.isolates ?? []) {
         if (isolateRef.id == null) continue;
         try {

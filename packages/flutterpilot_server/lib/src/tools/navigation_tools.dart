@@ -9,7 +9,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       description:
           'Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.',
       inputSchema: ToolInputSchema(
-        properties: {'route': JsonSchema.string(description: 'The named route to navigate to (e.g. "/home", "/profile/123"). Must be registered in the app router.')},
+        properties: {
+          'route': JsonSchema.string(
+            description:
+                'The named route to navigate to (e.g. "/home", "/profile/123"). Must be registered in the app router.',
+          ),
+        },
         required: ['route'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -33,8 +38,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The ValueKey string of the widget to wait for to appear.'),
-          'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for the widget (default: 5000ms).'),
+          'key': JsonSchema.string(
+            description:
+                'The ValueKey string of the widget to wait for to appear.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description:
+                'Maximum milliseconds to wait for the widget (default: 5000ms).',
+          ),
         },
         required: ['key'],
       ),
@@ -56,8 +67,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',
       inputSchema: ToolInputSchema(
         properties: {
-          'route': JsonSchema.string(description: 'The route name to wait for (e.g. "/dashboard", "/settings").'),
-          'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for the route (default: 5000ms).'),
+          'route': JsonSchema.string(
+            description:
+                'The route name to wait for (e.g. "/dashboard", "/settings").',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description:
+                'Maximum milliseconds to wait for the route (default: 5000ms).',
+          ),
         },
         required: ['route'],
       ),
@@ -78,7 +95,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       description:
           'Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.',
       inputSchema: ToolInputSchema(
-        properties: {'timeoutMs': JsonSchema.integer(description: 'Maximum milliseconds to wait for all animations to settle (default: 5000ms.')},
+        properties: {
+          'timeoutMs': JsonSchema.integer(
+            description:
+                'Maximum milliseconds to wait for all animations to settle (default: 5000ms.',
+          ),
+        },
       ),
       callback: (p, e) async {
         final args = {
@@ -111,7 +133,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             description: 'Substring expected in the state\'s toString() output',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Milliseconds to wait before timing out (default 5000)',
+            description:
+                'Milliseconds to wait before timing out (default 5000)',
           ),
         },
         required: ['type', 'name', 'expectedValue'],
@@ -123,8 +146,10 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'expectedValue': p['expectedValue']?.toString(),
           if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
         };
-        return _callExtensionRaw('ext.flutterpilot.waitForState', mapped)
-            .then((res) => res.toCallToolResult());
+        return _callExtensionRaw(
+          'ext.flutterpilot.waitForState',
+          mapped,
+        ).then((res) => res.toCallToolResult());
       },
     );
 
@@ -152,7 +177,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       description:
           'Switch app language (e.g., "en", "de_DE"). Use this to check for text overflows in different languages.',
       inputSchema: ToolInputSchema(
-        properties: {'locale': JsonSchema.string(description: 'BCP-47 locale tag (e.g. "en", "fr", "ar", "zh-CN"). Use "system" to restore the device default.')},
+        properties: {
+          'locale': JsonSchema.string(
+            description:
+                'BCP-47 locale tag (e.g. "en", "fr", "ar", "zh-CN"). Use "system" to restore the device default.',
+          ),
+        },
         required: ['locale'],
       ),
       callback: (p, e) => _callExtensionRaw(

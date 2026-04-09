@@ -40,15 +40,16 @@ class BlocPilotObserver extends BlocObserver {
     }
 
     FlutterPilot.registerStateSetter('bloc', (name, value) async {
-      // Try unique key first, then fall back to simple name
-      final bloc = _activeBlocs[name] ??
-          _activeBlocs.entries
-              .cast<MapEntry<String, BlocBase>?>()
-              .firstWhere(
-                (e) => e!.key.startsWith('$name#'),
-                orElse: () => null,
-              )
-              ?.value;
+      // Try unique key first, then fall back to simple name prefix
+      BlocBase? bloc = _activeBlocs[name];
+      if (bloc == null) {
+        for (final entry in _activeBlocs.entries) {
+          if (entry.key.startsWith('$name#')) {
+            bloc = entry.value;
+            break;
+          }
+        }
+      }
       if (bloc == null) throw 'Bloc "$name" not found or not yet active.';
 
       try {
@@ -132,7 +133,9 @@ class BlocPilotObserver extends BlocObserver {
     _blocStates.remove(uniqueKey);
     // Keep the simple name entry if another instance exists
     final simpleName = bloc.runtimeType.toString();
-    if (!_activeBlocs.values.any((b) => b.runtimeType.toString() == simpleName)) {
+    if (!_activeBlocs.values.any(
+      (b) => b.runtimeType.toString() == simpleName,
+    )) {
       _blocStates.remove(simpleName);
     }
     super.onClose(bloc);

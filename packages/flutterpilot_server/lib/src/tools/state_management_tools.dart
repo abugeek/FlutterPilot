@@ -6,23 +6,28 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
   /// Returns `true` when [sql] is a read-only SQL statement safe for
   /// untrusted execution against the app's Drift database.
   static bool _isReadOnlySql(String sql) {
-    final normalized =
-        sql.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    final normalized = sql.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    // Strip SQL comments before validation
+    final stripped = normalized
+        .replaceAll(RegExp(r'--.*$', multiLine: true), '')
+        .replaceAll(RegExp(r'/\*.*?\*/'), '')
+        .trim();
+    if (stripped.isEmpty) return false;
     // Block multi-statement
-    if (normalized.contains(';') &&
-        normalized.indexOf(';') < normalized.length - 1) {
+    if (stripped.contains(';') &&
+        stripped.indexOf(';') < stripped.length - 1) {
       return false;
     }
     // Block SELECT INTO
-    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) {
+    if (stripped.contains('SELECT') && stripped.contains(' INTO ')) {
       return false;
     }
     // Block dangerous PRAGMAs
     for (final pragma in _Constants.dangerousPragmas) {
-      if (normalized.startsWith(pragma)) return false;
+      if (stripped.startsWith(pragma)) return false;
     }
     // Must start with allowed prefix
-    return _Constants.allowedSqlPrefixes.any((p) => normalized.startsWith(p));
+    return _Constants.allowedSqlPrefixes.any((p) => stripped.startsWith(p));
   }
 
   void _registerStateManagementTools() {
@@ -48,8 +53,14 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\\"hello\\"").',
       inputSchema: ToolInputSchema(
         properties: {
-          'provider': JsonSchema.string(description: 'The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider").'),
-          'value': JsonSchema.string(description: 'The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings.'),
+          'provider': JsonSchema.string(
+            description:
+                'The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider").',
+          ),
+          'value': JsonSchema.string(
+            description:
+                'The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings.',
+          ),
         },
         required: ['provider', 'value'],
       ),
@@ -82,8 +93,14 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_bloc_state`. The `state` should be a JSON string (e.g. "42", "true").',
       inputSchema: ToolInputSchema(
         properties: {
-          'cubit': JsonSchema.string(description: 'The Bloc/Cubit class name as registered (e.g. "CounterCubit", "AuthBloc").'),
-          'state': JsonSchema.string(description: 'The new state value to inject. Use JSON-serializable representation.'),
+          'cubit': JsonSchema.string(
+            description:
+                'The Bloc/Cubit class name as registered (e.g. "CounterCubit", "AuthBloc").',
+          ),
+          'state': JsonSchema.string(
+            description:
+                'The new state value to inject. Use JSON-serializable representation.',
+          ),
         },
         required: ['cubit', 'state'],
       ),
@@ -122,7 +139,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       name: 'list_drift_tables',
       description: 'List all tables in the SQLite (Drift) database.',
       extension: 'ext.flutterpilot.listDriftTables',
-      properties: {'dbName': JsonSchema.string(description: 'The Drift database name registered via FlutterPilot.')},
+      properties: {
+        'dbName': JsonSchema.string(
+          description: 'The Drift database name registered via FlutterPilot.',
+        ),
+      },
     );
 
     server.registerTool(
@@ -130,7 +151,15 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       description:
           'Execute a raw SQL SELECT query on the local database. CALL THIS to verify complex data relationships or transaction history.',
       inputSchema: ToolInputSchema(
-        properties: {'dbName': JsonSchema.string(description: 'The Drift database name registered via FlutterPilot.'), 'sql': JsonSchema.string(description: 'A SQL SELECT, EXPLAIN, or WITH query. Write-operations (INSERT/UPDATE/DELETE) are blocked.')},
+        properties: {
+          'dbName': JsonSchema.string(
+            description: 'The Drift database name registered via FlutterPilot.',
+          ),
+          'sql': JsonSchema.string(
+            description:
+                'A SQL SELECT, EXPLAIN, or WITH query. Write-operations (INSERT/UPDATE/DELETE) are blocked.',
+          ),
+        },
         required: ['dbName', 'sql'],
       ),
       callback: (params, extra) async {
@@ -179,21 +208,27 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'stringList (JSON array, e.g. \'["a","b"]\').',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The SharedPreferences key to set.'),
-          'value': JsonSchema.string(description: 'The value to set as a string. Booleans: "true"/"false". Numbers: numeric string.'),
-          'type': JsonSchema.string(description: 'Value type: "string", "bool", "int", "double", or "stringList" (comma-separated).'),
+          'key': JsonSchema.string(
+            description: 'The SharedPreferences key to set.',
+          ),
+          'value': JsonSchema.string(
+            description:
+                'The value to set as a string. Booleans: "true"/"false". Numbers: numeric string.',
+          ),
+          'type': JsonSchema.string(
+            description:
+                'Value type: "string", "bool", "int", "double", or "stringList" (comma-separated).',
+          ),
         },
         required: ['key', 'value'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.setSharedPreference',
-          {
-            'key': p['key'].toString(),
-            'value': p['value'].toString(),
-            if (p['type'] != null) 'type': p['type'].toString(),
-          },
-        );
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.setSharedPreference', {
+              'key': p['key'].toString(),
+              'value': p['value'].toString(),
+              if (p['type'] != null) 'type': p['type'].toString(),
+            });
         return res.toCallToolResult();
       },
     );
@@ -205,7 +240,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'removed. If omitted, ALL preferences are cleared. '
           'Use with caution — clear all is irreversible.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The specific key to remove. Omit to clear ALL preferences.')},
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'The specific key to remove. Omit to clear ALL preferences.',
+          ),
+        },
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -246,12 +286,16 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'urlPattern': JsonSchema.string(
             description: 'Substring of the URL to match (e.g. "/api/users")',
           ),
-          'statusCode': JsonSchema.integer(description: 'HTTP status code (e.g. 200, 404, 500)'),
+          'statusCode': JsonSchema.integer(
+            description: 'HTTP status code (e.g. 200, 404, 500)',
+          ),
           'body': JsonSchema.string(
-            description: 'Response body as a JSON string (e.g. \'{"error":"not found"}\')',
+            description:
+                'Response body as a JSON string (e.g. \'{"error":"not found"}\')',
           ),
           'delayMs': JsonSchema.integer(
-            description: 'Artificial delay in milliseconds before returning the mock (default 0)',
+            description:
+                'Artificial delay in milliseconds before returning the mock (default 0)',
           ),
         },
         required: ['urlPattern', 'statusCode', 'body'],
@@ -263,8 +307,10 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'body': p['body']?.toString(),
           if (p['delayMs'] != null) 'delayMs': p['delayMs'].toString(),
         };
-        return _callExtensionRaw('ext.flutterpilot.addHttpMock', mapped)
-            .then((res) => res.toCallToolResult());
+        return _callExtensionRaw(
+          'ext.flutterpilot.addHttpMock',
+          mapped,
+        ).then((res) => res.toCallToolResult());
       },
     );
 
@@ -276,8 +322,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'urlPattern': JsonSchema.string(
-            description:
-                'Pattern to remove. Omit to clear ALL mocks.',
+            description: 'Pattern to remove. Omit to clear ALL mocks.',
           ),
         },
       ),
@@ -285,8 +330,10 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         final mapped = <String, String?>{
           if (p['urlPattern'] != null) 'urlPattern': p['urlPattern'].toString(),
         };
-        return _callExtensionRaw('ext.flutterpilot.clearHttpMocks', mapped)
-            .then((res) => res.toCallToolResult());
+        return _callExtensionRaw(
+          'ext.flutterpilot.clearHttpMocks',
+          mapped,
+        ).then((res) => res.toCallToolResult());
       },
     );
   }

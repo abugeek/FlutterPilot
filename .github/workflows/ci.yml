@@ -23,7 +23,7 @@ jobs:
         run: melos bootstrap
 
       - name: Format Check
-        run: dart format --set-exit-if-changed .
+        run: melos run format
 
       - name: Analyze
         run: melos run analyze

@@ -14,9 +14,7 @@ void main() {
           isTrue,
         );
         expect(
-          DriftPilotInspector.isSafeReadOnlyForTest(
-            'PRAGMA table_info(users)',
-          ),
+          DriftPilotInspector.isSafeReadOnlyForTest('PRAGMA table_info(users)'),
           isTrue,
         );
         expect(
@@ -77,6 +75,42 @@ void main() {
           DriftPilotInspector.isSafeReadOnlyForTest(
             'PRAGMA writable_schema=ON',
           ),
+          isFalse,
+        );
+      });
+
+      test('blocks SQL comment injection', () {
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest(
+            'SELECT 1 -- ; DROP TABLE users',
+          ),
+          isTrue, // Comment stripped, remainder is a valid SELECT
+        );
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest(
+            '/* DROP TABLE users */ SELECT 1',
+          ),
+          isTrue, // Comment stripped, remainder is a valid SELECT
+        );
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest(
+            'DROP TABLE users -- hidden',
+          ),
+          isFalse, // Even with comment, DROP is not allowed
+        );
+      });
+
+      test('blocks empty queries', () {
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest(''),
+          isFalse,
+        );
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest('   '),
+          isFalse,
+        );
+        expect(
+          DriftPilotInspector.isSafeReadOnlyForTest('-- just a comment'),
           isFalse,
         );
       });

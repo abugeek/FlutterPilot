@@ -34,8 +34,7 @@ void main(List<String> args) async {
   final uri = results['uri'];
   final allowDestructive = results['allow-destructive'] as bool;
   final projectRootArg = results['project-root'] as String?;
-  final projectRoot =
-      projectRootArg != null ? Directory(projectRootArg) : null;
+  final projectRoot = projectRootArg != null ? Directory(projectRootArg) : null;
 
   // Configure structured logging — all output goes to stderr (stdout is MCP JSON-RPC).
   _setupLogging(results['log-level'] as String);

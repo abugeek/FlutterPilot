@@ -48,8 +48,12 @@ class DriftPilotInspector {
 
   /// Validates that SQL is a safe read-only statement.
   static bool _isSafeReadOnly(String sql) {
+    // Strip SQL comments before validation to prevent comment-based injection
+    var cleaned = sql.replaceAll(RegExp(r'--[^\n]*'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
     final normalized =
-        sql.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+        cleaned.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    if (normalized.isEmpty) return false;
     // Block multi-statement injection
     if (normalized.contains(';') &&
         normalized.indexOf(';') < normalized.length - 1) {
