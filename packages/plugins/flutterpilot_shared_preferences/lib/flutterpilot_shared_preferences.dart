@@ -156,13 +156,30 @@ class SharedPrefsPilotInspector {
           case 'stringList':
             final List<String> list;
             try {
-              list = (json.decode(value) as List<dynamic>).cast<String>();
-            } on FormatException {
+              final decoded = json.decode(value);
+              if (decoded is! List) {
+                return ServiceExtensionResponse.error(
+                  ServiceExtensionResponse.extensionError,
+                  json.encode({
+                    'error':
+                        'Invalid stringList value. Expected a JSON array, e.g. \'["a","b"]\'',
+                  }),
+                );
+              }
+              list = decoded.map((item) {
+                if (item is! String) {
+                  throw FormatException(
+                    'Expected string in array, got ${item.runtimeType}',
+                  );
+                }
+                return item;
+              }).toList();
+            } on FormatException catch (e) {
               return ServiceExtensionResponse.error(
                 ServiceExtensionResponse.extensionError,
                 json.encode({
                   'error':
-                      'Invalid JSON for stringList. Expected a JSON array, e.g. \'["a","b"]\'',
+                      'Invalid JSON for stringList: ${e.message}. Expected a JSON array of strings, e.g. \'["a","b"]\'',
                 }),
               );
             }

@@ -19,9 +19,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           p,
         );
         if (res.isError) return res.toCallToolResult();
+        final imageData = res.data?['data'] as String?;
+        if (imageData == null) {
+          return CallToolResult(
+            content: [TextContent(text: 'Screenshot returned no image data')],
+            isError: true,
+          );
+        }
         return CallToolResult(
           content: [
-            ImageContent(data: res.data!['data'], mimeType: 'image/png'),
+            ImageContent(data: imageData, mimeType: 'image/png'),
             TextContent(
               text:
                   'Screenshot captured. HINT: If you see an error overlay, call diagnose_last_error immediately.',
@@ -67,9 +74,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
         // Evict oldest baseline when at capacity
-        if (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines &&
-            _screenshotBaselines.isNotEmpty) {
-          _screenshotBaselines.remove(_screenshotBaselines.keys.first);
+        if (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines) {
+          final firstKey = _screenshotBaselines.keys.firstOrNull;
+          if (firstKey != null) {
+            _screenshotBaselines.remove(firstKey);
+          }
         }
         final Uint8List decoded;
         try {

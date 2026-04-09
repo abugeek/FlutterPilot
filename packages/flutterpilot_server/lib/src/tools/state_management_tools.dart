@@ -163,7 +163,14 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         required: ['dbName', 'sql'],
       ),
       callback: (params, extra) async {
-        final sql = (params['sql'] as String).trim();
+        final sqlParam = params['sql'] as String?;
+        if (sqlParam == null || sqlParam.trim().isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'sql parameter is required')],
+            isError: true,
+          );
+        }
+        final sql = sqlParam.trim();
         if (!allowDestructive && !_isReadOnlySql(sql)) {
           return CallToolResult(
             content: [
@@ -180,11 +187,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           params,
         );
         if (res.isError) return res.toCallToolResult();
+        final results = res.data?['results'] ?? 'No results returned';
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  'Results:\n${res.data!['results']}\n\nHINT: If data is missing, check get_network_logs to see if the last sync failed.',
+                  'Results:\n$results\n\nHINT: If data is missing, check get_network_logs to see if the last sync failed.',
             ),
           ],
         );

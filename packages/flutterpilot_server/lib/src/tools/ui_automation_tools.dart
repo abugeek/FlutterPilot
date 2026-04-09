@@ -151,7 +151,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'durationMs': JsonSchema.integer(
             description:
-                'How long to wait for the widget (default: 5000ms). Throws if widget not found.',
+                'Duration of the long press in milliseconds (default: 600ms).',
           ),
         },
         required: ['key'],

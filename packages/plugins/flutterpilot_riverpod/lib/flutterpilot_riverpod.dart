@@ -45,12 +45,14 @@ class RiverpodPilotObserver extends ProviderObserver {
     FlutterPilot.registerStateSetter('riverpod', (name, value) async {
       final container = _containers[name];
       if (container == null) {
-        throw 'No ProviderContainer found for "$name". Is the app running?';
+        throw Exception(
+          'No ProviderContainer found for "$name". Is the app running?',
+        );
       }
 
       final provider = _providers[name];
       if (provider == null) {
-        throw 'Provider "$name" not found or not yet active.';
+        throw Exception('Provider "$name" not found or not yet active.');
       }
 
       try {
@@ -63,12 +65,15 @@ class RiverpodPilotObserver extends ProviderObserver {
           try {
             notifier.state = value;
           } catch (e) {
-            throw 'Provider "$name" (type: ${notifier.runtimeType}) does not support direct state injection: $e';
+            throw Exception(
+              'Provider "$name" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
+            );
           }
         }
         return {'status': 'success', 'name': name, 'newValue': value};
       } catch (e) {
-        throw 'Failed to set state for "$name": $e';
+        if (e is Exception) rethrow;
+        throw Exception('Failed to set state for "$name": $e');
       }
     });
 
@@ -109,7 +114,7 @@ class RiverpodPilotObserver extends ProviderObserver {
     _containers[name] = container;
 
     _states[name] = {
-      'value': newValue.toString(),
+      'value': newValue?.toString() ?? 'null',
       'type': newValue.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
@@ -128,7 +133,7 @@ class RiverpodPilotObserver extends ProviderObserver {
     _containers[name] = container;
 
     _states[name] = {
-      'value': value.toString(),
+      'value': value?.toString() ?? 'null',
       'type': value.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };

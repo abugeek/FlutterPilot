@@ -81,7 +81,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             content: [TextContent(text: 'No VM Service connection.')],
           );
         }
-        final limit = (params['limit'] as int?) ?? 30;
+        final limit = ((params['limit'] as int?) ?? 30).clamp(1, 500);
         try {
           final vm = await _vmService!.getVM();
           final isolateId = vm.isolates?.firstOrNull?.id;
@@ -142,7 +142,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (params, extra) async {
-        final limit = (params['limit'] as int?) ?? 50;
+        final limit = ((params['limit'] as int?) ?? 50).clamp(1, 500);
         final statusFilter = params['status_filter'] as int?;
         final res = await _callExtensionRaw('ext.dart.io.getHttpProfile', {});
         if (res.isError) {

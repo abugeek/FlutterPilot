@@ -130,9 +130,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
     _currentBackoff = _minBackoff;
 
+    // ignore: unawaited_futures
     _vmService!.onDone.then((_) {
       if (!_disposed) {
         _log.warning('VM Service connection lost');
+        _scheduleReconnect();
+      }
+    }).catchError((Object e) {
+      if (!_disposed) {
+        _log.warning('Error in VM Service done handler: $e');
         _scheduleReconnect();
       }
     });
@@ -199,33 +205,37 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       await _vmService!.streamListen(EventStreams.kExtension);
       _eventStreamSubscription = _vmService!.onExtensionEvent.listen(
         (Event event) async {
-          final timestamp = DateTime.now().toIso8601String();
-          if (event.extensionKind == 'ext.flutterpilot.error') {
-            final exception =
-                event.extensionData?.data['exception']?.toString() ??
-                'Unknown Exception';
-            _eventBuffer.add({
-              'type': 'error',
-              'timestamp': timestamp,
-              'data': event.extensionData?.data,
-            });
+          try {
+            final timestamp = DateTime.now().toIso8601String();
+            if (event.extensionKind == 'ext.flutterpilot.error') {
+              final exception =
+                  event.extensionData?.data['exception']?.toString() ??
+                  'Unknown Exception';
+              _eventBuffer.add({
+                'type': 'error',
+                'timestamp': timestamp,
+                'data': event.extensionData?.data,
+              });
 
-            await _selfHealManager.handleCrash(
-              exception: exception,
-              callExtension: (ext) async {
-                final res = await _callExtensionRaw(ext, {});
-                return res.isError ? 'N/A' : res.data;
-              },
-            );
-          } else if (event.extensionKind == 'ext.flutterpilot.action') {
-            _eventBuffer.add({
-              'type': 'action',
-              'timestamp': timestamp,
-              'data': event.extensionData?.data,
-            });
-          }
-          if (_eventBuffer.length > _Constants.eventBufferMax) {
-            _eventBuffer.removeFirst();
+              await _selfHealManager.handleCrash(
+                exception: exception,
+                callExtension: (ext) async {
+                  final res = await _callExtensionRaw(ext, {});
+                  return res.isError ? 'N/A' : res.data;
+                },
+              );
+            } else if (event.extensionKind == 'ext.flutterpilot.action') {
+              _eventBuffer.add({
+                'type': 'action',
+                'timestamp': timestamp,
+                'data': event.extensionData?.data,
+              });
+            }
+            if (_eventBuffer.length > _Constants.eventBufferMax) {
+              _eventBuffer.removeFirst();
+            }
+          } catch (e) {
+            _log.warning('Error processing extension event: $e');
           }
         },
         onError: (Object error) {

@@ -96,7 +96,14 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         required: ['path'],
       ),
       callback: (p, e) async {
-        final relativePath = p['path'].toString();
+        final pathParam = p['path'] as String?;
+        if (pathParam == null || pathParam.trim().isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'path parameter is required')],
+            isError: true,
+          );
+        }
+        final relativePath = pathParam.toString();
         // Block absolute paths
         if (path.isAbsolute(relativePath)) {
           return CallToolResult(
@@ -272,8 +279,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         }
         final lines = entries
             .map(
-              (e) =>
-                  '[${e['timestamp']}] [${e['level']}] ${e['logger'].toString().isNotEmpty ? '(${e['logger']}) ' : ''}${e['message']}',
+              (e) {
+                final logger = (e['logger'] as String?) ?? '';
+                return '[${e['timestamp']}] [${e['level']}] ${logger.isNotEmpty ? '($logger) ' : ''}${e['message']}';
+              },
             )
             .join('\n');
         return CallToolResult(

@@ -141,7 +141,7 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 ┌──────────────────────▼──────────────────────────────┐
 │          flutterpilot_server (modular)               │
 │  • 83 MCP tools with full schemas + param descriptions│
-│  • Organized into 9 tool categories (part files)     │
+│  • Organized into 8 tool categories (part files)     │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge with auto-reconnect             │
 └──────────────────────┬──────────────────────────────┘

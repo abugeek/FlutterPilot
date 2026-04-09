@@ -50,14 +50,19 @@ class BlocPilotObserver extends BlocObserver {
           }
         }
       }
-      if (bloc == null) throw 'Bloc "$name" not found or not yet active.';
+      if (bloc == null) {
+        throw Exception('Bloc "$name" not found or not yet active.');
+      }
 
       try {
         final dynamic dynamicBloc = bloc;
         dynamicBloc.emit(value);
         return {'status': 'success', 'name': name, 'newState': value};
       } catch (e) {
-        throw 'Failed to set state for "$name": $e. Ensure your Bloc/Cubit allows dynamic emission.';
+        if (e is Exception) rethrow;
+        throw Exception(
+          'Failed to set state for "$name": $e. Ensure your Bloc/Cubit allows dynamic emission.',
+        );
       }
     });
 
@@ -95,7 +100,7 @@ class BlocPilotObserver extends BlocObserver {
     _activeBlocs[uniqueKey] = bloc;
 
     final stateEntry = {
-      'state': change.nextState.toString(),
+      'state': change.nextState?.toString() ?? 'null',
       'type': change.nextState.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
@@ -115,7 +120,7 @@ class BlocPilotObserver extends BlocObserver {
     _activeBlocs[uniqueKey] = bloc;
 
     final stateEntry = {
-      'state': bloc.state.toString(),
+      'state': bloc.state?.toString() ?? 'null',
       'type': bloc.state.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
