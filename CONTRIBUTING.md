@@ -127,9 +127,10 @@ cd packages/flutterpilot_server && dart test
                        │ MCP Protocol (JSON-RPC over stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │              flutterpilot_server                     │
-│  - 30+ MCP tools (screenshot, tap, state, etc.)     │
+│  - 82 MCP tools across 9 categories                 │
+│  - Modular tool registration via part files          │
 │  - Self-Heal crash detection                        │
-│  - VM Service bridge                                │
+│  - VM Service bridge with auto-reconnect            │
 └──────────────────────┬──────────────────────────────┘
                        │ VM Service Extensions
 ┌──────────────────────▼──────────────────────────────┐

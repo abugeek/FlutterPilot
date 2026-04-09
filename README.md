@@ -139,21 +139,21 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 └──────────────────────┬──────────────────────────────┘
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
-│          flutterpilot_server (~2100 lines)           │
+│          flutterpilot_server (modular)               │
 │  • 82 MCP tools with full schemas + param descriptions│
-│  • Parallel data gathering (Future.wait)             │
+│  • Organized into 9 tool categories (part files)     │
 │  • Auto crash detection → AI notification            │
-│  • VM Service bridge                                 │
+│  • VM Service bridge with auto-reconnect             │
 └──────────────────────┬──────────────────────────────┘
                        │ VM Service Extensions
 ┌──────────────────────▼──────────────────────────────┐
-│          flutterpilot_sdk (in-app, ~1800 lines)      │
-│  • 43+ service extensions registered                 │
+│          flutterpilot_sdk (in-app, modular)           │
+│  • 43+ service extensions across 5 modules           │
 │  • Widget tree inspection via Element walking        │
 │  • Screenshot capture (RenderRepaintBoundary)        │
 │  • Error/nav/interaction tracking                    │
 ├─────────────┬──────────┬──────────┬────────┬────────┤
-│ BlocPlugin │RiverpodP │DioPluign │DriftPl│HivePlugin
+│ BlocPlugin │RiverpodP │DioPlugin │DriftPl│HivePlugin
 │   (Bloc)   │(Riverpod)│(Network) │(DB)   │(Storage)
 │            │          │          │       │SharedPref
 └─────────────┴──────────┴──────────┴────────┴────────┘

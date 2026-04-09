@@ -103,6 +103,34 @@ void main(List<String> args) async {
   print('⏳ Waiting for server to connect...');
   await Future.delayed(const Duration(seconds: 4));
 
+  // Send MCP initialize handshake
+  {
+    final id = nextId++;
+    final initRequest = {
+      'jsonrpc': '2.0',
+      'id': id,
+      'method': 'initialize',
+      'params': {
+        'protocolVersion': '2024-11-05',
+        'capabilities': {},
+        'clientInfo': {'name': 'smoke-test', 'version': '1.0.0'},
+      },
+    };
+    final completer = Completer<Map<String, dynamic>>();
+    responses[id] = completer;
+    process.stdin.writeln(jsonEncode(initRequest));
+    try {
+      await completer.future.timeout(const Duration(seconds: 10));
+      // Send initialized notification
+      process.stdin.writeln(jsonEncode({
+        'jsonrpc': '2.0',
+        'method': 'notifications/initialized',
+      }));
+    } catch (_) {
+      print('⚠️  MCP initialize handshake timed out');
+    }
+  }
+
   print('\n📋 Running smoke tests:\n');
 
   // Category 1: App Overview
@@ -112,7 +140,7 @@ void main(List<String> args) async {
   // Category 2: Widget Inspection
   print('── Widget Inspection ──');
   await test('get_widget_tree', 'get_widget_tree');
-  await test('find_widget_by_key', 'find_widget_by_key', {
+  await test('get_widget_properties', 'get_widget_properties', {
     'key': 'test_key_that_may_not_exist',
   });
 
@@ -130,7 +158,7 @@ void main(List<String> args) async {
 
   // Category 6: Event Stream
   print('── Events ──');
-  await test('get_event_stream', 'get_event_stream');
+  await test('get_recent_events', 'get_recent_events');
 
   // Category 7: Accessibility
   print('── Accessibility ──');
@@ -138,7 +166,25 @@ void main(List<String> args) async {
 
   // Category 8: Performance
   print('── Performance ──');
-  await test('get_render_stats', 'get_render_stats');
+  await test('get_perf_metrics', 'get_perf_metrics');
+
+  // Category 9: Debug Console
+  print('── Debug Console ──');
+  await test('get_debug_logs', 'get_debug_logs');
+
+  // Category 10: DevTools Deep Inspection
+  print('── DevTools ──');
+  await test('get_memory_details', 'get_memory_details');
+  await test('get_vm_info', 'get_vm_info');
+
+  // Category 11: Self-Heal
+  print('── Self-Heal ──');
+  await test('get_self_heal_status', 'get_self_heal_status');
+  await test('get_latest_crash_report', 'get_latest_crash_report');
+
+  // Category 12: File & Project
+  print('── File & Project ──');
+  await test('get_build_config', 'get_build_config');
 
   // Summary
   print('\n${'=' * 50}');
