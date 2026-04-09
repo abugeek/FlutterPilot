@@ -32,6 +32,12 @@ class HivePilotInspector {
     _registeredBoxNames.remove(name);
   }
 
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _registeredBoxNames.clear();
+    _initialized = false;
+  }
+
   static void _registerExtension() {
     if (!FlutterPilot.isInitialized) {
       debugPrint(

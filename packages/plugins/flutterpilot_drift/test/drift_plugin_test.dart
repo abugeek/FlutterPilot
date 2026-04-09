@@ -101,14 +101,8 @@ void main() {
       });
 
       test('blocks empty queries', () {
-        expect(
-          DriftPilotInspector.isSafeReadOnlyForTest(''),
-          isFalse,
-        );
-        expect(
-          DriftPilotInspector.isSafeReadOnlyForTest('   '),
-          isFalse,
-        );
+        expect(DriftPilotInspector.isSafeReadOnlyForTest(''), isFalse);
+        expect(DriftPilotInspector.isSafeReadOnlyForTest('   '), isFalse);
         expect(
           DriftPilotInspector.isSafeReadOnlyForTest('-- just a comment'),
           isFalse,

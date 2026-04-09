@@ -37,7 +37,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'tap_widget',
       description:
-          'Finds a widget by its Key and taps its center. HINT: Use `get_widget_tree` to find the Key first. After tapping, you should verify state changes.',
+          'Finds a widget by its ValueKey and taps its center. '
+          'PREREQUISITES: Call get_widget_tree first to discover available keys. '
+          'AFTER: Verify the tap worked with capture_screenshot, get_navigation_stack, '
+          'or a state inspection tool (get_riverpod_state, get_bloc_state). '
+          'COMMON ERRORS: "widget not found" means the key is wrong — recheck get_widget_tree.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -64,7 +68,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'enter_text',
       description:
-          'Types text into a TextField identified by a Key. Automatically handles controller updates and change notifications.',
+          'Types text into a TextField or TextFormField identified by its ValueKey. '
+          'Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. '
+          'PREREQUISITES: The widget must be a text input with a ValueKey. Use get_widget_tree to find it. '
+          'AFTER: The text field now contains the new text. You may need to tap a submit button.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -72,8 +79,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.',
           ),
           'text': JsonSchema.string(
-            description:
-                'The text to enter into the text field.',
+            description: 'The text to enter into the text field.',
           ),
         },
         required: ['key', 'text'],

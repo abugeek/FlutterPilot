@@ -597,8 +597,11 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       try {
+        final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
         return ServiceExtensionResponse.result(
-          json.encode({'tree': PilotWidgetInspector.captureWidgetTree()}),
+          json.encode({
+            'tree': PilotWidgetInspector.captureWidgetTree(maxDepth: maxDepth),
+          }),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(

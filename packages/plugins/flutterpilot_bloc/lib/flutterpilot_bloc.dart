@@ -83,7 +83,7 @@ class BlocPilotObserver extends BlocObserver {
   }
 
   static void _cleanStaleEntries() {
-    if (_blocStates.length >= _maxEntries * 2) {
+    if (_blocStates.length >= _maxEntries) {
       final staleKeys = _blocStates.keys
           .where((k) => k.contains('#') && !_activeBlocs.containsKey(k))
           .toList();
@@ -91,6 +91,13 @@ class BlocPilotObserver extends BlocObserver {
         _blocStates.remove(k);
       }
     }
+  }
+
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _blocStates.clear();
+    _activeBlocs.clear();
+    _initialized = false;
   }
 
   @override

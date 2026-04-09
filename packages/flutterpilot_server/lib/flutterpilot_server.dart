@@ -31,6 +31,7 @@ abstract class _FlutterPilotServerBase {
   bool get allowDestructive;
   Directory get _projectRoot;
   VmService? get _vmService;
+  bool get _isReconnecting;
   Queue<Map<String, dynamic>> get _eventBuffer;
   Queue<Map<String, dynamic>> get _debugLogBuffer;
   Map<String, Uint8List> get _screenshotBaselines;
@@ -82,6 +83,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   final Map<String, Uint8List> _screenshotBaselines = {};
 
   // Reconnection state
+  @override
   bool _isReconnecting = false;
   bool _disposed = false;
   Timer? _reconnectTimer;
@@ -131,17 +133,19 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _currentBackoff = _minBackoff;
 
     // ignore: unawaited_futures
-    _vmService!.onDone.then((_) {
-      if (!_disposed) {
-        _log.warning('VM Service connection lost');
-        _scheduleReconnect();
-      }
-    }).catchError((Object e) {
-      if (!_disposed) {
-        _log.warning('Error in VM Service done handler: $e');
-        _scheduleReconnect();
-      }
-    });
+    _vmService!.onDone
+        .then((_) {
+          if (!_disposed) {
+            _log.warning('VM Service connection lost');
+            _scheduleReconnect();
+          }
+        })
+        .catchError((Object e) {
+          if (!_disposed) {
+            _log.warning('Error in VM Service done handler: $e');
+            _scheduleReconnect();
+          }
+        });
 
     await _setupEventStreaming();
   }
@@ -530,9 +534,13 @@ Use this guide to understand what tools to call, when, and in what order.
       if (_isReconnecting) {
         return _ExtensionResult.error(
           'VM Service is reconnecting. Please retry shortly.',
+          ErrorCategory.reconnecting,
         );
       }
-      return _ExtensionResult.error('No VM Service connection.');
+      return _ExtensionResult.error(
+        'No VM Service connection.',
+        ErrorCategory.connectionLost,
+      );
     }
     try {
       final vm = await _vmService!.getVM().timeout(_Constants.vmServiceTimeout);
@@ -550,6 +558,7 @@ Use this guide to understand what tools to call, when, and in what order.
             if (response.json!['error'] != null) {
               return _ExtensionResult.error(
                 'Error: ${response.json!['error']}',
+                ErrorCategory.extensionError,
               );
             }
             return _ExtensionResult.success(response.json!);
@@ -558,38 +567,45 @@ Use this guide to understand what tools to call, when, and in what order.
           if (e.code == -32601) continue;
           return _ExtensionResult.error(
             e.data?['details'] as String? ?? 'Extension error: ${e.message}',
+            ErrorCategory.extensionError,
           );
         } on TimeoutException {
           return _ExtensionResult.error(
             'Extension call timed out. The app may be unresponsive.',
+            ErrorCategory.timeout,
           );
         }
       }
     } on TimeoutException {
       return _ExtensionResult.error(
         'VM Service timed out. The app may be unresponsive.',
+        ErrorCategory.timeout,
       );
     } on StateError catch (e) {
       _log.warning('VM Service connection error during call', e);
       _scheduleReconnect();
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
+        ErrorCategory.connectionLost,
       );
     } on WebSocketException catch (e) {
       _log.warning('WebSocket error during VM Service call', e);
       _scheduleReconnect();
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
+        ErrorCategory.connectionLost,
       );
     } on IOException catch (e) {
       _log.warning('IO error during VM Service call', e);
       _scheduleReconnect();
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
+        ErrorCategory.connectionLost,
       );
     }
     return _ExtensionResult.error(
       'Tool not found in any isolate. Ensure you registered the plugin.',
+      ErrorCategory.toolNotFound,
     );
   }
 
@@ -615,17 +631,47 @@ Use this guide to understand what tools to call, when, and in what order.
 // Internal DTO for VM extension call results
 // ---------------------------------------------------------------------------
 
+/// Category of error returned by a tool call, enabling AI agents to decide
+/// whether to retry, call a different tool, or report the failure.
+enum ErrorCategory {
+  /// The VM Service connection is not available.
+  connectionLost,
+
+  /// The VM Service is currently reconnecting — retry shortly.
+  reconnecting,
+
+  /// The extension call timed out (app may be unresponsive).
+  timeout,
+
+  /// The requested extension was not found in any isolate.
+  toolNotFound,
+
+  /// The extension returned an application-level error.
+  extensionError,
+
+  /// Input validation failed (missing/invalid parameters).
+  validation,
+}
+
 class _ExtensionResult {
   final Map<String, dynamic>? data;
   final String? errorMessage;
   final bool isError;
-  _ExtensionResult.success(this.data) : errorMessage = null, isError = false;
-  _ExtensionResult.error(this.errorMessage) : data = null, isError = true;
+  final ErrorCategory? errorCategory;
+  _ExtensionResult.success(this.data)
+    : errorMessage = null,
+      isError = false,
+      errorCategory = null;
+  _ExtensionResult.error(this.errorMessage, [this.errorCategory])
+    : data = null,
+      isError = true;
   CallToolResult toCallToolResult() => CallToolResult(
     content: [
       TextContent(
         text: isError
-            ? (errorMessage ?? 'Unknown error')
+            ? (errorCategory != null
+                  ? '[${errorCategory!.name}] ${errorMessage ?? 'Unknown error'}'
+                  : (errorMessage ?? 'Unknown error'))
             : jsonEncode(data ?? {}),
       ),
     ],

@@ -44,11 +44,7 @@ class InteractionManager {
     if (view == null) {
       return {'x': position.dx, 'y': position.dy};
     }
-    WidgetsBinding.instance.hitTestInView(
-      result,
-      position,
-      view.viewId,
-    );
+    WidgetsBinding.instance.hitTestInView(result, position, view.viewId);
 
     Element? bestElement;
     for (final entry in result.path) {

@@ -62,6 +62,12 @@ class SharedPrefsPilotInspector {
     _registerExtensions();
   }
 
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _prefs = null;
+    _registered = false;
+  }
+
   static void _registerExtensions() {
     // -- ext.flutterpilot.getSharedPreferences --------------------------------
     registerExtension('ext.flutterpilot.getSharedPreferences', (

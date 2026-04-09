@@ -46,13 +46,21 @@ class DriftPilotInspector {
     _databases.remove(name);
   }
 
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _databases.clear();
+    _initialized = false;
+  }
+
   /// Validates that SQL is a safe read-only statement.
   static bool _isSafeReadOnly(String sql) {
     // Strip SQL comments before validation to prevent comment-based injection
     var cleaned = sql.replaceAll(RegExp(r'--[^\n]*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
-    final normalized =
-        cleaned.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    final normalized = cleaned
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toUpperCase();
     if (normalized.isEmpty) return false;
     // Block multi-statement injection
     if (normalized.contains(';') &&

@@ -10,6 +10,9 @@ import 'package:flutter/widgets.dart';
 ///
 /// This class is stateless and exposes only static methods.
 class PilotWidgetInspector {
+  /// Default maximum depth for widget tree traversal.
+  static const int defaultMaxDepth = 50;
+
   /// Captures the widget tree as a nested JSON-compatible map.
   ///
   /// Returns a recursive structure where each node contains:
@@ -20,12 +23,15 @@ class PilotWidgetInspector {
   ///   on a private Flutter API that may not be available in all builds).
   /// - `children` — child nodes.
   ///
+  /// [maxDepth] limits recursion depth to prevent stack overflow on very
+  /// deep widget trees (default: [defaultMaxDepth]).
+  ///
   /// Returns `{'error': 'No root element found'}` if the root element is
   /// not yet available (e.g., before [runApp]).
-  static Map<String, dynamic> captureWidgetTree() {
+  static Map<String, dynamic> captureWidgetTree({int? maxDepth}) {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return {'error': 'No root element found'};
-    return _elementToJson(root);
+    return _elementToJson(root, 0, maxDepth ?? defaultMaxDepth);
   }
 
   /// Finds an [Element] in the tree whose widget key matches [keyString].
@@ -65,9 +71,18 @@ class PilotWidgetInspector {
     return count;
   }
 
-  static Map<String, dynamic> _elementToJson(Element element) {
+  static Map<String, dynamic> _elementToJson(
+    Element element,
+    int currentDepth,
+    int maxDepth,
+  ) {
     final List<Map<String, dynamic>> children = [];
-    element.visitChildren((child) => children.add(_elementToJson(child)));
+    if (currentDepth < maxDepth) {
+      element.visitChildren(
+        (child) =>
+            children.add(_elementToJson(child, currentDepth + 1, maxDepth)),
+      );
+    }
 
     Map<String, dynamic>? layout;
     final ro = element.renderObject;
@@ -103,7 +118,17 @@ class PilotWidgetInspector {
       'key': element.widget.key?.toString(),
       'layout': layout,
       'location': location,
+      if (currentDepth >= maxDepth && _hasChildren(element)) '_truncated': true,
       'children': children,
     };
+  }
+
+  /// Returns true if [element] has at least one child, without building a list.
+  static bool _hasChildren(Element element) {
+    bool found = false;
+    element.visitChildren((_) {
+      found = true;
+    });
+    return found;
   }
 }

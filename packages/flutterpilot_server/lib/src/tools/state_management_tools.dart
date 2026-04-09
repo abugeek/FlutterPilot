@@ -14,8 +14,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         .trim();
     if (stripped.isEmpty) return false;
     // Block multi-statement
-    if (stripped.contains(';') &&
-        stripped.indexOf(';') < stripped.length - 1) {
+    if (stripped.contains(';') && stripped.indexOf(';') < stripped.length - 1) {
       return false;
     }
     // Block SELECT INTO
@@ -34,7 +33,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_riverpod_state',
       description:
-          'Inspect the current values of all active Riverpod providers. CALL THIS to debug data flow, authentication status, or to verify if a state update occurred after an action.',
+          'Inspect current values of all active Riverpod providers. '
+          'Returns provider name, current value (as string), value type, and timestamp. '
+          'PREREQUISITES: App must use flutterpilot_riverpod plugin with RiverpodPilotObserver. '
+          'Use get_capabilities first to check if the riverpod plugin is loaded. '
+          'COMMON ERRORS: Empty result means no providers are active or plugin is not registered.',
       extension: 'ext.flutterpilot.getRiverpodStates',
       formatResult: (json) {
         final states = json['states'] as Map?;

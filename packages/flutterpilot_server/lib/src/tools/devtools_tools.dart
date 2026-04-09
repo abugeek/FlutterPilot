@@ -157,8 +157,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           );
         }
         final requests = (res.data?['requests'] as List<dynamic>?) ?? [];
-        var filtered =
-            requests.whereType<Map<String, dynamic>>().toList();
+        var filtered = requests.whereType<Map<String, dynamic>>().toList();
         if (statusFilter != null) {
           filtered = filtered
               .where(

@@ -148,10 +148,7 @@ class DioPilotInterceptor extends Interceptor {
   }
 
   @override
-  void onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     _onRequestAsync(options, handler);
   }
 
@@ -243,8 +240,18 @@ class DioPilotInterceptor extends Interceptor {
     super.onError(err, handler);
   }
 
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _logs.clear();
+    _mocks.clear();
+    _condition = NetworkCondition.normal;
+    _initialized = false;
+  }
+
   void _addLog(Map<String, dynamic> log) {
-    if (_logs.length >= maxLogEntries) _logs.removeAt(0);
     _logs.add(log);
+    while (_logs.length > maxLogEntries) {
+      _logs.removeAt(0);
+    }
   }
 }

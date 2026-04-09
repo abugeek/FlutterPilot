@@ -7,7 +7,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'capture_screenshot',
       description:
-          'Capture a vision-ready image of the current screen. CALL THIS to analyze layout, colors, or visual glitches. HINT: Compare with `get_widget_tree` for coordinate-perfect reasoning.',
+          'Capture a PNG image of the current screen for visual analysis. '
+          'Returns base64-encoded image data. Use to verify layout, colors, text rendering, '
+          'or visual glitches. PAIR WITH get_widget_tree for coordinate-perfect element identification. '
+          'AFTER: If you see an error overlay, call get_errors immediately.',
       inputSchema: ToolInputSchema(
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'webp']),
@@ -216,13 +219,36 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _registerAppTool(
-      name: 'get_widget_tree',
+    server.registerTool(
+      'get_widget_tree',
       description:
-          'Retrieve the complete widget hierarchy with exact screen coordinates (x, y, width, height) and source code locations (file/line). CALL THIS to locate buttons to tap or to debug layout overflows.',
-      extension: 'ext.flutterpilot.getWidgetTree',
-      nudge:
-          'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.',
+          'Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and '
+          'source code locations (file/line). CALL THIS to locate buttons to tap or debug '
+          'layout overflows. Use maxDepth to limit tree size for large apps (default: 50).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'maxDepth': JsonSchema.integer(
+            description:
+                'Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
+        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTree', {
+          'maxDepth': maxDepth.toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${jsonEncode(res.data)}\n\n'
+                  'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.',
+            ),
+          ],
+        );
+      },
     );
 
     server.registerTool(
@@ -257,12 +283,21 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'readers (VoiceOver/TalkBack). Each node has: id, label, value, '
           'hint, tooltip, role flags (isButton/isTextField/isSlider/isImage/'
           'isLink/isLiveRegion), isChecked, isEnabled, isFocused, and '
-          'screen-space rect. Use this for accessibility audits.',
-      inputSchema: ToolInputSchema(properties: {}),
+          'screen-space rect. Use this for accessibility audits. '
+          'Use maxDepth to limit tree size (default: 50).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'maxDepth': JsonSchema.integer(
+            description:
+                'Maximum tree depth to traverse (default: 50). Lower values for faster results.',
+          ),
+        },
+      ),
       callback: (p, e) async {
+        final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getSemanticsTree',
-          {},
+          {'maxDepth': maxDepth.toString()},
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(

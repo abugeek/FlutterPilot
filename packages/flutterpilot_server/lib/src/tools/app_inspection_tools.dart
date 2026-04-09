@@ -6,7 +6,11 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_app_summary',
       description:
-          'Get a 360-degree high-level status of the application. CALL THIS TOOL FIRST upon connecting to find your bearings, identify the current screen, and see if there are any pending errors.',
+          'Get a 360-degree overview of the app: current route, widget count, '
+          'pending errors, loaded plugins, and FPS stats. '
+          'CALL THIS FIRST upon connecting to orient yourself. '
+          'AFTER: Use get_widget_tree to find interactable elements, or '
+          'capture_screenshot to see the visual state.',
       extension: 'ext.flutterpilot.getSummary',
       nudge:
           'HINT: Now that you have the summary, use get_widget_tree to find interactable elements or capture_screenshot to see the UI.',
@@ -278,12 +282,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           );
         }
         final lines = entries
-            .map(
-              (e) {
-                final logger = (e['logger'] as String?) ?? '';
-                return '[${e['timestamp']}] [${e['level']}] ${logger.isNotEmpty ? '($logger) ' : ''}${e['message']}';
-              },
-            )
+            .map((e) {
+              final logger = (e['logger'] as String?) ?? '';
+              return '[${e['timestamp']}] [${e['level']}] ${logger.isNotEmpty ? '($logger) ' : ''}${e['message']}';
+            })
             .join('\n');
         return CallToolResult(
           content: [
@@ -346,6 +348,56 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                   'Log buffers cleared (server: $serverCleared entries, app: cleared).',
             ),
           ],
+        );
+      },
+    );
+
+    // -- get_capabilities -----------------------------------------------------
+    server.registerTool(
+      'get_capabilities',
+      description:
+          'Returns the server capabilities: connection status, loaded plugins, '
+          'available state managers, buffer sizes, and configuration. '
+          'CALL THIS FIRST to discover what plugins and tools are available '
+          'before attempting state inspection or plugin-specific operations.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (params, extra) async {
+        // Probe which plugins are loaded by attempting extension calls
+        final pluginStatus = <String, String>{};
+        for (final entry in <String, String>{
+          'bloc': 'ext.flutterpilot.getBlocStates',
+          'riverpod': 'ext.flutterpilot.getRiverpodStates',
+          'dio': 'ext.flutterpilot.getNetworkLogs',
+          'hive': 'ext.flutterpilot.getHiveContents',
+          'shared_preferences': 'ext.flutterpilot.getSharedPreferences',
+          'drift': 'ext.flutterpilot.listDriftTables',
+        }.entries) {
+          final res = await _callExtensionRaw(entry.value, {});
+          pluginStatus[entry.key] = res.isError ? 'not_loaded' : 'loaded';
+        }
+
+        final capabilities = {
+          'connection': {
+            'vmServiceUri': vmServiceUri,
+            'connected': _vmService != null,
+            'reconnecting': _isReconnecting,
+          },
+          'config': {
+            'allowDestructive': allowDestructive,
+            'eventBufferMax': _Constants.eventBufferMax,
+            'debugLogBufferMax': _Constants.debugLogBufferMax,
+            'maxScreenshotBaselines': _Constants.maxScreenshotBaselines,
+          },
+          'plugins': pluginStatus,
+          'buffers': {
+            'events': _eventBuffer.length,
+            'debugLogs': _debugLogBuffer.length,
+            'screenshotBaselines': _screenshotBaselines.length,
+          },
+        };
+
+        return CallToolResult(
+          content: [TextContent(text: jsonEncode(capabilities))],
         );
       },
     );

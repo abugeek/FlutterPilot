@@ -102,6 +102,14 @@ class RiverpodPilotObserver extends ProviderObserver {
     }
   }
 
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    _states.clear();
+    _providers.clear();
+    _containers.clear();
+    _initialized = false;
+  }
+
   @override
   void didUpdateProvider(
     ProviderBase<Object?> provider,

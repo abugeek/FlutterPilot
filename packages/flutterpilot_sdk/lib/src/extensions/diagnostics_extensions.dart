@@ -70,12 +70,16 @@ extension _DiagnosticsExtensions on FlutterPilot {
       WidgetsBinding.instance.scheduleFrame();
       await WidgetsBinding.instance.endOfFrame;
 
-      Map<String, dynamic> nodeToMap(SemanticsNode node) {
+      final maxDepth = int.tryParse(parameters['maxDepth'] ?? '') ?? 50;
+
+      Map<String, dynamic> nodeToMap(SemanticsNode node, int depth) {
         final children = <Map<String, dynamic>>[];
-        node.visitChildren((child) {
-          children.add(nodeToMap(child));
-          return true;
-        });
+        if (depth < maxDepth) {
+          node.visitChildren((child) {
+            children.add(nodeToMap(child, depth + 1));
+            return true;
+          });
+        }
         // ignore: unused_local_variable
         final flags = node.flagsCollection;
         // ignore: deprecated_member_use
@@ -118,7 +122,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
         );
       }
       return ServiceExtensionResponse.result(
-        json.encode({'tree': nodeToMap(root)}),
+        json.encode({'tree': nodeToMap(root, 0)}),
       );
     });
 
