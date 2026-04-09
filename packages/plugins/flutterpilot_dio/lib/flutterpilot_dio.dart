@@ -22,8 +22,8 @@ enum NetworkCondition {
 /// A Dio [Interceptor] that captures HTTP traffic for FlutterPilot.
 ///
 /// Logs requests, responses, and errors, exposing them via the
-/// `ext.flutterpilot.getNetworkLogs` service extension. Keeps the last 50
-/// entries in a rolling buffer.
+/// `ext.flutterpilot.getNetworkLogs` service extension. Keeps the last
+/// [maxLogEntries] entries in a rolling buffer.
 ///
 /// Also supports network condition simulation via
 /// `ext.flutterpilot.simulateNetwork`.
@@ -38,6 +38,8 @@ class DioPilotInterceptor extends Interceptor {
   static bool _initialized = false;
   static NetworkCondition _condition = NetworkCondition.normal;
   static final Map<String, Map<String, dynamic>> _mocks = {};
+  static const int maxLogEntries = 100;
+  static const int _maxDelayMs = 60000;
 
   DioPilotInterceptor() {
     if (!_initialized) {
@@ -89,8 +91,6 @@ class DioPilotInterceptor extends Interceptor {
     });
 
     // -- ext.flutterpilot.addHttpMock ------------------------------------------
-    // Registers a URL pattern mock. Any request whose URI contains [urlPattern]
-    // will be intercepted and a synthetic Response returned.
     registerExtension('ext.flutterpilot.addHttpMock', (
       method,
       parameters,
@@ -112,7 +112,8 @@ class DioPilotInterceptor extends Interceptor {
           'statusCode must be an integer',
         );
       }
-      final delayMs = int.tryParse(parameters['delayMs'] ?? '0') ?? 0;
+      final delayMs = (int.tryParse(parameters['delayMs'] ?? '0') ?? 0)
+          .clamp(0, _maxDelayMs);
       _mocks[urlPattern] = {
         'statusCode': statusCode,
         'body': body,
@@ -128,7 +129,6 @@ class DioPilotInterceptor extends Interceptor {
     });
 
     // -- ext.flutterpilot.clearHttpMocks ---------------------------------------
-    // Removes a specific URL pattern mock, or all mocks if urlPattern is absent.
     registerExtension('ext.flutterpilot.clearHttpMocks', (
       method,
       parameters,
@@ -159,13 +159,16 @@ class DioPilotInterceptor extends Interceptor {
 
     // Check mocks first — mocks take priority over network condition simulation.
     final uri = options.uri.toString();
-    final mockEntry = _mocks.entries.cast<MapEntry<String, Map<String, dynamic>>?>().firstWhere(
-      (e) => uri.contains(e!.key),
-      orElse: () => null,
-    );
+    MapEntry<String, Map<String, dynamic>>? mockEntry;
+    for (final entry in _mocks.entries) {
+      if (uri.contains(entry.key)) {
+        mockEntry = entry;
+        break;
+      }
+    }
     if (mockEntry != null) {
       final mock = mockEntry.value;
-      final delayMs = (mock['delayMs'] as int?) ?? 0;
+      final delayMs = ((mock['delayMs'] as int?) ?? 0).clamp(0, _maxDelayMs);
       if (delayMs > 0) {
         await Future.delayed(Duration(milliseconds: delayMs));
       }
@@ -230,7 +233,7 @@ class DioPilotInterceptor extends Interceptor {
   }
 
   void _addLog(Map<String, dynamic> log) {
+    if (_logs.length >= maxLogEntries) _logs.removeAt(0);
     _logs.add(log);
-    if (_logs.length > 50) _logs.removeAt(0);
   }
 }

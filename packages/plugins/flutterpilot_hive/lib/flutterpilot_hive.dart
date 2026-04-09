@@ -17,6 +17,7 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 class HivePilotInspector {
   static final Set<String> _registeredBoxNames = {};
   static bool _initialized = false;
+  static const int _maxResultSize = 100000;
 
   static void registerBox(String boxName) {
     _registeredBoxNames.add(boxName);
@@ -24,6 +25,11 @@ class HivePilotInspector {
       _initialized = true;
       _registerExtension();
     }
+  }
+
+  /// Removes a box from inspection.
+  static void unregisterBox(String name) {
+    _registeredBoxNames.remove(name);
   }
 
   static void _registerExtension() {
@@ -40,8 +46,25 @@ class HivePilotInspector {
     ) async {
       final Map<String, dynamic> allData = {};
       for (final boxName in _registeredBoxNames) {
-        if (Hive.isBoxOpen(boxName))
-          allData[boxName] = Hive.box(boxName).toMap();
+        try {
+          if (Hive.isBoxOpen(boxName)) {
+            final boxData = Hive.box(boxName).toMap();
+            final encoded = json.encode(boxData);
+            if (encoded.length > _maxResultSize) {
+              allData[boxName] = {
+                '_truncated': true,
+                '_keyCount': boxData.length,
+                '_note': 'Box contents exceed size limit',
+              };
+            } else {
+              allData[boxName] = boxData;
+            }
+          } else {
+            allData[boxName] = {'_status': 'closed'};
+          }
+        } catch (e) {
+          allData[boxName] = {'_error': e.toString()};
+        }
       }
       return ServiceExtensionResponse.result(
         json.encode({'contents': allData}),

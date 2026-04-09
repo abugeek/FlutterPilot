@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'package:flutter/widgets.dart';
 
 /// Intercepts Flutter framework and platform errors and maintains a
@@ -14,7 +15,7 @@ import 'package:flutter/widgets.dart';
 /// This class is initialized automatically by [FlutterPilot.initialize]
 /// and should not be used directly in most cases.
 class ErrorInspector {
-  static final List<Map<String, dynamic>> _errorBuffer = [];
+  static final Queue<Map<String, dynamic>> _errorBuffer = Queue();
   static bool _initialized = false;
 
   /// Optional callback invoked whenever a new error is captured.
@@ -50,6 +51,9 @@ class ErrorInspector {
   }
 
   static void _captureError(FlutterErrorDetails details) {
+    if (_errorBuffer.length >= 10) {
+      _errorBuffer.removeFirst();
+    }
     _errorBuffer.add({
       'exception': details.exceptionAsString(),
       'stackTrace': details.stack?.toString(),
@@ -57,7 +61,6 @@ class ErrorInspector {
       'context': details.context?.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     });
-    if (_errorBuffer.length > 10) _errorBuffer.removeAt(0);
   }
 
   /// Returns an unmodifiable view of the current error buffer.
@@ -69,5 +72,5 @@ class ErrorInspector {
   /// - `context` — Additional error context from Flutter.
   /// - `timestamp` — ISO 8601 timestamp of when the error was captured.
   static List<Map<String, dynamic>> get errors =>
-      List.unmodifiable(_errorBuffer);
+      List.unmodifiable(_errorBuffer.toList());
 }

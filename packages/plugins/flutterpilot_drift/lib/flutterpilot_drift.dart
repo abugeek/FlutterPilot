@@ -4,9 +4,6 @@ import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-/// Allowed SQL statement prefixes for read-only mode.
-const _readOnlyPrefixes = ['SELECT', 'EXPLAIN', 'PRAGMA'];
-
 /// Inspects Drift [GeneratedDatabase] instances for FlutterPilot.
 ///
 /// Exposes `ext.flutterpilot.queryDrift` (read-only SQL) and
@@ -20,6 +17,21 @@ const _readOnlyPrefixes = ['SELECT', 'EXPLAIN', 'PRAGMA'];
 class DriftPilotInspector {
   static final Map<String, GeneratedDatabase> _databases = {};
   static bool _initialized = false;
+  static const int _maxResults = 1000;
+
+  static const Set<String> _allowedPrefixes = {
+    'SELECT',
+    'EXPLAIN',
+    'PRAGMA',
+    'WITH',
+  };
+  static const Set<String> _dangerousPragmas = {
+    'PRAGMA JOURNAL_MODE',
+    'PRAGMA WAL',
+    'PRAGMA SYNCHRONOUS',
+    'PRAGMA FOREIGN_KEYS',
+    'PRAGMA WRITABLE_SCHEMA',
+  };
 
   static void registerDatabase(String name, GeneratedDatabase db) {
     _databases[name] = db;
@@ -29,11 +41,34 @@ class DriftPilotInspector {
     }
   }
 
+  /// Removes a previously registered database.
+  static void unregister(String name) {
+    _databases.remove(name);
+  }
+
   /// Validates that SQL is a safe read-only statement.
   static bool _isSafeReadOnly(String sql) {
-    final trimmed = sql.trimLeft().toUpperCase();
-    return _readOnlyPrefixes.any((prefix) => trimmed.startsWith(prefix));
+    final normalized =
+        sql.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    // Block multi-statement injection
+    if (normalized.contains(';') &&
+        normalized.indexOf(';') < normalized.length - 1) {
+      return false;
+    }
+    // Block SELECT INTO
+    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) {
+      return false;
+    }
+    // Block dangerous PRAGMAs
+    for (final p in _dangerousPragmas) {
+      if (normalized.startsWith(p)) return false;
+    }
+    return _allowedPrefixes.any((p) => normalized.startsWith(p));
   }
+
+  /// Exposes [_isSafeReadOnly] for unit testing.
+  @visibleForTesting
+  static bool isSafeReadOnlyForTest(String sql) => _isSafeReadOnly(sql);
 
   static void _registerExtensions() {
     if (!FlutterPilot.isInitialized) {
@@ -49,37 +84,43 @@ class DriftPilotInspector {
     ) async {
       final dbName = parameters['dbName'];
       final sql = parameters['sql'];
-      if (dbName == null || sql == null)
+      if (dbName == null || sql == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'Missing dbName/sql',
         );
+      }
 
-      // Block destructive SQL unless the server was started with --allow-destructive.
-      // The server-side check is the primary gate; this is defense-in-depth.
       if (!_isSafeReadOnly(sql)) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Only SELECT/EXPLAIN/PRAGMA queries are allowed in the SDK. '
+          'Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed in the SDK. '
           'Start the server with --allow-destructive to enable write operations.',
         );
       }
 
       final db = _databases[dbName];
-      if (db == null)
+      if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'DB not found',
         );
+      }
       try {
         final results = await db.customSelect(sql).get();
-        return ServiceExtensionResponse.result(
-          json.encode({'results': results.map((r) => r.data).toList()}),
-        );
+        final limited = results.take(_maxResults).toList();
+        final response = <String, dynamic>{
+          'results': limited.map((r) => r.data).toList(),
+        };
+        if (results.length > _maxResults) {
+          response['truncated'] = true;
+          response['total'] = results.length;
+        }
+        return ServiceExtensionResponse.result(json.encode(response));
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Query error: $e',
+          'Query execution failed. Check SQL syntax.',
         );
       }
     });
@@ -89,17 +130,19 @@ class DriftPilotInspector {
       parameters,
     ) async {
       final dbName = parameters['dbName'];
-      if (dbName == null)
+      if (dbName == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'Missing dbName',
         );
+      }
       final db = _databases[dbName];
-      if (db == null)
+      if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'DB not found',
         );
+      }
       return ServiceExtensionResponse.result(
         json.encode({
           'tables': db.allTables.map((t) => t.actualTableName).toList(),

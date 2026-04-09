@@ -20,11 +20,12 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 ///   ));
 /// }
 /// ```
-base class RiverpodPilotObserver extends ProviderObserver {
+class RiverpodPilotObserver extends ProviderObserver {
   static final Map<String, dynamic> _states = {};
   static final Map<String, ProviderBase> _providers = {};
-  static ProviderContainer? _lastContainer;
+  static final Map<String, ProviderContainer> _containers = {};
   static bool _initialized = false;
+  static const int _maxEntries = 100;
 
   RiverpodPilotObserver() {
     if (!_initialized) {
@@ -42,17 +43,17 @@ base class RiverpodPilotObserver extends ProviderObserver {
     }
 
     FlutterPilot.registerStateSetter('riverpod', (name, value) async {
-      final container = _lastContainer;
-      if (container == null)
-        throw 'No ProviderContainer found. Is the app running?';
+      final container = _containers[name];
+      if (container == null) {
+        throw 'No ProviderContainer found for "$name". Is the app running?';
+      }
 
       final provider = _providers[name];
-      if (provider == null)
+      if (provider == null) {
         throw 'Provider "$name" not found or not yet active.';
+      }
 
       try {
-        // Use dynamic to access 'notifier' which exists on most Riverpod
-        // providers but is not defined on the base ProviderBase class.
         final dynamic dynamicProvider = provider;
         final dynamic notifier = container.read(dynamicProvider.notifier);
 
@@ -85,6 +86,17 @@ base class RiverpodPilotObserver extends ProviderObserver {
     });
   }
 
+  static void _cleanStaleEntries() {
+    if (_states.length >= _maxEntries) {
+      final staleKeys = _states.keys
+          .where((k) => !_providers.containsKey(k))
+          .toList();
+      for (final k in staleKeys) {
+        _states.remove(k);
+      }
+    }
+  }
+
   @override
   void didUpdateProvider(
     ProviderBase<Object?> provider,
@@ -92,15 +104,16 @@ base class RiverpodPilotObserver extends ProviderObserver {
     Object? newValue,
     ProviderContainer container,
   ) {
-    _lastContainer = container;
     final name = provider.runtimeType.toString();
     _providers[name] = provider;
+    _containers[name] = container;
 
     _states[name] = {
       'value': newValue.toString(),
       'type': newValue.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
+    _cleanStaleEntries();
     FlutterPilot.logStateChange('riverpod', name, newValue);
   }
 
@@ -110,9 +123,9 @@ base class RiverpodPilotObserver extends ProviderObserver {
     Object? value,
     ProviderContainer container,
   ) {
-    _lastContainer = container;
     final name = provider.runtimeType.toString();
     _providers[name] = provider;
+    _containers[name] = container;
 
     _states[name] = {
       'value': value.toString(),
@@ -120,5 +133,16 @@ base class RiverpodPilotObserver extends ProviderObserver {
       'timestamp': DateTime.now().toIso8601String(),
     };
     FlutterPilot.logStateChange('riverpod', name, value);
+  }
+
+  @override
+  void didDisposeProvider(
+    ProviderBase<Object?> provider,
+    ProviderContainer container,
+  ) {
+    final name = provider.runtimeType.toString();
+    _states.remove(name);
+    _providers.remove(name);
+    _containers.remove(name);
   }
 }

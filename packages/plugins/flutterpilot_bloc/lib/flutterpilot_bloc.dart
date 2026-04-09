@@ -22,6 +22,7 @@ class BlocPilotObserver extends BlocObserver {
   static final Map<String, dynamic> _blocStates = {};
   static final Map<String, BlocBase> _activeBlocs = {};
   static bool _initialized = false;
+  static const int _maxEntries = 100;
 
   BlocPilotObserver() {
     if (!_initialized) {
@@ -39,11 +40,18 @@ class BlocPilotObserver extends BlocObserver {
     }
 
     FlutterPilot.registerStateSetter('bloc', (name, value) async {
-      final bloc = _activeBlocs[name];
+      // Try unique key first, then fall back to simple name
+      final bloc = _activeBlocs[name] ??
+          _activeBlocs.entries
+              .cast<MapEntry<String, BlocBase>?>()
+              .firstWhere(
+                (e) => e!.key.startsWith('$name#'),
+                orElse: () => null,
+              )
+              ?.value;
       if (bloc == null) throw 'Bloc "$name" not found or not yet active.';
 
       try {
-        // Use dynamic access to call the protected 'emit' method.
         final dynamic dynamicBloc = bloc;
         dynamicBloc.emit(value);
         return {'status': 'success', 'name': name, 'newState': value};
@@ -68,37 +76,65 @@ class BlocPilotObserver extends BlocObserver {
     });
   }
 
+  static void _cleanStaleEntries() {
+    if (_blocStates.length >= _maxEntries * 2) {
+      final staleKeys = _blocStates.keys
+          .where((k) => k.contains('#') && !_activeBlocs.containsKey(k))
+          .toList();
+      for (final k in staleKeys) {
+        _blocStates.remove(k);
+      }
+    }
+  }
+
   @override
   void onChange(BlocBase bloc, Change change) {
     super.onChange(bloc, change);
-    final name = bloc.runtimeType.toString();
-    _activeBlocs[name] = bloc;
+    final uniqueKey = '${bloc.runtimeType}#${identityHashCode(bloc)}';
+    _activeBlocs[uniqueKey] = bloc;
 
-    _blocStates[name] = {
+    final stateEntry = {
       'state': change.nextState.toString(),
       'type': change.nextState.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
-    FlutterPilot.logStateChange('bloc', name, change.nextState);
+    _blocStates[uniqueKey] = stateEntry;
+    // Also store by simple name for backward-compat lookup
+    final simpleName = bloc.runtimeType.toString();
+    _blocStates[simpleName] = stateEntry;
+
+    _cleanStaleEntries();
+    FlutterPilot.logStateChange('bloc', simpleName, change.nextState);
   }
 
   @override
   void onCreate(BlocBase bloc) {
     super.onCreate(bloc);
-    final name = bloc.runtimeType.toString();
-    _activeBlocs[name] = bloc;
+    final uniqueKey = '${bloc.runtimeType}#${identityHashCode(bloc)}';
+    _activeBlocs[uniqueKey] = bloc;
 
-    _blocStates[name] = {
+    final stateEntry = {
       'state': bloc.state.toString(),
       'type': bloc.state.runtimeType.toString(),
       'timestamp': DateTime.now().toIso8601String(),
     };
-    FlutterPilot.logStateChange('bloc', name, bloc.state);
+    _blocStates[uniqueKey] = stateEntry;
+    final simpleName = bloc.runtimeType.toString();
+    _blocStates[simpleName] = stateEntry;
+
+    FlutterPilot.logStateChange('bloc', simpleName, bloc.state);
   }
 
   @override
   void onClose(BlocBase bloc) {
+    final uniqueKey = '${bloc.runtimeType}#${identityHashCode(bloc)}';
+    _activeBlocs.remove(uniqueKey);
+    _blocStates.remove(uniqueKey);
+    // Keep the simple name entry if another instance exists
+    final simpleName = bloc.runtimeType.toString();
+    if (!_activeBlocs.values.any((b) => b.runtimeType.toString() == simpleName)) {
+      _blocStates.remove(simpleName);
+    }
     super.onClose(bloc);
-    _activeBlocs.remove(bloc.runtimeType.toString());
   }
 }

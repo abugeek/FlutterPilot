@@ -26,6 +26,14 @@ class SharedPrefsPilotInspector {
   static bool _registered = false;
   static SharedPreferences? _prefs;
 
+  static const Set<String> _validTypes = {
+    'string',
+    'int',
+    'double',
+    'bool',
+    'stringList',
+  };
+
   /// Registers the [SharedPreferences] instance with FlutterPilot.
   ///
   /// Call once after [SharedPreferences.getInstance] resolves, before
@@ -97,19 +105,58 @@ class SharedPrefsPilotInspector {
             'Missing required parameters: key, value',
           );
         }
+        if (key.isEmpty) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.invalidParams,
+            json.encode({'error': 'Key must not be empty'}),
+          );
+        }
+        if (!_validTypes.contains(type)) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            json.encode({
+              'error':
+                  'Invalid type "$type". Must be one of: ${_validTypes.join(', ')}',
+            }),
+          );
+        }
         try {
           switch (type) {
             case 'int':
-              await p.setInt(key, int.parse(value));
+              final parsed = int.tryParse(value);
+              if (parsed == null) {
+                return ServiceExtensionResponse.error(
+                  ServiceExtensionResponse.extensionError,
+                  json.encode({'error': 'Invalid integer: "$value"'}),
+                );
+              }
+              await p.setInt(key, parsed);
             case 'double':
-              await p.setDouble(key, double.parse(value));
+              final parsed = double.tryParse(value);
+              if (parsed == null) {
+                return ServiceExtensionResponse.error(
+                  ServiceExtensionResponse.extensionError,
+                  json.encode({'error': 'Invalid double: "$value"'}),
+                );
+              }
+              await p.setDouble(key, parsed);
             case 'bool':
-              await p.setBool(key, value.toLowerCase() == 'true');
+              final lower = value.toLowerCase().trim();
+              if (lower != 'true' && lower != 'false') {
+                return ServiceExtensionResponse.error(
+                  ServiceExtensionResponse.extensionError,
+                  json.encode({
+                    'error':
+                        'Boolean value must be "true" or "false", got: "$value"',
+                  }),
+                );
+              }
+              await p.setBool(key, lower == 'true');
             case 'stringList':
-              final list = (json.decode(value) as List<dynamic>)
-                  .cast<String>();
+              final list =
+                  (json.decode(value) as List<dynamic>).cast<String>();
               await p.setStringList(key, list);
-            default: // 'string'
+            default:
               await p.setString(key, value);
           }
           return ServiceExtensionResponse.result(

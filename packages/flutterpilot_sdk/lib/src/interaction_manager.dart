@@ -16,12 +16,15 @@ class InteractionManager {
   /// meaningful widget is found — `key` and `type`.
   static void Function(Map<String, dynamic> info)? onPointerDown;
 
+  static bool _initialized = false;
+
   /// Installs a global pointer route that intercepts all
   /// [PointerDownEvent]s and resolves the tapped widget.
   ///
-  /// Safe to call multiple times — each call adds an additional listener,
-  /// so callers should ensure single initialization.
+  /// Safe to call multiple times — subsequent calls are no-ops.
   static void initialize() {
+    if (_initialized) return;
+    _initialized = true;
     GestureBinding.instance.pointerRouter.addGlobalRoute((PointerEvent event) {
       if (event is PointerDownEvent) {
         final info = _resolveWidgetAt(event.position);
