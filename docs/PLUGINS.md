@@ -383,10 +383,36 @@ void main() {
 ```
 
 **Server Tools**: 
-- `query_drift_db` — Execute SELECT/EXPLAIN/PRAGMA/WITH
+- `query_drift` — Execute SELECT/EXPLAIN/PRAGMA/WITH
 - `list_drift_tables` — Enumerate tables
 
 **Capabilities**: Read-only SQL with injection prevention
+
+### flutterpilot_sqflite
+
+**Purpose**: Inspect sqflite databases via read-only SQL queries
+
+**Setup**:
+```dart
+import 'package:sqflite/sqflite.dart';
+import 'package:flutterpilot_sqflite/flutterpilot_sqflite.dart';
+
+void main() async {
+  final db = await openDatabase('my_app.db', version: 1, onCreate: (db, v) async {
+    await db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+  });
+  FlutterPilot.initialize();
+  SqflitePilotInspector.registerDatabase('main', db);
+  runApp(MyApp());
+}
+```
+
+**Server Tools**:
+- `list_sqflite_databases` — List all registered sqflite databases
+- `list_sqflite_tables` — Enumerate tables in a named database
+- `query_sqflite` — Execute read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH)
+
+**Capabilities**: Read-only SQL with the same injection prevention as Drift. Supports multiple databases registered by name.
 
 ### flutterpilot_hive
 
@@ -517,25 +543,40 @@ class GetXPilotObserver {
 // }
 ```
 
-### Example 2: Firebase Realtime Database Plugin
+### Example 2: sqflite Plugin (Custom Extension)
+
+This shows how to write your own plugin wrapping a third-party package. The
+official `flutterpilot_sqflite` package already does this — use it directly
+rather than re-implementing. Shown here as a reference pattern.
 
 ```dart
-import 'package:firebase_database/firebase_database.dart';
+import 'dart:developer';
+import 'dart:convert';
+import 'package:sqflite/sqflite.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-class FirebaseRTPilotObserver {
-  static final Map<String, dynamic> _snapshots = {};
+class MySqflitePilotObserver {
+  static Database? _db;
 
-  static void initialize() {
-    registerExtension('ext.flutterpilot.getFirebaseRTData', (_, __) async {
-      return ServiceExtensionResponse.result(
-        json.encode({'data': _snapshots}),
-      );
-    });
-  }
-
-  static void trackSnapshot(String path, DataSnapshot snapshot) {
-    _snapshots[path] = snapshot.value;
+  static void initialize(Database db) {
+    _db = db;
+    try {
+      registerExtension('ext.flutterpilot.myQueryDb', (_, params) async {
+        final sql = params['sql'] ?? '';
+        if (!sql.toUpperCase().trimLeft().startsWith('SELECT')) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'Only SELECT queries allowed.',
+          );
+        }
+        final rows = await _db!.rawQuery(sql);
+        return ServiceExtensionResponse.result(
+          json.encode({'rows': rows}),
+        );
+      });
+    } on ArgumentError {
+      // Already registered on hot-restart — safe to ignore.
+    }
   }
 }
 ```

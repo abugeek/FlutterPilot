@@ -202,6 +202,99 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    // =========================================================================
+    // sqflite
+    // =========================================================================
+
+    _registerAppTool(
+      name: 'list_sqflite_databases',
+      description:
+          'List all sqflite databases registered with FlutterPilot. '
+          'PREREQUISITES: App must use flutterpilot_sqflite plugin.',
+      extension: 'ext.flutterpilot.listSqfliteDatabases',
+      formatResult: (json) {
+        final dbs = json['databases'] as List? ?? [];
+        if (dbs.isEmpty) return 'No sqflite databases registered.';
+        return 'Registered databases: ${dbs.join(', ')}';
+      },
+    );
+
+    _registerAppTool(
+      name: 'list_sqflite_tables',
+      description:
+          'List all tables in a sqflite database. '
+          'PREREQUISITES: App must use flutterpilot_sqflite plugin.',
+      extension: 'ext.flutterpilot.listSqfliteTables',
+      properties: {
+        'dbName': JsonSchema.string(
+          description: 'The sqflite database name registered via FlutterPilot.',
+        ),
+      },
+      formatResult: (json) {
+        final dbName = json['dbName'] ?? '?';
+        final tables = json['tables'] as List? ?? [];
+        if (tables.isEmpty) return 'Database "$dbName": no tables found.';
+        return 'Database "$dbName" tables: ${tables.join(', ')}';
+      },
+    );
+
+    server.registerTool(
+      'query_sqflite',
+      description:
+          'Execute a read-only SQL SELECT query on a sqflite database. '
+          'Only SELECT/EXPLAIN/PRAGMA/WITH are allowed — write operations are blocked. '
+          'PREREQUISITES: App must use flutterpilot_sqflite plugin.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'dbName': JsonSchema.string(
+            description: 'The sqflite database name registered via FlutterPilot.',
+          ),
+          'sql': JsonSchema.string(
+            description:
+                'A read-only SQL query (SELECT, EXPLAIN, PRAGMA, WITH). Write operations are blocked.',
+          ),
+        },
+        required: ['dbName', 'sql'],
+      ),
+      callback: (params, extra) async {
+        final sqlParam = params['sql'] as String?;
+        if (sqlParam == null || sqlParam.trim().isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'sql parameter is required')],
+            isError: true,
+          );
+        }
+        final sql = sqlParam.trim();
+        if (!allowDestructive && !_isReadOnlySql(sql)) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Security: Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed.',
+              ),
+            ],
+            isError: true,
+          );
+        }
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.querySqflite',
+          params,
+        );
+        if (res.isError) return res.toCallToolResult();
+        final results = res.data?['results'] ?? 'No results returned';
+        final rowCount = res.data?['rowCount'] ?? 0;
+        final truncated = res.data?['truncated'] == true;
+        final buf = StringBuffer('$rowCount row(s)\n');
+        if (results is List) {
+          for (final row in results.take(50)) {
+            buf.writeln('  $row');
+          }
+          if (truncated) buf.writeln('  (results truncated)');
+        }
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
+      },
+    );
+
     _registerAppTool(
       name: 'get_shared_preferences',
       description:

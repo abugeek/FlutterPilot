@@ -1,8 +1,8 @@
 import 'dart:developer';
 import 'dart:convert';
-import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:sqflite/sqflite.dart';
 
 void _safeRegisterExtension(
   String method,
@@ -16,18 +16,24 @@ void _safeRegisterExtension(
   }
 }
 
-/// Inspects Drift [GeneratedDatabase] instances for FlutterPilot.
+/// FlutterPilot plugin that exposes sqflite [Database] instances to AI agents.
 ///
-/// Exposes `ext.flutterpilot.queryDrift` (read-only SQL) and
-/// `ext.flutterpilot.listDriftTables` service extensions.
+/// Provides read-only SQL access and table listing for any number of sqflite
+/// databases registered by name. Write queries are blocked at the SDK level.
 ///
 /// ## Setup
 /// ```dart
-/// final db = AppDatabase();
-/// DriftPilotInspector.registerDatabase('main', db);
+/// final db = await openDatabase('my_app.db');
+/// SqflitePilotInspector.registerDatabase('main', db);
 /// ```
-class DriftPilotInspector {
-  static final Map<String, GeneratedDatabase> _databases = {};
+///
+/// ## What AI agents can do
+/// - `list_sqflite_tables` — list all tables in a named database
+/// - `query_sqflite` — run a read-only SELECT/EXPLAIN/PRAGMA query
+class SqflitePilotInspector {
+  SqflitePilotInspector._();
+
+  static final Map<String, Database> _databases = {};
   static bool _initialized = false;
   static const int _maxResults = 1000;
 
@@ -45,7 +51,14 @@ class DriftPilotInspector {
     'PRAGMA WRITABLE_SCHEMA',
   };
 
-  static void registerDatabase(String name, GeneratedDatabase db) {
+  /// Registers a sqflite [Database] with FlutterPilot under [name].
+  ///
+  /// Call after [openDatabase] resolves:
+  /// ```dart
+  /// final db = await openDatabase('my_app.db');
+  /// SqflitePilotInspector.registerDatabase('main', db);
+  /// ```
+  static void registerDatabase(String name, Database db) {
     _databases[name] = db;
     if (!_initialized) {
       _initialized = true;
@@ -64,25 +77,21 @@ class DriftPilotInspector {
     _initialized = false;
   }
 
+  /// Returns names of all registered databases.
+  static List<String> get registeredDatabases => _databases.keys.toList();
+
   /// Validates that SQL is a safe read-only statement.
   static bool _isSafeReadOnly(String sql) {
-    // Strip SQL comments before validation to prevent comment-based injection
     var cleaned = sql.replaceAll(RegExp(r'--[^\n]*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
-    final normalized = cleaned
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .toUpperCase();
+    final normalized = cleaned.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
     if (normalized.isEmpty) return false;
     // Block multi-statement injection
-    if (normalized.contains(';') &&
-        normalized.indexOf(';') < normalized.length - 1) {
+    if (normalized.contains(';') && normalized.indexOf(';') < normalized.length - 1) {
       return false;
     }
     // Block SELECT INTO
-    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) {
-      return false;
-    }
+    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) return false;
     // Block dangerous PRAGMAs
     for (final p in _dangerousPragmas) {
       if (normalized.startsWith(p)) return false;
@@ -97,12 +106,13 @@ class DriftPilotInspector {
   static void _registerExtensions() {
     if (!FlutterPilot.isInitialized) {
       debugPrint(
-        'FlutterPilot: DriftPilotInspector registered before '
+        'FlutterPilot: SqflitePilotInspector registered before '
         'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
       );
     }
 
-    _safeRegisterExtension('ext.flutterpilot.queryDrift', (
+    // -- ext.flutterpilot.querySqflite ------------------------------------------
+    _safeRegisterExtension('ext.flutterpilot.querySqflite', (
       method,
       parameters,
     ) async {
@@ -111,15 +121,15 @@ class DriftPilotInspector {
       if (dbName == null || sql == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing dbName/sql',
+          'Missing required parameters: dbName, sql',
         );
       }
 
       if (!_isSafeReadOnly(sql)) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed in the SDK. '
-          'Start the server with --allow-destructive to enable write operations.',
+          'Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed. '
+          'Write operations are blocked for safety.',
         );
       }
 
@@ -127,14 +137,16 @@ class DriftPilotInspector {
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'DB not found',
+          'Database "$dbName" not found. Registered: ${_databases.keys.join(', ')}',
         );
       }
+
       try {
-        final results = await db.customSelect(sql).get();
+        final results = await db.rawQuery(sql);
         final limited = results.take(_maxResults).toList();
         final response = <String, dynamic>{
-          'results': limited.map((r) => r.data).toList(),
+          'results': limited,
+          'rowCount': limited.length,
         };
         if (results.length > _maxResults) {
           response['truncated'] = true;
@@ -144,12 +156,13 @@ class DriftPilotInspector {
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Query execution failed. Check SQL syntax.',
+          'Query failed: $e',
         );
       }
     });
 
-    _safeRegisterExtension('ext.flutterpilot.listDriftTables', (
+    // -- ext.flutterpilot.listSqfliteTables -------------------------------------
+    _safeRegisterExtension('ext.flutterpilot.listSqfliteTables', (
       method,
       parameters,
     ) async {
@@ -157,21 +170,44 @@ class DriftPilotInspector {
       if (dbName == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing dbName',
+          'Missing required parameter: dbName',
         );
       }
+
       final db = _databases[dbName];
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'DB not found',
+          'Database "$dbName" not found. Registered: ${_databases.keys.join(', ')}',
         );
       }
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'tables': db.allTables.map((t) => t.actualTableName).toList(),
-        }),
-      );
+
+      try {
+        final tables = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+        );
+        return ServiceExtensionResponse.result(json.encode({
+          'dbName': dbName,
+          'tables': tables.map((r) => r['name']).toList(),
+          'tableCount': tables.length,
+        }));
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Failed to list tables: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.listSqfliteDatabases ----------------------------------
+    _safeRegisterExtension('ext.flutterpilot.listSqfliteDatabases', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(json.encode({
+        'databases': _databases.keys.toList(),
+        'count': _databases.length,
+      }));
     });
   }
 }

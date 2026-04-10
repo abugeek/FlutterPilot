@@ -22,6 +22,7 @@ void _safeRegisterExtension(
 /// Provides visibility into:
 /// - **Auth state**: current user, session, JWT expiry, auth events
 /// - **Realtime**: active channel subscriptions and their status
+/// - **Database**: query Supabase tables directly (read-only, limit-capped)
 /// - **Auth actions**: sign out, refresh session (for testing)
 ///
 /// ## Setup
@@ -157,12 +158,81 @@ class SupabasePilotInspector {
       }
 
       final channels = client.getChannels();
-      final channelCount = channels.length;
+      // ignore: invalid_use_of_internal_member — RealtimeChannel exposes these
+      // only as @internal but they are stable and essential for inspection.
+      final channelList = channels.map((c) {
+        // ignore: invalid_use_of_internal_member
+        final topic = c.topic;
+        // ignore: invalid_use_of_internal_member
+        final isJoined = c.isJoined;
+        // ignore: invalid_use_of_internal_member
+        final isClosed = c.isClosed;
+        return {
+          'topic': topic,
+          'isJoined': isJoined,
+          'isClosed': isClosed,
+        };
+      }).toList();
 
       return ServiceExtensionResponse.result(json.encode({
-        'channelCount': channelCount,
-        'hasActiveChannels': channelCount > 0,
+        'channels': channelList,
+        'channelCount': channelList.length,
+        'hasActiveChannels': channelList.isNotEmpty,
       }));
+    });
+
+    // -- ext.flutterpilot.querySupabaseTable -----------------------------------
+    _safeRegisterExtension('ext.flutterpilot.querySupabaseTable', (
+      method,
+      parameters,
+    ) async {
+      final client = _client;
+      if (client == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'SupabaseClient not registered.',
+        );
+      }
+
+      final table = parameters['table'];
+      if (table == null || table.isEmpty) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Required parameter "table" is missing.',
+        );
+      }
+
+      final limitStr = parameters['limit'] ?? '20';
+      final limit = int.tryParse(limitStr) ?? 20;
+      if (limit < 1 || limit > 200) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'limit must be between 1 and 200.',
+        );
+      }
+
+      try {
+        var query = client.from(table).select();
+        final filter = parameters['filter'];
+        if (filter != null && filter.isNotEmpty) {
+          // filter format: "column=value" (simple equality only — safe)
+          final parts = filter.split('=');
+          if (parts.length == 2) {
+            query = query.eq(parts[0].trim(), parts[1].trim());
+          }
+        }
+        final data = await query.limit(limit);
+        return ServiceExtensionResponse.result(json.encode({
+          'table': table,
+          'rowCount': (data as List).length,
+          'rows': data,
+        }));
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Query failed: $e',
+        );
+      }
     });
 
     // -- ext.flutterpilot.supabaseSignOut --------------------------------------

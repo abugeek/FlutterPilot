@@ -65,6 +65,40 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    _registerAppTool(
+      name: 'query_supabase_table',
+      description:
+          'Query rows from a Supabase table using the project\'s own credentials. '
+          'Returns up to `limit` rows (default 20, max 200). Optionally filter '
+          'with "column=value" equality. Useful for inspecting data during debug. '
+          'PREREQUISITES: App must use flutterpilot_supabase plugin.',
+      extension: 'ext.flutterpilot.querySupabaseTable',
+      properties: {
+        'table': JsonSchema.string(
+          description: 'Supabase table name (required).',
+        ),
+        'limit': JsonSchema.string(
+          description: 'Max rows to return (1–200, default 20).',
+        ),
+        'filter': JsonSchema.string(
+          description:
+              'Optional equality filter in "column=value" format, e.g. "user_id=abc123".',
+        ),
+      },
+      formatResult: (json) {
+        final table = json['table'];
+        final rowCount = json['rowCount'] ?? 0;
+        final rows = json['rows'] as List? ?? [];
+        if (rows.isEmpty) return 'Table "$table": 0 rows returned.';
+        final buf = StringBuffer('Table "$table": $rowCount row(s)\n');
+        for (final row in rows.take(50)) {
+          buf.writeln('  ${jsonEncode(row)}');
+        }
+        if (rowCount > 50) buf.writeln('  ... and ${rowCount - 50} more rows');
+        return buf.toString();
+      },
+    );
+
     server.registerTool(
       'supabase_sign_out',
       description:

@@ -1261,11 +1261,14 @@ All HTTP requests/responses captured by Dio.
 
 ### `query_drift_db` `sql: string` *(requires flutterpilot_drift)*
 
+> **Note:** The tool name registered by the server is `query_drift`. Both names are documented here for reference.
+
 Execute SQL query on Drift database.
 
 **Parameters:**
 ```json
 {
+  "dbName": "main",
   "sql": "SELECT * FROM users WHERE id = 1"
 }
 ```
@@ -1293,6 +1296,41 @@ Execute SQL query on Drift database.
 - Data validation
 - Test data setup/teardown
 - Schema debugging
+
+---
+
+### `query_sqflite` `sql: string` *(requires flutterpilot_sqflite)*
+
+Execute a read-only SQL query on a sqflite database.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dbName` | string | **Yes** | Database name registered with `SqflitePilotInspector.registerDatabase()`. |
+| `sql` | string | **Yes** | SELECT/EXPLAIN/PRAGMA/WITH query. Write operations are blocked. |
+
+**Returns:** Rows from the query result.
+
+---
+
+### `list_sqflite_tables` *(requires flutterpilot_sqflite)*
+
+List all tables in a registered sqflite database.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dbName` | string | **Yes** | Database name. |
+
+**Returns:** Table names in the database.
+
+---
+
+### `list_sqflite_databases` *(requires flutterpilot_sqflite)*
+
+List all sqflite databases registered with FlutterPilot.
+
+**Parameters:** None
+
+**Returns:** Names of all registered databases.
 
 ---
 
@@ -2075,7 +2113,7 @@ Garbage collection heap pressure statistics across isolates.
 
 These tools become available when the corresponding FlutterPilot plugin is registered in the app.
 
-### Supabase (4 tools)
+### Supabase (5 tools)
 
 Requires: `flutterpilot_supabase` plugin with `SupabasePilotInspector.register(client)`.
 
@@ -2099,7 +2137,21 @@ List all active Supabase Realtime channel subscriptions.
 
 **Parameters:** None
 
-**Returns:** Channel count and whether any channels are active.
+**Returns:** List of channels with topic, join status, and closed status.
+
+---
+
+#### `query_supabase_table`
+
+Query rows from a Supabase table using the app's own credentials. Useful for inspecting live data during debug.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `table` | string | **Yes** | Supabase table name. |
+| `limit` | string | No | Max rows to return (1–200, default 20). |
+| `filter` | string | No | Equality filter in `"column=value"` format, e.g. `"user_id=abc123"`. |
+
+**Returns:** Row data from the specified table.
 
 ---
 
