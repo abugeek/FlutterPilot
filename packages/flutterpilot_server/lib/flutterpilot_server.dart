@@ -20,6 +20,7 @@ part 'src/tools/screenshot_tools.dart';
 part 'src/tools/self_heal_tools.dart';
 part 'src/tools/state_management_tools.dart';
 part 'src/tools/testing_tools.dart';
+part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
 final _log = logging.Logger('FlutterPilotServer');
@@ -62,7 +63,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _SelfHealToolsMixin,
         _StateManagementToolsMixin,
         _TestingToolsMixin,
-        _DevtoolsToolsMixin {
+        _DevtoolsToolsMixin,
+        _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
   @override
@@ -340,6 +342,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerStateManagementTools();
     _registerTestingTools();
     _registerDevtoolsTools();
+    _registerPluginIntegrationTools();
   }
 
   // ---------------------------------------------------------------------------

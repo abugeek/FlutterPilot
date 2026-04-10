@@ -7,7 +7,7 @@
 
 **FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, and AI-native development workflows.
 
-> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **83 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, and full DevTools-level deep inspection — all designed specifically for how AI agents work.
+> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **105 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, full DevTools-level deep inspection, and plugin integrations for Supabase, GoRouter, Firebase, Connectivity, and Secure Storage — all designed specifically for how AI agents work.
 
 ## 🚀 Quick Start (3 Steps)
 
@@ -43,7 +43,7 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 
 ## 📋 What You Get
 
-### 83 MCP Tools Across 6 Categories
+### 105 MCP Tools Across 10 Categories
 
 #### 🎬 **Screenshots & Layout** (5 tools)
 - `capture_screenshot` — PNG screenshot as MCP Image
@@ -140,8 +140,8 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │          flutterpilot_server (modular)               │
-│  • 83 MCP tools with full schemas + param descriptions│
-│  • Organized into 8 tool categories (part files)     │
+│  • 105 MCP tools with full schemas + param descriptions│
+│  • Organized into 9 tool categories (part files)      │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge with auto-reconnect             │
 └──────────────────────┬──────────────────────────────┘
@@ -156,6 +156,9 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 │ BlocPlugin │RiverpodP │DioPlugin │DriftPl│HivePlugin
 │   (Bloc)   │(Riverpod)│(Network) │(DB)   │(Storage)
 │            │          │          │       │SharedPref
+├─────────────┼──────────┼──────────┼────────┼────────┤
+│ Supabase   │GoRouter  │Connectiv │Firebase│SecureSt │
+│  (Auth)    │ (Routes) │ (Network)│(Crash) │(Encrypt)│
 └─────────────┴──────────┴──────────┴────────┴────────┘
 ```
 
@@ -170,10 +173,15 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 ### Plugins (Optional — Add Only What You Need)
 - **`flutterpilot_riverpod`** — Inspect/inject Riverpod providers
 - **`flutterpilot_bloc`** — Inspect/inject Bloc/Cubit state
-- **`flutterpilot_dio`** — View all HTTP requests/responses
-- **`flutterpilot_drift`** — Query databases via SQL
+- **`flutterpilot_dio`** — View all HTTP requests/responses, mock endpoints
+- **`flutterpilot_drift`** — Query SQLite databases via SQL
 - **`flutterpilot_hive`** — Inspect Hive key-value storage
 - **`flutterpilot_shared_preferences`** — Inspect/edit SharedPreferences
+- **`flutterpilot_supabase`** — Auth state, session, realtime channels
+- **`flutterpilot_gorouter`** — Route state, config, history, programmatic navigation
+- **`flutterpilot_connectivity`** — Network status, history, simulated offline
+- **`flutterpilot_firebase`** — Crashlytics, Analytics, Performance, FCM
+- **`flutterpilot_secure_storage`** — Encrypted key-value inspection (auto-redacted)
 
 ---
 
@@ -190,6 +198,11 @@ flutter pub add --dev flutterpilot_riverpod    # if using Riverpod
 flutter pub add --dev flutterpilot_bloc        # if using Bloc
 flutter pub add --dev flutterpilot_dio         # if using Dio
 flutter pub add --dev flutterpilot_shared_preferences  # if using SharedPreferences
+flutter pub add --dev flutterpilot_supabase    # if using Supabase
+flutter pub add --dev flutterpilot_gorouter    # if using GoRouter
+flutter pub add --dev flutterpilot_connectivity # if using connectivity_plus
+flutter pub add --dev flutterpilot_firebase    # if using Firebase
+flutter pub add --dev flutterpilot_secure_storage  # if using flutter_secure_storage
 ```
 
 #### Step 2: Initialize SDK
@@ -241,6 +254,30 @@ SharedPrefsPilotInspector.register(prefs);
 // If using Hive:
 final myBox = await Hive.openBox('myData');
 HivePilotInspector.registerBox(myBox);
+
+// If using Supabase:
+await Supabase.initialize(url: '...', anonKey: '...');
+SupabasePilotInspector.register(Supabase.instance.client);
+
+// If using GoRouter:
+final router = GoRouter(routes: [...]);
+GoRouterPilotInspector.register(router);
+
+// If using connectivity_plus:
+ConnectivityPilotInspector.register();
+
+// If using Firebase:
+await Firebase.initializeApp();
+FirebasePilotInspector.register(
+  crashlytics: FirebaseCrashlytics.instance,
+  analytics: FirebaseAnalytics.instance,
+  performance: FirebasePerformance.instance,
+  messaging: FirebaseMessaging.instance,
+);
+
+// If using flutter_secure_storage:
+const storage = FlutterSecureStorage();
+SecureStoragePilotInspector.register(storage);
 ```
 
 #### Step 4: Run App & Server

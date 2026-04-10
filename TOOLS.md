@@ -1,6 +1,6 @@
 # FlutterPilot Tools Reference
 
-Complete reference of all **83 MCP tools** available through FlutterPilot Server.
+Complete reference of all **105 MCP tools** available through FlutterPilot Server.
 
 **Table of Contents:**
 - [Screenshots & Layout](#screenshots--layout) (5 tools)
@@ -12,6 +12,7 @@ Complete reference of all **83 MCP tools** available through FlutterPilot Server
 - [Performance & DevTools](#performance--devtools) (11 tools)
 - [Debug Console](#debug-console) (3 tools)
 - [DevTools Deep Inspection](#devtools-deep-inspection) (12 tools)
+- [Plugin Integrations](#plugin-integrations) (22 tools)
 
 ---
 
@@ -2057,3 +2058,272 @@ Garbage collection heap pressure statistics across isolates.
 - Detect heap pressure causing GC-induced jank
 - Compare heap before/after an operation
 - Identify memory not being released
+
+---
+
+## Plugin Integrations
+
+These tools become available when the corresponding FlutterPilot plugin is registered in the app.
+
+### Supabase (4 tools)
+
+Requires: `flutterpilot_supabase` plugin with `SupabasePilotInspector.register(client)`.
+
+---
+
+#### `get_supabase_auth`
+
+Inspect current Supabase auth state: user profile, session, JWT expiry, and recent auth events.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `showSensitive` | string | No | `"true"` to reveal email/phone/user_id. Default: redacted. |
+
+**Returns:** Authentication status, user profile, session details, auth event history.
+
+---
+
+#### `get_supabase_realtime`
+
+List all active Supabase Realtime channel subscriptions.
+
+**Parameters:** None
+
+**Returns:** Channel count and whether any channels are active.
+
+---
+
+#### `supabase_sign_out`
+
+Sign out the current Supabase user.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scope` | string | No | `"local"`, `"global"` (all devices), or `"others"` (other sessions). Default: `"local"`. |
+
+---
+
+#### `supabase_refresh_session`
+
+Force-refresh the current Supabase session token. Use when testing token expiry flows.
+
+**Parameters:** None
+
+---
+
+### GoRouter (4 tools)
+
+Requires: `flutterpilot_gorouter` plugin with `GoRouterPilotInspector.register(router)`.
+
+---
+
+#### `get_gorouter_state`
+
+Inspect the current GoRouter navigation state.
+
+**Parameters:** None
+
+**Returns:** Current location, path parameters, query parameters, matched routes, can-pop status.
+
+---
+
+#### `get_gorouter_config`
+
+List all registered GoRouter routes and their configuration.
+
+**Parameters:** None
+
+**Returns:** Route tree with paths, names, types, and children.
+
+---
+
+#### `get_gorouter_history`
+
+View timestamped navigation history.
+
+**Parameters:** None
+
+**Returns:** List of recent route changes with timestamps.
+
+---
+
+#### `gorouter_navigate`
+
+Navigate programmatically using GoRouter.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `location` | string | Yes (except pop) | Route path (e.g. `"/home"`, `"/user/123"`). |
+| `action` | string | No | `"go"` (replace stack), `"push"`, `"replace"`, `"pop"`. Default: `"go"`. |
+
+---
+
+### Connectivity (3 tools)
+
+Requires: `flutterpilot_connectivity` plugin with `ConnectivityPilotInspector.register()`.
+
+---
+
+#### `get_connectivity`
+
+Check current network connectivity status.
+
+**Parameters:** None
+
+**Returns:** Online status, connectivity types (wifi/mobile/ethernet/vpn), simulated-offline flag.
+
+---
+
+#### `get_connectivity_history`
+
+View timestamped log of connectivity state transitions.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | string | No | Max entries to return (default: 100). |
+
+---
+
+#### `simulate_offline`
+
+Toggle simulated offline mode for testing.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | string | Yes | `"true"` to simulate offline, `"false"` to restore. |
+
+**Note:** App code can check `ConnectivityPilotInspector.isSimulatedOffline` to honor this flag.
+
+---
+
+### Firebase (7 tools)
+
+Requires: `flutterpilot_firebase` plugin. Register only the Firebase services you use:
+
+```dart
+FirebasePilotInspector.register(
+  crashlytics: FirebaseCrashlytics.instance,
+  analytics: FirebaseAnalytics.instance,
+  performance: FirebasePerformance.instance,
+  messaging: FirebaseMessaging.instance,
+);
+```
+
+---
+
+#### `get_firebase_status`
+
+Check which Firebase services are registered and their status.
+
+**Parameters:** None
+
+**Returns:** Availability and config for Crashlytics, Analytics, Performance, and Messaging.
+
+---
+
+#### `get_fcm_token`
+
+Get the Firebase Cloud Messaging token (truncated for security).
+
+**Parameters:** None
+
+---
+
+#### `log_analytics_event`
+
+Log a custom Firebase Analytics event.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Event name (e.g. `"button_pressed"`). |
+| `params` | string | No | JSON object of parameters (e.g. `'{"button_id":"submit"}'`). |
+
+---
+
+#### `get_analytics_log`
+
+View recent analytics events logged through FlutterPilot.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `limit` | string | No | Max events to return (default: 200). |
+
+---
+
+#### `start_performance_trace`
+
+Start a named Firebase Performance trace.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Trace name (e.g. `"checkout_flow"`). |
+
+---
+
+#### `stop_performance_trace`
+
+Stop a previously started Firebase Performance trace.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Trace name to stop. |
+
+---
+
+#### `record_crashlytics_error`
+
+Record a test error in Firebase Crashlytics.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | No | Error message (default: "FlutterPilot test error"). |
+| `fatal` | string | No | `"true"` for fatal, `"false"` for non-fatal (default). |
+
+---
+
+### Secure Storage (4 tools)
+
+Requires: `flutterpilot_secure_storage` plugin with `SecureStoragePilotInspector.register(storage)`.
+
+---
+
+#### `get_secure_storage_keys`
+
+List all keys in FlutterSecureStorage. Values redacted by default.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `showValues` | string | No | `"true"` to reveal values (sensitive keys always redacted). |
+
+**Security:** Keys matching `password`, `secret`, `private_key`, `api_key` patterns are always redacted, even with `showValues=true`.
+
+---
+
+#### `read_secure_storage_key`
+
+Read a specific key from FlutterSecureStorage.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | Yes | The key to read. |
+
+---
+
+#### `set_secure_storage_key`
+
+Write a key-value pair to FlutterSecureStorage.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | Yes | The key to set. |
+| `value` | string | Yes | The value to store. |
+
+---
+
+#### `delete_secure_storage_key`
+
+Delete a key or clear all secure storage.
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | No | Key to delete. Omit to clear ALL secure storage. |

@@ -1,15 +1,15 @@
-name: flutterpilot_drift
-description: "Drift database inspector plugin for FlutterPilot — exposes SQL queries to AI agents."
+name: flutterpilot_connectivity
+description: "Connectivity inspector plugin for FlutterPilot — exposes network status and connectivity history to AI agents."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
 issue_tracker: https://github.com/abugeek/FlutterPilot/issues
 topics:
   - flutter
-  - drift
+  - connectivity
   - mcp
   - ai
-  - database
+  - debugging
 
 environment:
   sdk: ^3.11.0
@@ -17,7 +17,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  drift: ">=2.0.0 <3.0.0"
+  connectivity_plus: ">=5.0.0"
   flutterpilot_sdk:
     path: ../../flutterpilot_sdk
 dev_dependencies:

@@ -1,15 +1,15 @@
-name: flutterpilot_drift
-description: "Drift database inspector plugin for FlutterPilot — exposes SQL queries to AI agents."
+name: flutterpilot_secure_storage
+description: "Secure storage inspector plugin for FlutterPilot — exposes encrypted key-value storage contents to AI agents with optional redaction."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
 issue_tracker: https://github.com/abugeek/FlutterPilot/issues
 topics:
   - flutter
-  - drift
+  - security
   - mcp
   - ai
-  - database
+  - debugging
 
 environment:
   sdk: ^3.11.0
@@ -17,7 +17,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  drift: ">=2.0.0 <3.0.0"
+  flutter_secure_storage: ">=9.0.0"
   flutterpilot_sdk:
     path: ../../flutterpilot_sdk
 dev_dependencies:
