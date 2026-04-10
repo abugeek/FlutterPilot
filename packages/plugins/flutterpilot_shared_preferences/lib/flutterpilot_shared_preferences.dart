@@ -4,6 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Already registered — safe to ignore during re-initialization.
+  }
+}
+
 /// FlutterPilot plugin that exposes [SharedPreferences] data to AI agents.
 ///
 /// ## Setup
@@ -20,6 +32,11 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 ///
 /// The MCP server exposes these as `get_shared_preferences`,
 /// `set_shared_preference`, and `clear_shared_preferences` tools.
+///
+/// ## Security
+/// Values whose keys match common sensitive patterns (token, password, secret,
+/// api_key, etc.) are **redacted by default**. Pass `showSensitive=true` to
+/// the `get_shared_preferences` tool to reveal them.
 class SharedPrefsPilotInspector {
   SharedPrefsPilotInspector._();
 
@@ -33,6 +50,36 @@ class SharedPrefsPilotInspector {
     'bool',
     'stringList',
   };
+
+  /// Key substrings that trigger automatic redaction of the stored value.
+  static const Set<String> _sensitivePatterns = {
+    'token',
+    'password',
+    'secret',
+    'api_key',
+    'apikey',
+    'private_key',
+    'auth',
+    'credential',
+    'session',
+    'refresh',
+    'access_key',
+  };
+
+  static bool _isSensitiveKey(String key) {
+    final lower = key.toLowerCase();
+    return _sensitivePatterns.any(lower.contains);
+  }
+
+  /// The set of key substrings that trigger automatic value redaction.
+  /// Exposed for testing.
+  @visibleForTesting
+  static const Set<String> sensitivePatterns = _sensitivePatterns;
+
+  /// Returns true if [key] matches a sensitive pattern and would be redacted.
+  /// Exposed for testing.
+  @visibleForTesting
+  static bool isSensitiveKey(String key) => _isSensitiveKey(key);
 
   /// Registers the [SharedPreferences] instance with FlutterPilot.
   ///
@@ -70,7 +117,7 @@ class SharedPrefsPilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getSharedPreferences --------------------------------
-    registerExtension('ext.flutterpilot.getSharedPreferences', (
+    _safeRegisterExtension('ext.flutterpilot.getSharedPreferences', (
       method,
       parameters,
     ) async {
@@ -81,10 +128,15 @@ class SharedPrefsPilotInspector {
           'SharedPreferences not registered.',
         );
       }
+      final showSensitive = parameters['showSensitive'] == 'true';
       final keys = p.getKeys();
       final data = <String, dynamic>{};
       for (final key in keys) {
-        data[key] = p.get(key);
+        if (!showSensitive && _isSensitiveKey(key)) {
+          data[key] = '[redacted — pass showSensitive=true to reveal]';
+        } else {
+          data[key] = p.get(key);
+        }
       }
       return ServiceExtensionResponse.result(
         json.encode({'prefs': data, 'count': data.length}),
@@ -92,7 +144,7 @@ class SharedPrefsPilotInspector {
     });
 
     // -- ext.flutterpilot.setSharedPreference --------------------------------
-    registerExtension('ext.flutterpilot.setSharedPreference', (
+    _safeRegisterExtension('ext.flutterpilot.setSharedPreference', (
       method,
       parameters,
     ) async {
@@ -205,7 +257,7 @@ class SharedPrefsPilotInspector {
     });
 
     // -- ext.flutterpilot.clearSharedPreferences ------------------------------
-    registerExtension('ext.flutterpilot.clearSharedPreferences', (
+    _safeRegisterExtension('ext.flutterpilot.clearSharedPreferences', (
       method,
       parameters,
     ) async {
@@ -217,10 +269,19 @@ class SharedPrefsPilotInspector {
         );
       }
       final key = parameters['key'];
-      if (key != null) {
+      if (key != null && key.isNotEmpty) {
         await p.remove(key);
         return ServiceExtensionResponse.result(
           json.encode({'status': 'success', 'removed': key}),
+        );
+      }
+      // Require explicit confirmation to wipe all preferences
+      final confirm = parameters['confirm'];
+      if (confirm != 'CLEAR_ALL') {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Clearing ALL SharedPreferences requires confirm="CLEAR_ALL". '
+          'This is a destructive operation that cannot be undone.',
         );
       }
       await p.clear();

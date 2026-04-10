@@ -206,9 +206,17 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       name: 'get_shared_preferences',
       description:
           'Returns all SharedPreferences keys and their typed values '
-          '(String, int, double, bool, List<String>). '
+          '(String, int, double, bool, List<String>). Values matching '
+          'sensitive key patterns (token, password, secret, auth, etc.) are '
+          'redacted by default — pass showSensitive=true to reveal them. '
           'Requires the flutterpilot_shared_preferences plugin.',
       extension: 'ext.flutterpilot.getSharedPreferences',
+      properties: {
+        'showSensitive': JsonSchema.string(
+          description:
+              'Set to "true" to reveal values for sensitive-looking keys. Default: redacted.',
+        ),
+      },
     );
 
     server.registerTool(
@@ -247,21 +255,29 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'clear_shared_preferences',
       description:
-          'Clears SharedPreferences. If key is specified, only that key is '
-          'removed. If omitted, ALL preferences are cleared. '
-          'Use with caution — clear all is irreversible.',
+          '⚠ DESTRUCTIVE — Removes SharedPreferences entries. '
+          'If key is specified, only that key is removed. '
+          'To clear ALL preferences, omit key and pass confirm="CLEAR_ALL". '
+          'Cannot be undone.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The specific key to remove. Omit to clear ALL preferences.',
+                'The specific key to remove. Omit to clear ALL preferences (requires confirm).',
+          ),
+          'confirm': JsonSchema.string(
+            description:
+                'Required when clearing all keys (no "key" given). Must be "CLEAR_ALL".',
           ),
         },
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.clearSharedPreferences',
-          {if (p['key'] != null) 'key': p['key'].toString()},
+          {
+            if (p['key'] != null) 'key': p['key'].toString(),
+            if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+          },
         );
         return res.toCallToolResult();
       },

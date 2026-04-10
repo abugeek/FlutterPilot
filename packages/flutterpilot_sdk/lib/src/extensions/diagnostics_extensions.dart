@@ -110,11 +110,17 @@ extension _DiagnosticsExtensions on FlutterPilot {
         };
       }
 
-      final root = RendererBinding
-          .instance
-          .rootPipelineOwner
-          .semanticsOwner
-          ?.rootSemanticsNode;
+      SemanticsNode? root;
+      try {
+        root = RendererBinding
+            .instance
+            .rootPipelineOwner
+            .semanticsOwner
+            ?.rootSemanticsNode;
+      } catch (_) {
+        // rootPipelineOwner is an internal Flutter API — may not be available
+        // in all Flutter versions. Fall back gracefully.
+      }
       if (root == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

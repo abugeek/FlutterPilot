@@ -1330,20 +1330,22 @@ All key-value pairs from registered Hive boxes.
 
 ### `get_shared_preferences` *(requires flutterpilot_shared_preferences)*
 
-Current SharedPreferences key-value map.
+Current SharedPreferences key-value map. Values for keys matching sensitive patterns (`token`, `password`, `secret`, `auth`, `session`, etc.) are **redacted by default**.
 
-**Parameters:** None
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `showSensitive` | string | No | `"true"` to reveal sensitive-looking values. Default: redacted. |
 
 **Returns:**
 ```json
 {
   "prefs": {
     "username": "alice",
-    "email": "alice@example.com",
-    "notification_enabled": true,
-    "notification_count": 5,
     "theme": "dark",
-    "last_login": "2024-04-08T19:30:00Z"
+    "notification_enabled": true,
+    "auth_token": "[redacted — pass showSensitive=true to reveal]"
   }
 }
 ```
@@ -1394,16 +1396,24 @@ Write a value to SharedPreferences.
 
 ### `clear_shared_preferences` *(requires flutterpilot_shared_preferences)*
 
-Clear all SharedPreferences data.
+> ⚠️ **DESTRUCTIVE** — Cannot be undone. Clearing all keys requires `confirm="CLEAR_ALL"`.
 
-**Parameters:** None
+Remove one or all SharedPreferences entries.
 
-**Returns:**
-```json
-{
-  "success": true,
-  "cleared": true
-}
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | No | Key to remove. Omit to clear ALL preferences (requires `confirm`). |
+| `confirm` | string | Conditional | Must be `"CLEAR_ALL"` when `key` is omitted. |
+
+**Examples:**
+```
+# Remove one key
+clear_shared_preferences(key: "theme")
+
+# Clear everything — requires confirmation
+clear_shared_preferences(confirm: "CLEAR_ALL")
 ```
 
 **Use Cases:**
