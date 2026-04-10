@@ -2095,6 +2095,8 @@ List all active Supabase Realtime channel subscriptions.
 
 #### `supabase_sign_out`
 
+> ⚠️ **MAKES REAL NETWORK CALL** — Signs out via the Supabase Auth API. Affects the real session. Use only in dev/test environments.
+
 Sign out the current Supabase user.
 
 | Param | Type | Required | Description |
@@ -2104,6 +2106,8 @@ Sign out the current Supabase user.
 ---
 
 #### `supabase_refresh_session`
+
+> ⚠️ **MAKES REAL NETWORK CALL** — Calls `client.auth.refreshSession()`. Use only in dev/test environments.
 
 Force-refresh the current Supabase session token. Use when testing token expiry flows.
 
@@ -2231,6 +2235,8 @@ Get the Firebase Cloud Messaging token (truncated for security).
 
 #### `log_analytics_event`
 
+> ⚠️ **MAKES REAL NETWORK CALL** — Sends event to your Firebase Analytics dashboard. Do not use in CI or production test runs.
+
 Log a custom Firebase Analytics event.
 
 | Param | Type | Required | Description |
@@ -2252,6 +2258,8 @@ View recent analytics events logged through FlutterPilot.
 
 #### `start_performance_trace`
 
+> ⚠️ **MAKES REAL NETWORK CALL** — Starts a Firebase Performance trace (data sent to Firebase on stop).
+
 Start a named Firebase Performance trace.
 
 | Param | Type | Required | Description |
@@ -2271,6 +2279,8 @@ Stop a previously started Firebase Performance trace.
 ---
 
 #### `record_crashlytics_error`
+
+> ⚠️ **MAKES REAL NETWORK CALL** — Sends error to your Firebase Crashlytics dashboard. Avoid in CI to prevent dashboard pollution.
 
 Record a test error in Firebase Crashlytics.
 
@@ -2322,8 +2332,11 @@ Write a key-value pair to FlutterSecureStorage.
 
 #### `delete_secure_storage_key`
 
+> ⚠️ **DESTRUCTIVE** — Deletion cannot be undone. Wiping all keys requires `confirm="DELETE_ALL"`.
+
 Delete a key or clear all secure storage.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| `key` | string | No | Key to delete. Omit to clear ALL secure storage. |
+| `key` | string | No | Key to delete. Omit to clear ALL secure storage (requires `confirm`). |
+| `confirm` | string | Conditional | Must be `"DELETE_ALL"` when `key` is omitted. |

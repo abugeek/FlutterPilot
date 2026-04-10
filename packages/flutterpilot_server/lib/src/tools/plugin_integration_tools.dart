@@ -68,7 +68,10 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'supabase_sign_out',
       description:
-          'Sign out the current Supabase user. Scope: "local" (default), "global" (all devices), "others" (other sessions only).',
+          '⚠ MAKES REAL NETWORK CALL — signs out the current Supabase user '
+          'via the Supabase Auth API. This affects the real session. '
+          'Scope: "local" (default, this device only), "global" (all devices), '
+          '"others" (other sessions only). Only use in dev/test environments.',
       inputSchema: ToolInputSchema(
         properties: {
           'scope': JsonSchema.string(
@@ -87,7 +90,9 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'supabase_refresh_session',
       description:
-          'Force-refresh the current Supabase session token. Use when testing token expiry flows.',
+          '⚠ MAKES REAL NETWORK CALL — force-refreshes the current Supabase '
+          'session token via the Supabase Auth API. Use when testing token '
+          'expiry flows. Only use in dev/test environments.',
       extension: 'ext.flutterpilot.supabaseRefreshSession',
     );
 
@@ -251,7 +256,10 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'log_analytics_event',
       description:
-          'Log a custom Firebase Analytics event. Useful for verifying analytics instrumentation.',
+          '⚠ MAKES REAL NETWORK CALL — logs a custom Firebase Analytics event '
+          'to your Firebase project (visible in the Firebase console). '
+          'Useful for verifying analytics instrumentation during development. '
+          'Do not call in production test runs to avoid polluting analytics data.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
@@ -320,7 +328,10 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'record_crashlytics_error',
       description:
-          'Record a test error in Firebase Crashlytics. Useful for verifying crash reporting.',
+          '⚠ MAKES REAL NETWORK CALL — records a test error in Firebase '
+          'Crashlytics (appears in your Firebase console). Useful for verifying '
+          'crash reporting instrumentation. Do not call repeatedly or in CI — '
+          'it pollutes your production Crashlytics dashboard.',
       inputSchema: ToolInputSchema(
         properties: {
           'message': JsonSchema.string(
@@ -409,17 +420,27 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'delete_secure_storage_key',
       description:
-          'Delete a key from FlutterSecureStorage, or clear ALL keys if key is omitted.',
+          '⚠ DESTRUCTIVE — Delete a specific key from FlutterSecureStorage. '
+          'To wipe ALL keys, omit "key" and pass confirm="DELETE_ALL". '
+          'Deletion cannot be undone.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'Key to delete. Omit to clear ALL secure storage.',
+            description: 'Key to delete. Omit to clear ALL secure storage (requires confirm).',
+          ),
+          'confirm': JsonSchema.string(
+            description:
+                'Required when wiping all keys (no "key" given). '
+                'Must be exactly "DELETE_ALL" to proceed.',
           ),
         },
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.deleteSecureStorageKey',
-        {if (p['key'] != null) 'key': p['key'].toString()},
+        {
+          if (p['key'] != null) 'key': p['key'].toString(),
+          if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+        },
       ).then((res) => res.toCallToolResult()),
     );
   }

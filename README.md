@@ -418,6 +418,52 @@ await mcp.call('get_semantics_tree');
 
 ---
 
+## 🔐 Authentication & Credentials
+
+**FlutterPilot requires zero accounts, zero logins, and zero credentials of its own.**
+
+It is a development tool — the MCP server connects directly to your app's Dart VM (same machine, same debug session). No cloud service involved.
+
+### Plugin Auth Model
+
+Plugin packages wrap your already-initialized, already-authenticated SDK instances:
+
+```dart
+// Your app already initializes Supabase — FlutterPilot just wraps it:
+await Supabase.initialize(url: '...', anonKey: '...');
+SupabasePilotInspector.register(Supabase.instance.client); // no extra login
+```
+
+FlutterPilot never connects to Supabase, Firebase, or any other external service on its own.
+
+### ⚠️ Tools That Make Real External Calls
+
+A small number of **mutating** plugin tools do make real API calls to external services via the SDK instances you passed in. These are clearly marked with `⚠ MAKES REAL NETWORK CALL` in the tool description:
+
+| Tool | Side Effect |
+|------|-------------|
+| `supabase_sign_out` | Calls `client.auth.signOut()` — signs out the real session |
+| `supabase_refresh_session` | Calls `client.auth.refreshSession()` — rotates tokens |
+| `log_analytics_event` | Sends event to Firebase Analytics dashboard |
+| `record_crashlytics_error` | Sends error to Firebase Crashlytics dashboard |
+| `start_performance_trace` | Starts a Firebase Performance trace (network call when stopped) |
+
+> **Recommendation:** Only use these tools in development/test environments against non-production Firebase projects and Supabase instances. All other FlutterPilot tools are read-only and safe to use in any environment.
+
+### ⚠️ Destructive Storage Tools
+
+`delete_secure_storage_key` without a `key` argument wipes **all** secure storage. It requires `confirm="DELETE_ALL"` to proceed:
+
+```
+# Safe — deletes one key
+delete_secure_storage_key(key: "session_token")
+
+# Requires explicit confirmation — deletes everything
+delete_secure_storage_key(confirm: "DELETE_ALL")
+```
+
+---
+
 ## 🤝 Contributing
 
 FlutterPilot is open source! We welcome:

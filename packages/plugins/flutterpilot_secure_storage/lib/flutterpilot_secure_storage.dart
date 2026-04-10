@@ -249,6 +249,7 @@ class SecureStoragePilotInspector {
       }
 
       final key = parameters['key'];
+      final confirm = parameters['confirm'];
       try {
         if (key != null && key.isNotEmpty) {
           await storage.delete(key: key);
@@ -257,6 +258,14 @@ class SecureStoragePilotInspector {
             'deleted': key,
           }));
         } else {
+          // Require explicit confirmation to wipe all storage
+          if (confirm != 'DELETE_ALL') {
+            return ServiceExtensionResponse.error(
+              ServiceExtensionResponse.extensionError,
+              'Wiping ALL secure storage requires confirm="DELETE_ALL". '
+              'This is a destructive operation that cannot be undone.',
+            );
+          }
           await storage.deleteAll();
           return ServiceExtensionResponse.result(json.encode({
             'status': 'success',
