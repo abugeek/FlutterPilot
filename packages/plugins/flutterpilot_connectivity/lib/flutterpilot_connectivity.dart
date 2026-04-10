@@ -78,6 +78,14 @@ class ConnectivityPilotInspector {
   /// ```
   static bool get isSimulatedOffline => _simulatedOffline;
 
+  /// Programmatically toggles the simulated-offline flag.
+  ///
+  /// Equivalent to calling the `simulate_offline` MCP tool.
+  /// Useful in integration tests and UI that needs to toggle the flag directly.
+  static void setSimulatedOffline(bool enabled) {
+    _simulatedOffline = enabled;
+  }
+
   static void _startListening() {
     final connectivity = Connectivity();
     connectivity.checkConnectivity().then((results) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../state/bloc_state.dart';
 
 /// Demonstrates all navigation and routing tools:
@@ -84,8 +85,8 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     ElevatedButton.icon(
                       key: const Key('press_back_button'),
                       onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
+                        if (context.canPop()) {
+                          context.pop();
                         }
                       },
                       icon: const Icon(Icons.arrow_back),
@@ -275,7 +276,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                               if (!mounted) return;
                               setState(() => _pendingNavigation = false);
                               // ignore: use_build_context_synchronously
-                              Navigator.of(context).pushNamed('/state');
+                              context.push('/state');
                             },
                       icon: _pendingNavigation
                           ? const SizedBox.square(
@@ -311,7 +312,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
   Widget _routeButton(BuildContext ctx, String route, String label, IconData icon) {
     return ElevatedButton.icon(
       key: Key('nav_to${route.replaceAll("/", "_")}_button'),
-      onPressed: () => Navigator.pushNamed(ctx, route),
+      onPressed: () => ctx.push(route),
       icon: Icon(icon, size: 16),
       label: Text(label, style: const TextStyle(fontSize: 12)),
     );

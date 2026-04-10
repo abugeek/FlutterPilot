@@ -35,6 +35,12 @@ dependencies:
     path: ../../packages/plugins/flutterpilot_hive
   flutterpilot_shared_preferences:
     path: ../../packages/plugins/flutterpilot_shared_preferences
+  flutterpilot_gorouter:
+    path: ../../packages/plugins/flutterpilot_gorouter
+  flutterpilot_connectivity:
+    path: ../../packages/plugins/flutterpilot_connectivity
+  go_router: ^14.0.0
+  connectivity_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:

@@ -363,7 +363,36 @@ void main() {
     await _goBack(tester);
   });
 
-  // ── 9. Chaos ──────────────────────────────────────────────────────────────
+  // ── 10. Connectivity ─────────────────────────────────────────────────────
+  testWidgets('Connectivity: status display, offline toggle, history', (tester) async {
+    await launchApp(tester);
+    await _goTo(tester, 'nav_connectivity_button');
+    expect(find.text('Connectivity'), findsOneWidget);
+
+    // Connectivity status should be visible
+    expect(find.byKey(const Key('connectivity_status_label')), findsOneWidget);
+
+    // Toggle simulate offline switch on
+    await tester.ensureVisible(find.byKey(const Key('simulate_offline_switch')));
+    await _tap(tester, 'simulate_offline_switch',
+        settle: const Duration(milliseconds: 400));
+    expect(find.text('Offline simulation ACTIVE'), findsOneWidget,
+        reason: 'After toggle, simulation should be active');
+
+    // Toggle simulate offline switch off
+    await _tap(tester, 'simulate_offline_switch',
+        settle: const Duration(milliseconds: 400));
+    expect(find.text('Simulation off'), findsOneWidget,
+        reason: 'After second toggle, simulation should be off');
+
+    // Clear history
+    await _tap(tester, 'clear_history_button',
+        settle: const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    await _goBack(tester);
+  });
+  // ── 11. Chaos ─────────────────────────────────────────────────────────────
   testWidgets('Chaos: screen loads with error trigger buttons visible', (tester) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_chaos_button');

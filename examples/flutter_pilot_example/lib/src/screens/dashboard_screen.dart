@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../state/riverpod_state.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -92,6 +93,12 @@ class DashboardScreen extends ConsumerWidget {
                   icon: Icons.camera_alt,
                   subtitle: 'Screenshots, recording, pump_frames',
                 ),
+                _NavButton(
+                  label: 'Connectivity',
+                  route: '/connectivity',
+                  icon: Icons.wifi,
+                  subtitle: 'Network status, offline simulation',
+                ),
               ],
             ),
           ],
@@ -119,7 +126,7 @@ class _NavButton extends StatelessWidget {
       width: 160,
       child: ElevatedButton(
         key: Key('nav_${route.substring(1)}_button'),
-        onPressed: () => Navigator.pushNamed(context, route),
+        onPressed: () => context.push(route),
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         ),

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dio/dio.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 
 // FlutterPilot Imports
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
@@ -12,6 +13,8 @@ import 'package:flutterpilot_bloc/flutterpilot_bloc.dart';
 import 'package:flutterpilot_dio/flutterpilot_dio.dart';
 import 'package:flutterpilot_hive/flutterpilot_hive.dart';
 import 'package:flutterpilot_shared_preferences/flutterpilot_shared_preferences.dart';
+import 'package:flutterpilot_gorouter/flutterpilot_gorouter.dart';
+import 'package:flutterpilot_connectivity/flutterpilot_connectivity.dart';
 
 // App Imports
 import 'src/screens/dashboard_screen.dart';
@@ -24,6 +27,7 @@ import 'src/screens/navigation_features_screen.dart';
 import 'src/screens/debug_performance_screen.dart';
 import 'src/screens/accessibility_screen.dart';
 import 'src/screens/testing_screen.dart';
+import 'src/screens/connectivity_screen.dart';
 import 'src/state/bloc_state.dart';
 
 late final Dio dio;
@@ -49,6 +53,9 @@ Future<Widget> initializeApp() async {
   final prefs = await SharedPreferences.getInstance();
   SharedPrefsPilotInspector.register(prefs);
 
+  // 6. Initialize Connectivity plugin
+  ConnectivityPilotInspector.register();
+
   return ProviderScope(
     observers: [RiverpodPilotObserver()],
     child: MultiBlocProvider(
@@ -66,16 +73,58 @@ void main() async {
   runApp(await initializeApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   final Box settingsBox;
   const MainApp({super.key, required this.settingsBox});
+
+  @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    _router = GoRouter(
+      initialLocation: '/',
+      observers: [NavigationTracker()],
+      routes: [
+        GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
+        GoRoute(path: '/state', builder: (_, __) => const StateInjectionScreen()),
+        GoRoute(path: '/chaos', builder: (_, __) => const ChaosScreen()),
+        GoRoute(path: '/network', builder: (context, _) => NetworkScreen(dio: dio)),
+        GoRoute(
+          path: '/storage',
+          builder: (context, _) => StorageScreen(settingsBox: widget.settingsBox),
+        ),
+        GoRoute(path: '/ui_automation', builder: (_, __) => const UiAutomationScreen()),
+        GoRoute(path: '/navigation', builder: (_, __) => const NavigationFeaturesScreen()),
+        GoRoute(path: '/debug_perf', builder: (_, __) => const DebugPerformanceScreen()),
+        GoRoute(path: '/accessibility', builder: (_, __) => const AccessibilityScreen()),
+        GoRoute(path: '/testing', builder: (_, __) => const TestingScreen()),
+        GoRoute(path: '/connectivity', builder: (_, __) => const ConnectivityScreen()),
+      ],
+    );
+    // Register GoRouter with FlutterPilot for AI agent navigation visibility
+    GoRouterPilotInspector.register(_router);
+  }
+
+  @override
+  void dispose() {
+    GoRouterPilotInspector.reset();
+    _router.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ThemeCubit, bool>(
       builder: (context, isDark) {
-        return MaterialApp(
+        return MaterialApp.router(
           title: 'FlutterPilot Example',
+          routerConfig: _router,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
             useMaterial3: true,
@@ -88,20 +137,6 @@ class MainApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          navigatorObservers: [NavigationTracker()],
-          initialRoute: '/',
-          routes: {
-            '/': (context) => const DashboardScreen(),
-            '/state': (context) => const StateInjectionScreen(),
-            '/chaos': (context) => const ChaosScreen(),
-            '/network': (context) => NetworkScreen(dio: dio),
-            '/storage': (context) => StorageScreen(settingsBox: settingsBox),
-            '/ui_automation': (context) => const UiAutomationScreen(),
-            '/navigation': (context) => const NavigationFeaturesScreen(),
-            '/debug_perf': (context) => const DebugPerformanceScreen(),
-            '/accessibility': (context) => const AccessibilityScreen(),
-            '/testing': (context) => const TestingScreen(),
-          },
         );
       },
     );
