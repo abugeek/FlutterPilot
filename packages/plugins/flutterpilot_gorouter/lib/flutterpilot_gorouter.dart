@@ -5,6 +5,24 @@ import 'package:flutter/widgets.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:go_router/go_router.dart';
 
+/// Registers a VM service extension, silently ignoring duplicate registration.
+///
+/// In production apps, extensions are registered once. In test environments,
+/// reset() + re-register() would cause `ArgumentError: Extension already
+/// registered` because the VM service registry is process-scoped.
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Extension already registered — safe to ignore during hot-restart or
+    // re-initialization in test environments.
+  }
+}
+
 /// FlutterPilot plugin that exposes GoRouter navigation state to AI agents.
 ///
 /// Provides visibility into:
@@ -78,7 +96,7 @@ class GoRouterPilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getGoRouterState ------------------------------------
-    registerExtension('ext.flutterpilot.getGoRouterState', (
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterState', (
       method,
       parameters,
     ) async {
@@ -110,7 +128,7 @@ class GoRouterPilotInspector {
     });
 
     // -- ext.flutterpilot.getGoRouterConfig -----------------------------------
-    registerExtension('ext.flutterpilot.getGoRouterConfig', (
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterConfig', (
       method,
       parameters,
     ) async {
@@ -149,7 +167,7 @@ class GoRouterPilotInspector {
     });
 
     // -- ext.flutterpilot.getGoRouterHistory -----------------------------------
-    registerExtension('ext.flutterpilot.getGoRouterHistory', (
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterHistory', (
       method,
       parameters,
     ) async {
@@ -160,7 +178,7 @@ class GoRouterPilotInspector {
     });
 
     // -- ext.flutterpilot.goRouterNavigate ------------------------------------
-    registerExtension('ext.flutterpilot.goRouterNavigate', (
+    _safeRegisterExtension('ext.flutterpilot.goRouterNavigate', (
       method,
       parameters,
     ) async {

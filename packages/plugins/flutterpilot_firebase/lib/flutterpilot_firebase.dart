@@ -7,6 +7,19 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Already registered — safe to ignore during re-initialization.
+  }
+}
+
+
 /// FlutterPilot plugin that exposes Firebase services state to AI agents.
 ///
 /// Provides visibility into:
@@ -81,7 +94,7 @@ class FirebasePilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getFirebaseStatus ------------------------------------
-    registerExtension('ext.flutterpilot.getFirebaseStatus', (
+    _safeRegisterExtension('ext.flutterpilot.getFirebaseStatus', (
       method,
       parameters,
     ) async {
@@ -123,7 +136,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.getFcmToken -----------------------------------------
-    registerExtension('ext.flutterpilot.getFcmToken', (
+    _safeRegisterExtension('ext.flutterpilot.getFcmToken', (
       method,
       parameters,
     ) async {
@@ -151,7 +164,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.logAnalyticsEvent ------------------------------------
-    registerExtension('ext.flutterpilot.logAnalyticsEvent', (
+    _safeRegisterExtension('ext.flutterpilot.logAnalyticsEvent', (
       method,
       parameters,
     ) async {
@@ -209,7 +222,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.getAnalyticsLog -------------------------------------
-    registerExtension('ext.flutterpilot.getAnalyticsLog', (
+    _safeRegisterExtension('ext.flutterpilot.getAnalyticsLog', (
       method,
       parameters,
     ) async {
@@ -228,7 +241,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.startPerformanceTrace --------------------------------
-    registerExtension('ext.flutterpilot.startPerformanceTrace', (
+    _safeRegisterExtension('ext.flutterpilot.startPerformanceTrace', (
       method,
       parameters,
     ) async {
@@ -272,7 +285,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.stopPerformanceTrace ---------------------------------
-    registerExtension('ext.flutterpilot.stopPerformanceTrace', (
+    _safeRegisterExtension('ext.flutterpilot.stopPerformanceTrace', (
       method,
       parameters,
     ) async {
@@ -308,7 +321,7 @@ class FirebasePilotInspector {
     });
 
     // -- ext.flutterpilot.recordCrashlyticsError --------------------------------
-    registerExtension('ext.flutterpilot.recordCrashlyticsError', (
+    _safeRegisterExtension('ext.flutterpilot.recordCrashlyticsError', (
       method,
       parameters,
     ) async {

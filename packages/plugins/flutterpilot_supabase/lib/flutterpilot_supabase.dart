@@ -5,6 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Already registered — safe to ignore during re-initialization.
+  }
+}
+
 /// FlutterPilot plugin that exposes Supabase state to AI agents.
 ///
 /// Provides visibility into:
@@ -71,7 +83,7 @@ class SupabasePilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getSupabaseAuth --------------------------------------
-    registerExtension('ext.flutterpilot.getSupabaseAuth', (
+    _safeRegisterExtension('ext.flutterpilot.getSupabaseAuth', (
       method,
       parameters,
     ) async {
@@ -132,7 +144,7 @@ class SupabasePilotInspector {
     });
 
     // -- ext.flutterpilot.getSupabaseRealtime ----------------------------------
-    registerExtension('ext.flutterpilot.getSupabaseRealtime', (
+    _safeRegisterExtension('ext.flutterpilot.getSupabaseRealtime', (
       method,
       parameters,
     ) async {
@@ -154,7 +166,7 @@ class SupabasePilotInspector {
     });
 
     // -- ext.flutterpilot.supabaseSignOut --------------------------------------
-    registerExtension('ext.flutterpilot.supabaseSignOut', (
+    _safeRegisterExtension('ext.flutterpilot.supabaseSignOut', (
       method,
       parameters,
     ) async {
@@ -189,7 +201,7 @@ class SupabasePilotInspector {
     });
 
     // -- ext.flutterpilot.supabaseRefreshSession --------------------------------
-    registerExtension('ext.flutterpilot.supabaseRefreshSession', (
+    _safeRegisterExtension('ext.flutterpilot.supabaseRefreshSession', (
       method,
       parameters,
     ) async {

@@ -4,6 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Already registered — safe to ignore during re-initialization.
+  }
+}
+
 /// FlutterPilot plugin that exposes [FlutterSecureStorage] to AI agents.
 ///
 /// Provides visibility into:
@@ -87,7 +99,7 @@ class SecureStoragePilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getSecureStorageKeys ---------------------------------
-    registerExtension('ext.flutterpilot.getSecureStorageKeys', (
+    _safeRegisterExtension('ext.flutterpilot.getSecureStorageKeys', (
       method,
       parameters,
     ) async {
@@ -134,7 +146,7 @@ class SecureStoragePilotInspector {
     });
 
     // -- ext.flutterpilot.readSecureStorageKey ---------------------------------
-    registerExtension('ext.flutterpilot.readSecureStorageKey', (
+    _safeRegisterExtension('ext.flutterpilot.readSecureStorageKey', (
       method,
       parameters,
     ) async {
@@ -188,7 +200,7 @@ class SecureStoragePilotInspector {
     });
 
     // -- ext.flutterpilot.setSecureStorageKey ----------------------------------
-    registerExtension('ext.flutterpilot.setSecureStorageKey', (
+    _safeRegisterExtension('ext.flutterpilot.setSecureStorageKey', (
       method,
       parameters,
     ) async {
@@ -224,7 +236,7 @@ class SecureStoragePilotInspector {
     });
 
     // -- ext.flutterpilot.deleteSecureStorageKey --------------------------------
-    registerExtension('ext.flutterpilot.deleteSecureStorageKey', (
+    _safeRegisterExtension('ext.flutterpilot.deleteSecureStorageKey', (
       method,
       parameters,
     ) async {

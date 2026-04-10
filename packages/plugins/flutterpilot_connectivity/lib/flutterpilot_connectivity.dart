@@ -5,6 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+      handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Already registered — safe to ignore during re-initialization.
+  }
+}
+
 /// FlutterPilot plugin that exposes network connectivity state to AI agents.
 ///
 /// Provides visibility into:
@@ -91,7 +103,7 @@ class ConnectivityPilotInspector {
 
   static void _registerExtensions() {
     // -- ext.flutterpilot.getConnectivity --------------------------------------
-    registerExtension('ext.flutterpilot.getConnectivity', (
+    _safeRegisterExtension('ext.flutterpilot.getConnectivity', (
       method,
       parameters,
     ) async {
@@ -110,7 +122,7 @@ class ConnectivityPilotInspector {
     });
 
     // -- ext.flutterpilot.getConnectivityHistory --------------------------------
-    registerExtension('ext.flutterpilot.getConnectivityHistory', (
+    _safeRegisterExtension('ext.flutterpilot.getConnectivityHistory', (
       method,
       parameters,
     ) async {
@@ -129,7 +141,7 @@ class ConnectivityPilotInspector {
     });
 
     // -- ext.flutterpilot.simulateOffline --------------------------------------
-    registerExtension('ext.flutterpilot.simulateOffline', (
+    _safeRegisterExtension('ext.flutterpilot.simulateOffline', (
       method,
       parameters,
     ) async {
