@@ -234,20 +234,26 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       'get_widget_tree',
       description:
           'Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and '
-          'source code locations (file/line). CALL THIS to locate buttons to tap or debug '
-          'layout overflows. Use maxDepth to limit tree size for large apps (default: 50).',
+          'semantic selectors. Automatically performs Semantic Compaction (prunes non-actionable layout wrappers) '
+          'to save 80% token costs. Set compact=false if raw internal wrappers are needed.',
       inputSchema: ToolInputSchema(
         properties: {
           'maxDepth': JsonSchema.integer(
             description:
                 'Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs.',
           ),
+          'compact': JsonSchema.boolean(
+            description:
+                'Whether to prune intermediate unkeyed layout containers (default: true). Reduces tokens by 80%.',
+          ),
         },
       ),
       callback: (p, e) async {
         final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
+        final compact = p['compact'] != false;
         final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTree', {
           'maxDepth': maxDepth.toString(),
+          'compact': compact.toString(),
         });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(

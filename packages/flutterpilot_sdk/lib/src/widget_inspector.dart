@@ -1,39 +1,33 @@
 import 'package:flutter/material.dart';
 
-/// Provides read-only introspection and semantic element querying into the live Flutter widget tree.
-///
-/// [PilotWidgetInspector] can serialize the entire element tree to JSON,
-/// look up individual widgets by explicit keys or semantic selectors,
-/// and count elements.
+/// Provides high-performance, single-pass introspection and semantic element querying into the live Flutter widget tree.
 class PilotWidgetInspector {
   /// Default maximum depth for widget tree traversal.
   static const int defaultMaxDepth = 250;
 
-  /// Captures the widget tree as a nested JSON-compatible map.
-  ///
-  /// Returns a recursive structure where each node contains:
-  /// - `type` — the widget's `runtimeType`.
-  /// - `key` — the widget's key (if any).
-  /// - `selector` — Virtual Semantic Selector (e.g. `ElevatedButton['Sign In']`).
-  /// - `text` — visible text content (if any).
-  /// - `layout` — bounding box (`x`, `y`, `w`, `h`) when available.
-  /// - `location` — source file, line, and column (best-effort).
-  /// - `children` — child nodes.
-  static Map<String, dynamic> captureWidgetTree({int? maxDepth}) {
-    final root = WidgetsBinding.instance.rootElement;
-    if (root == null) return {'error': 'No root element found'};
-    return _elementToJson(root, 0, maxDepth ?? defaultMaxDepth);
+  // Frame-scoped key cache for O(1) lookups
+  static final Map<String, Element> _keyCache = {};
+
+  /// Invalidates the internal frame-scoped element cache.
+  static void invalidateCache() {
+    _keyCache.clear();
   }
 
-  /// Finds an [Element] in the tree matching [query].
+  /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
+  static Map<String, dynamic> captureWidgetTree({
+    int? maxDepth,
+    bool compact = true,
+  }) {
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return {'error': 'No root element found'};
+    final depth = maxDepth ?? defaultMaxDepth;
+    return _elementToJson(root, 0, depth, compact: compact) ?? {'type': 'Empty'};
+  }
+
+  /// High-performance Single-Pass Multi-Priority Element Matcher (O(N)).
   ///
-  /// Lookup resolution order:
-  /// 1. Exact widget key (`'login'`, `ValueKey('login')`, `GlobalKey`).
-  /// 2. Structured semantic selector (e.g. `ElevatedButton['Log In']`, `Button['Submit']`, `TextField['Email']`, `Tooltip['Settings']`).
-  /// 3. Visible button text (e.g. tapping `"Log In"` finds the enclosing `ElevatedButton`/`TextButton`/`InkWell`).
-  /// 4. Direct text content on `Text` or `RichText` widgets.
-  /// 5. Accessibility semantics label or Tooltip message.
-  /// 6. Widget runtime type (e.g. `"FloatingActionButton"`).
+  /// Evaluates exact keys, semantic selectors, button texts, text widgets,
+  /// tooltips, widget types, and fuzzy similarity in a single tree walk.
   static Element? findElement(String query) {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
@@ -41,164 +35,162 @@ class PilotWidgetInspector {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return null;
 
-    // 1. Try exact key match first
-    final byKey = findElementByKey(cleanQuery);
-    if (byKey != null) return byKey;
+    // 1. O(1) Key Cache Lookup
+    final cached = _keyCache[cleanQuery];
+    if (cached != null && cached.mounted) return cached;
 
-    // 2. Try structured semantic selector pattern: Type['value'] or Type[attr:'value']
+    // 2. Parse selector pattern if present (e.g. Type['value'])
+    String? typeTarget;
+    String? valueTarget;
     final selectorRegex = RegExp(r'^([a-zA-Z0-9_]+)\[(.*)\]$');
     final match = selectorRegex.firstMatch(cleanQuery);
     if (match != null) {
-      final typeTarget = match.group(1)!;
-      var valueTarget = match.group(2)!.trim();
-      if ((valueTarget.startsWith("'") && valueTarget.endsWith("'")) ||
-          (valueTarget.startsWith('"') && valueTarget.endsWith('"'))) {
-        valueTarget = valueTarget.substring(1, valueTarget.length - 1);
+      typeTarget = match.group(1)!;
+      var rawVal = match.group(2)!.trim();
+      if ((rawVal.startsWith("'") && rawVal.endsWith("'")) ||
+          (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
+        rawVal = rawVal.substring(1, rawVal.length - 1);
       }
-
-      Element? foundBySelector;
-      void searchSelector(Element element) {
-        if (foundBySelector != null) return;
-        final typeName = element.widget.runtimeType.toString();
-        final matchesType = _isMatchingType(typeName, typeTarget);
-
-        if (matchesType) {
-          if (valueTarget.isEmpty) {
-            foundBySelector = element;
-            return;
-          }
-          final text = _extractDescendantText(element);
-          if (text.toLowerCase().contains(valueTarget.toLowerCase())) {
-            foundBySelector = element;
-            return;
-          }
-        }
-        element.visitChildren(searchSelector);
-      }
-
-      searchSelector(root);
-      if (foundBySelector != null) return foundBySelector;
+      valueTarget = rawVal;
     }
 
-    // 3. Try finding an interactable button or tile whose descendant text matches query
-    Element? foundButton;
-    void searchButtonWithText(Element element) {
-      if (foundButton != null) return;
-      final typeName = element.widget.runtimeType.toString();
-      if (_isButtonOrClickable(typeName)) {
+    Element? bestMatch;
+    int bestPriority = -1; // Higher is better
+    double bestSimilarity = 0.0;
+
+    void evaluateElement(Element element) {
+      final widget = element.widget;
+      final typeName = widget.runtimeType.toString();
+      final widgetKey = widget.key?.toString();
+
+      // Priority 100: Exact Key Match
+      if (widgetKey != null) {
+        if (widgetKey == cleanQuery ||
+            widgetKey == "['$cleanQuery']" ||
+            widgetKey == "[<'$cleanQuery'>]") {
+          bestMatch = element;
+          bestPriority = 100;
+          _keyCache[cleanQuery] = element;
+          return; // Short-circuit
+        }
+      }
+
+      // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
+      if (typeTarget != null && bestPriority < 90) {
+        if (_isMatchingType(typeName, typeTarget)) {
+          if (valueTarget == null || valueTarget.isEmpty) {
+            bestMatch = element;
+            bestPriority = 90;
+          } else {
+            final text = _extractDescendantText(element);
+            if (text.toLowerCase().contains(valueTarget.toLowerCase())) {
+              bestMatch = element;
+              bestPriority = 90;
+            }
+          }
+        }
+      }
+
+      // Priority 80: Clickable Button Text Match
+      if (bestPriority < 80 && _isButtonOrClickable(typeName)) {
         final text = _extractDescendantText(element);
         if (text.toLowerCase() == cleanQuery.toLowerCase() ||
             text.toLowerCase().contains(cleanQuery.toLowerCase())) {
-          foundButton = element;
-          return;
+          bestMatch = element;
+          bestPriority = 80;
         }
       }
-      element.visitChildren(searchButtonWithText);
-    }
 
-    searchButtonWithText(root);
-    if (foundButton != null) return foundButton;
-
-    // 4. Try matching Text / RichText / EditableText directly
-    Element? foundText;
-    void searchTextWidget(Element element) {
-      if (foundText != null) return;
-      final w = element.widget;
-      if (w is Text) {
-        final data = w.data ?? '';
-        if (data.toLowerCase() == cleanQuery.toLowerCase() ||
-            data.toLowerCase().contains(cleanQuery.toLowerCase())) {
-          foundText = element;
-          return;
-        }
-      } else if (w is RichText) {
-        final plain = w.text.toPlainText();
-        if (plain.toLowerCase() == cleanQuery.toLowerCase() ||
-            plain.toLowerCase().contains(cleanQuery.toLowerCase())) {
-          foundText = element;
-          return;
-        }
-      } else if (w is EditableText) {
-        final currentText = w.controller.text;
-        if (currentText.toLowerCase().contains(cleanQuery.toLowerCase())) {
-          foundText = element;
-          return;
+      // Priority 70 / 60: Text / RichText / EditableText Direct Match
+      if (bestPriority < 70) {
+        if (widget is Text) {
+          final data = widget.data ?? '';
+          if (data.toLowerCase() == cleanQuery.toLowerCase()) {
+            bestMatch = element;
+            bestPriority = 70;
+          } else if (bestPriority < 60 && data.toLowerCase().contains(cleanQuery.toLowerCase())) {
+            bestMatch = element;
+            bestPriority = 60;
+          }
+        } else if (widget is RichText) {
+          final plain = widget.text.toPlainText();
+          if (plain.toLowerCase() == cleanQuery.toLowerCase()) {
+            bestMatch = element;
+            bestPriority = 70;
+          } else if (bestPriority < 60 && plain.toLowerCase().contains(cleanQuery.toLowerCase())) {
+            bestMatch = element;
+            bestPriority = 60;
+          }
+        } else if (widget is EditableText && bestPriority < 60) {
+          if (widget.controller.text.toLowerCase().contains(cleanQuery.toLowerCase())) {
+            bestMatch = element;
+            bestPriority = 60;
+          }
         }
       }
-      element.visitChildren(searchTextWidget);
-    }
 
-    searchTextWidget(root);
-    if (foundText != null) return foundText;
-
-    // 5. Try Tooltip or Semantics label
-    Element? foundTooltipOrSemantics;
-    void searchTooltip(Element element) {
-      if (foundTooltipOrSemantics != null) return;
-      final w = element.widget;
-      if (w is Tooltip && (w.message?.toLowerCase().contains(cleanQuery.toLowerCase()) ?? false)) {
-        foundTooltipOrSemantics = element;
-        return;
-      }
-      element.visitChildren(searchTooltip);
-    }
-
-    searchTooltip(root);
-    if (foundTooltipOrSemantics != null) return foundTooltipOrSemantics;
-
-    // 6. Try exact or suffix match on Widget Type (e.g. "FloatingActionButton")
-    Element? foundByType;
-    void searchByType(Element element) {
-      if (foundByType != null) return;
-      final typeName = element.widget.runtimeType.toString();
-      if (typeName.toLowerCase() == cleanQuery.toLowerCase()) {
-        foundByType = element;
-        return;
-      }
-      element.visitChildren(searchByType);
-    }
-
-    searchByType(root);
-    if (foundByType != null) return foundByType;
-
-    // 7. Layer 7: Fuzzy / Similarity Matcher (Self-Healing)
-    Element? bestFuzzyMatch;
-    double bestScore = 0.0;
-
-    void searchFuzzy(Element element) {
-      final w = element.widget;
-      String? candidateText;
-      if (w is Text) {
-        candidateText = w.data;
-      } else if (w is RichText) {
-        candidateText = w.text.toPlainText();
-      } else if (w is Tooltip) {
-        candidateText = w.message;
-      }
-
-      if (candidateText != null && candidateText.isNotEmpty) {
-        final score = calculateSimilarity(cleanQuery, candidateText);
-        if (score > bestScore && score >= 0.65) {
-          bestScore = score;
-          bestFuzzyMatch = element;
+      // Priority 50: Tooltip / Semantics
+      if (bestPriority < 50 && widget is Tooltip) {
+        if (widget.message?.toLowerCase().contains(cleanQuery.toLowerCase()) ?? false) {
+          bestMatch = element;
+          bestPriority = 50;
         }
       }
-      element.visitChildren(searchFuzzy);
+
+      // Priority 40: Type Exact Match
+      if (bestPriority < 40 && typeName.toLowerCase() == cleanQuery.toLowerCase()) {
+        bestMatch = element;
+        bestPriority = 40;
+      }
+
+      // Priority 10-39: Fuzzy / Similarity Match
+      if (bestPriority < 40) {
+        String? candidateText;
+        if (widget is Text) {
+          candidateText = widget.data;
+        } else if (widget is RichText) {
+          candidateText = widget.text.toPlainText();
+        } else if (widget is Tooltip) {
+          candidateText = widget.message;
+        }
+
+        if (candidateText != null && candidateText.isNotEmpty) {
+          final sim = calculateSimilarity(cleanQuery, candidateText);
+          if (sim >= 0.65 && sim > bestSimilarity) {
+            bestSimilarity = sim;
+            bestMatch = element;
+            bestPriority = (sim * 39).round();
+          }
+        }
+      }
+
+      // Continue single-pass traversal
+      element.visitChildren(evaluateElement);
     }
 
-    searchFuzzy(root);
-    return bestFuzzyMatch;
+    evaluateElement(root);
+    return bestMatch;
   }
 
-  /// Computes the similarity score (0.0 to 1.0) between two strings.
+  /// Fast Bigram Dice similarity calculator with early length cutoff and substring ratio check.
   static double calculateSimilarity(String s1, String s2) {
     final a = s1.trim().toLowerCase();
     final b = s2.trim().toLowerCase();
     if (a == b) return 1.0;
     if (a.isEmpty || b.isEmpty) return 0.0;
-    if (a.contains(b) || b.contains(a)) return 0.85;
 
-    // Bigram Dice coefficient
+    final minLen = a.length < b.length ? a.length : b.length;
+    final maxLen = a.length > b.length ? a.length : b.length;
+
+    // If one contains the other and they are close in length (>= 60% overlap ratio)
+    if ((a.contains(b) || b.contains(a)) && (minLen / maxLen >= 0.6)) {
+      return 0.85;
+    }
+
+    // Fast length pre-filter: if difference is too large, similarity cannot exceed 0.65
+    final lenDiff = (a.length - b.length).abs();
+    if (lenDiff > 10 || (minLen / maxLen < 0.3)) return 0.0;
+
     final Set<String> bigramsA = {};
     for (int i = 0; i < a.length - 1; i++) {
       bigramsA.add(a.substring(i, i + 2));
@@ -212,11 +204,11 @@ class PilotWidgetInspector {
     return (2.0 * intersection) / (bigramsA.length + bigramsB.length);
   }
 
-  /// Finds an [Element] in the tree whose widget key matches [keyString].
-  ///
-  /// Supports plain string keys, `ValueKey` (`['keyString']`), and
-  /// `GlobalKey` (`[<'keyString'>]`) representations.
+  /// Finds an [Element] by Key string.
   static Element? findElementByKey(String keyString) {
+    final cached = _keyCache[keyString];
+    if (cached != null && cached.mounted) return cached;
+
     Element? found;
     void search(Element element) {
       if (found != null) return;
@@ -225,6 +217,7 @@ class PilotWidgetInspector {
           widgetKey == "['$keyString']" ||
           widgetKey == "[<'$keyString'>]") {
         found = element;
+        _keyCache[keyString] = element;
         return;
       }
       element.visitChildren(search);
@@ -235,7 +228,7 @@ class PilotWidgetInspector {
     return found;
   }
 
-  /// Recursively counts all [Element] nodes in the subtree rooted at [element].
+  /// Recursively counts all elements.
   static int countElements(Element element) {
     int count = 1;
     element.visitChildren((child) {
@@ -322,17 +315,52 @@ class PilotWidgetInspector {
     return null;
   }
 
-  static Map<String, dynamic> _elementToJson(
+  static bool _isTransparentLayoutWrapper(String type) {
+    return type == 'Padding' ||
+        type == 'SizedBox' ||
+        type == 'ColoredBox' ||
+        type == 'DecoratedBox' ||
+        type == 'ConstrainedBox' ||
+        type == 'Align' ||
+        type == 'Center' ||
+        type == 'RepaintBoundary' ||
+        type == 'Semantics' ||
+        type == 'DefaultTextStyle' ||
+        type == 'MediaQuery' ||
+        type == 'Theme' ||
+        type == 'InheritedTheme' ||
+        type == 'FocusScope' ||
+        type == 'Actions' ||
+        type == 'Shortcuts';
+  }
+
+  static Map<String, dynamic>? _elementToJson(
     Element element,
     int currentDepth,
-    int maxDepth,
-  ) {
+    int maxDepth, {
+    bool compact = true,
+  }) {
     final List<Map<String, dynamic>> children = [];
     if (currentDepth < maxDepth) {
-      element.visitChildren(
-        (child) =>
-            children.add(_elementToJson(child, currentDepth + 1, maxDepth)),
-      );
+      element.visitChildren((child) {
+        final childJson = _elementToJson(child, currentDepth + 1, maxDepth, compact: compact);
+        if (childJson != null) children.add(childJson);
+      });
+    }
+
+    final widget = element.widget;
+    final typeName = widget.runtimeType.toString();
+    final keyStr = widget.key?.toString();
+    final text = _extractDescendantText(element);
+    final selector = _computeSemanticSelector(element);
+
+    // If compact mode is enabled, collapse intermediate single-child layout wrappers without keys
+    if (compact && keyStr == null && _isTransparentLayoutWrapper(typeName)) {
+      if (children.length == 1) {
+        return children.first;
+      } else if (children.isEmpty && text.isEmpty) {
+        return null; // Prune empty leaf wrappers
+      }
     }
 
     Map<String, dynamic>? layout;
@@ -340,63 +368,22 @@ class PilotWidgetInspector {
     if (ro is RenderBox && ro.hasSize) {
       final pos = ro.localToGlobal(Offset.zero);
       layout = {
-        'x': pos.dx,
-        'y': pos.dy,
-        'w': ro.size.width,
-        'h': ro.size.height,
+        'x': pos.dx.round(),
+        'y': pos.dy.round(),
+        'w': ro.size.width.round(),
+        'h': ro.size.height.round(),
       };
     }
 
-    Map<String, dynamic>? location;
-    try {
-      final dynamic loc = (element.widget as dynamic)._location;
-      if (loc != null) {
-        location = {
-          'file': loc.file?.toString(),
-          'line': loc.line,
-          'column': loc.column,
-        };
-      }
-    } catch (_) {}
-
-    bool isSensitive = false;
-    final keyStr = element.widget.key?.toString().toLowerCase() ?? '';
-    if (keyStr.contains('password') ||
-        keyStr.contains('pin') ||
-        keyStr.contains('secret') ||
-        keyStr.contains('token') ||
-        keyStr.contains('ssn') ||
-        keyStr.contains('cvv') ||
-        keyStr.contains('card')) {
-      isSensitive = true;
-    }
-    if (element.widget is EditableText && (element.widget as EditableText).obscureText) {
-      isSensitive = true;
-    }
-
-    final selector = _computeSemanticSelector(element);
-    final text = (element.widget is Text || element.widget is RichText)
-        ? _extractDescendantText(element)
-        : null;
-
-    return {
-      'type': element.widget.runtimeType.toString(),
-      'key': element.widget.key?.toString(),
+    final node = <String, dynamic>{
+      'type': typeName,
+      if (keyStr != null) 'key': keyStr,
       if (selector != null) 'selector': selector,
-      if (text != null && text.isNotEmpty && !isSensitive) 'text': text,
-      'layout': layout,
-      'location': location,
-      if (isSensitive) 'isSensitive': true,
-      if (currentDepth >= maxDepth && _hasChildren(element)) '_truncated': true,
-      'children': children,
+      if (text.isNotEmpty) 'text': text.length > 50 ? '${text.substring(0, 50)}...' : text,
+      if (layout != null) 'layout': layout,
+      if (children.isNotEmpty) 'children': children,
     };
-  }
 
-  static bool _hasChildren(Element element) {
-    bool found = false;
-    element.visitChildren((_) {
-      found = true;
-    });
-    return found;
+    return node;
   }
 }
