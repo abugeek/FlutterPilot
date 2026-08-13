@@ -1083,6 +1083,21 @@ Resets the flight recorder buffer and clears frozen snapshots.
 
 ---
 
+### `export_test_suite`
+
+Exports recorded interactive user journeys and flight sessions into production-ready test suites for Patrol, standard Flutter Integration Tests, or Widget Tests.
+
+**Parameters:**
+- `framework` (optional string): `"patrol"`, `"integration_test"`, or `"widget_test"` (default: `"patrol"`).
+- `testName` (optional string): Descriptive name for the test.
+- `appWidget` (optional string): Target root widget to mount (default: `"MyApp()"`).
+- `writeToDisk` (optional boolean): Whether to write the synthesized test file directly to disk.
+- `filePath` (optional string): Custom file path (default: `"integration_test/flow_test.dart"` or `"test/flow_test.dart"`).
+
+**Returns:** Complete, runnable test file string.
+
+---
+
 ### `get_perf_metrics`
 
 Real-time performance metrics.

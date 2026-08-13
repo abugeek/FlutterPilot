@@ -109,6 +109,71 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
+      'export_test_suite',
+      description:
+          'Exports recorded user journeys and flight sessions as production-ready test suites for Patrol, standard Flutter Integration Tests, or Widget Tests. '
+          'Can write the file directly to disk (e.g. integration_test/flow_test.dart or test/flow_test.dart).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'framework': JsonSchema.string(
+            description: 'Target test framework: "patrol", "integration_test", or "widget_test" (default: "patrol").',
+            enumValues: ['patrol', 'integration_test', 'widget_test'],
+          ),
+          'testName': JsonSchema.string(
+            description: 'Descriptive test name.',
+          ),
+          'appWidget': JsonSchema.string(
+            description: 'Target app/screen widget name (e.g. "MyApp()", "CheckoutScreen()").',
+          ),
+          'writeToDisk': JsonSchema.boolean(
+            description: 'Whether to write generated test to disk (default: false).',
+          ),
+          'filePath': JsonSchema.string(
+            description: 'File path to write (e.g. "integration_test/checkout_flow_test.dart").',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final framework = p['framework']?.toString() ?? 'patrol';
+        final res = await _callExtensionRaw('ext.flutterpilot.exportTestSuite', {
+          'framework': framework,
+          if (p['testName'] != null) 'testName': p['testName'].toString(),
+          if (p['appWidget'] != null) 'appWidget': p['appWidget'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+
+        final code = res.data?['code']?.toString() ?? '';
+        final writeToDisk = p['writeToDisk'] == true;
+        final defaultPath = framework == 'widget_test'
+            ? 'test/flow_test.dart'
+            : 'integration_test/flow_test.dart';
+        final targetPath = p['filePath']?.toString() ?? defaultPath;
+
+        String diskStatus = '';
+        if (writeToDisk && code.isNotEmpty) {
+          try {
+            final file = File(targetPath);
+            if (!file.parent.existsSync()) {
+              file.parent.createSync(recursive: true);
+            }
+            file.writeAsStringSync(code);
+            diskStatus = '\n\n✅ Wrote test suite to `$targetPath`.';
+          } catch (err) {
+            diskStatus = '\n\n⚠️ Failed to write to disk: $err';
+          }
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '### 🧪 Auto-Generated Test Suite ($framework)$diskStatus\n\n```dart\n$code\n```',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
       'clear_flight_log',
       description: 'Clears the flight recorder event buffer.',
       inputSchema: ToolInputSchema(properties: {}),

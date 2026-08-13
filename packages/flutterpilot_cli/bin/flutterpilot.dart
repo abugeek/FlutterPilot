@@ -9,7 +9,8 @@ void main(List<String> args) async {
   )
     ..addCommand(InitCommand())
     ..addCommand(DevCommand())
-    ..addCommand(DoctorCommand());
+    ..addCommand(DoctorCommand())
+    ..addCommand(ExportTestCommand());
 
   try {
     await runner.run(args);

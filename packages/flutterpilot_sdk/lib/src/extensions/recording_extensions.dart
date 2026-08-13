@@ -9,6 +9,7 @@ part of '../../flutterpilot_sdk.dart';
 /// - `callCustomTool` — Invoke a custom tool by name
 /// - `getFlightLog` — Read full timeline from continuous FlightRecorder
 /// - `generateReproTest` — Synthesize executable repro_test.dart test code
+/// - `exportTestSuite` — Synthesize Patrol / Integration / Widget test suites
 /// - `clearFlightLog` — Reset the flight recorder buffer
 extension _RecordingExtensions on FlutterPilot {
   static void register() {
@@ -93,6 +94,31 @@ extension _RecordingExtensions on FlutterPilot {
       );
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', 'code': code}),
+      );
+    });
+
+    // -- ext.flutterpilot.exportTestSuite ------------------------------------
+    registerExtension('ext.flutterpilot.exportTestSuite', (
+      method,
+      parameters,
+    ) async {
+      final frameworkStr = parameters['framework'] ?? 'patrol';
+      final framework = TestFramework.fromString(frameworkStr);
+      final testName = parameters['testName'];
+      final appWidget = parameters['appWidget'];
+
+      final code = TestSynthesizer.generate(
+        framework: framework,
+        testName: testName,
+        appWidget: appWidget,
+      );
+
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'framework': framework.name,
+          'code': code,
+        }),
       );
     });
 
