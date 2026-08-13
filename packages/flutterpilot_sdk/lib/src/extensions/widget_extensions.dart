@@ -40,6 +40,7 @@ extension _WidgetExtensions on FlutterPilot {
           'Widget not found matching: $target',
         );
       }
+      final routeBefore = NavigationTracker.currentRoute;
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
@@ -47,8 +48,17 @@ extension _WidgetExtensions on FlutterPilot {
           FlutterPilot._recordAction('tapWidget', {'key': target});
         }
         await InteractionManager.tapAt(pos, label: target);
+        final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', 'target': target}),
+          json.encode({
+            'status': 'success',
+            'target': target,
+            'delta': {
+              'navigated': routeBefore != routeAfter,
+              'fromRoute': routeBefore,
+              'toRoute': routeAfter,
+            },
+          }),
         );
       }
       return ServiceExtensionResponse.error(
@@ -778,6 +788,134 @@ extension _WidgetExtensions on FlutterPilot {
       FocusManager.instance.primaryFocus?.unfocus();
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success'}),
+      );
+    });
+
+    // -- ext.flutterpilot.waitForCondition ------------------------------------
+    registerExtension('ext.flutterpilot.waitForCondition', (
+      method,
+      parameters,
+    ) async {
+      final selector = parameters['selector'] ?? parameters['target'] ?? parameters['key'];
+      final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
+      final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+
+      if (selector == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing selector/target parameter',
+        );
+      }
+
+      while (DateTime.now().isBefore(deadline)) {
+        final element = PilotWidgetInspector.findElement(selector);
+        if (element != null) {
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'matched',
+              'selector': selector,
+              'elapsedMs': timeoutMs - deadline.difference(DateTime.now()).inMilliseconds,
+            }),
+          );
+        }
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'Timeout: Element matching "$selector" did not appear within ${timeoutMs}ms',
+      );
+    });
+
+    // -- ext.flutterpilot.fillForm --------------------------------------------
+    registerExtension('ext.flutterpilot.fillForm', (method, parameters) async {
+      final fieldsJson = parameters['fields'];
+      final submitWith = parameters['submitWith'];
+      if (fieldsJson == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing fields map',
+        );
+      }
+
+      try {
+        final dynamic decoded = json.decode(fieldsJson);
+        final Map<String, dynamic> fields = decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : <String, dynamic>{};
+
+        int filledCount = 0;
+        for (final entry in fields.entries) {
+          final target = entry.key;
+          final text = entry.value.toString();
+          final element = PilotWidgetInspector.findElement(target);
+          if (element != null) {
+            bool entered = false;
+            void findText(Element e) {
+              if (entered) return;
+              if (e is StatefulElement && e.state is EditableTextState) {
+                try {
+                  final state = e.state as EditableTextState;
+                  state.updateEditingValue(TextEditingValue(text: text));
+                  entered = true;
+                } catch (_) {
+                  try {
+                    (e.state as dynamic).controller.text = text;
+                    entered = true;
+                  } catch (_) {}
+                }
+                if (entered && FlutterPilot._isRecording) {
+                  FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
+                }
+                return;
+              }
+              e.visitChildren(findText);
+            }
+            findText(element);
+            if (entered) filledCount++;
+          }
+        }
+
+        bool submitted = false;
+        if (submitWith != null && submitWith.isNotEmpty) {
+          final submitElem = PilotWidgetInspector.findElement(submitWith);
+          if (submitElem != null) {
+            final ro = submitElem.renderObject;
+            if (ro is RenderBox && ro.hasSize) {
+              final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+              if (FlutterPilot._isRecording) {
+                FlutterPilot._recordAction('tapWidget', {'key': submitWith});
+              }
+              await InteractionManager.tapAt(pos, label: submitWith);
+              submitted = true;
+            }
+          }
+        }
+
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'fieldsFilled': filledCount,
+            'totalFields': fields.length,
+            'submitted': submitted,
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Form filling failed: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.auditScreenHealth -----------------------------------
+    registerExtension('ext.flutterpilot.auditScreenHealth', (
+      method,
+      parameters,
+    ) async {
+      final auditReport = UiHealthAuditor.audit();
+      return ServiceExtensionResponse.result(
+        json.encode(auditReport),
       );
     });
   }

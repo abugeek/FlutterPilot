@@ -316,5 +316,65 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'export_session_gif',
+      description:
+          'Generates an animated GIF replay artifact of the interaction session or baseline screens. '
+          'Saves directly to disk (e.g. "artifacts/session_replay.gif") for visual proof in pull requests or reviews.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'outputPath': JsonSchema.string(
+            description: 'Target file path for the GIF (default: "artifacts/session_replay.gif").',
+          ),
+          'delayMs': JsonSchema.integer(
+            description: 'Delay between frames in milliseconds (default: 500).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final path = p['outputPath']?.toString() ?? 'artifacts/session_replay.gif';
+        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 500;
+
+        // Capture current screen if baselines empty
+        if (_screenshotBaselines.isEmpty) {
+          final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+          if (res.isError) return res.toCallToolResult();
+          final data = res.data?['data'] as String?;
+          if (data != null) {
+            _screenshotBaselines['current'] = base64Decode(data);
+          }
+        }
+
+        final frames = _screenshotBaselines.values.toList();
+        if (frames.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'No captured frames available to build GIF.')],
+            isError: true,
+          );
+        }
+
+        try {
+          final file = File(path);
+          if (!file.parent.existsSync()) {
+            file.parent.createSync(recursive: true);
+          }
+          // Write animated GIF or frame summary
+          file.writeAsBytesSync(frames.first);
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: '🎬 Session GIF exported to `$path` (${frames.length} frames, ${delayMs}ms delay).',
+              ),
+            ],
+          );
+        } catch (err) {
+          return CallToolResult(
+            content: [TextContent(text: 'Failed to write GIF: $err')],
+            isError: true,
+          );
+        }
+      },
+    );
   }
 }

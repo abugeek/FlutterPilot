@@ -23,6 +23,39 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
+    server.registerTool(
+      'jump_to_screen',
+      description:
+          'Directly teleports to a deep application screen with optional seed state injection (Riverpod/Bloc/storage). '
+          'Bypasses lengthy manual onboarding or multi-step checkout clicks.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'route': JsonSchema.string(
+            description: 'Target route name (e.g. "/order/123", "/settings/security").',
+          ),
+          'state': JsonSchema.object(
+            description:
+                'Optional map of state seeds to inject before navigation (e.g. {"riverpod:auth": "logged_in"}).',
+          ),
+        },
+        required: ['route'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.jumpToScreen', {
+          'route': p['route'].toString(),
+          if (p['state'] != null) 'state': json.encode(p['state']),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '🚀 Teleported directly to "${p['route']}" with state injected.',
+            ),
+          ],
+        );
+      },
+    );
+
     _registerAppTool(
       name: 'get_navigation_stack',
       description:

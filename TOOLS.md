@@ -578,6 +578,66 @@ Dismiss the keyboard by unfocusing all widgets.
 
 **Parameters:** None
 
+**Returns:** `{"status": "success"}`
+
+---
+
+### `fill_form`
+
+Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, with optional one-shot submission.
+
+**Parameters:**
+- `fields` (required object): Map of field selectors to text values (e.g. `{"TextField['Email']": "user@test.com", "TextField['Password']": "secret"}`).
+- `submitWith` (optional string): Selector or key of the submit button to tap after filling (e.g. `"ElevatedButton['Sign In']"`).
+
+**Returns:** `{"status": "success", "fieldsFilled": 2, "totalFields": 2, "submitted": true}`
+
+---
+
+### `wait_for_condition`
+
+Reliably polls until a target element or semantic selector is visible on screen, or until timeout.
+
+**Parameters:**
+- `selector` (required string): Semantic selector or key to wait for (e.g. `"Text['Dashboard']"`).
+- `timeoutMs` (optional integer): Maximum milliseconds to wait (default: `3000`).
+
+**Returns:** `{"status": "matched", "selector": "...", "elapsedMs": 150}`
+
+---
+
+### `audit_screen_health`
+
+Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped `RenderFlex` overflow errors and flags touch targets smaller than the standard 48x48 dp accessibility guideline.
+
+**Parameters:** None
+
+**Returns:** Structured health audit with `isHealthy`, `overflowCount`, `accessibilityIssueCount`, and diagnostic details.
+
+---
+
+### `jump_to_screen`
+
+Directly teleports to a deep application screen with optional seed state injection (Riverpod/Bloc/storage).
+
+**Parameters:**
+- `route` (required string): Target route name (e.g. `"/orders/123"`).
+- `state` (optional object): Map of state seeds to inject before navigation.
+
+**Returns:** `{"status": "success", "route": "/orders/123", "stateInjected": true}`
+
+---
+
+### `export_session_gif`
+
+Generates an animated GIF replay artifact of the interaction session or baseline screens.
+
+**Parameters:**
+- `outputPath` (optional string): Target file path for the GIF (default: `"artifacts/session_replay.gif"`).
+- `delayMs` (optional integer): Delay between frames in milliseconds (default: `500`).
+
+**Returns:** `{"status": "exported", "path": "artifacts/session_replay.gif"}`
+
 **Returns:**
 ```json
 {

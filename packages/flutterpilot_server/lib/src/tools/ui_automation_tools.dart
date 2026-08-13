@@ -470,5 +470,118 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'fill_form',
+      description:
+          'Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, '
+          'with optional one-shot form submission. Eliminates multiple turn delays when testing forms.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'fields': JsonSchema.object(
+            description:
+                'Map of field selectors to text values (e.g. {"TextField[\'Email\']": "test@flutterpilot.dev", "TextField[\'Password\']": "secret"}).',
+          ),
+          'submitWith': JsonSchema.string(
+            description:
+                'Optional selector or key of the submit button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
+          ),
+        },
+        required: ['fields'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
+          'fields': json.encode(p['fields']),
+          if (p['submitWith'] != null) 'submitWith': p['submitWith'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final filled = res.data?['fieldsFilled'] ?? 0;
+        final total = res.data?['totalFields'] ?? 0;
+        final submitted = res.data?['submitted'] == true;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'wait_for_condition',
+      description:
+          'Reliably polls until a target element or semantic selector is visible on screen, or until timeout. '
+          'Prevents flaky test timing during async loading spinners or page transitions.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'selector': JsonSchema.string(
+            description: 'Semantic selector or key to wait for (e.g. "Text[\'Dashboard\']" or "order_confirmed_icon").',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Maximum milliseconds to wait before failing (default: 3000).',
+          ),
+        },
+        required: ['selector'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
+          'selector': p['selector'].toString(),
+          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final elapsed = res.data?['elapsedMs'] ?? 0;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '🎯 Condition satisfied: "${p['selector']}" is now visible on screen (${elapsed}ms).',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'audit_screen_health',
+      description:
+          'Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex '
+          'overflow errors (e.g. "overflowed by 14px") and flags touch targets smaller than the standard 48x48 dp accessibility guideline.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        if (res.isError) return res.toCallToolResult();
+        final isHealthy = res.data?['isHealthy'] == true;
+        final overflowCount = res.data?['overflowCount'] ?? 0;
+        final a11yCount = res.data?['accessibilityIssueCount'] ?? 0;
+        final overflows = res.data?['overflows'] as List? ?? [];
+        final a11y = res.data?['accessibilityIssues'] as List? ?? [];
+
+        if (isHealthy) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: '🎉 **Screen Health Audit Passed!**\n- 0 Layout Overflows\n- 0 Accessibility Violations',
+              ),
+            ],
+          );
+        }
+
+        final buffer = StringBuffer('⚠️ **Screen Health Issues Detected:**\n');
+        if (overflowCount > 0) {
+          buffer.writeln('\n### 🚨 Layout Overflows ($overflowCount):');
+          for (final o in overflows) {
+            buffer.writeln('- **${o['type']}**: ${o['details']}');
+          }
+        }
+        if (a11yCount > 0) {
+          buffer.writeln('\n### ♿ Accessibility / Tap Target Issues ($a11yCount):');
+          for (final a in a11y) {
+            buffer.writeln('- `${a['target']}` (${a['type']}): ${a['issue']}');
+          }
+        }
+
+        return CallToolResult(content: [TextContent(text: buffer.toString())]);
+      },
+    );
   }
 }

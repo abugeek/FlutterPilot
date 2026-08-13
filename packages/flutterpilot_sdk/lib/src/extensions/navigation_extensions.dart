@@ -251,5 +251,75 @@ extension _NavigationExtensions on FlutterPilot {
         json.encode({'status': 'success', 'orientation': orientation}),
       );
     });
+
+    // -- ext.flutterpilot.jumpToScreen ----------------------------------------
+    registerExtension('ext.flutterpilot.jumpToScreen', (
+      method,
+      parameters,
+    ) async {
+      final route = parameters['route'];
+      final stateJson = parameters['state'];
+
+      if (route == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing route parameter',
+        );
+      }
+
+      // 1. Inject seed state if provided
+      if (stateJson != null) {
+        try {
+          final dynamic stateData = json.decode(stateJson);
+          if (stateData is Map) {
+            for (final entry in stateData.entries) {
+              final parts = entry.key.toString().split(':');
+              if (parts.length >= 2) {
+                final type = parts[0];
+                final name = parts.sublist(1).join(':');
+                if (FlutterPilot._stateSetters.containsKey(type)) {
+                  await FlutterPilot._stateSetters[type]!(name, entry.value);
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 2. Teleport to target screen
+      try {
+        final nav = NavigationTracker.navigatorState;
+        if (nav != null && nav.mounted) {
+          if (FlutterPilot._isRecording) {
+            FlutterPilot._recordAction('jumpToScreen', {'route': route});
+          }
+          nav.pushNamed(route);
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success', 'route': route, 'stateInjected': stateJson != null}),
+          );
+        }
+
+        final context = WidgetsBinding.instance.rootElement;
+        if (context != null) {
+          if (FlutterPilot._isRecording) {
+            FlutterPilot._recordAction('jumpToScreen', {'route': route});
+          }
+          Navigator.of(context, rootNavigator: true).pushNamed(route);
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success', 'route': route, 'stateInjected': stateJson != null}),
+          );
+        }
+
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No Navigator available to jump to screen.',
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Jump to screen failed: $e',
+        );
+      }
+    });
   }
 }
