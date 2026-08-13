@@ -40,9 +40,9 @@ When interacting with a Flutter app using FlutterPilot:
 - Use `list_connected_devices` to see all running Flutter instances across iOS, Android, and Web.
 - Use `switch_device(id: "...")` to toggle target device on the fly.
 
-### 6. Self-Healing & Error Recovery Loop
-1. When an unhandled crash occurs, read `get_errors` or `diagnose_last_error`.
-2. Review the stack trace and failing widget tree.
-3. Apply the code fix in the Dart source files.
-4. Call `hot_reload` to push the fix immediately to the running app.
-5. Re-verify the flow to confirm recovery.
+### 6. Crash Flight Recorder & Self-Healing Loop
+1. When a crash occurs, call `get_flight_log` to inspect the 30-60s event timeline leading up to failure.
+2. Call `generate_repro_test(writeToDisk: true)` to automatically synthesize an executable `test/repro_test.dart` test reproducing the bug.
+3. Review the failing test & error details, then apply the code fix in the Dart source files.
+4. Call `hot_reload` to push the fix to the running application.
+5. Re-run `flutter test test/repro_test.dart` to verify that the bug is definitively fixed.

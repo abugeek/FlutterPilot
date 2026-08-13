@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
+description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, crash flight recorder, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
 ---
 
 # FlutterPilot Agent Skill
@@ -10,6 +10,7 @@ This skill guides AI agents on orchestrating FlutterPilot MCP tools to test, deb
 ## When to Use
 - Autonomous UI verification (filling forms, clicking buttons, testing user journeys).
 - Interacting with Flutter widgets using Virtual Semantic Selectors without requiring manual `ValueKey`s.
+- Continuous Crash Flight Recording & auto-synthesizing executable `repro_test.dart` reproduction tests.
 - Visual regression testing with pixel diff detection.
 - Debugging state management (Riverpod, Bloc), network calls (Dio), databases (Drift, SQLite), or local storage (Hive, SharedPreferences, SecureStorage).
 - Simulating network chaos (offline mode, slow 3G latency, synthetic 500 error mocks).
@@ -26,7 +27,7 @@ flowchart TD
     D --> E[Semantic Interaction: tap_widget / enter_text]
     E --> F[Verify State / Network Logs / Diff]
     F --> G{Error Detected?}
-    G -- Yes --> H[diagnose_last_error -> Fix Code -> hot_reload]
+    G -- Yes --> H[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
     G -- No --> I[Complete Task]
 ```
 
@@ -93,11 +94,17 @@ call_tool("list_connected_devices", {})
 call_tool("switch_device", {"id": "android_emu"})
 ```
 
-### 6. Self-Healing Crashes
+### 6. Crash Flight Recorder & Self-Healing
 ```json
-// Analyze failure
-call_tool("diagnose_last_error", {})
+// 1. Inspect the 30s rolling flight timeline
+call_tool("get_flight_log", {})
 
-// After editing Dart file in workspace, hot reload:
+// 2. Auto-generate reproduction test to disk
+call_tool("generate_repro_test", {
+  "testName": "Reproduce checkout crash",
+  "writeToDisk": true
+})
+
+// 3. After editing Dart file in workspace, hot reload:
 call_tool("hot_reload", {})
 ```

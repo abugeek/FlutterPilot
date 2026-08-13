@@ -7,6 +7,9 @@ part of '../../flutterpilot_sdk.dart';
 /// - `stopRecording` — Stop recording and return captured actions
 /// - `listCustomTools` — List registered custom tools
 /// - `callCustomTool` — Invoke a custom tool by name
+/// - `getFlightLog` — Read full timeline from continuous FlightRecorder
+/// - `generateReproTest` — Synthesize executable repro_test.dart test code
+/// - `clearFlightLog` — Reset the flight recorder buffer
 extension _RecordingExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.startRecording --------------------------------------
@@ -65,6 +68,43 @@ extension _RecordingExtensions on FlutterPilot {
           'Error: $e',
         );
       }
+    });
+
+    // -- ext.flutterpilot.getFlightLog ----------------------------------------
+    registerExtension('ext.flutterpilot.getFlightLog', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode(FlightRecorder.getFlightLogJson()),
+      );
+    });
+
+    // -- ext.flutterpilot.generateReproTest -----------------------------------
+    registerExtension('ext.flutterpilot.generateReproTest', (
+      method,
+      parameters,
+    ) async {
+      final testName = parameters['testName'];
+      final initialWidgetName = parameters['widgetName'];
+      final code = ReproTestGenerator.generate(
+        testName: testName,
+        initialWidgetName: initialWidgetName,
+      );
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', 'code': code}),
+      );
+    });
+
+    // -- ext.flutterpilot.clearFlightLog --------------------------------------
+    registerExtension('ext.flutterpilot.clearFlightLog', (
+      method,
+      parameters,
+    ) async {
+      FlightRecorder.clear();
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'cleared'}),
+      );
     });
   }
 }

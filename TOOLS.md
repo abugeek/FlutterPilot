@@ -1027,6 +1027,62 @@ Full diagnostic report of the most recent error.
 
 ---
 
+### `get_flight_log`
+
+Retrieves the rolling 30-60 second continuous Flight Recorder timeline (user gestures, route shifts, state mutations, and network requests) leading up to the current state or crash.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "totalEvents": 14,
+  "hasCrashSnapshot": true,
+  "lastException": "NullPointerException: user is null",
+  "crashTime": "2026-08-14T04:10:00.000Z",
+  "timeline": [
+    {
+      "category": "route",
+      "action": "push",
+      "data": { "name": "/checkout" },
+      "offsetMs": "+0 ms"
+    },
+    {
+      "category": "gesture",
+      "action": "tapWidget",
+      "data": { "key": "ElevatedButton['Pay Now']" },
+      "offsetMs": "+450 ms"
+    }
+  ]
+}
+```
+
+---
+
+### `generate_repro_test`
+
+Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug.
+
+**Parameters:**
+- `testName` (optional string): Descriptive name for the test.
+- `widgetName` (optional string): Root widget or screen name to mount (default: `"MyApp()"`).
+- `writeToDisk` (optional boolean): Automatically write test code to disk (default: `false`).
+- `filePath` (optional string): Target file path to write (default: `"test/repro_test.dart"`).
+
+**Returns:** Complete, runnable `testWidgets` Dart code string.
+
+---
+
+### `clear_flight_log`
+
+Resets the flight recorder buffer and clears frozen snapshots.
+
+**Parameters:** None
+
+**Returns:** `{"status": "cleared"}`
+
+---
+
 ### `get_perf_metrics`
 
 Real-time performance metrics.

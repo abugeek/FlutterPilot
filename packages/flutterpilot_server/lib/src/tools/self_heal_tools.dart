@@ -1,6 +1,6 @@
 part of '../../flutterpilot_server.dart';
 
-/// Tools for self-heal status, crash reports, diagnostics, hot reload/restart.
+/// Tools for self-heal status, crash flight recorder, reproduction tests, diagnostics, and hot reload/restart.
 mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   void _registerSelfHealTools() {
     server.registerTool(
@@ -35,9 +35,93 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
+      'get_flight_log',
+      description:
+          'Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.getFlightLog', {});
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '### 🛫 Continuous Flight Recorder Log\n```json\n${json.encode(res.data)}\n```',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'generate_repro_test',
+      description:
+          'Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. '
+          'Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'testName': JsonSchema.string(
+            description: 'Optional descriptive name for the test.',
+          ),
+          'widgetName': JsonSchema.string(
+            description: 'Root widget or screen name to mount (default: "MyApp()").',
+          ),
+          'writeToDisk': JsonSchema.boolean(
+            description: 'Whether to automatically write the test to test/repro_test.dart (default: false).',
+          ),
+          'filePath': JsonSchema.string(
+            description: 'Custom file path to write to (default: "test/repro_test.dart").',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.generateReproTest', {
+          if (p['testName'] != null) 'testName': p['testName'].toString(),
+          if (p['widgetName'] != null) 'widgetName': p['widgetName'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+
+        final code = res.data?['code']?.toString() ?? '';
+        final writeToDisk = p['writeToDisk'] == true;
+        final targetPath = (p['filePath']?.toString() ?? 'test/repro_test.dart');
+
+        String diskStatus = '';
+        if (writeToDisk && code.isNotEmpty) {
+          try {
+            final file = File(targetPath);
+            if (!file.parent.existsSync()) {
+              file.parent.createSync(recursive: true);
+            }
+            file.writeAsStringSync(code);
+            diskStatus = '\n\n✅ Wrote reproduction test to `$targetPath`. Run with:\n`flutter test $targetPath`';
+          } catch (err) {
+            diskStatus = '\n\n⚠️ Failed to write to disk: $err';
+          }
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '### 🧪 Auto-Generated Reproduction Test$diskStatus\n\n```dart\n$code\n```',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'clear_flight_log',
+      description: 'Clears the flight recorder event buffer.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.clearFlightLog', {});
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
       'diagnose_last_error',
       description:
-          '[DEPRECATED] Use `get_latest_crash_report` instead for better structured data.',
+          '[DEPRECATED] Use `get_latest_crash_report` or `get_flight_log` instead.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final report = _selfHealManager.lastCrashReport;

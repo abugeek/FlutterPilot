@@ -10,13 +10,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/error_inspector.dart';
+import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
+import 'src/repro_test_generator.dart';
 import 'src/widget_inspector.dart';
 
 export 'src/error_inspector.dart';
+export 'src/flight_recorder.dart';
 export 'src/interaction_manager.dart';
 export 'src/navigation_tracker.dart';
+export 'src/repro_test_generator.dart';
 export 'src/widget_inspector.dart';
 
 part 'src/extensions/widget_extensions.dart';
@@ -170,12 +174,17 @@ class FlutterPilot {
   static void _setupModules() {
     // Navigation
     NavigationTracker.onStateChange = (source, name, value) {
+      FlightRecorder.recordRoute(name, {'source': source, 'value': _safeJsonEncode(value)});
       logStateChange(source, name, value);
     };
 
     // Errors
     ErrorInspector.initialize();
     ErrorInspector.onErrorCaptured = (details) {
+      FlightRecorder.recordError(
+        details.exceptionAsString(),
+        details.stack?.toString(),
+      );
       if (_isRecording) {
         _recordAction('error', {'exception': details.exceptionAsString()});
       }
@@ -187,6 +196,7 @@ class FlutterPilot {
     // Interactions
     InteractionManager.initialize();
     InteractionManager.onPointerDown = (info) {
+      FlightRecorder.recordGesture('tapAt', info);
       if (_isRecording) {
         _recordAction('user_tap', info);
       }
