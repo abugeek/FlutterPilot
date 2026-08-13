@@ -37,16 +37,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'tap_widget',
       description:
-          'Finds a widget by its ValueKey and taps its center. '
-          'PREREQUISITES: Call get_widget_tree first to discover available keys. '
-          'AFTER: Verify the tap worked with capture_screenshot, get_navigation_stack, '
-          'or a state inspection tool (get_riverpod_state, get_bloc_state). '
-          'COMMON ERRORS: "widget not found" means the key is wrong — recheck get_widget_tree.',
+          'Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']", "Button[\'Submit\']", or plain visible button text "Log In") and taps its center. '
+          'Works reliably across all devices without needing hardcoded coordinates. '
+          'PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. '
+          'AFTER: Verify the tap worked with capture_screenshot or a state inspection tool.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.',
+                'The ValueKey string, semantic selector (e.g. "ElevatedButton[\'Sign In\']"), or visible button text to tap.',
           ),
         },
         required: ['key'],
@@ -68,15 +67,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'enter_text',
       description:
-          'Types text into a TextField or TextFormField identified by its ValueKey. '
+          'Types text into a TextField or TextFormField identified by Key or Semantic Selector (e.g. "TextField[\'Email\']", placeholder, or label). '
           'Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. '
-          'PREREQUISITES: The widget must be a text input with a ValueKey. Use get_widget_tree to find it. '
           'AFTER: The text field now contains the new text. You may need to tap a submit button.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The ValueKey string of the widget to tap. Use get_widget_tree to find widget keys.',
+                'The ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the text field to type into.',
           ),
           'text': JsonSchema.string(
             description: 'The text to enter into the text field.',
@@ -101,12 +99,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'scroll_into_view',
       description:
-          'Ensures a widget is visible by scrolling its parent list. Use this before tapping a widget that might be off-screen.',
+          'Ensures a widget is visible by scrolling its parent list. Works with Keys, semantic selectors, or text labels.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The ValueKey string of the widget to scroll into view.',
+                'The ValueKey string, semantic selector, or label of the widget to scroll into view.',
           ),
         },
         required: ['key'],

@@ -15,10 +15,14 @@ When interacting with a Flutter app using FlutterPilot:
 ### 1. Orientation & Diagnostics
 - **First Step**: Call `get_app_summary` to discover the current route, widget count, active plugins, and runtime errors.
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
-- **Hierarchy Inspection**: Use `get_widget_tree` to map out semantic widget keys and hierarchy. PII and passwords are automatically redacted.
+- **Hierarchy Inspection**: Use `get_widget_tree` to map out semantic widget selectors and hierarchy. PII and passwords are automatically redacted.
 
-### 2. UI Interaction & Visual AI Pointer
-- **Key-Based Automation**: Always prefer `tap_widget(key: "...")` or `enter_text(key: "...", text: "...")` for deterministic interactions.
+### 2. UI Interaction & Virtual Semantic Keys
+- **No Manual Keys Needed**: You can interact with widgets using:
+  - **Explicit Keys**: `tap_widget(key: "login_button")`
+  - **Semantic Selectors**: `tap_widget(key: "ElevatedButton['Log In']")` or `enter_text(key: "TextField['Email']", text: "user@test.com")`
+  - **Visible Text**: `tap_widget(key: "Log In")`
+  - **Tooltips**: `tap_widget(key: "Tooltip['Settings']")`
 - **AI Visual Overlay**: When AI interacts, a visual ripple and `🤖 AI Tap` badge pulse on screen for live human observation.
 - **Scroll Before Tapping**: Use `scroll_into_view(key: "...")` if a widget is below the fold.
 - **Wait for Settle**: Call `pump_frames(count: 10)` or `wait_for_route(route: "...")` after navigation.

@@ -3,17 +3,17 @@ part of '../../flutterpilot_sdk.dart';
 /// Widget interaction and inspection service extensions.
 ///
 /// Registers the following `ext.flutterpilot.*` service extensions:
-/// - `tapWidget` — Tap a widget by key
-/// - `enterText` — Enter text in a text field by key
+/// - `tapWidget` — Tap a widget by key or semantic selector
+/// - `enterText` — Enter text in a text field by key or semantic selector
 /// - `scrollIntoView` — Scroll a widget into the visible viewport
-/// - `doubleTapWidget` — Double-tap a widget by key
-/// - `longPressWidget` — Long-press a widget by key
+/// - `doubleTapWidget` — Double-tap a widget by key or selector
+/// - `longPressWidget` — Long-press a widget by key or selector
 /// - `swipeWidget` — Swipe from a widget center in a direction
 /// - `dragWidget` — Drag from one widget to another
-/// - `clearTextField` — Clear a text field by key
-/// - `focusWidget` — Focus a widget by key (tap to open keyboard)
-/// - `toggleCheckbox` — Toggle a Checkbox/Switch/Radio by key
-/// - `setSliderValue` — Set a Slider's value by key
+/// - `clearTextField` — Clear a text field by key or selector
+/// - `focusWidget` — Focus a widget by key or selector
+/// - `toggleCheckbox` — Toggle a Checkbox/Switch/Radio
+/// - `setSliderValue` — Set a Slider's value
 /// - `getWidgetProperties` — Read semantic properties of a widget
 /// - `getWidgetTree` — Capture the full widget tree as JSON
 /// - `assertWidgetVisible` — Assert a widget exists and has layout
@@ -26,52 +26,52 @@ extension _WidgetExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.tapWidget -------------------------------------------
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null || target.isEmpty) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing key or target parameter',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found',
+          'Widget not found matching: $target',
         );
       }
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('tapWidget', {'key': key});
+          FlutterPilot._recordAction('tapWidget', {'key': target});
         }
-        await InteractionManager.tapAt(pos);
+        await InteractionManager.tapAt(pos, label: target);
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success'}),
+          json.encode({'status': 'success', 'target': target}),
         );
       }
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
-        'No layout',
+        'No layout for target: $target',
       );
     });
 
     // -- ext.flutterpilot.enterText -------------------------------------------
     registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
-      final key = parameters['key'];
+      final target = parameters['key'] ?? parameters['target'];
       final text = parameters['text'];
-      if (key == null || text == null) {
+      if (target == null || text == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing params',
+          'Missing target or text params',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found',
+          'Widget not found: $target',
         );
       }
       bool found = false;
@@ -85,14 +85,13 @@ extension _WidgetExtensions on FlutterPilot {
               found = true;
             }
           } catch (_) {
-            // Fall back to dynamic access for older Flutter versions
             try {
               (e.state as dynamic).controller.text = text;
               found = true;
             } catch (_) {}
           }
           if (found && FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('enterText', {'key': key, 'text': text});
+            FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
           }
           return;
         }
@@ -104,7 +103,7 @@ extension _WidgetExtensions on FlutterPilot {
           ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
           : ServiceExtensionResponse.error(
               ServiceExtensionResponse.extensionError,
-              'Not text field',
+              'Not text field: $target',
             );
     });
 
@@ -113,18 +112,18 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found',
+          'Widget not found: $target',
         );
       }
       Scrollable.ensureVisible(element);
@@ -138,34 +137,34 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('doubleTapWidget', {'key': key});
+          FlutterPilot._recordAction('doubleTapWidget', {'key': target});
         }
-        await InteractionManager.doubleTapAt(pos);
+        await InteractionManager.doubleTapAt(pos, label: target);
         return ServiceExtensionResponse.result(
           json.encode({'status': 'success'}),
         );
       }
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
-        'No layout for widget: $key',
+        'No layout for widget: $target',
       );
     });
 
@@ -174,19 +173,19 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
+      final target = parameters['key'] ?? parameters['target'];
       final ms = int.tryParse(parameters['durationMs'] ?? '600') ?? 600;
-      if (key == null) {
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       final ro = element.renderObject;
@@ -194,13 +193,14 @@ extension _WidgetExtensions on FlutterPilot {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('longPressWidget', {
-            'key': key,
+            'key': target,
             'durationMs': ms,
           });
         }
         await InteractionManager.longPressAt(
           pos,
           duration: Duration(milliseconds: ms),
+          label: target,
         );
         return ServiceExtensionResponse.result(
           json.encode({'status': 'success'}),
@@ -208,7 +208,7 @@ extension _WidgetExtensions on FlutterPilot {
       }
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
-        'No layout for widget: $key',
+        'No layout for widget: $target',
       );
     });
 
@@ -217,28 +217,28 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
+      final target = parameters['key'] ?? parameters['target'];
       final direction = parameters['direction'] ?? 'up';
       final distance =
           double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
-      if (key == null) {
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       final ro = element.renderObject;
       if (ro is! RenderBox || !ro.hasSize) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'No layout for widget: $key',
+          'No layout for widget: $target',
         );
       }
       final start = ro.localToGlobal(ro.size.center(Offset.zero));
@@ -260,7 +260,7 @@ extension _WidgetExtensions on FlutterPilot {
       }
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('swipeWidget', {
-          'key': key,
+          'key': target,
           'direction': direction,
           'distance': distance,
         });
@@ -276,26 +276,26 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final fromKey = parameters['fromKey'];
-      final toKey = parameters['toKey'];
-      if (fromKey == null || toKey == null) {
+      final fromTarget = parameters['fromKey'] ?? parameters['from'];
+      final toTarget = parameters['toKey'] ?? parameters['to'];
+      if (fromTarget == null || toTarget == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing fromKey or toKey',
+          'Missing from or to target',
         );
       }
-      final fromEl = PilotWidgetInspector.findElementByKey(fromKey);
-      final toEl = PilotWidgetInspector.findElementByKey(toKey);
+      final fromEl = PilotWidgetInspector.findElement(fromTarget);
+      final toEl = PilotWidgetInspector.findElement(toTarget);
       if (fromEl == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $fromKey',
+          'Widget not found: $fromTarget',
         );
       }
       if (toEl == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $toKey',
+          'Widget not found: $toTarget',
         );
       }
       final fromRo = fromEl.renderObject;
@@ -313,8 +313,8 @@ extension _WidgetExtensions on FlutterPilot {
       final to = toRo.localToGlobal(toRo.size.center(Offset.zero));
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('dragWidget', {
-          'fromKey': fromKey,
-          'toKey': toKey,
+          'fromKey': fromTarget,
+          'toKey': toTarget,
         });
       }
       await InteractionManager.dragFromTo(from, to);
@@ -328,18 +328,18 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       bool found = false;
@@ -353,14 +353,13 @@ extension _WidgetExtensions on FlutterPilot {
               found = true;
             }
           } catch (_) {
-            // Fall back to dynamic access for older Flutter versions
             try {
               (e.state as dynamic).controller.clear();
               found = true;
             } catch (_) {}
           }
           if (found && FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('clearTextField', {'key': key});
+            FlutterPilot._recordAction('clearTextField', {'key': target});
           }
           return;
         }
@@ -372,7 +371,7 @@ extension _WidgetExtensions on FlutterPilot {
           ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
           : ServiceExtensionResponse.error(
               ServiceExtensionResponse.extensionError,
-              'No text field found under key: $key',
+              'No text field found under target: $target',
             );
     });
 
@@ -381,32 +380,32 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       final renderObject = element.renderObject;
       if (renderObject is! RenderBox) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget "$key" has no renderable box',
+          'Widget "$target" has no renderable box',
         );
       }
       final offset = renderObject.localToGlobal(Offset.zero);
       final center =
           offset +
           Offset(renderObject.size.width / 2, renderObject.size.height / 2);
-      await InteractionManager.tapAt(center);
+      await InteractionManager.tapAt(center, label: target);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success'}),
       );
@@ -417,18 +416,18 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       RenderBox? renderBox;
@@ -453,15 +452,15 @@ extension _WidgetExtensions on FlutterPilot {
       if (renderBox == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget "$key" has no renderable box',
+          'Widget "$target" has no renderable box',
         );
       }
       final box = renderBox!;
       final offset = box.localToGlobal(Offset.zero);
       final center = offset + Offset(box.size.width / 2, box.size.height / 2);
-      await InteractionManager.tapAt(center);
+      await InteractionManager.tapAt(center, label: target);
       if (FlutterPilot._isRecording) {
-        FlutterPilot._recordAction('toggleCheckbox', {'key': key});
+        FlutterPilot._recordAction('toggleCheckbox', {'key': target});
       }
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success'}),
@@ -473,12 +472,12 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
+      final target = parameters['key'] ?? parameters['target'];
       final valueStr = parameters['value'];
-      if (key == null || valueStr == null) {
+      if (target == null || valueStr == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameters: key, value',
+          'Missing required parameters: target, value',
         );
       }
       final targetValue = double.tryParse(valueStr);
@@ -488,11 +487,11 @@ extension _WidgetExtensions on FlutterPilot {
           'value must be a numeric string',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       Slider? sliderWidget;
@@ -516,7 +515,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (sliderWidget == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'No Slider found under key: $key',
+          'No Slider found under target: $target',
         );
       }
       final renderBox = sliderElement!.renderObject;
@@ -548,10 +547,10 @@ extension _WidgetExtensions on FlutterPilot {
       final globalOffset = renderBox.localToGlobal(Offset.zero);
       final tapX = globalOffset.dx + trackPadding + fraction * trackWidth;
       final tapY = globalOffset.dy + renderBox.size.height / 2;
-      await InteractionManager.tapAt(Offset(tapX, tapY));
+      await InteractionManager.tapAt(Offset(tapX, tapY), label: target);
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('setSliderValue', {
-          'key': key,
+          'key': target,
           'value': clamped,
         });
       }
@@ -569,23 +568,23 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       final props = <String, dynamic>{
         'type': element.widget.runtimeType.toString(),
-        'key': key,
+        'target': target,
       };
       FlutterPilot._extractWidgetProps(element, props);
       return ServiceExtensionResponse.result(json.encode(props));
@@ -616,29 +615,29 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key',
+          'Missing key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'ASSERTION FAILED: widget "$key" not found in tree',
+          'ASSERTION FAILED: widget "$target" not found in tree',
         );
       }
       final ro = element.renderObject;
       if (ro is! RenderBox || !ro.hasSize) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'ASSERTION FAILED: widget "$key" found but has no layout (off-screen?)',
+          'ASSERTION FAILED: widget "$target" found but has no layout (off-screen?)',
         );
       }
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'passed', 'key': key}),
+        json.encode({'status': 'passed', 'target': target}),
       );
     });
 
@@ -725,23 +724,23 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       return FlutterPilot._assertWidgetState(
         element,
-        key,
+        target,
         shouldBeEnabled: true,
       );
     });
@@ -750,23 +749,23 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final key = parameters['key'];
-      if (key == null) {
+      final target = parameters['key'] ?? parameters['target'];
+      if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: key',
+          'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElementByKey(key);
+      final element = PilotWidgetInspector.findElement(target);
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $key',
+          'Widget not found: $target',
         );
       }
       return FlutterPilot._assertWidgetState(
         element,
-        key,
+        target,
         shouldBeEnabled: false,
       );
     });

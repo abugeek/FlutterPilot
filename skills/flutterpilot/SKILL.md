@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, key-based test driving, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
+description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
 ---
 
 # FlutterPilot Agent Skill
@@ -9,6 +9,7 @@ This skill guides AI agents on orchestrating FlutterPilot MCP tools to test, deb
 
 ## When to Use
 - Autonomous UI verification (filling forms, clicking buttons, testing user journeys).
+- Interacting with Flutter widgets using Virtual Semantic Selectors without requiring manual `ValueKey`s.
 - Visual regression testing with pixel diff detection.
 - Debugging state management (Riverpod, Bloc), network calls (Dio), databases (Drift, SQLite), or local storage (Hive, SharedPreferences, SecureStorage).
 - Simulating network chaos (offline mode, slow 3G latency, synthetic 500 error mocks).
@@ -22,7 +23,7 @@ flowchart TD
     A[Connect Session] --> B[get_app_summary]
     B --> C[capture_screenshot]
     C --> D[get_widget_tree]
-    D --> E[Key-Based Interaction: tap_widget / enter_text]
+    D --> E[Semantic Interaction: tap_widget / enter_text]
     E --> F[Verify State / Network Logs / Diff]
     F --> G{Error Detected?}
     G -- Yes --> H[diagnose_last_error -> Fix Code -> hot_reload]
@@ -37,21 +38,23 @@ call_tool("get_app_summary", {})
 // 2. See visual UI
 call_tool("capture_screenshot", {})
 
-// 3. Inspect widget hierarchy and keys (PII automatically masked)
-call_tool("get_widget_tree", {"maxDepth": 50})
+// 3. Inspect widget hierarchy with semantic selectors (PII automatically masked)
+call_tool("get_widget_tree", {"maxDepth": 250})
 ```
 
-### 2. Deterministic UI Driving
-Always look up the widget's `key` from the widget tree:
+### 2. UI Driving via Virtual Semantic Selectors
+You can interact using explicit keys, semantic selectors, or visible button text:
 ```json
-// Fill input field
-call_tool("enter_text", {"key": "email_field", "text": "user@example.com"})
+// Fill input field using semantic selector or label
+call_tool("enter_text", {"key": "TextField['Email']", "text": "user@example.com"})
 
 // Scroll if off-screen
-call_tool("scroll_into_view", {"key": "submit_button"})
+call_tool("scroll_into_view", {"key": "Button['Submit']"})
 
-// Tap button (triggers live AI visual pointer on app screen)
-call_tool("tap_widget", {"key": "submit_button"})
+// Tap button via semantic selector or text (triggers live AI visual pointer on app screen)
+call_tool("tap_widget", {"key": "ElevatedButton['Sign In']"})
+// Or simply by visible text:
+call_tool("tap_widget", {"key": "Sign In"})
 
 // Advance frames
 call_tool("pump_frames", {"count": 10})
