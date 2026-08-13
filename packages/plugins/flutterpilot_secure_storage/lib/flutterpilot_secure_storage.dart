@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -132,11 +132,13 @@ class SecureStoragePilotInspector {
           }
         }
 
-        return ServiceExtensionResponse.result(json.encode({
-          'keys': entries,
-          'count': entries.length,
-          'showValues': showValues,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'keys': entries,
+            'count': entries.length,
+            'showValues': showValues,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -169,28 +171,31 @@ class SecureStoragePilotInspector {
       try {
         final value = await storage.read(key: key);
         if (value == null) {
-          return ServiceExtensionResponse.result(json.encode({
-            'key': key,
-            'exists': false,
-          }));
+          return ServiceExtensionResponse.result(
+            json.encode({'key': key, 'exists': false}),
+          );
         }
 
         if (_isAlwaysRedacted(key)) {
-          return ServiceExtensionResponse.result(json.encode({
-            'key': key,
-            'exists': true,
-            'redacted': true,
-            'reason': 'Key matches always-redact pattern.',
-            'length': value.length,
-          }));
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'key': key,
+              'exists': true,
+              'redacted': true,
+              'reason': 'Key matches always-redact pattern.',
+              'length': value.length,
+            }),
+          );
         }
 
-        return ServiceExtensionResponse.result(json.encode({
-          'key': key,
-          'exists': true,
-          'value': value,
-          'length': value.length,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'key': key,
+            'exists': true,
+            'value': value,
+            'length': value.length,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -223,10 +228,9 @@ class SecureStoragePilotInspector {
 
       try {
         await storage.write(key: key, value: value);
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success',
-          'key': key,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'key': key}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -253,10 +257,9 @@ class SecureStoragePilotInspector {
       try {
         if (key != null && key.isNotEmpty) {
           await storage.delete(key: key);
-          return ServiceExtensionResponse.result(json.encode({
-            'status': 'success',
-            'deleted': key,
-          }));
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success', 'deleted': key}),
+          );
         } else {
           // Require explicit confirmation to wipe all storage
           if (confirm != 'DELETE_ALL') {
@@ -267,10 +270,9 @@ class SecureStoragePilotInspector {
             );
           }
           await storage.deleteAll();
-          return ServiceExtensionResponse.result(json.encode({
-            'status': 'success',
-            'deleted': 'all',
-          }));
+          return ServiceExtensionResponse.result(
+            json.encode({'status': 'success', 'deleted': 'all'}),
+          );
         }
       } catch (e) {
         return ServiceExtensionResponse.error(

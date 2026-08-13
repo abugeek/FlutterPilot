@@ -8,7 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -115,18 +115,21 @@ class ConnectivityPilotInspector {
       method,
       parameters,
     ) async {
-      final hasNone = _currentResults.isEmpty ||
+      final hasNone =
+          _currentResults.isEmpty ||
           _currentResults.contains(ConnectivityResult.none);
 
-      return ServiceExtensionResponse.result(json.encode({
-        'connectivity': _currentResults.map((r) => r.name).toList(),
-        'isOnline': !hasNone && !_simulatedOffline,
-        'simulatedOffline': _simulatedOffline,
-        'hasWifi': _currentResults.contains(ConnectivityResult.wifi),
-        'hasMobile': _currentResults.contains(ConnectivityResult.mobile),
-        'hasEthernet': _currentResults.contains(ConnectivityResult.ethernet),
-        'hasVpn': _currentResults.contains(ConnectivityResult.vpn),
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'connectivity': _currentResults.map((r) => r.name).toList(),
+          'isOnline': !hasNone && !_simulatedOffline,
+          'simulatedOffline': _simulatedOffline,
+          'hasWifi': _currentResults.contains(ConnectivityResult.wifi),
+          'hasMobile': _currentResults.contains(ConnectivityResult.mobile),
+          'hasEthernet': _currentResults.contains(ConnectivityResult.ethernet),
+          'hasVpn': _currentResults.contains(ConnectivityResult.vpn),
+        }),
+      );
     });
 
     // -- ext.flutterpilot.getConnectivityHistory --------------------------------
@@ -135,17 +138,21 @@ class ConnectivityPilotInspector {
       parameters,
     ) async {
       final limitStr = parameters['limit'];
-      final limit = (int.tryParse(limitStr ?? '') ?? _maxHistory)
-          .clamp(1, _maxHistory);
+      final limit = (int.tryParse(limitStr ?? '') ?? _maxHistory).clamp(
+        1,
+        _maxHistory,
+      );
       final entries = _history.length > limit
           ? _history.sublist(_history.length - limit)
           : _history;
 
-      return ServiceExtensionResponse.result(json.encode({
-        'history': entries,
-        'count': entries.length,
-        'total': _history.length,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'history': entries,
+          'count': entries.length,
+          'total': _history.length,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.simulateOffline --------------------------------------
@@ -157,10 +164,12 @@ class ConnectivityPilotInspector {
       _simulatedOffline = enabled.toLowerCase() == 'true';
       _addHistory(_currentResults); // log the simulation change
 
-      return ServiceExtensionResponse.result(json.encode({
-        'status': 'success',
-        'simulatedOffline': _simulatedOffline,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'simulatedOffline': _simulatedOffline,
+        }),
+      );
     });
   }
 }

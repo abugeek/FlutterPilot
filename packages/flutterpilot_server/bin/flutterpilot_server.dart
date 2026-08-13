@@ -31,7 +31,7 @@ void main(List<String> args) async {
     );
 
   final results = parser.parse(args);
-  final uri = results['uri'];
+  final uri = results['uri'] as String?;
   final allowDestructive = results['allow-destructive'] as bool;
   final projectRootArg = results['project-root'] as String?;
   final projectRoot = projectRootArg != null ? Directory(projectRootArg) : null;
@@ -41,11 +41,8 @@ void main(List<String> args) async {
 
   if (uri == null) {
     stderr.writeln(
-      'Usage: flutterpilot_server --uri <vm-service-uri> '
-      '[--project-root <path>] [--allow-destructive] '
-      '[--log-level fine|info|warning|severe]',
+      'ℹ️ No --uri provided. FlutterPilot will auto-discover running Flutter debug sessions.',
     );
-    exit(1);
   }
 
   final server = FlutterPilotServer(

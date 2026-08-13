@@ -247,7 +247,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'dbName': JsonSchema.string(
-            description: 'The sqflite database name registered via FlutterPilot.',
+            description:
+                'The sqflite database name registered via FlutterPilot.',
           ),
           'sql': JsonSchema.string(
             description:
@@ -365,13 +366,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.clearSharedPreferences',
-          {
-            if (p['key'] != null) 'key': p['key'].toString(),
-            if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
-          },
-        );
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.clearSharedPreferences', {
+              if (p['key'] != null) 'key': p['key'].toString(),
+              if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+            });
         return res.toCallToolResult();
       },
     );

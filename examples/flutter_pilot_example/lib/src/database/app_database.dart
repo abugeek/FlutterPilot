@@ -17,8 +17,7 @@ class Notes extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text().withLength(min: 1, max: 200)();
   TextColumn get body => text()();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get pinned => boolean().withDefault(const Constant(false))();
 }
 
@@ -59,25 +58,40 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteNote(int id) =>
       (delete(notes)..where((t) => t.id.equals(id))).go();
 
-  Future<void> togglePin(int id, bool pinned) => (update(notes)
-        ..where((t) => t.id.equals(id)))
-      .write(NotesCompanion(pinned: Value(pinned)));
+  Future<void> togglePin(int id, bool pinned) =>
+      (update(notes)..where((t) => t.id.equals(id))).write(
+        NotesCompanion(pinned: Value(pinned)),
+      );
 
   /// Seed demo rows so AI agents have something to query on first open.
   Future<void> seedIfEmpty() async {
     final existing = await getAllNotes();
     if (existing.isNotEmpty) return;
-    await insertNote('Welcome to FlutterPilot', 'AI agents can query this DB using query_drift_db.');
+    await insertNote(
+      'Welcome to FlutterPilot',
+      'AI agents can query this DB using query_drift_db.',
+    );
     await insertNote('SQL Tip', 'Try: SELECT * FROM notes WHERE pinned = 1');
-    await insertNote('JOIN Demo', 'Try: SELECT n.title, t.name FROM notes n JOIN note_tags nt ON nt.note_id = n.id JOIN tags t ON t.id = nt.tag_id');
+    await insertNote(
+      'JOIN Demo',
+      'Try: SELECT n.title, t.name FROM notes n JOIN note_tags nt ON nt.note_id = n.id JOIN tags t ON t.id = nt.tag_id',
+    );
 
     // Seed tags
-    final ideaTagId = await into(tags).insert(TagsCompanion.insert(name: 'idea'));
-    final demoTagId = await into(tags).insert(TagsCompanion.insert(name: 'demo'));
+    final ideaTagId = await into(
+      tags,
+    ).insert(TagsCompanion.insert(name: 'idea'));
+    final demoTagId = await into(
+      tags,
+    ).insert(TagsCompanion.insert(name: 'demo'));
     final notes = await getAllNotes();
     if (notes.length >= 2) {
-      await into(noteTags).insert(NoteTagsCompanion.insert(noteId: notes[0].id, tagId: ideaTagId));
-      await into(noteTags).insert(NoteTagsCompanion.insert(noteId: notes[1].id, tagId: demoTagId));
+      await into(
+        noteTags,
+      ).insert(NoteTagsCompanion.insert(noteId: notes[0].id, tagId: ideaTagId));
+      await into(
+        noteTags,
+      ).insert(NoteTagsCompanion.insert(noteId: notes[1].id, tagId: demoTagId));
     }
   }
 }

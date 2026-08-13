@@ -26,7 +26,7 @@ void main() {
 
     test('up() throws if called before down()', () {
       final pointer = pilot.TestPointer();
-      expect(() => pointer.up(), throwsA(isA<TypeError>()));
+      expect(() => pointer.up(), throwsA(isA<StateError>()));
     });
 
     test('supports custom pointer IDs', () {
@@ -55,7 +55,7 @@ void main() {
       pointer.up();
 
       // After up(), location is null again — calling up() again should throw
-      expect(() => pointer.up(), throwsA(isA<TypeError>()));
+      expect(() => pointer.up(), throwsA(isA<StateError>()));
     });
 
     test('can perform multiple down/up sequences', () {

@@ -38,7 +38,8 @@ class _TestingScreenState extends State<TestingScreen> {
               desc: 'Save screenshot as named baseline',
               widgetKey: const Key('save_baseline_button'),
               color: Colors.green,
-              onTap: () => _addLog('save_screenshot_baseline(name: testing_screen)'),
+              onTap: () =>
+                  _addLog('save_screenshot_baseline(name: testing_screen)'),
             ),
             _toolCard(
               icon: Icons.compare,
@@ -46,7 +47,8 @@ class _TestingScreenState extends State<TestingScreen> {
               desc: 'Diff current screen vs saved baseline',
               widgetKey: const Key('compare_screenshot_button'),
               color: Colors.purple,
-              onTap: () => _addLog('compare_screenshot(name: testing_screen) -> diff%'),
+              onTap: () =>
+                  _addLog('compare_screenshot(name: testing_screen) -> diff%'),
             ),
           ]),
           const SizedBox(height: 16),
@@ -57,43 +59,56 @@ class _TestingScreenState extends State<TestingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Icon(
-                        _isRecording ? Icons.stop_circle : Icons.fiber_manual_record,
-                        color: _isRecording ? Colors.red : Colors.grey,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isRecording ? 'Recording...' : 'Not Recording',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                    ]),
+                    Row(
+                      children: [
+                        Icon(
+                          _isRecording
+                              ? Icons.stop_circle
+                              : Icons.fiber_manual_record,
+                          color: _isRecording ? Colors.red : Colors.grey,
+                          size: 28,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isRecording ? 'Recording...' : 'Not Recording',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
-                      ElevatedButton.icon(
-                        key: const Key('start_recording_button'),
-                        icon: const Icon(Icons.fiber_manual_record, color: Colors.red),
-                        label: const Text('start_recording'),
-                        onPressed: _isRecording
-                            ? null
-                            : () {
-                                setState(() => _isRecording = true);
-                                _addLog('start_recording');
-                              },
-                      ),
-                      ElevatedButton.icon(
-                        key: const Key('stop_recording_button'),
-                        icon: const Icon(Icons.stop),
-                        label: const Text('stop_and_generate_test'),
-                        onPressed: !_isRecording
-                            ? null
-                            : () {
-                                setState(() => _isRecording = false);
-                                _addLog('stop_and_generate_test -> integration test code');
-                              },
-                      ),
-                    ]),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ElevatedButton.icon(
+                          key: const Key('start_recording_button'),
+                          icon: const Icon(
+                            Icons.fiber_manual_record,
+                            color: Colors.red,
+                          ),
+                          label: const Text('start_recording'),
+                          onPressed: _isRecording
+                              ? null
+                              : () {
+                                  setState(() => _isRecording = true);
+                                  _addLog('start_recording');
+                                },
+                        ),
+                        ElevatedButton.icon(
+                          key: const Key('stop_recording_button'),
+                          icon: const Icon(Icons.stop),
+                          label: const Text('stop_and_generate_test'),
+                          onPressed: !_isRecording
+                              ? null
+                              : () {
+                                  setState(() => _isRecording = false);
+                                  _addLog(
+                                    'stop_and_generate_test -> integration test code',
+                                  );
+                                },
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'Record user interactions, then generate Flutter integration tests automatically',
@@ -118,18 +133,21 @@ class _TestingScreenState extends State<TestingScreen> {
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
-                    Wrap(spacing: 8, children: [
-                      ElevatedButton(
-                        key: const Key('increment_counter_button'),
-                        onPressed: () => setState(() => _counter++),
-                        child: const Text('Increment'),
-                      ),
-                      ElevatedButton(
-                        key: const Key('pump_frames_button'),
-                        onPressed: () => _addLog('pump_frames(count: 10)'),
-                        child: const Text('pump_frames'),
-                      ),
-                    ]),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ElevatedButton(
+                          key: const Key('increment_counter_button'),
+                          onPressed: () => setState(() => _counter++),
+                          child: const Text('Increment'),
+                        ),
+                        ElevatedButton(
+                          key: const Key('pump_frames_button'),
+                          onPressed: () => _addLog('pump_frames(count: 10)'),
+                          child: const Text('pump_frames'),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'pump_frames advances the Flutter rendering pipeline N frames',
@@ -156,7 +174,8 @@ class _TestingScreenState extends State<TestingScreen> {
               desc: 'List all registered custom MCP tool extensions',
               widgetKey: const Key('list_custom_tools_button'),
               color: Colors.teal,
-              onTap: () => _addLog('list_custom_tools -> [my_custom_tool, ...]'),
+              onTap: () =>
+                  _addLog('list_custom_tools -> [my_custom_tool, ...]'),
             ),
             _toolCard(
               icon: Icons.build,
@@ -179,13 +198,20 @@ class _TestingScreenState extends State<TestingScreen> {
           if (_log.isNotEmpty) ...[
             Text('Action Log', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            ...(_log.take(10).map((e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Text(
-                    '> $e',
-                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            ...(_log
+                .take(10)
+                .map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      '> $e',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
                   ),
-                ))),
+                )),
           ],
         ],
       ),
@@ -196,7 +222,10 @@ class _TestingScreenState extends State<TestingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 8),
         ...children,
       ],
@@ -218,7 +247,10 @@ class _TestingScreenState extends State<TestingScreen> {
           backgroundColor: color.withValues(alpha: 0.15),
           child: Icon(icon, color: color),
         ),
-        title: Text(title, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+        title: Text(
+          title,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        ),
         subtitle: Text(desc, style: const TextStyle(fontSize: 12)),
         onTap: onTap,
       ),

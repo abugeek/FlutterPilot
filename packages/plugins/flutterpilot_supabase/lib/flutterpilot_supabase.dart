@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -115,24 +115,28 @@ class SupabasePilotInspector {
           'lastSignInAt': user.lastSignInAt,
           'appMetadata': user.appMetadata,
           'userMetadata': showSensitive ? user.userMetadata : '***redacted***',
-          'identities': user.identities?.map((i) => {
-            'provider': i.provider,
-            'createdAt': i.createdAt,
-          }).toList(),
+          'identities': user.identities
+              ?.map((i) => {'provider': i.provider, 'createdAt': i.createdAt})
+              .toList(),
         };
       }
 
       if (session != null) {
         result['session'] = {
-          'accessTokenPrefix': session.accessToken.substring(
-            0,
-            (session.accessToken.length > 20 ? 20 : session.accessToken.length),
-          ) + '...',
+          'accessTokenPrefix':
+              session.accessToken.substring(
+                0,
+                (session.accessToken.length > 20
+                    ? 20
+                    : session.accessToken.length),
+              ) +
+              '...',
           'tokenType': session.tokenType,
           'expiresIn': session.expiresIn,
           'expiresAt': session.expiresAt != null
-              ? DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000)
-                  .toIso8601String()
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  session.expiresAt! * 1000,
+                ).toIso8601String()
               : null,
           'isExpired': session.isExpired,
           'refreshTokenPrefix': session.refreshToken != null
@@ -167,18 +171,16 @@ class SupabasePilotInspector {
         final isJoined = c.isJoined;
         // ignore: invalid_use_of_internal_member
         final isClosed = c.isClosed;
-        return {
-          'topic': topic,
-          'isJoined': isJoined,
-          'isClosed': isClosed,
-        };
+        return {'topic': topic, 'isJoined': isJoined, 'isClosed': isClosed};
       }).toList();
 
-      return ServiceExtensionResponse.result(json.encode({
-        'channels': channelList,
-        'channelCount': channelList.length,
-        'hasActiveChannels': channelList.isNotEmpty,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'channels': channelList,
+          'channelCount': channelList.length,
+          'hasActiveChannels': channelList.isNotEmpty,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.querySupabaseTable -----------------------------------
@@ -222,11 +224,13 @@ class SupabasePilotInspector {
           }
         }
         final data = await query.limit(limit);
-        return ServiceExtensionResponse.result(json.encode({
-          'table': table,
-          'rowCount': (data as List).length,
-          'rows': data,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'table': table,
+            'rowCount': (data as List).length,
+            'rows': data,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -258,10 +262,9 @@ class SupabasePilotInspector {
           default:
             await client.auth.signOut(scope: SignOutScope.local);
         }
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success',
-          'scope': scope,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'scope': scope}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -285,11 +288,13 @@ class SupabasePilotInspector {
 
       try {
         final response = await client.auth.refreshSession();
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success',
-          'hasSession': response.session != null,
-          'hasUser': response.user != null,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'hasSession': response.session != null,
+            'hasUser': response.user != null,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

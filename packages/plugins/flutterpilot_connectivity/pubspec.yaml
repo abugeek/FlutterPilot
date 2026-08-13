@@ -18,8 +18,7 @@ dependencies:
   flutter:
     sdk: flutter
   connectivity_plus: ">=5.0.0"
-  flutterpilot_sdk:
-    path: ../../flutterpilot_sdk
+  flutterpilot_sdk: ^0.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -60,14 +60,24 @@ void main() {
       const normalKeys = ['user_name', 'theme_mode', 'last_sync'];
       for (final key in sensitiveKeys) {
         final lower = key.toLowerCase();
-        final isSensitive = ['password', 'secret', 'private_key', 'api_key', 'apikey']
-            .any((p) => lower.contains(p));
+        final isSensitive = [
+          'password',
+          'secret',
+          'private_key',
+          'api_key',
+          'apikey',
+        ].any((p) => lower.contains(p));
         expect(isSensitive, isTrue, reason: '$key should be sensitive');
       }
       for (final key in normalKeys) {
         final lower = key.toLowerCase();
-        final isSensitive = ['password', 'secret', 'private_key', 'api_key', 'apikey']
-            .any((p) => lower.contains(p));
+        final isSensitive = [
+          'password',
+          'secret',
+          'private_key',
+          'api_key',
+          'apikey',
+        ].any((p) => lower.contains(p));
         expect(isSensitive, isFalse, reason: '$key should NOT be sensitive');
       }
     });
@@ -84,25 +94,25 @@ void main() {
       }
     });
 
-    test('register without FlutterPilot.initialize prints warning and skips', () {
-      // Simulate calling register before initialize
-      SecureStoragePilotInspector.reset();
-      // Without reinitializing FlutterPilot, register should print warning
-      // and not crash. We call reset to clear the initialized flag — but
-      // FlutterPilot.initialize() was called in setUp so this tests that
-      // guard is respected.
-      const storage = FlutterSecureStorage();
-      // This should not throw
-      expect(
-        () {
+    test(
+      'register without FlutterPilot.initialize prints warning and skips',
+      () {
+        // Simulate calling register before initialize
+        SecureStoragePilotInspector.reset();
+        // Without reinitializing FlutterPilot, register should print warning
+        // and not crash. We call reset to clear the initialized flag — but
+        // FlutterPilot.initialize() was called in setUp so this tests that
+        // guard is respected.
+        const storage = FlutterSecureStorage();
+        // This should not throw
+        expect(() {
           try {
             SecureStoragePilotInspector.register(storage);
           } on UnsupportedError {
             // Expected.
           }
-        },
-        returnsNormally,
-      );
-    });
+        }, returnsNormally);
+      },
+    );
   });
 }

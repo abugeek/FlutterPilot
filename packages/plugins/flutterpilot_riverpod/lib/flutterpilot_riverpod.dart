@@ -20,9 +20,9 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 ///   ));
 /// }
 /// ```
-class RiverpodPilotObserver extends ProviderObserver {
+base class RiverpodPilotObserver extends ProviderObserver {
   static final Map<String, dynamic> _states = {};
-  static final Map<String, ProviderBase> _providers = {};
+  static final Map<String, dynamic> _providers = {};
   static final Map<String, ProviderContainer> _containers = {};
   static bool _initialized = false;
   static const int _maxEntries = 100;
@@ -59,16 +59,12 @@ class RiverpodPilotObserver extends ProviderObserver {
         final dynamic dynamicProvider = provider;
         final dynamic notifier = container.read(dynamicProvider.notifier);
 
-        if (notifier is StateController) {
+        try {
           notifier.state = value;
-        } else {
-          try {
-            notifier.state = value;
-          } catch (e) {
-            throw Exception(
-              'Provider "$name" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
-            );
-          }
+        } catch (e) {
+          throw Exception(
+            'Provider "$name" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
+          );
         }
         return {'status': 'success', 'name': name, 'newValue': value};
       } catch (e) {
@@ -112,14 +108,13 @@ class RiverpodPilotObserver extends ProviderObserver {
 
   @override
   void didUpdateProvider(
-    ProviderBase<Object?> provider,
+    ProviderObserverContext context,
     Object? previousValue,
     Object? newValue,
-    ProviderContainer container,
   ) {
-    final name = provider.runtimeType.toString();
-    _providers[name] = provider;
-    _containers[name] = container;
+    final name = context.provider.runtimeType.toString();
+    _providers[name] = context.provider;
+    _containers[name] = context.container;
 
     _states[name] = {
       'value': newValue?.toString() ?? 'null',
@@ -131,14 +126,10 @@ class RiverpodPilotObserver extends ProviderObserver {
   }
 
   @override
-  void didAddProvider(
-    ProviderBase<Object?> provider,
-    Object? value,
-    ProviderContainer container,
-  ) {
-    final name = provider.runtimeType.toString();
-    _providers[name] = provider;
-    _containers[name] = container;
+  void didAddProvider(ProviderObserverContext context, Object? value) {
+    final name = context.provider.runtimeType.toString();
+    _providers[name] = context.provider;
+    _containers[name] = context.container;
 
     _states[name] = {
       'value': value?.toString() ?? 'null',
@@ -149,11 +140,8 @@ class RiverpodPilotObserver extends ProviderObserver {
   }
 
   @override
-  void didDisposeProvider(
-    ProviderBase<Object?> provider,
-    ProviderContainer container,
-  ) {
-    final name = provider.runtimeType.toString();
+  void didDisposeProvider(ProviderObserverContext context) {
+    final name = context.provider.runtimeType.toString();
     _states.remove(name);
     _providers.remove(name);
     _containers.remove(name);

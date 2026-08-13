@@ -1,12 +1,14 @@
 # FlutterPilot Tools Reference
 
-Complete reference of all **105 MCP tools** available through FlutterPilot Server.
+Complete reference of all **110+ MCP tools** available through FlutterPilot Server.
 
 **Table of Contents:**
-- [Screenshots & Layout](#screenshots--layout) (5 tools)
-- [UI Automation](#ui-automation) (15 tools)
+- [Screenshots & Visual Regression](#screenshots--layout) (5 tools)
+- [UI Automation & Visual AI Overlay](#ui-automation) (15 tools)
 - [Navigation & Routing](#navigation--routing) (8 tools)
 - [State & Inspection](#state--inspection) (19 tools)
+- [Network Chaos & Mocking](#network-chaos--mocking) (5 tools)
+- [Multi-Device Fleet Manager](#multi-device-fleet-manager) (4 tools)
 - [Recording & Testing](#recording--testing) (6 tools)
 - [Custom Tools](#custom-tools) (3 tools)
 - [Performance & DevTools](#performance--devtools) (11 tools)

@@ -179,25 +179,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         }
 
         double diffPercent;
+        img.Image? diffImg;
         if (baselineImg.width != currentImg.width ||
             baselineImg.height != currentImg.height) {
           diffPercent = 100.0;
         } else {
           int diffPixels = 0;
           final total = baselineImg.width * baselineImg.height;
-          // Early-exit threshold: once we exceed this, stop comparing
-          final earlyExitThreshold = (total * (threshold / 100.0) * 1.5).ceil();
-          bool earlyExit = false;
-          for (int y = 0; y < baselineImg.height && !earlyExit; y++) {
+          diffImg = img.Image.from(currentImg);
+
+          for (int y = 0; y < baselineImg.height; y++) {
             for (int x = 0; x < baselineImg.width; x++) {
               final bp = baselineImg.getPixel(x, y);
               final cp = currentImg.getPixel(x, y);
               if (bp.r != cp.r || bp.g != cp.g || bp.b != cp.b) {
                 diffPixels++;
-              }
-              if (diffPixels > earlyExitThreshold) {
-                earlyExit = true;
-                break;
+                // Highlight changed pixels with vivid magenta (RGBA: 255, 0, 128, 255)
+                diffImg.setPixelRgba(x, y, 255, 0, 128, 255);
               }
             }
           }
@@ -206,14 +204,27 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
 
         final passed = diffPercent <= threshold;
         final diffStr = diffPercent.toStringAsFixed(2);
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: passed
-                  ? 'Visual regression PASSED ✅ — diff: $diffStr% (threshold: $threshold%)'
-                  : 'Visual regression FAILED ❌ — diff: $diffStr% exceeds threshold $threshold%',
+        final contentList = <Content>[
+          TextContent(
+            text: passed
+                ? 'Visual regression PASSED ✅ — diff: $diffStr% (threshold: $threshold%)'
+                : 'Visual regression FAILED ❌ — diff: $diffStr% exceeds threshold $threshold%',
+          ),
+        ];
+
+        if (!passed && diffImg != null) {
+          final diffPngBytes = Uint8List.fromList(img.encodePng(diffImg));
+          contentList.insert(
+            0,
+            ImageContent(
+              data: base64Encode(diffPngBytes),
+              mimeType: 'image/png',
             ),
-          ],
+          );
+        }
+
+        return CallToolResult(
+          content: contentList,
           isError: !passed,
         );
       },

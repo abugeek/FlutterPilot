@@ -47,11 +47,17 @@ void main() {
       }
     });
 
-    test('sensitive patterns include token, password, secret, auth, session', () {
-      // Test the exported sensitive pattern set
-      const patterns = SharedPrefsPilotInspector.sensitivePatterns;
-      expect(patterns, containsAll(['token', 'password', 'secret', 'auth', 'session']));
-    });
+    test(
+      'sensitive patterns include token, password, secret, auth, session',
+      () {
+        // Test the exported sensitive pattern set
+        const patterns = SharedPrefsPilotInspector.sensitivePatterns;
+        expect(
+          patterns,
+          containsAll(['token', 'password', 'secret', 'auth', 'session']),
+        );
+      },
+    );
 
     test('isSensitiveKey correctly classifies keys', () {
       // Keys that must be redacted

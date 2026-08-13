@@ -181,7 +181,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'location': JsonSchema.string(
-            description: 'The route path to navigate to (e.g. "/home", "/user/123").',
+            description:
+                'The route path to navigate to (e.g. "/home", "/user/123").',
           ),
           'action': JsonSchema.string(
             description: 'Navigation action.',
@@ -223,8 +224,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
 
     _registerAppTool(
       name: 'get_connectivity_history',
-      description:
-          'View timestamped log of connectivity state transitions.',
+      description: 'View timestamped log of connectivity state transitions.',
       extension: 'ext.flutterpilot.getConnectivityHistory',
       properties: {
         'limit': JsonSchema.string(
@@ -242,7 +242,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'enabled': JsonSchema.string(
-            description: '"true" to enable simulated offline, "false" to disable.',
+            description:
+                '"true" to enable simulated offline, "false" to disable.',
             enumValues: ['true', 'false'],
           ),
         },
@@ -266,12 +267,21 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       extension: 'ext.flutterpilot.getFirebaseStatus',
       formatResult: (json) {
         final buf = StringBuffer('Firebase Services:\n');
-        for (final service in ['crashlytics', 'analytics', 'performance', 'messaging']) {
+        for (final service in [
+          'crashlytics',
+          'analytics',
+          'performance',
+          'messaging',
+        ]) {
           final info = json[service] as Map? ?? {};
           final available = info['available'] == true;
-          buf.writeln('  $service: ${available ? '✓ registered' : '✗ not registered'}');
+          buf.writeln(
+            '  $service: ${available ? '✓ registered' : '✗ not registered'}',
+          );
           if (service == 'crashlytics' && available) {
-            buf.writeln('    Collection enabled: ${info['isCrashlyticsCollectionEnabled']}');
+            buf.writeln(
+              '    Collection enabled: ${info['isCrashlyticsCollectionEnabled']}',
+            );
           }
           if (service == 'messaging' && available) {
             buf.writeln('    Authorization: ${info['authorizationStatus']}');
@@ -283,7 +293,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
 
     _registerAppTool(
       name: 'get_fcm_token',
-      description: 'Get the Firebase Cloud Messaging token (truncated for security).',
+      description:
+          'Get the Firebase Cloud Messaging token (truncated for security).',
       extension: 'ext.flutterpilot.getFcmToken',
     );
 
@@ -314,8 +325,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
 
     _registerAppTool(
       name: 'get_analytics_log',
-      description:
-          'View recent analytics events logged through FlutterPilot.',
+      description: 'View recent analytics events logged through FlutterPilot.',
       extension: 'ext.flutterpilot.getAnalyticsLog',
       properties: {
         'limit': JsonSchema.string(
@@ -348,7 +358,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
-            description: 'Trace name that was passed to start_performance_trace.',
+            description:
+                'Trace name that was passed to start_performance_trace.',
           ),
         },
         required: ['name'],
@@ -368,11 +379,10 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'it pollutes your production Crashlytics dashboard.',
       inputSchema: ToolInputSchema(
         properties: {
-          'message': JsonSchema.string(
-            description: 'Error message to record.',
-          ),
+          'message': JsonSchema.string(description: 'Error message to record.'),
           'fatal': JsonSchema.string(
-            description: '"true" for fatal error, "false" for non-fatal (default).',
+            description:
+                '"true" for fatal error, "false" for non-fatal (default).',
             enumValues: ['true', 'false'],
           ),
         },
@@ -421,11 +431,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'Read a specific key from FlutterSecureStorage. '
           'Keys matching password/secret/api_key patterns are always redacted.',
       inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'The key to read.',
-          ),
-        },
+        properties: {'key': JsonSchema.string(description: 'The key to read.')},
         required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
@@ -460,7 +466,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'Key to delete. Omit to clear ALL secure storage (requires confirm).',
+            description:
+                'Key to delete. Omit to clear ALL secure storage (requires confirm).',
           ),
           'confirm': JsonSchema.string(
             description:
@@ -469,13 +476,11 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.deleteSecureStorageKey',
-        {
-          if (p['key'] != null) 'key': p['key'].toString(),
-          if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
-        },
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) =>
+          _callExtensionRaw('ext.flutterpilot.deleteSecureStorageKey', {
+            if (p['key'] != null) 'key': p['key'].toString(),
+            if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+          }).then((res) => res.toCallToolResult()),
     );
   }
 }

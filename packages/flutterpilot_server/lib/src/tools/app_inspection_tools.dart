@@ -3,6 +3,126 @@ part of '../../flutterpilot_server.dart';
 /// Tools for inspecting application state, errors, events, config, and logs.
 mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
   void _registerAppInspectionTools() {
+    server.registerTool(
+      'connect_app',
+      description:
+          'Connects or reconnects FlutterPilot to a running Flutter application. '
+          'If uri is omitted, it automatically scans localhost for an active Flutter debug session.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'uri': JsonSchema.string(
+            description:
+                'Optional VM Service URI (e.g. "http://127.0.0.1:12345/abcdefg=/"). If omitted, auto-discovers.',
+          ),
+        },
+      ),
+      callback: (params, extra) async {
+        final uri = params['uri'] as String?;
+        final success = await _connectWithUri(uri);
+        if (success) {
+          _fleetManager.registerDevice('default', vmServiceUri);
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: ' Connected successfully to Flutter app at $vmServiceUri',
+              ),
+            ],
+          );
+        } else {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    '❌ Could not connect to a running Flutter app. Ensure your Flutter app is running in debug mode ("flutter run") and try again.',
+              ),
+            ],
+          );
+        }
+      },
+    );
+
+    server.registerTool(
+      'list_connected_devices',
+      description:
+          'Lists all registered Flutter devices/instances in the multi-device fleet and which one is active.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        return CallToolResult(
+          content: [
+            TextContent(text: _fleetManager.toJsonString()),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'register_device',
+      description:
+          'Registers a new device or instance in the multi-device fleet with its name and VM Service URI.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'id': JsonSchema.string(
+            description: 'A unique identifier or name (e.g. "ios_pro_max", "pixel_8", "web_chrome").',
+          ),
+          'uri': JsonSchema.string(
+            description: 'The VM Service WebSocket URI for that device.',
+          ),
+        },
+        required: ['id', 'uri'],
+      ),
+      callback: (p, e) async {
+        final id = p['id'] as String;
+        final uri = p['uri'] as String;
+        _fleetManager.registerDevice(id, uri);
+        return CallToolResult(
+          content: [
+            TextContent(text: 'Registered device "$id" with URI $uri'),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'switch_device',
+      description:
+          'Switches the active device to target for all subsequent inspection and UI automation commands.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'id': JsonSchema.string(
+            description: 'The ID or name of the registered device to switch to.',
+          ),
+        },
+        required: ['id'],
+      ),
+      callback: (p, e) async {
+        final id = p['id'] as String;
+        final success = _fleetManager.switchDevice(id);
+        if (!success) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text: 'Device "$id" not found in fleet. Call list_connected_devices to see available devices.',
+              ),
+            ],
+          );
+        }
+        final targetUri = _fleetManager.activeUri;
+        final connected = await _connectWithUri(targetUri);
+        return CallToolResult(
+          isError: !connected,
+          content: [
+            TextContent(
+              text: connected
+                  ? 'Switched active device to "$id" ($targetUri) ✅'
+                  : 'Switched active device to "$id", but failed to connect to $targetUri ❌',
+            ),
+          ],
+        );
+      },
+    );
+
     _registerAppTool(
       name: 'get_app_summary',
       description:

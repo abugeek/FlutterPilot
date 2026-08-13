@@ -92,19 +92,41 @@ class _MainAppState extends State<MainApp> {
       observers: [NavigationTracker()],
       routes: [
         GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
-        GoRoute(path: '/state', builder: (_, __) => const StateInjectionScreen()),
+        GoRoute(
+          path: '/state',
+          builder: (_, __) => const StateInjectionScreen(),
+        ),
         GoRoute(path: '/chaos', builder: (_, __) => const ChaosScreen()),
-        GoRoute(path: '/network', builder: (context, _) => NetworkScreen(dio: dio)),
+        GoRoute(
+          path: '/network',
+          builder: (context, _) => NetworkScreen(dio: dio),
+        ),
         GoRoute(
           path: '/storage',
-          builder: (context, _) => StorageScreen(settingsBox: widget.settingsBox),
+          builder: (context, _) =>
+              StorageScreen(settingsBox: widget.settingsBox),
         ),
-        GoRoute(path: '/ui_automation', builder: (_, __) => const UiAutomationScreen()),
-        GoRoute(path: '/navigation', builder: (_, __) => const NavigationFeaturesScreen()),
-        GoRoute(path: '/debug_perf', builder: (_, __) => const DebugPerformanceScreen()),
-        GoRoute(path: '/accessibility', builder: (_, __) => const AccessibilityScreen()),
+        GoRoute(
+          path: '/ui_automation',
+          builder: (_, __) => const UiAutomationScreen(),
+        ),
+        GoRoute(
+          path: '/navigation',
+          builder: (_, __) => const NavigationFeaturesScreen(),
+        ),
+        GoRoute(
+          path: '/debug_perf',
+          builder: (_, __) => const DebugPerformanceScreen(),
+        ),
+        GoRoute(
+          path: '/accessibility',
+          builder: (_, __) => const AccessibilityScreen(),
+        ),
         GoRoute(path: '/testing', builder: (_, __) => const TestingScreen()),
-        GoRoute(path: '/connectivity', builder: (_, __) => const ConnectivityScreen()),
+        GoRoute(
+          path: '/connectivity',
+          builder: (_, __) => const ConnectivityScreen(),
+        ),
       ],
     );
     // Register GoRouter with FlutterPilot for AI agent navigation visibility

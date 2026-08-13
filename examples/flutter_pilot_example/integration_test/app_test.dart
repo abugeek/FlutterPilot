@@ -19,14 +19,21 @@ Future<void> _goTo(WidgetTester tester, String tileKey) async {
 /// Tap the AppBar back button and wait for the dashboard to reappear.
 Future<void> _goBack(WidgetTester tester) async {
   final back = find.byTooltip('Back');
-  expect(back, findsOneWidget, reason: 'Back button should always be present on sub-screens');
+  expect(
+    back,
+    findsOneWidget,
+    reason: 'Back button should always be present on sub-screens',
+  );
   await tester.tap(back);
   await tester.pump(const Duration(milliseconds: 600));
 }
 
 /// Tap a widget by key and wait for any resulting rebuild / animation.
-Future<void> _tap(WidgetTester tester, String key,
-    {Duration settle = const Duration(milliseconds: 400)}) async {
+Future<void> _tap(
+  WidgetTester tester,
+  String key, {
+  Duration settle = const Duration(milliseconds: 400),
+}) async {
   final w = find.byKey(Key(key));
   await tester.ensureVisible(w);
   await tester.pump(const Duration(milliseconds: 100));
@@ -56,21 +63,32 @@ void main() {
   Future<void> launchApp(WidgetTester tester) async {
     await tester.pumpWidget(rootWidget);
     await tester.pump(const Duration(seconds: 2));
-    expect(find.text('FlutterPilot Dashboard'), findsOneWidget,
-        reason: 'Dashboard should be the initial screen');
+    expect(
+      find.text('FlutterPilot Dashboard'),
+      findsOneWidget,
+      reason: 'Dashboard should be the initial screen',
+    );
   }
 
   // ── 1. UI Automation ──────────────────────────────────────────────────────
-  testWidgets('UI Automation: text fields, switches, checkboxes, scroll', (tester) async {
+  testWidgets('UI Automation: text fields, switches, checkboxes, scroll', (
+    tester,
+  ) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_ui_automation_button');
     expect(find.text('UI Automation Tools'), findsOneWidget);
 
     // Type into main text field
-    await tester.enterText(find.byKey(const Key('main_text_field')), 'Hello FlutterPilot');
+    await tester.enterText(
+      find.byKey(const Key('main_text_field')),
+      'Hello FlutterPilot',
+    );
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Value: "Hello FlutterPilot"'), findsOneWidget,
-        reason: 'Entered text should appear as a live preview');
+    expect(
+      find.text('Value: "Hello FlutterPilot"'),
+      findsOneWidget,
+      reason: 'Entered text should appear as a live preview',
+    );
 
     // Type into search field
     await tester.enterText(find.byKey(const Key('search_field')), 'flutter');
@@ -78,8 +96,11 @@ void main() {
 
     // Clear the main text field
     await _tap(tester, 'clear_main_text_button');
-    expect(find.text('No text entered yet'), findsOneWidget,
-        reason: 'After clearing, preview should reset');
+    expect(
+      find.text('No text entered yet'),
+      findsOneWidget,
+      reason: 'After clearing, preview should reset',
+    );
 
     // Dismiss keyboard
     await _tap(tester, 'unfocus_button');
@@ -108,13 +129,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
 
     final findMe = find.byKey(const Key('find_me_tile'));
-    await tester.scrollUntilVisible(findMe, 60,
-        scrollable: find.descendant(
-          of: scrollableList,
-          matching: find.byType(Scrollable),
-        ));
+    await tester.scrollUntilVisible(
+      findMe,
+      60,
+      scrollable: find.descendant(
+        of: scrollableList,
+        matching: find.byType(Scrollable),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 300));
-    expect(findMe, findsOneWidget, reason: '"Find Me" tile should be reachable by scrolling');
+    expect(
+      findMe,
+      findsOneWidget,
+      reason: '"Find Me" tile should be reachable by scrolling',
+    );
 
     // Tap "Find Me" to log the interaction
     await tester.tap(findMe);
@@ -125,50 +153,81 @@ void main() {
   });
 
   // ── 2. Accessibility ──────────────────────────────────────────────────────
-  testWidgets('Accessibility: text scale, semantics toggle, enable/disable form', (tester) async {
-    await launchApp(tester);
-    await _goTo(tester, 'nav_accessibility_button');
-    expect(find.text('Accessibility'), findsOneWidget);
+  testWidgets(
+    'Accessibility: text scale, semantics toggle, enable/disable form',
+    (tester) async {
+      await launchApp(tester);
+      await _goTo(tester, 'nav_accessibility_button');
+      expect(find.text('Accessibility'), findsOneWidget);
 
-    // Tap the "Large 1.5x" scale preset
-    await _tap(tester, 'scale_1_5_button', settle: const Duration(milliseconds: 400));
+      // Tap the "Large 1.5x" scale preset
+      await _tap(
+        tester,
+        'scale_1_5_button',
+        settle: const Duration(milliseconds: 400),
+      );
 
-    // Tap "XL 2.0x" preset, wait for text to rescale
-    await _tap(tester, 'scale_2_0_button', settle: const Duration(milliseconds: 400));
+      // Tap "XL 2.0x" preset, wait for text to rescale
+      await _tap(
+        tester,
+        'scale_2_0_button',
+        settle: const Duration(milliseconds: 400),
+      );
 
-    // Back to normal
-    await _tap(tester, 'scale_1_0_button', settle: const Duration(milliseconds: 400));
+      // Back to normal
+      await _tap(
+        tester,
+        'scale_1_0_button',
+        settle: const Duration(milliseconds: 400),
+      );
 
-    // Scroll to semantics section
-    await _scroll(tester, -200);
-    await tester.ensureVisible(find.byKey(const Key('show_semantic_labels_switch')));
-    // Toggle semantic labels overlay on
-    await _tap(tester, 'show_semantic_labels_switch');
-    // Toggle back off
-    await _tap(tester, 'show_semantic_labels_switch');
+      // Scroll to semantics section
+      await _scroll(tester, -200);
+      await tester.ensureVisible(
+        find.byKey(const Key('show_semantic_labels_switch')),
+      );
+      // Toggle semantic labels overlay on
+      await _tap(tester, 'show_semantic_labels_switch');
+      // Toggle back off
+      await _tap(tester, 'show_semantic_labels_switch');
 
-    // Scroll to form enabled section
-    await _scroll(tester, -200);
-    await tester.ensureVisible(find.byKey(const Key('form_enabled_switch')));
+      // Scroll to form enabled section
+      await _scroll(tester, -200);
+      await tester.ensureVisible(find.byKey(const Key('form_enabled_switch')));
 
-    // Verify submit button is initially enabled
-    final submitBtn = tester.widget<ElevatedButton>(find.byKey(const Key('submit_button')));
-    expect(submitBtn.onPressed, isNotNull, reason: 'submit_button should start enabled');
+      // Verify submit button is initially enabled
+      final submitBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_button')),
+      );
+      expect(
+        submitBtn.onPressed,
+        isNotNull,
+        reason: 'submit_button should start enabled',
+      );
 
-    // Disable the form
-    await _tap(tester, 'form_enabled_switch');
-    final submitBtnDisabled = tester.widget<ElevatedButton>(find.byKey(const Key('submit_button')));
-    expect(submitBtnDisabled.onPressed, isNull, reason: 'submit_button should be disabled when form is off');
+      // Disable the form
+      await _tap(tester, 'form_enabled_switch');
+      final submitBtnDisabled = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_button')),
+      );
+      expect(
+        submitBtnDisabled.onPressed,
+        isNull,
+        reason: 'submit_button should be disabled when form is off',
+      );
 
-    // Re-enable
-    await _tap(tester, 'form_enabled_switch');
+      // Re-enable
+      await _tap(tester, 'form_enabled_switch');
 
-    expect(tester.takeException(), isNull);
-    await _goBack(tester);
-  });
+      expect(tester.takeException(), isNull);
+      await _goBack(tester);
+    },
+  );
 
   // ── 3. Testing & Screenshots ───────────────────────────────────────────────
-  testWidgets('Testing: screenshot buttons, recording toggle, pump counter', (tester) async {
+  testWidgets('Testing: screenshot buttons, recording toggle, pump counter', (
+    tester,
+  ) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_testing_button');
     expect(find.text('Testing & Screenshots'), findsOneWidget);
@@ -179,27 +238,56 @@ void main() {
     await _tap(tester, 'compare_screenshot_button');
 
     // Start and stop recording
-    await _tap(tester, 'start_recording_button', settle: const Duration(milliseconds: 500));
-    expect(find.text('Recording...'), findsOneWidget,
-        reason: 'Recording status should update after start');
-    await _tap(tester, 'stop_recording_button', settle: const Duration(milliseconds: 500));
-    expect(find.text('Not Recording'), findsOneWidget,
-        reason: 'Recording status should reset after stop');
+    await _tap(
+      tester,
+      'start_recording_button',
+      settle: const Duration(milliseconds: 500),
+    );
+    expect(
+      find.text('Recording...'),
+      findsOneWidget,
+      reason: 'Recording status should update after start',
+    );
+    await _tap(
+      tester,
+      'stop_recording_button',
+      settle: const Duration(milliseconds: 500),
+    );
+    expect(
+      find.text('Not Recording'),
+      findsOneWidget,
+      reason: 'Recording status should reset after stop',
+    );
 
     // Scroll to pump_frames section
     await _scroll(tester, -300);
-    await tester.ensureVisible(find.byKey(const Key('increment_counter_button')));
+    await tester.ensureVisible(
+      find.byKey(const Key('increment_counter_button')),
+    );
 
     // Increment counter several times
     for (var i = 0; i < 5; i++) {
-      await _tap(tester, 'increment_counter_button', settle: const Duration(milliseconds: 200));
+      await _tap(
+        tester,
+        'increment_counter_button',
+        settle: const Duration(milliseconds: 200),
+      );
     }
-    final counterLabel = tester.widget<Text>(find.byKey(const Key('pump_counter_label')));
-    expect(counterLabel.data, contains('5'),
-        reason: 'Counter should show 5 after 5 taps');
+    final counterLabel = tester.widget<Text>(
+      find.byKey(const Key('pump_counter_label')),
+    );
+    expect(
+      counterLabel.data,
+      contains('5'),
+      reason: 'Counter should show 5 after 5 taps',
+    );
 
     // Tap pump_frames button
-    await _tap(tester, 'pump_frames_button', settle: const Duration(milliseconds: 500));
+    await _tap(
+      tester,
+      'pump_frames_button',
+      settle: const Duration(milliseconds: 500),
+    );
 
     // Scroll to more tools
     await _scroll(tester, -200);
@@ -227,37 +315,79 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('perf_overlay_switch')));
 
     // Toggle performance overlay on/off
-    await _tap(tester, 'perf_overlay_switch', settle: const Duration(milliseconds: 400));
-    await _tap(tester, 'perf_overlay_switch', settle: const Duration(milliseconds: 400));
+    await _tap(
+      tester,
+      'perf_overlay_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    await _tap(
+      tester,
+      'perf_overlay_switch',
+      settle: const Duration(milliseconds: 400),
+    );
 
     // Repaint rainbow
     await tester.ensureVisible(find.byKey(const Key('repaint_rainbow_switch')));
-    await _tap(tester, 'repaint_rainbow_switch', settle: const Duration(milliseconds: 400));
-    await _tap(tester, 'repaint_rainbow_switch', settle: const Duration(milliseconds: 400));
+    await _tap(
+      tester,
+      'repaint_rainbow_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    await _tap(
+      tester,
+      'repaint_rainbow_switch',
+      settle: const Duration(milliseconds: 400),
+    );
 
     // Debug paint
     await tester.ensureVisible(find.byKey(const Key('debug_paint_switch')));
-    await _tap(tester, 'debug_paint_switch', settle: const Duration(milliseconds: 400));
-    await _tap(tester, 'debug_paint_switch', settle: const Duration(milliseconds: 400));
+    await _tap(
+      tester,
+      'debug_paint_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    await _tap(
+      tester,
+      'debug_paint_switch',
+      settle: const Duration(milliseconds: 400),
+    );
 
     // Slow animations
     await tester.ensureVisible(find.byKey(const Key('slow_animations_switch')));
-    await _tap(tester, 'slow_animations_switch', settle: const Duration(milliseconds: 400));
-    await _tap(tester, 'slow_animations_switch', settle: const Duration(milliseconds: 400));
+    await _tap(
+      tester,
+      'slow_animations_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    await _tap(
+      tester,
+      'slow_animations_switch',
+      settle: const Duration(milliseconds: 400),
+    );
 
     expect(tester.takeException(), isNull);
     await _goBack(tester);
   });
 
   // ── 5. Navigation Features ────────────────────────────────────────────────
-  testWidgets('Navigation: theme toggle, locale, orientation buttons', (tester) async {
+  testWidgets('Navigation: theme toggle, locale, orientation buttons', (
+    tester,
+  ) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_navigation_button');
     expect(find.text('Navigation Features'), findsOneWidget);
 
     // Theme toggle
-    await _tap(tester, 'theme_toggle_button', settle: const Duration(milliseconds: 500));
-    await _tap(tester, 'theme_toggle_button', settle: const Duration(milliseconds: 500));
+    await _tap(
+      tester,
+      'theme_toggle_button',
+      settle: const Duration(milliseconds: 500),
+    );
+    await _tap(
+      tester,
+      'theme_toggle_button',
+      settle: const Duration(milliseconds: 500),
+    );
 
     // Scroll to locale section
     await _scroll(tester, -250);
@@ -268,8 +398,16 @@ void main() {
     final portraitBtn = find.byKey(const Key('portrait_button'));
     if (portraitBtn.evaluate().isNotEmpty) {
       await tester.ensureVisible(portraitBtn);
-      await _tap(tester, 'portrait_button', settle: const Duration(milliseconds: 400));
-      await _tap(tester, 'landscape_button', settle: const Duration(milliseconds: 400));
+      await _tap(
+        tester,
+        'portrait_button',
+        settle: const Duration(milliseconds: 400),
+      );
+      await _tap(
+        tester,
+        'landscape_button',
+        settle: const Duration(milliseconds: 400),
+      );
     }
 
     // Delayed navigate button
@@ -300,10 +438,14 @@ void main() {
     // Increment the first counter (bloc)
     final blocIncrBtn = find.byKey(const Key('bloc_increment_button'));
     if (blocIncrBtn.evaluate().isNotEmpty) {
-      final before = tester.widget<Text>(find.byKey(const Key('bloc_count_text'))).data ?? '';
+      final before =
+          tester.widget<Text>(find.byKey(const Key('bloc_count_text'))).data ??
+          '';
       await tester.tap(blocIncrBtn);
       await tester.pump(const Duration(milliseconds: 400));
-      final after = tester.widget<Text>(find.byKey(const Key('bloc_count_text'))).data ?? '';
+      final after =
+          tester.widget<Text>(find.byKey(const Key('bloc_count_text'))).data ??
+          '';
       expect(before, isNot(after), reason: 'Bloc counter should increment');
     }
 
@@ -325,11 +467,19 @@ void main() {
     expect(find.text('Network & Logs'), findsOneWidget);
 
     // Trigger POST fetch (will fail in test env — we just verify no crash)
-    await _tap(tester, 'fetch_posts_button', settle: const Duration(seconds: 2));
+    await _tap(
+      tester,
+      'fetch_posts_button',
+      settle: const Duration(seconds: 2),
+    );
     // Verify log list is rendered
     await tester.ensureVisible(find.byKey(const Key('network_log_list')));
 
-    await _tap(tester, 'fetch_users_button', settle: const Duration(seconds: 2));
+    await _tap(
+      tester,
+      'fetch_users_button',
+      settle: const Duration(seconds: 2),
+    );
     await _tap(tester, 'fetch_404_button', settle: const Duration(seconds: 2));
 
     expect(tester.takeException(), isNull);
@@ -343,16 +493,30 @@ void main() {
     expect(find.text('Storage (Hive)'), findsOneWidget);
 
     // Type a key and value
-    await tester.enterText(find.byKey(const Key('storage_key_field')), 'test_key');
+    await tester.enterText(
+      find.byKey(const Key('storage_key_field')),
+      'test_key',
+    );
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.enterText(find.byKey(const Key('storage_value_field')), 'hello_world');
+    await tester.enterText(
+      find.byKey(const Key('storage_value_field')),
+      'hello_world',
+    );
     await tester.pump(const Duration(milliseconds: 200));
 
     // Save it
-    await _tap(tester, 'storage_save_button', settle: const Duration(milliseconds: 600));
+    await _tap(
+      tester,
+      'storage_save_button',
+      settle: const Duration(milliseconds: 600),
+    );
 
     // Seed demo data
-    await _tap(tester, 'seed_demo_data_button', settle: const Duration(milliseconds: 800));
+    await _tap(
+      tester,
+      'seed_demo_data_button',
+      settle: const Duration(milliseconds: 800),
+    );
 
     // Verify entries list is visible
     final entriesList = find.byKey(const Key('storage_entries_list'));
@@ -364,7 +528,9 @@ void main() {
   });
 
   // ── 10. Connectivity ─────────────────────────────────────────────────────
-  testWidgets('Connectivity: status display, offline toggle, history', (tester) async {
+  testWidgets('Connectivity: status display, offline toggle, history', (
+    tester,
+  ) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_connectivity_button');
     expect(find.text('Connectivity'), findsOneWidget);
@@ -373,27 +539,46 @@ void main() {
     expect(find.byKey(const Key('connectivity_status_label')), findsOneWidget);
 
     // Toggle simulate offline switch on
-    await tester.ensureVisible(find.byKey(const Key('simulate_offline_switch')));
-    await _tap(tester, 'simulate_offline_switch',
-        settle: const Duration(milliseconds: 400));
-    expect(find.text('Offline simulation ACTIVE'), findsOneWidget,
-        reason: 'After toggle, simulation should be active');
+    await tester.ensureVisible(
+      find.byKey(const Key('simulate_offline_switch')),
+    );
+    await _tap(
+      tester,
+      'simulate_offline_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    expect(
+      find.text('Offline simulation ACTIVE'),
+      findsOneWidget,
+      reason: 'After toggle, simulation should be active',
+    );
 
     // Toggle simulate offline switch off
-    await _tap(tester, 'simulate_offline_switch',
-        settle: const Duration(milliseconds: 400));
-    expect(find.text('Simulation off'), findsOneWidget,
-        reason: 'After second toggle, simulation should be off');
+    await _tap(
+      tester,
+      'simulate_offline_switch',
+      settle: const Duration(milliseconds: 400),
+    );
+    expect(
+      find.text('Simulation off'),
+      findsOneWidget,
+      reason: 'After second toggle, simulation should be off',
+    );
 
     // Clear history
-    await _tap(tester, 'clear_history_button',
-        settle: const Duration(milliseconds: 300));
+    await _tap(
+      tester,
+      'clear_history_button',
+      settle: const Duration(milliseconds: 300),
+    );
 
     expect(tester.takeException(), isNull);
     await _goBack(tester);
   });
   // ── 11. Chaos ─────────────────────────────────────────────────────────────
-  testWidgets('Chaos: screen loads with error trigger buttons visible', (tester) async {
+  testWidgets('Chaos: screen loads with error trigger buttons visible', (
+    tester,
+  ) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_chaos_button');
     expect(find.text('Chaos & Self-Heal'), findsOneWidget);
@@ -401,10 +586,16 @@ void main() {
     // Verify the crash-trigger buttons are present and tappable.
     // We do NOT trigger them — they intentionally throw unhandled exceptions
     // which cause pending-frame assertion failures in the test binding.
-    expect(find.byKey(const Key('trigger_sync_error_button')), findsOneWidget,
-        reason: 'Sync error button should be visible');
-    expect(find.byKey(const Key('trigger_async_error_button')), findsOneWidget,
-        reason: 'Async error button should be visible');
+    expect(
+      find.byKey(const Key('trigger_sync_error_button')),
+      findsOneWidget,
+      reason: 'Sync error button should be visible',
+    );
+    expect(
+      find.byKey(const Key('trigger_async_error_button')),
+      findsOneWidget,
+      reason: 'Async error button should be visible',
+    );
 
     await _goBack(tester);
   });

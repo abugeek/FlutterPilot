@@ -23,7 +23,9 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
   @override
   Widget build(BuildContext context) {
     return MediaQuery(
-      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_textScale)),
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(_textScale)),
       child: Scaffold(
         appBar: AppBar(title: const Text('Accessibility')),
         body: SingleChildScrollView(
@@ -67,7 +69,9 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                         'This paragraph scales with the slider above. '
                         'AI can call set_text_scale_factor(2.0) to simulate '
                         'users who prefer larger system fonts.',
-                        style: TextStyle(fontSize: 14 * _textScale.clamp(0.8, 1.5)),
+                        style: TextStyle(
+                          fontSize: 14 * _textScale.clamp(0.8, 1.5),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -104,7 +108,8 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                         key: const Key('show_semantic_labels_switch'),
                         title: const Text('Show Semantic Labels'),
                         subtitle: const Text(
-                            'Overlay semantic descriptions on widgets'),
+                          'Overlay semantic descriptions on widgets',
+                        ),
                         value: _showSemanticLabels,
                         onChanged: (v) =>
                             setState(() => _showSemanticLabels = v),
@@ -117,7 +122,8 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                         ),
                         const SizedBox(height: 8),
                         _SemanticsWidget(
-                          semanticsLabel: 'Submit button, double-press to confirm',
+                          semanticsLabel:
+                              'Submit button, double-press to confirm',
                           role: 'Button',
                           child: ElevatedButton(
                             key: const Key('semantics_submit_button'),
@@ -169,8 +175,9 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
 
               // -- Widget Assertions ----------------------------------------
               _sectionHeader(
-                  'Widget Assertions',
-                  'assert_widget_enabled · assert_widget_disabled'),
+                'Widget Assertions',
+                'assert_widget_enabled · assert_widget_disabled',
+              ),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -256,70 +263,83 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
   }
 
   Widget _scalePreset(String label, double scale) => ElevatedButton(
-        key: Key('scale_${scale.toString().replaceAll(".", "_")}_button'),
-        onPressed: () => setState(() => _textScale = scale),
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-              _textScale == scale ? Colors.indigo : Colors.grey.shade100,
-          foregroundColor:
-              _textScale == scale ? Colors.white : Colors.black87,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        ),
-        child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
-      );
+    key: Key('scale_${scale.toString().replaceAll(".", "_")}_button'),
+    onPressed: () => setState(() => _textScale = scale),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: _textScale == scale
+          ? Colors.indigo
+          : Colors.grey.shade100,
+      foregroundColor: _textScale == scale ? Colors.white : Colors.black87,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    ),
+    child: Text(
+      label,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontSize: 10),
+    ),
+  );
 
   Widget _sectionHeader(String title, String tools) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(tools,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontFamily: 'monospace')),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-      );
+        Text(
+          tools,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _aiHint(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
-                      fontFamily: 'monospace')),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontFamily: 'monospace',
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _codeBox(String code) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Text(code,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Text(
+      code,
+      style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -351,21 +371,24 @@ class _SemanticsWidget extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.teal,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text(role,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 10)),
+                child: Text(
+                  role,
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   semanticsLabel,
-                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ],

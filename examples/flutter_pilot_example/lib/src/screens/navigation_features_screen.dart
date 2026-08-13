@@ -60,7 +60,10 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Navigate To', 'navigate_to · press_back · get_navigation_stack'),
+            _sectionHeader(
+              'Navigate To',
+              'navigate_to · press_back · get_navigation_stack',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -71,14 +74,54 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        _routeButton(context, '/state', 'State Screen', Icons.memory),
-                        _routeButton(context, '/network', 'Network', Icons.network_check),
-                        _routeButton(context, '/storage', 'Storage', Icons.storage),
-                        _routeButton(context, '/chaos', 'Chaos', Icons.bug_report),
-                        _routeButton(context, '/ui_automation', 'UI Automation', Icons.touch_app),
-                        _routeButton(context, '/accessibility', 'Accessibility', Icons.accessibility),
-                        _routeButton(context, '/debug_perf', 'Debug & Perf', Icons.speed),
-                        _routeButton(context, '/testing', 'Testing', Icons.science),
+                        _routeButton(
+                          context,
+                          '/state',
+                          'State Screen',
+                          Icons.memory,
+                        ),
+                        _routeButton(
+                          context,
+                          '/network',
+                          'Network',
+                          Icons.network_check,
+                        ),
+                        _routeButton(
+                          context,
+                          '/storage',
+                          'Storage',
+                          Icons.storage,
+                        ),
+                        _routeButton(
+                          context,
+                          '/chaos',
+                          'Chaos',
+                          Icons.bug_report,
+                        ),
+                        _routeButton(
+                          context,
+                          '/ui_automation',
+                          'UI Automation',
+                          Icons.touch_app,
+                        ),
+                        _routeButton(
+                          context,
+                          '/accessibility',
+                          'Accessibility',
+                          Icons.accessibility,
+                        ),
+                        _routeButton(
+                          context,
+                          '/debug_perf',
+                          'Debug & Perf',
+                          Icons.speed,
+                        ),
+                        _routeButton(
+                          context,
+                          '/testing',
+                          'Testing',
+                          Icons.science,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -114,12 +157,16 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                         children: [
                           ElevatedButton(
                             key: const Key('set_light_theme_button'),
-                            onPressed: isDark ? () => ctx.read<ThemeCubit>().toggle() : null,
+                            onPressed: isDark
+                                ? () => ctx.read<ThemeCubit>().toggle()
+                                : null,
                             child: const Text('Light'),
                           ),
                           ElevatedButton(
                             key: const Key('set_dark_theme_button'),
-                            onPressed: !isDark ? () => ctx.read<ThemeCubit>().toggle() : null,
+                            onPressed: !isDark
+                                ? () => ctx.read<ThemeCubit>().toggle()
+                                : null,
                             child: const Text('Dark'),
                           ),
                         ],
@@ -127,7 +174,10 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                       const SizedBox(height: 4),
                       Text(
                         'AI: set_theme("dark") or set_theme("light")',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
@@ -147,21 +197,27 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       key: const Key('locale_dropdown'),
-                      value: _currentLocale,
+                      initialValue: _currentLocale,
                       decoration: const InputDecoration(
                         labelText: 'Select locale',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
                       items: _locales
-                          .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                          .map(
+                            (l) => DropdownMenuItem(value: l, child: Text(l)),
+                          )
                           .toList(),
-                      onChanged: (v) => setState(() => _currentLocale = v ?? 'en_US'),
+                      onChanged: (v) =>
+                          setState(() => _currentLocale = v ?? 'en_US'),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'AI: set_locale("es_ES") switches language at runtime',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -187,7 +243,9 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Currently: ${_isPortrait ? "Portrait" : "Landscape"}'),
+                          Text(
+                            'Currently: ${_isPortrait ? "Portrait" : "Landscape"}',
+                          ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
@@ -198,7 +256,10 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                                 onPressed: !_isPortrait
                                     ? () => setState(() => _isPortrait = true)
                                     : null,
-                                icon: const Icon(Icons.stay_current_portrait, size: 16),
+                                icon: const Icon(
+                                  Icons.stay_current_portrait,
+                                  size: 16,
+                                ),
                                 label: const Text('Portrait'),
                               ),
                               ElevatedButton.icon(
@@ -206,7 +267,10 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                                 onPressed: _isPortrait
                                     ? () => setState(() => _isPortrait = false)
                                     : null,
-                                icon: const Icon(Icons.stay_current_landscape, size: 16),
+                                icon: const Icon(
+                                  Icons.stay_current_landscape,
+                                  size: 16,
+                                ),
                                 label: const Text('Landscape'),
                               ),
                             ],
@@ -244,7 +308,9 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     Text(
                       'AI: simulate_deep_link("flutterpilot://note/42")',
                       style: TextStyle(
-                          fontSize: 12, color: Colors.purple.shade700),
+                        fontSize: 12,
+                        color: Colors.purple.shade700,
+                      ),
                     ),
                   ],
                 ),
@@ -309,7 +375,12 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
     );
   }
 
-  Widget _routeButton(BuildContext ctx, String route, String label, IconData icon) {
+  Widget _routeButton(
+    BuildContext ctx,
+    String route,
+    String label,
+    IconData icon,
+  ) {
     return ElevatedButton.icon(
       key: Key('nav_to${route.replaceAll("/", "_")}_button'),
       onPressed: () => ctx.push(route),
@@ -319,55 +390,66 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
   }
 
   Widget _sectionHeader(String title, String tools) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(tools,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontFamily: 'monospace')),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-      );
+        Text(
+          tools,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _aiHint(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
-                      fontFamily: 'monospace')),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontFamily: 'monospace',
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _codeChip(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.purple.shade100,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(text,
-            style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                color: Colors.purple.shade900)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: Colors.purple.shade100,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: Colors.purple.shade900,
+      ),
+    ),
+  );
 }

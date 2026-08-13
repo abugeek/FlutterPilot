@@ -66,22 +66,25 @@ void main() {
       }
     });
 
-    test('register without FlutterPilot.initialize prints warning and skips', () {
-      // Simulate calling register before initialize by resetting both
-      GoRouterPilotInspector.reset();
+    test(
+      'register without FlutterPilot.initialize prints warning and skips',
+      () {
+        // Simulate calling register before initialize by resetting both
+        GoRouterPilotInspector.reset();
 
-      final router = GoRouter(
-        routes: [GoRoute(path: '/', builder: (_, __) => const SizedBox())],
-      );
-      // This should not throw — just print a warning and return early
-      // because _registered guard prevents double-registration issues
-      try {
-        GoRouterPilotInspector.register(router);
-      } on UnsupportedError {
-        // Expected — registerExtension not available in test env.
-      } finally {
-        router.dispose();
-      }
-    });
+        final router = GoRouter(
+          routes: [GoRoute(path: '/', builder: (_, __) => const SizedBox())],
+        );
+        // This should not throw — just print a warning and return early
+        // because _registered guard prevents double-registration issues
+        try {
+          GoRouterPilotInspector.register(router);
+        } on UnsupportedError {
+          // Expected — registerExtension not available in test env.
+        } finally {
+          router.dispose();
+        }
+      },
+    );
   });
 }

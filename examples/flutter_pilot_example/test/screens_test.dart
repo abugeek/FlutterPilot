@@ -16,19 +16,30 @@ import 'package:flutter_pilot_example/src/state/bloc_state.dart';
 /// 3. State management integrations display correctly
 /// 4. Key widgets are identifiable by their semantic keys
 
+import 'package:go_router/go_router.dart';
+
 Widget _wrapWithProviders(Widget child) {
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, __) => child),
+      GoRoute(path: '/state', builder: (_, __) => const StateInjectionScreen()),
+      GoRoute(
+        path: '/network',
+        builder: (_, __) => const Scaffold(body: Text('network')),
+      ),
+      GoRoute(
+        path: '/storage',
+        builder: (_, __) => const Scaffold(body: Text('storage')),
+      ),
+      GoRoute(path: '/chaos', builder: (_, __) => const ChaosScreen()),
+    ],
+  );
+
   return ProviderScope(
     child: BlocProvider(
       create: (_) => CounterCubit(),
-      child: MaterialApp(
-        home: child,
-        routes: {
-          '/state': (_) => const StateInjectionScreen(),
-          '/network': (_) => const Scaffold(body: Text('network')),
-          '/storage': (_) => const Scaffold(body: Text('storage')),
-          '/chaos': (_) => const ChaosScreen(),
-        },
-      ),
+      child: MaterialApp.router(routerConfig: router),
     ),
   );
 }

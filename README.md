@@ -5,52 +5,91 @@
 [![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.0-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-%5E3.11-0175C2?logo=dart)](https://dart.dev)
 
-**FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, and AI-native development workflows.
+**FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, network chaos mocking, visual regression diffing, and AI-native development workflows.
 
-> **Why FlutterPilot?** Flutter's built-in support for AI-driven development is limited. FlutterPilot fills that gap with **105 tools** for screenshots, UI automation, state inspection, error recovery, debug console capture, full DevTools-level deep inspection, and plugin integrations for Supabase, GoRouter, Firebase, Connectivity, and Secure Storage — all designed specifically for how AI agents work.
+> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with **110+ tools** for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage.
 
-## 🚀 Quick Start (3 Steps)
+## 🚀 Quick Start (Choose Your Workflow)
 
-### 1️⃣ Add SDK to Your Flutter App
+### Option A: The 1-Command CLI Workflow (Recommended)
+```bash
+# 1. Install CLI
+dart pub global activate --source path ./packages/flutterpilot_cli
+
+# 2. In your Flutter project root, auto-configure SDK & plugins:
+flutterpilot init
+
+# 3. Launch app with automatic MCP binding:
+flutterpilot dev
+```
+
+### Option B: Zero-Code Mode (No App Changes Required)
+Connect FlutterPilot MCP Server to **any existing Flutter app** out of the box:
+```bash
+# Run any vanilla Flutter app:
+flutter run
+
+# Start the MCP server (auto-discovers your app on localhost):
+dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
+```
+
+### Option C: Manual SDK Integration
 ```bash
 flutter pub add --dev flutterpilot_sdk
 ```
-Then in `main.dart`:
+In `main.dart`:
 ```dart
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
   runApp(MyApp());
 }
 ```
 
-### 2️⃣ Run Your App
-```bash
-flutter run
-```
-From the output, copy the **VM Service URI** (looks like `http://127.0.0.1:XXXXX/...=`).
-
-### 3️⃣ Start the MCP Server
-```bash
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
-  --uri <paste-vm-service-uri-here>
-```
-
-**That's it!** Your AI agent (Claude, Cursor, etc.) can now see and control your running app.
-
 ---
 
 ## 📋 What You Get
 
-### 105 MCP Tools Across 10 Categories
+### 110+ MCP Tools Across 10 Categories
 
-#### 🎬 **Screenshots & Layout** (5 tools)
+#### 🎬 **Screenshots & Visual Regression Diff Engine** (5 tools)
 - `capture_screenshot` — PNG screenshot as MCP Image
-- `get_widget_tree` — Full widget hierarchy with positions
+- `get_widget_tree` — Full widget hierarchy with positions (PII automatically masked)
 - `get_widget_properties` — Read text, enabled state, value, bounds from any widget
-- `compare_screenshot` — Visual regression testing baseline
-- `save_screenshot_baseline` — Save screenshot for comparisons
+- `save_screenshot_baseline` — Save baseline image for visual regression tests
+- `compare_screenshot` — Pixel-by-pixel regression comparison with automatic magenta visual diff generation
+
+#### 🖱️ **UI Automation & Live Visual AI Overlay** (15 tools)
+- `tap_widget(key)` — Tap a widget by key (triggers live animated ripple & `🤖 AI: Tap` badge on screen)
+- `tap_at(x, y)` — Tap at screen coordinates
+- `double_tap_widget(key)` — Double-tap a widget
+- `long_press_widget(key)` — Long-press a widget
+- `enter_text(key, text)` — Type into a text field
+- `clear_text_field(key)` — Clear a text field
+- `scroll_into_view(key)` — Scroll until widget is visible
+- `scroll_by(dx, dy)` — Scroll by pixel amount
+- `press_back` — Pop current route (hardware back button)
+- `set_slider_value(key, value)` — Set slider to numeric value
+- `toggle_checkbox(key)` — Toggle checkbox/switch/radio
+- `focus_widget(key)` — Request focus on a widget
+- `unfocus_all` — Dismiss keyboard
+- `set_text_scale_factor(scale)` — Accessibility text scaling
+- `pump_frames(count)` — Wait for N animation frames
+
+#### 🌐 **Network Chaos & Mocking Engine** (5 tools)
+- `mock_http_response` — Mock HTTP endpoints with custom status code, delay, and response payload
+- `clear_http_mocks` — Clear active synthetic mocks
+- `simulate_network_condition` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
+- `simulate_offline` — Toggle offline mode for connectivity testing
+- `get_network_logs` — HTTP requests/responses (Dio)
+
+#### 📱 **Multi-Device / Fleet Manager & Connection** (4 tools)
+- `connect_app(uri)` — Connect or auto-discover running Flutter app
+- `list_connected_devices` — List all registered iOS, Android, and Web instances
+- `register_device(id, uri)` — Register new simulator/device in the fleet
+- `switch_device(id)` — Switch active target device on the fly
 
 #### 🖱️ **UI Automation** (15 tools)
 - `tap_at(x, y)` — Tap at screen coordinates

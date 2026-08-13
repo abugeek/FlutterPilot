@@ -10,7 +10,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -18,7 +18,6 @@ void _safeRegisterExtension(
     // Already registered — safe to ignore during re-initialization.
   }
 }
-
 
 /// FlutterPilot plugin that exposes Firebase services state to AI agents.
 ///
@@ -110,8 +109,8 @@ class FirebasePilotInspector {
         'performance': _performance != null
             ? {
                 'available': true,
-                'isPerformanceCollectionEnabled':
-                    _performance!.isPerformanceCollectionEnabled(),
+                'isPerformanceCollectionEnabled': _performance!
+                    .isPerformanceCollectionEnabled(),
               }
             : {'available': false},
         'messaging': {'available': _messaging != null},
@@ -149,12 +148,14 @@ class FirebasePilotInspector {
 
       try {
         final token = await _messaging!.getToken();
-        return ServiceExtensionResponse.result(json.encode({
-          'token': token != null
-              ? '${token.substring(0, (token.length > 20 ? 20 : token.length))}...'
-              : null,
-          'tokenLength': token?.length,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'token': token != null
+                ? '${token.substring(0, (token.length > 20 ? 20 : token.length))}...'
+                : null,
+            'tokenLength': token?.length,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -189,7 +190,9 @@ class FirebasePilotInspector {
         try {
           final decoded = json.decode(paramsJson);
           if (decoded is Map) {
-            eventParams = decoded.map((k, v) => MapEntry(k.toString(), v as Object));
+            eventParams = decoded.map(
+              (k, v) => MapEntry(k.toString(), v as Object),
+            );
           }
         } catch (_) {
           return ServiceExtensionResponse.error(
@@ -209,10 +212,9 @@ class FirebasePilotInspector {
         while (_analyticsLog.length > _maxAnalyticsLog) {
           _analyticsLog.removeAt(0);
         }
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success',
-          'event': name,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'event': name}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -227,17 +229,21 @@ class FirebasePilotInspector {
       parameters,
     ) async {
       final limitStr = parameters['limit'];
-      final limit = (int.tryParse(limitStr ?? '') ?? _maxAnalyticsLog)
-          .clamp(1, _maxAnalyticsLog);
+      final limit = (int.tryParse(limitStr ?? '') ?? _maxAnalyticsLog).clamp(
+        1,
+        _maxAnalyticsLog,
+      );
       final entries = _analyticsLog.length > limit
           ? _analyticsLog.sublist(_analyticsLog.length - limit)
           : _analyticsLog;
 
-      return ServiceExtensionResponse.result(json.encode({
-        'events': entries,
-        'count': entries.length,
-        'total': _analyticsLog.length,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'events': entries,
+          'count': entries.length,
+          'total': _analyticsLog.length,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.startPerformanceTrace --------------------------------
@@ -271,11 +277,13 @@ class FirebasePilotInspector {
         final trace = _performance!.newTrace(name);
         await trace.start();
         _activeTraces[name] = trace;
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'started',
-          'trace': name,
-          'activeTraces': _activeTraces.keys.toList(),
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'started',
+            'trace': name,
+            'activeTraces': _activeTraces.keys.toList(),
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -307,11 +315,13 @@ class FirebasePilotInspector {
 
       try {
         await trace.stop();
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'stopped',
-          'trace': name,
-          'activeTraces': _activeTraces.keys.toList(),
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'stopped',
+            'trace': name,
+            'activeTraces': _activeTraces.keys.toList(),
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -342,11 +352,13 @@ class FirebasePilotInspector {
           reason: 'FlutterPilot: $message',
           fatal: fatal,
         );
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'recorded',
-          'message': message,
-          'fatal': fatal,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'recorded',
+            'message': message,
+            'fatal': fatal,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

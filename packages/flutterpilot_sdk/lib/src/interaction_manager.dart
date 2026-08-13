@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'ai_overlay_manager.dart';
 
 /// Manages user-interaction tracking and programmatic gesture simulation.
 ///
@@ -86,7 +87,8 @@ class InteractionManager {
   ///
   /// Used by the `ext.flutterpilot.tapAt` and `ext.flutterpilot.tapWidget`
   /// service extensions to drive the UI programmatically.
-  static Future<void> tapAt(Offset position) async {
+  static Future<void> tapAt(Offset position, {String? label}) async {
+    AiOverlayManager.showAction(position, label ?? 'Tap');
     final pointer = TestPointer(1, PointerDeviceKind.touch);
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
     await Future.delayed(const Duration(milliseconds: 50));
@@ -94,7 +96,8 @@ class InteractionManager {
   }
 
   /// Simulates a double-tap at [position].
-  static Future<void> doubleTapAt(Offset position) async {
+  static Future<void> doubleTapAt(Offset position, {String? label}) async {
+    AiOverlayManager.showAction(position, label ?? 'Double Tap');
     await tapAt(position);
     await Future.delayed(const Duration(milliseconds: 40));
     await tapAt(position);
@@ -104,7 +107,9 @@ class InteractionManager {
   static Future<void> longPressAt(
     Offset position, {
     Duration duration = const Duration(milliseconds: 600),
+    String? label,
   }) async {
+    AiOverlayManager.showAction(position, label ?? 'Long Press');
     final pointer = TestPointer(1, PointerDeviceKind.touch);
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
     await Future.delayed(duration);

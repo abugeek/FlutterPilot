@@ -13,7 +13,7 @@ import 'package:go_router/go_router.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -111,20 +111,22 @@ class GoRouterPilotInspector {
       final config = router.routerDelegate.currentConfiguration;
       final location = config.uri.toString();
 
-      return ServiceExtensionResponse.result(json.encode({
-        'currentLocation': location,
-        'pathParameters': config.pathParameters,
-        'queryParameters': config.uri.queryParameters,
-        'matchedRoutes': config.matches.map((m) {
-          return {
-            'matchedLocation': m.matchedLocation,
-            'route': m.route is GoRoute
-                ? (m.route as GoRoute).path
-                : m.route.runtimeType.toString(),
-          };
-        }).toList(),
-        'canPop': router.canPop(),
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'currentLocation': location,
+          'pathParameters': config.pathParameters,
+          'queryParameters': config.uri.queryParameters,
+          'matchedRoutes': config.matches.map((m) {
+            return {
+              'matchedLocation': m.matchedLocation,
+              'route': m.route is GoRoute
+                  ? (m.route as GoRoute).path
+                  : m.route.runtimeType.toString(),
+            };
+          }).toList(),
+          'canPop': router.canPop(),
+        }),
+      );
     });
 
     // -- ext.flutterpilot.getGoRouterConfig -----------------------------------
@@ -142,9 +144,7 @@ class GoRouterPilotInspector {
 
       List<Map<String, dynamic>> extractRoutes(List<RouteBase> routes) {
         return routes.map((route) {
-          final data = <String, dynamic>{
-            'type': route.runtimeType.toString(),
-          };
+          final data = <String, dynamic>{'type': route.runtimeType.toString()};
           if (route is GoRoute) {
             data['path'] = route.path;
             data['name'] = route.name;
@@ -161,9 +161,9 @@ class GoRouterPilotInspector {
         }).toList();
       }
 
-      return ServiceExtensionResponse.result(json.encode({
-        'routes': extractRoutes(router.configuration.routes),
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({'routes': extractRoutes(router.configuration.routes)}),
+      );
     });
 
     // -- ext.flutterpilot.getGoRouterHistory -----------------------------------
@@ -171,10 +171,12 @@ class GoRouterPilotInspector {
       method,
       parameters,
     ) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'history': _navigationHistory,
-        'count': _navigationHistory.length,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'history': _navigationHistory,
+          'count': _navigationHistory.length,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.goRouterNavigate ------------------------------------
@@ -219,11 +221,13 @@ class GoRouterPilotInspector {
           default:
             router.go(location!);
         }
-        return ServiceExtensionResponse.result(json.encode({
-          'status': 'success',
-          'action': action,
-          'location': location,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'action': action,
+            'location': location,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

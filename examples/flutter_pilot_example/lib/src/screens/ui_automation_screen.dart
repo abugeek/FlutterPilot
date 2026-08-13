@@ -35,7 +35,12 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
   final _searchController = TextEditingController();
   final List<String> _log = [];
 
-  void _addLog(String msg) => setState(() => _log.insert(0, '${DateTime.now().toIso8601String().substring(11, 19)}  $msg'));
+  void _addLog(String msg) => setState(
+    () => _log.insert(
+      0,
+      '${DateTime.now().toIso8601String().substring(11, 19)}  $msg',
+    ),
+  );
 
   @override
   void dispose() {
@@ -59,7 +64,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
             const SizedBox(height: 16),
 
             // ── Text Fields ──────────────────────────────────────────────────
-            _sectionHeader('Text Fields', 'enter_text · clear_text_field · focus_widget · unfocus_all'),
+            _sectionHeader(
+              'Text Fields',
+              'enter_text · clear_text_field · focus_widget · unfocus_all',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -92,7 +100,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
                             _textController.text.isEmpty
                                 ? 'No text entered yet'
                                 : 'Value: "${_textController.text}"',
-                            style: const TextStyle(fontSize: 13, color: Colors.grey),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
                         TextButton.icon(
@@ -163,7 +174,9 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
                 children: [
                   SwitchListTile(
                     key: const Key('notifications_switch'),
-                    title: const Text('Notifications (key: notifications_switch)'),
+                    title: const Text(
+                      'Notifications (key: notifications_switch)',
+                    ),
                     value: _notificationsEnabled,
                     onChanged: (v) {
                       setState(() => _notificationsEnabled = v);
@@ -194,7 +207,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
             const SizedBox(height: 16),
 
             // ── Tap Variants ─────────────────────────────────────────────────
-            _sectionHeader('Tap Variants', 'tap_widget · double_tap_widget · long_press_widget'),
+            _sectionHeader(
+              'Tap Variants',
+              'tap_widget · double_tap_widget · long_press_widget',
+            ),
             Row(
               children: [
                 Expanded(
@@ -260,7 +276,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
                       itemCount: _log.length,
                       itemBuilder: (_, i) => Text(
                         _log[i],
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                        ),
                       ),
                     ),
             ),
@@ -286,7 +305,9 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
                       key: const Key('find_me_tile'),
                       leading: const Icon(Icons.flag, color: Colors.green),
                       title: const Text('🎯 Find Me! (key: find_me_tile)'),
-                      subtitle: const Text('scroll_into_view("find_me_tile") should jump here'),
+                      subtitle: const Text(
+                        'scroll_into_view("find_me_tile") should jump here',
+                      ),
                       tileColor: Colors.green.shade50,
                     );
                   }
@@ -331,37 +352,47 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
   }
 
   Widget _sectionHeader(String title, String tools) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(
-              tools,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontFamily: 'monospace'),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-      );
+        Text(
+          tools,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _aiHint(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 12, color: Colors.blue),
+          ),
         ),
-        child: Row(
-          children: [
-            const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text, style: const TextStyle(fontSize: 12, color: Colors.blue)),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -441,18 +472,24 @@ class _TapCardState extends State<_TapCard> {
   @override
   Widget build(BuildContext context) {
     final detector = GestureDetector(
-      onTap: widget.isDoubleTap || widget.isLongPress ? null : () {
-        setState(() => _count++);
-        widget.onActivate();
-      },
-      onDoubleTap: widget.isDoubleTap ? () {
-        setState(() => _count++);
-        widget.onActivate();
-      } : null,
-      onLongPress: widget.isLongPress ? () {
-        setState(() => _count++);
-        widget.onActivate();
-      } : null,
+      onTap: widget.isDoubleTap || widget.isLongPress
+          ? null
+          : () {
+              setState(() => _count++);
+              widget.onActivate();
+            },
+      onDoubleTap: widget.isDoubleTap
+          ? () {
+              setState(() => _count++);
+              widget.onActivate();
+            }
+          : null,
+      onLongPress: widget.isLongPress
+          ? () {
+              setState(() => _count++);
+              widget.onActivate();
+            }
+          : null,
       child: Container(
         key: Key(widget.buttonKey),
         height: 90,
@@ -477,13 +514,19 @@ class _TapCardState extends State<_TapCard> {
             if (_count > 0)
               Text(
                 '×$_count',
-                style: TextStyle(fontSize: 11, color: widget.color.withAlpha(200)),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: widget.color.withAlpha(200),
+                ),
               ),
           ],
         ),
       ),
     );
 
-    return Card(key: Key(widget.cardKey), child: Padding(padding: const EdgeInsets.all(4), child: detector));
+    return Card(
+      key: Key(widget.cardKey),
+      child: Padding(padding: const EdgeInsets.all(4), child: detector),
+    );
   }
 }

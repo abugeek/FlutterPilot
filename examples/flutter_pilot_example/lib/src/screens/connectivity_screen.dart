@@ -99,10 +99,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             const SizedBox(height: 16),
 
             // ── Current Status ───────────────────────────────────────────────
-            _sectionHeader(
-              'Current Network Status',
-              'get_connectivity_status',
-            ),
+            _sectionHeader('Current Network Status', 'get_connectivity_status'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -199,10 +196,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                         'if (ConnectivityPilotInspector.isSimulatedOffline) {\n'
                         '  showOfflineBanner();\n'
                         '}',
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 12),
                       ),
                     ),
                   ],
@@ -307,76 +301,76 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   Widget _sectionHeader(String title, String tools) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              tools,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-      );
+        Text(
+          tools,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _aiHint(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.blue,
-                  fontFamily: 'monospace',
-                ),
-              ),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontFamily: 'monospace',
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _scriptBlock(String label, String script) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.blue.shade200),
-            ),
-            child: Text(
-              script,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-            ),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+      const SizedBox(height: 4),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.blue.shade200),
+        ),
+        child: Text(
+          script,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+        ),
+      ),
+    ],
+  );
 }
 
 class _ConnEvent {

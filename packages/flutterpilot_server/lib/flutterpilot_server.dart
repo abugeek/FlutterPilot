@@ -10,7 +10,9 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:path/path.dart' as path;
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
+import 'src/fleet_manager.dart';
 import 'src/self_heal_manager.dart';
+import 'src/vm_discovery.dart';
 
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
@@ -37,6 +39,9 @@ abstract class _FlutterPilotServerBase {
   Queue<Map<String, dynamic>> get _debugLogBuffer;
   Map<String, Uint8List> get _screenshotBaselines;
   SelfHealManager get _selfHealManager;
+  FleetManager get _fleetManager;
+
+  Future<bool> _connectWithUri([String? targetUri]);
 
   Future<_ExtensionResult> _callExtensionRaw(
     String extension,
@@ -67,8 +72,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
+  String? _vmServiceUri;
   @override
-  final String vmServiceUri;
+  String get vmServiceUri => _vmServiceUri ?? '';
   @override
   final bool allowDestructive;
   @override
@@ -81,6 +87,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   final Queue<Map<String, dynamic>> _debugLogBuffer = Queue();
   @override
   late final SelfHealManager _selfHealManager;
+  @override
+  late final FleetManager _fleetManager = FleetManager();
   @override
   final Map<String, Uint8List> _screenshotBaselines = {};
 
@@ -98,12 +106,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   static final Random _random = Random();
 
   FlutterPilotServer({
-    required this.vmServiceUri,
+    String? vmServiceUri,
     this.allowDestructive = false,
     Directory? projectRoot,
-  }) : _projectRoot = projectRoot ?? Directory.current,
+  }) : _vmServiceUri = vmServiceUri,
+       _projectRoot = projectRoot ?? Directory.current,
        server = McpServer(
-         Implementation(name: 'FlutterPilot', version: '0.0.1'),
+         Implementation(name: 'FlutterPilot', version: '0.1.0'),
          options: McpServerOptions(
            capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
          ),
@@ -114,7 +123,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   Future<void> start() async {
-    await _connectToVmService();
+    try {
+      await _connectToVmService();
+    } catch (e) {
+      _log.warning('Initial VM Service connection skipped: $e');
+    }
 
     // Start MCP server over stdio
     final stdioTransport = StdioServerTransport();
@@ -126,11 +139,50 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   // VM Service connection & reconnection
   // ---------------------------------------------------------------------------
 
+  @override
+  Future<bool> _connectWithUri([String? targetUri]) async {
+    if (targetUri != null && targetUri.isNotEmpty) {
+      _vmServiceUri = targetUri;
+    }
+    if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
+      _log.info('Auto-discovering running Flutter app...');
+      final discovered = await VmDiscoveryService.discover(
+        projectRoot: _projectRoot,
+      );
+      if (discovered != null) {
+        _vmServiceUri = discovered;
+        _log.info('Discovered VM Service: $_vmServiceUri');
+      } else {
+        return false;
+      }
+    }
+    try {
+      await _connectToVmService();
+      return _vmService != null;
+    } catch (e) {
+      _log.warning('Failed to connect to VM Service: $e');
+      return false;
+    }
+  }
+
   Future<void> _connectToVmService() async {
     if (_disposed) return;
-    _log.info('Connecting to VM Service: $vmServiceUri');
-    _vmService = await vmServiceConnectUri(vmServiceUri);
-    _log.info('Connected to VM Service');
+    if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
+      final discovered = await VmDiscoveryService.discover(
+        projectRoot: _projectRoot,
+      );
+      if (discovered != null) {
+        _vmServiceUri = discovered;
+      } else {
+        _log.info(
+          'Standby mode: Waiting for Flutter app to launch (call connect_app or flutter run).',
+        );
+        return;
+      }
+    }
+    _log.info('Connecting to VM Service: $_vmServiceUri');
+    _vmService = await vmServiceConnectUri(_vmServiceUri!);
+    _log.info('Connected to VM Service at $_vmServiceUri');
 
     _currentBackoff = _minBackoff;
 
@@ -534,16 +586,20 @@ Use this guide to understand what tools to call, when, and in what order.
     Map<String, dynamic> parameters,
   ) async {
     if (_vmService == null) {
-      if (_isReconnecting) {
+      // Attempt quick auto-connect if disconnected
+      await _connectWithUri();
+      if (_vmService == null) {
+        if (_isReconnecting) {
+          return _ExtensionResult.error(
+            'VM Service is reconnecting. Please retry shortly.',
+            ErrorCategory.reconnecting,
+          );
+        }
         return _ExtensionResult.error(
-          'VM Service is reconnecting. Please retry shortly.',
-          ErrorCategory.reconnecting,
+          'No active Flutter app connection. Start your app with "flutter run" or call connect_app(uri: "...") to connect.',
+          ErrorCategory.connectionLost,
         );
       }
-      return _ExtensionResult.error(
-        'No VM Service connection.',
-        ErrorCategory.connectionLost,
-      );
     }
     try {
       final vm = await _vmService!.getVM().timeout(_Constants.vmServiceTimeout);
@@ -567,7 +623,15 @@ Use this guide to understand what tools to call, when, and in what order.
             return _ExtensionResult.success(response.json!);
           }
         } on RPCError catch (e) {
-          if (e.code == -32601) continue;
+          if (e.code == -32601) {
+            final fallback = await _handleZeroCodeFallback(
+              extension,
+              parameters,
+              isolateRef.id!,
+            );
+            if (fallback != null) return fallback;
+            continue;
+          }
           return _ExtensionResult.error(
             e.data?['details'] as String? ?? 'Extension error: ${e.message}',
             ErrorCategory.extensionError,
@@ -579,6 +643,10 @@ Use this guide to understand what tools to call, when, and in what order.
           );
         }
       }
+      return _ExtensionResult.error(
+        'Extension "$extension" is not registered in the running Flutter app. If this is a plugin or deep state tool, run "flutterpilot init" to install matching packages.',
+        ErrorCategory.extensionError,
+      );
     } on TimeoutException {
       return _ExtensionResult.error(
         'VM Service timed out. The app may be unresponsive.',
@@ -606,10 +674,50 @@ Use this guide to understand what tools to call, when, and in what order.
         ErrorCategory.connectionLost,
       );
     }
-    return _ExtensionResult.error(
-      'Tool not found in any isolate. Ensure you registered the plugin.',
-      ErrorCategory.toolNotFound,
-    );
+  }
+
+  Future<_ExtensionResult?> _handleZeroCodeFallback(
+    String extension,
+    Map<String, dynamic> parameters,
+    String isolateId,
+  ) async {
+    if (_vmService == null) return null;
+    try {
+      if (extension == 'ext.flutterpilot.getSummary') {
+        final vm = await _vmService!.getVM();
+        final memory = await _vmService!.getMemoryUsage(isolateId);
+        return _ExtensionResult.success({
+          'sdkMode': 'zero-code (core Flutter VM)',
+          'status': 'connected',
+          'flutterVersion': vm.version ?? 'Unknown',
+          'isolateCount': vm.isolates?.length ?? 1,
+          'memory': {
+            'heapUsageMb':
+                ((memory.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(1),
+            'heapCapacityMb':
+                ((memory.heapCapacity ?? 0) / (1024 * 1024)).toStringAsFixed(1),
+          },
+          'hint':
+              'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
+        });
+      } else if (extension == 'ext.flutterpilot.hotReload') {
+        await _vmService!.callServiceExtension(
+          'ext.flutter.reassemble',
+          isolateId: isolateId,
+        );
+        return _ExtensionResult.success({'status': 'hot_reload_applied'});
+      } else if (extension == 'ext.flutterpilot.getWidgetTree') {
+        final res = await _vmService!.callServiceExtension(
+          'ext.flutter.inspector.getRootWidgetTree',
+          isolateId: isolateId,
+          args: {'isSummaryTree': 'true'},
+        );
+        if (res.json != null) {
+          return _ExtensionResult.success(res.json!);
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import 'package:sqflite/sqflite.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);
@@ -84,14 +84,20 @@ class SqflitePilotInspector {
   static bool _isSafeReadOnly(String sql) {
     var cleaned = sql.replaceAll(RegExp(r'--[^\n]*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
-    final normalized = cleaned.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+    final normalized = cleaned
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toUpperCase();
     if (normalized.isEmpty) return false;
     // Block multi-statement injection
-    if (normalized.contains(';') && normalized.indexOf(';') < normalized.length - 1) {
+    if (normalized.contains(';') &&
+        normalized.indexOf(';') < normalized.length - 1) {
       return false;
     }
     // Block SELECT INTO
-    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) return false;
+    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) {
+      return false;
+    }
     // Block dangerous PRAGMAs
     for (final p in _dangerousPragmas) {
       if (normalized.startsWith(p)) return false;
@@ -186,11 +192,13 @@ class SqflitePilotInspector {
         final tables = await db.rawQuery(
           "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
         );
-        return ServiceExtensionResponse.result(json.encode({
-          'dbName': dbName,
-          'tables': tables.map((r) => r['name']).toList(),
-          'tableCount': tables.length,
-        }));
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'dbName': dbName,
+            'tables': tables.map((r) => r['name']).toList(),
+            'tableCount': tables.length,
+          }),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -204,10 +212,12 @@ class SqflitePilotInspector {
       method,
       parameters,
     ) async {
-      return ServiceExtensionResponse.result(json.encode({
-        'databases': _databases.keys.toList(),
-        'count': _databases.length,
-      }));
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'databases': _databases.keys.toList(),
+          'count': _databases.length,
+        }),
+      );
     });
   }
 }

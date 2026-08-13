@@ -7,7 +7,7 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 void _safeRegisterExtension(
   String method,
   Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-      handler,
+  handler,
 ) {
   try {
     registerExtension(method, handler);

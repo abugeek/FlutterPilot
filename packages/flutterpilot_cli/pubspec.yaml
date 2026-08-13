@@ -1,0 +1,28 @@
+name: flutterpilot_cli
+description: "Official CLI for FlutterPilot — 1-command init, dev runner, and diagnostics for AI-driven Flutter development."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - cli
+  - mcp
+  - ai
+  - devtools
+
+environment:
+  sdk: ^3.11.0
+
+executables:
+  flutterpilot: flutterpilot
+
+dependencies:
+  args: ^2.7.0
+  path: ^1.9.0
+  yaml: ^3.1.3
+  yaml_edit: ^2.2.1
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

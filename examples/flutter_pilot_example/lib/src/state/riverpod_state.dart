@@ -1,8 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final counterProvider = StateProvider<int>((ref) => 0);
+class CounterNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
 
-final authProvider = StateProvider<bool>((ref) => false);
+  void increment() => state++;
+}
+
+final counterProvider = NotifierProvider<CounterNotifier, int>(
+  CounterNotifier.new,
+);
+
+class AuthNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+}
+
+final authProvider = NotifierProvider<AuthNotifier, bool>(AuthNotifier.new);
 
 class User {
   final String name;
@@ -13,4 +27,9 @@ class User {
   String toString() => 'User(name: $name, email: $email)';
 }
 
-final userProvider = StateProvider<User?>((ref) => null);
+class UserNotifier extends Notifier<User?> {
+  @override
+  User? build() => null;
+}
+
+final userProvider = NotifierProvider<UserNotifier, User?>(UserNotifier.new);

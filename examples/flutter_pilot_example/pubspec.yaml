@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_riverpod: ^2.6.1
+  flutter_riverpod: ^3.2.1
   flutter_bloc: ^8.1.6
   dio: ^5.7.0
   drift: ^2.23.0

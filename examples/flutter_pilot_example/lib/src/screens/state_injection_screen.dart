@@ -20,7 +20,7 @@ class StateInjectionScreen extends ConsumerWidget {
             _CounterCard(
               title: 'Riverpod Counter',
               value: riverpodCount,
-              onIncrement: () => ref.read(counterProvider.notifier).state++,
+              onIncrement: () => ref.read(counterProvider.notifier).increment(),
               keyPrefix: 'riverpod',
             ),
             const SizedBox(height: 20),

@@ -27,8 +27,7 @@ class DebugPerformanceScreen extends StatefulWidget {
   const DebugPerformanceScreen({super.key});
 
   @override
-  State<DebugPerformanceScreen> createState() =>
-      _DebugPerformanceScreenState();
+  State<DebugPerformanceScreen> createState() => _DebugPerformanceScreenState();
 }
 
 class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
@@ -51,7 +50,8 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
     setState(() => _logCount += 5);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-          content: Text('5 logs emitted. Call get_debug_logs to read them.')),
+        content: Text('5 logs emitted. Call get_debug_logs to read them.'),
+      ),
     );
   }
 
@@ -59,17 +59,21 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
     try {
       throw StateError('Intentional error for diagnose_last_error demo');
     } catch (e, st) {
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: e,
-        stack: st,
-        library: 'FPExample',
-        context: ErrorDescription('DebugPerformanceScreen'),
-      ));
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: e,
+          stack: st,
+          library: 'FPExample',
+          context: ErrorDescription('DebugPerformanceScreen'),
+        ),
+      );
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-          content:
-              Text('Error captured. Call get_errors or diagnose_last_error.')),
+        content: Text(
+          'Error captured. Call get_errors or diagnose_last_error.',
+        ),
+      ),
     );
   }
 
@@ -96,7 +100,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
             // -- Debug Logs --------------------------------------------------
             _sectionHeader(
-                'Debug Logs', 'get_debug_logs · clear_debug_logs · set_log_filter'),
+              'Debug Logs',
+              'get_debug_logs · clear_debug_logs · set_log_filter',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -128,7 +134,10 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             const SizedBox(height: 16),
 
             // -- Error Detection ---------------------------------------------
-            _sectionHeader('Error Detection', 'get_errors · diagnose_last_error'),
+            _sectionHeader(
+              'Error Detection',
+              'get_errors · diagnose_last_error',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -147,7 +156,8 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                       icon: const Icon(Icons.error_outline),
                       label: const Text('Report a Handled Error'),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange.shade50),
+                        backgroundColor: Colors.orange.shade50,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _codeBox(
@@ -163,7 +173,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
             // -- Performance Metrics ----------------------------------------
             _sectionHeader(
-                'Performance Metrics', 'get_perf_metrics · show_performance_overlay'),
+              'Performance Metrics',
+              'get_perf_metrics · show_performance_overlay',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -178,16 +190,21 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       key: const Key('perf_overlay_switch'),
-                      title: const Text('Performance Overlay (show_performance_overlay)'),
+                      title: const Text(
+                        'Performance Overlay (show_performance_overlay)',
+                      ),
                       subtitle: const Text(
-                          'Displays rendering bars at the top of the screen'),
+                        'Displays rendering bars at the top of the screen',
+                      ),
                       value: _showPerfOverlay,
                       onChanged: (v) {
                         setState(() => _showPerfOverlay = v);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                              content: Text(
-                                  'AI: show_performance_overlay(show: $v)')),
+                            content: Text(
+                              'AI: show_performance_overlay(show: $v)',
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -203,9 +220,10 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
             // -- DevTools Toggles -------------------------------------------
             _sectionHeader(
-                'DevTools Visual Toggles',
-                'toggle_repaint_rainbow · toggle_debug_paint · '
-                    'toggle_slow_animations · enable_widget_rebuild_tracking'),
+              'DevTools Visual Toggles',
+              'toggle_repaint_rainbow · toggle_debug_paint · '
+                  'toggle_slow_animations · enable_widget_rebuild_tracking',
+            ),
             Card(
               child: Column(
                 children: [
@@ -213,14 +231,17 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     key: const Key('repaint_rainbow_switch'),
                     title: const Text('Repaint Rainbow'),
                     subtitle: const Text(
-                        'Colors widgets that repaint — spot unnecessary rebuilds'),
+                      'Colors widgets that repaint — spot unnecessary rebuilds',
+                    ),
                     value: _repaintRainbow,
                     onChanged: (v) {
                       setState(() => _repaintRainbow = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content:
-                                Text('AI: toggle_repaint_rainbow(enabled: $v)')),
+                          content: Text(
+                            'AI: toggle_repaint_rainbow(enabled: $v)',
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -228,14 +249,15 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     key: const Key('debug_paint_switch'),
                     title: const Text('Debug Paint'),
                     subtitle: const Text(
-                        'Shows layout bounds, padding, and hit-test regions'),
+                      'Shows layout bounds, padding, and hit-test regions',
+                    ),
                     value: _debugPaint,
                     onChanged: (v) {
                       setState(() => _debugPaint = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content:
-                                Text('AI: toggle_debug_paint(enabled: $v)')),
+                          content: Text('AI: toggle_debug_paint(enabled: $v)'),
+                        ),
                       );
                     },
                   ),
@@ -243,14 +265,17 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     key: const Key('slow_animations_switch'),
                     title: const Text('Slow Animations (5x)'),
                     subtitle: const Text(
-                        'Slows animations to verify correctness'),
+                      'Slows animations to verify correctness',
+                    ),
                     value: _slowAnimations,
                     onChanged: (v) {
                       setState(() => _slowAnimations = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content:
-                                Text('AI: toggle_slow_animations(enabled: $v)')),
+                          content: Text(
+                            'AI: toggle_slow_animations(enabled: $v)',
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -258,14 +283,17 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     key: const Key('rebuild_tracking_switch'),
                     title: const Text('Widget Rebuild Tracking'),
                     subtitle: const Text(
-                        'Highlights widgets that rebuilt in the last frame'),
+                      'Highlights widgets that rebuilt in the last frame',
+                    ),
                     value: _rebuildTracking,
                     onChanged: (v) {
                       setState(() => _rebuildTracking = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content: Text(
-                                'AI: enable_widget_rebuild_tracking(enabled: $v)')),
+                          content: Text(
+                            'AI: enable_widget_rebuild_tracking(enabled: $v)',
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -276,7 +304,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
             // -- Memory & GC ------------------------------------------------
             _sectionHeader(
-                'Memory & GC', 'get_memory_details · get_gc_stats · get_allocation_profile'),
+              'Memory & GC',
+              'get_memory_details · get_gc_stats · get_allocation_profile',
+            ),
             Card(
               color: Colors.green.shade50,
               child: Padding(
@@ -303,8 +333,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
             // -- Deep DevTools -----------------------------------------------
             _sectionHeader(
-                'Deep DevTools Inspection',
-                'get_render_tree · get_layer_tree · get_vm_info · get_http_profile'),
+              'Deep DevTools Inspection',
+              'get_render_tree · get_layer_tree · get_vm_info · get_http_profile',
+            ),
             Card(
               color: Colors.indigo.shade50,
               child: Padding(
@@ -328,7 +359,10 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     const Text(
                       'Tip: Combine get_render_tree with get_widget_tree to '
                       'correlate layout problems with specific widgets.',
-                      style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ],
                 ),
@@ -342,55 +376,64 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
   }
 
   Widget _sectionHeader(String title, String tools) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text(tools,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontFamily: 'monospace')),
-          ],
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-      );
+        Text(
+          tools,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontFamily: 'monospace',
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _aiHint(String text) => Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade200),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
-                      fontFamily: 'monospace')),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.smart_toy, color: Colors.blue, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.blue,
+              fontFamily: 'monospace',
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   Widget _codeBox(String code) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Text(code,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Text(
+      code,
+      style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+    ),
+  );
 }

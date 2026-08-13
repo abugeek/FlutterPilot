@@ -135,9 +135,17 @@ class _NavButton extends StatelessWidget {
           children: [
             Icon(icon),
             const SizedBox(height: 4),
-            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 2),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10),
+            ),
           ],
         ),
       ),

@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 /// This class is stateless and exposes only static methods.
 class PilotWidgetInspector {
   /// Default maximum depth for widget tree traversal.
-  static const int defaultMaxDepth = 50;
+  static const int defaultMaxDepth = 250;
 
   /// Captures the widget tree as a nested JSON-compatible map.
   ///
@@ -113,11 +113,27 @@ class PilotWidgetInspector {
       // Expected in release mode or without --track-widget-creation.
     }
 
+    bool isSensitive = false;
+    final keyStr = element.widget.key?.toString().toLowerCase() ?? '';
+    if (keyStr.contains('password') ||
+        keyStr.contains('pin') ||
+        keyStr.contains('secret') ||
+        keyStr.contains('token') ||
+        keyStr.contains('ssn') ||
+        keyStr.contains('cvv') ||
+        keyStr.contains('card')) {
+      isSensitive = true;
+    }
+    if (element.widget is EditableText && (element.widget as EditableText).obscureText) {
+      isSensitive = true;
+    }
+
     return {
       'type': element.widget.runtimeType.toString(),
       'key': element.widget.key?.toString(),
       'layout': layout,
       'location': location,
+      if (isSensitive) 'isSensitive': true,
       if (currentDepth >= maxDepth && _hasChildren(element)) '_truncated': true,
       'children': children,
     };
