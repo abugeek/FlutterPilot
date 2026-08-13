@@ -14,6 +14,7 @@ import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
 import 'src/repro_test_generator.dart';
+import 'src/state_snapshot_manager.dart';
 import 'src/test_synthesizer.dart';
 import 'src/widget_inspector.dart';
 
@@ -22,6 +23,7 @@ export 'src/flight_recorder.dart';
 export 'src/interaction_manager.dart';
 export 'src/navigation_tracker.dart';
 export 'src/repro_test_generator.dart';
+export 'src/state_snapshot_manager.dart';
 export 'src/test_synthesizer.dart';
 export 'src/widget_inspector.dart';
 

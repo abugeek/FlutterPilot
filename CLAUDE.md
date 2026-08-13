@@ -27,20 +27,25 @@ When interacting with a Flutter app using FlutterPilot:
 - **Scroll Before Tapping**: Use `scroll_into_view(key: "...")` if a widget is below the fold.
 - **Wait for Settle**: Call `pump_frames(count: 10)` or `wait_for_route(route: "...")` after navigation.
 
-### 3. Visual Regression Diff Engine
+### 3. Time-Travel State Snapshots (<100ms Rewind)
+- Save checkpoint state: `save_state_snapshot(name: "checkout_filled")`.
+- Rewind anytime without restart: `restore_state_snapshot(name: "checkout_filled")`.
+- List saved snapshots: `list_state_snapshots`.
+
+### 4. Visual Regression Diff Engine
 - Establish golden baselines with `save_screenshot_baseline(name: "...")`.
 - After code modifications or UI updates, run `compare_screenshot(name: "...")` to get automated diff percentages and pixel-by-pixel highlighted diff images on regression.
 
-### 4. Network Chaos & Mocking
+### 5. Network Chaos & Mocking
 - **Mock Responses**: Use `mock_http_response(urlPattern: "...", statusCode: 500, body: '{"error":"server_down"}')` to test failure handling without a backend.
 - **Network Conditioning**: Call `simulate_network_condition(condition: "slow_3g"|"offline"|"normal")` or `simulate_offline(enabled: true)`.
 - **Verify Logs**: Call `get_network_logs` to inspect HTTP request/response payloads.
 
-### 5. Multi-Device Fleet Testing
+### 6. Multi-Device Fleet Testing
 - Use `list_connected_devices` to see all running Flutter instances across iOS, Android, and Web.
 - Use `switch_device(id: "...")` to toggle target device on the fly.
 
-### 6. Crash Flight Recorder & Self-Healing Loop
+### 7. Crash Flight Recorder & Self-Healing Loop
 1. When a crash occurs, call `get_flight_log` to inspect the 30-60s event timeline leading up to failure.
 2. Call `generate_repro_test(writeToDisk: true)` to automatically synthesize an executable `test/repro_test.dart` test reproducing the bug.
 3. Review the failing test & error details, then apply the code fix in the Dart source files.

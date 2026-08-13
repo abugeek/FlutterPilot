@@ -1098,6 +1098,49 @@ Exports recorded interactive user journeys and flight sessions into production-r
 
 ---
 
+### `save_state_snapshot`
+
+Captures a named point-in-time snapshot of the entire running application state (current route, Riverpod/Bloc providers, and storage).
+
+**Parameters:**
+- `name` (required string): Descriptive identifier for the snapshot (e.g. `"checkout_with_items"`).
+
+**Returns:** `{"status": "saved", "snapshot": {...}}`
+
+---
+
+### `restore_state_snapshot`
+
+Instantly rewinds the running application back to a previously captured state snapshot (<100ms) without restarting.
+
+**Parameters:**
+- `name` (required string): Name of the snapshot to restore.
+
+**Returns:** `{"status": "restored", "name": "checkout_with_items"}`
+
+---
+
+### `list_state_snapshots`
+
+Lists all point-in-time state snapshots stored in memory.
+
+**Parameters:** None
+
+**Returns:** List of saved snapshot metadata.
+
+---
+
+### `delete_state_snapshot`
+
+Deletes a saved state snapshot by name.
+
+**Parameters:**
+- `name` (required string): Name of the snapshot to delete.
+
+**Returns:** `{"status": "deleted"}`
+
+---
+
 ### `get_perf_metrics`
 
 Real-time performance metrics.

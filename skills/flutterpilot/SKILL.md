@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, crash flight recorder, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
+description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, time-travel state snapshots, crash flight recorder, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
 ---
 
 # FlutterPilot Agent Skill
@@ -10,7 +10,9 @@ This skill guides AI agents on orchestrating FlutterPilot MCP tools to test, deb
 ## When to Use
 - Autonomous UI verification (filling forms, clicking buttons, testing user journeys).
 - Interacting with Flutter widgets using Virtual Semantic Selectors without requiring manual `ValueKey`s.
+- Time-Travel State Snapshots & instant state rewind (<100ms) across Riverpod, Bloc, and local storage.
 - Continuous Crash Flight Recording & auto-synthesizing executable `repro_test.dart` reproduction tests.
+- Exporting production-ready Patrol, Integration, and Widget test suites.
 - Visual regression testing with pixel diff detection.
 - Debugging state management (Riverpod, Bloc), network calls (Dio), databases (Drift, SQLite), or local storage (Hive, SharedPreferences, SecureStorage).
 - Simulating network chaos (offline mode, slow 3G latency, synthetic 500 error mocks).
@@ -25,10 +27,11 @@ flowchart TD
     B --> C[capture_screenshot]
     C --> D[get_widget_tree]
     D --> E[Semantic Interaction: tap_widget / enter_text]
-    E --> F[Verify State / Network Logs / Diff]
-    F --> G{Error Detected?}
-    G -- Yes --> H[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
-    G -- No --> I[Complete Task]
+    E --> F[Save State Checkpoint: save_state_snapshot]
+    F --> G[Verify State / Network Logs / Diff]
+    G --> H{Error Detected?}
+    H -- Yes --> I[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
+    H -- No --> J[Complete Task]
 ```
 
 ### 1. Initial State Reconnaissance
@@ -61,7 +64,16 @@ call_tool("tap_widget", {"key": "Sign In"})
 call_tool("pump_frames", {"count": 10})
 ```
 
-### 3. Visual Regression Diff Engine
+### 3. Time-Travel State Snapshots
+```json
+// Save current point-in-time state checkpoint
+call_tool("save_state_snapshot", {"name": "onboarding_step_2"})
+
+// Rewind app state anytime in <100ms without restarting
+call_tool("restore_state_snapshot", {"name": "onboarding_step_2"})
+```
+
+### 4. Visual Regression Diff Engine
 ```json
 // 1. Establish golden baseline
 call_tool("save_screenshot_baseline", {"name": "checkout_screen"})
@@ -70,7 +82,7 @@ call_tool("save_screenshot_baseline", {"name": "checkout_screen"})
 call_tool("compare_screenshot", {"name": "checkout_screen", "threshold": 0.5})
 ```
 
-### 4. Network Chaos & Mocking
+### 5. Network Chaos & Mocking
 ```json
 // Mock endpoint with synthetic 500 error
 call_tool("mock_http_response", {
@@ -85,7 +97,7 @@ call_tool("simulate_network", {"condition": "slow_3g"})
 call_tool("simulate_offline", {"enabled": "true"})
 ```
 
-### 5. Multi-Device Fleet Manager
+### 6. Multi-Device Fleet Manager
 ```json
 // List connected iOS/Android/Web instances
 call_tool("list_connected_devices", {})
@@ -94,7 +106,7 @@ call_tool("list_connected_devices", {})
 call_tool("switch_device", {"id": "android_emu"})
 ```
 
-### 6. Crash Flight Recorder & Self-Healing
+### 7. Crash Flight Recorder & Self-Healing
 ```json
 // 1. Inspect the 30s rolling flight timeline
 call_tool("get_flight_log", {})

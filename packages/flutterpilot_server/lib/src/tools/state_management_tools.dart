@@ -455,5 +455,104 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         ).then((res) => res.toCallToolResult());
       },
     );
+
+    // -- Time-Travel State Snapshots -----------------------------------------
+    server.registerTool(
+      'save_state_snapshot',
+      description:
+          'Captures a named point-in-time snapshot of the entire running app state (active route, Riverpod/Bloc providers, storage). '
+          'Use restore_state_snapshot later to rewind to this exact state in <100ms.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'Descriptive identifier for the snapshot (e.g. "checkout_with_items").',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.saveStateSnapshot', {
+          'name': p['name'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '✅ State snapshot "${p['name']}" saved. Use `restore_state_snapshot` to rewind anytime.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'restore_state_snapshot',
+      description:
+          'Instantly rewinds the running app back to a previously captured state snapshot (<100ms) without restarting the app.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'Name of the snapshot to restore.',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.restoreStateSnapshot', {
+          'name': p['name'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ App state successfully rewound to "${p['name']}"! UI reassembled.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'list_state_snapshots',
+      description: 'Lists all available point-in-time state snapshots currently stored in memory.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.listStateSnapshots', {});
+        if (res.isError) return res.toCallToolResult();
+        final snapshots = res.data?['snapshots'] as List? ?? [];
+        if (snapshots.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'No saved snapshots found.')],
+          );
+        }
+        final summary = snapshots.map((s) => '- **${s['name']}** (${s['timestamp']}) - Route: `${s['currentRoute']}`').join('\n');
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '### ⏳ Saved State Snapshots (${snapshots.length})\n$summary',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'delete_state_snapshot',
+      description: 'Deletes a specific state snapshot by name.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'Name of the snapshot to delete.',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.deleteStateSnapshot', {
+          'name': p['name'].toString(),
+        });
+        return res.toCallToolResult();
+      },
+    );
   }
 }
