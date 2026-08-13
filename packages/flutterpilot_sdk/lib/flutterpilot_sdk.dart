@@ -9,9 +9,11 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'src/chaos_fuzzer.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
+import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
 import 'src/repro_test_generator.dart';
 import 'src/state_snapshot_manager.dart';
@@ -19,11 +21,15 @@ import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
+export 'src/chaos_fuzzer.dart';
 export 'src/error_inspector.dart';
+export 'src/fixture_manager.dart';
 export 'src/flight_recorder.dart';
 export 'src/gif_encoder.dart';
 export 'src/interaction_manager.dart';
+export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
+export 'src/pr_report_generator.dart';
 export 'src/repro_test_generator.dart';
 export 'src/state_snapshot_manager.dart';
 export 'src/test_synthesizer.dart';

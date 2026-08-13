@@ -918,5 +918,100 @@ extension _WidgetExtensions on FlutterPilot {
         json.encode(auditReport),
       );
     });
+
+    // -- ext.flutterpilot.executeActionChain ----------------------------------
+    registerExtension('ext.flutterpilot.executeActionChain', (
+      method,
+      parameters,
+    ) async {
+      final actionsJson = parameters['actions'];
+      if (actionsJson == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing actions array',
+        );
+      }
+
+      try {
+        final decoded = json.decode(actionsJson);
+        if (decoded is! List) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.invalidParams,
+            'actions must be a JSON array',
+          );
+        }
+
+        int executedCount = 0;
+        for (final item in decoded) {
+          if (item is Map) {
+            final action = item['action']?.toString();
+            final target = item['target']?.toString() ?? item['key']?.toString();
+            if (action == 'tap' && target != null) {
+              final element = PilotWidgetInspector.findElement(target);
+              if (element != null) {
+                final ro = element.renderObject;
+                if (ro is RenderBox && ro.hasSize) {
+                  final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+                  await InteractionManager.tapAt(pos, label: target);
+                  executedCount++;
+                }
+              }
+            } else if (action == 'enterText' && target != null) {
+              final text = item['text']?.toString() ?? '';
+              final element = PilotWidgetInspector.findElement(target);
+              if (element != null) {
+                bool entered = false;
+                void findText(Element e) {
+                  if (entered) return;
+                  if (e is StatefulElement && e.state is EditableTextState) {
+                    try {
+                      (e.state as EditableTextState).updateEditingValue(TextEditingValue(text: text));
+                      entered = true;
+                    } catch (_) {}
+                    return;
+                  }
+                  e.visitChildren(findText);
+                }
+                findText(element);
+                if (entered) executedCount++;
+              }
+            }
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
+        }
+
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'executedCount': executedCount, 'totalActions': decoded.length}),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Action chain execution failed: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.runChaosFuzzing -------------------------------------
+    registerExtension('ext.flutterpilot.runChaosFuzzing', (
+      method,
+      parameters,
+    ) async {
+      final duration = int.tryParse(parameters['durationSeconds'] ?? '5') ?? 5;
+      final rate = int.tryParse(parameters['eventRatePerSecond'] ?? '5') ?? 5;
+      final report = await ChaosFuzzer.run(
+        durationSeconds: duration,
+        eventRatePerSecond: rate,
+      );
+      return ServiceExtensionResponse.result(json.encode(report));
+    });
+
+    // -- ext.flutterpilot.auditMemoryHealth ----------------------------------
+    registerExtension('ext.flutterpilot.auditMemoryHealth', (
+      method,
+      parameters,
+    ) async {
+      final audit = MemoryAuditor.audit();
+      return ServiceExtensionResponse.result(json.encode(audit));
+    });
   }
 }

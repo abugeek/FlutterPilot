@@ -218,5 +218,42 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'run_chaos_fuzzing',
+      description:
+          'Runs autonomous monkey/chaos stress fuzzing against the running Flutter app for a specified duration. '
+          'Randomly clicks interactive elements, inputs text, and navigates to detect crashes and unhandled exceptions.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'durationSeconds': JsonSchema.integer(
+            description: 'Duration to run chaos fuzzing in seconds (default: 5).',
+          ),
+          'eventRatePerSecond': JsonSchema.integer(
+            description: 'Rate of chaos events per second (default: 5).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.runChaosFuzzing', {
+          if (p['durationSeconds'] != null) 'durationSeconds': p['durationSeconds'].toString(),
+          if (p['eventRatePerSecond'] != null) 'eventRatePerSecond': p['eventRatePerSecond'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final events = res.data?['eventsExecuted'] ?? 0;
+        final errors = res.data?['newErrorsCaught'] ?? 0;
+        final duration = res.data?['durationMs'] ?? 0;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '🐒 **Chaos Fuzzing Finished (${(duration / 1000).toStringAsFixed(1)}s):**\n'
+                  '- Events Executed: $events\n'
+                  '- Unhandled Crashes Caught: $errors\n'
+                  '- Result: ${errors == 0 ? "🟢 APP STABLE (0 Crashes)" : "🚨 UNHANDLED EXCEPTIONS DETECTED - Call get_flight_log"}',
+            ),
+          ],
+        );
+      },
+    );
   }
 }

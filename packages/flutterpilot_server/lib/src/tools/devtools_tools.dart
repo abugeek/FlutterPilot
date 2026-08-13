@@ -488,5 +488,32 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         }
       },
     );
+
+    server.registerTool(
+      'audit_memory_health',
+      description:
+          'Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, '
+          'and identifies oversized image allocations (>4x layout size) causing memory bloat.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.auditMemoryHealth', {});
+        if (res.isError) return res.toCallToolResult();
+        final isHealthy = res.data?['isHealthy'] == true;
+        final cache = res.data?['imageCache'] as Map? ?? {};
+        final warnings = res.data?['warnings'] as List? ?? [];
+
+        final buf = StringBuffer('🧠 **Memory & Resource Health Audit:**\n');
+        buf.writeln('- Image Cache: ${cache['cachedImagesCount'] ?? 0} images (${cache['cachedMegaBytes']} MB / ${cache['maxMegaBytes']} MB max)');
+        buf.writeln('- Health Status: ${isHealthy ? "🟢 Optimal" : "⚠️ Memory Pressure / Inefficiencies Detected"}');
+
+        if (warnings.isNotEmpty) {
+          buf.writeln('\n### ⚠️ Oversized Allocations (${warnings.length}):');
+          for (final w in warnings) {
+            buf.writeln('- ${w['issue']}');
+          }
+        }
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
+      },
+    );
   }
 }

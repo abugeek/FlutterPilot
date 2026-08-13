@@ -159,7 +159,57 @@ class PilotWidgetInspector {
     }
 
     searchByType(root);
-    return foundByType;
+    if (foundByType != null) return foundByType;
+
+    // 7. Layer 7: Fuzzy / Similarity Matcher (Self-Healing)
+    Element? bestFuzzyMatch;
+    double bestScore = 0.0;
+
+    void searchFuzzy(Element element) {
+      final w = element.widget;
+      String? candidateText;
+      if (w is Text) {
+        candidateText = w.data;
+      } else if (w is RichText) {
+        candidateText = w.text.toPlainText();
+      } else if (w is Tooltip) {
+        candidateText = w.message;
+      }
+
+      if (candidateText != null && candidateText.isNotEmpty) {
+        final score = calculateSimilarity(cleanQuery, candidateText);
+        if (score > bestScore && score >= 0.65) {
+          bestScore = score;
+          bestFuzzyMatch = element;
+        }
+      }
+      element.visitChildren(searchFuzzy);
+    }
+
+    searchFuzzy(root);
+    return bestFuzzyMatch;
+  }
+
+  /// Computes the similarity score (0.0 to 1.0) between two strings.
+  static double calculateSimilarity(String s1, String s2) {
+    final a = s1.trim().toLowerCase();
+    final b = s2.trim().toLowerCase();
+    if (a == b) return 1.0;
+    if (a.isEmpty || b.isEmpty) return 0.0;
+    if (a.contains(b) || b.contains(a)) return 0.85;
+
+    // Bigram Dice coefficient
+    final Set<String> bigramsA = {};
+    for (int i = 0; i < a.length - 1; i++) {
+      bigramsA.add(a.substring(i, i + 2));
+    }
+    final Set<String> bigramsB = {};
+    for (int i = 0; i < b.length - 1; i++) {
+      bigramsB.add(b.substring(i, i + 2));
+    }
+    if (bigramsA.isEmpty || bigramsB.isEmpty) return 0.0;
+    final intersection = bigramsA.intersection(bigramsB).length;
+    return (2.0 * intersection) / (bigramsA.length + bigramsB.length);
   }
 
   /// Finds an [Element] in the tree whose widget key matches [keyString].

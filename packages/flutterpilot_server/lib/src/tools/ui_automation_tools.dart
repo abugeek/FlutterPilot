@@ -583,5 +583,37 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(content: [TextContent(text: buffer.toString())]);
       },
     );
+
+    server.registerTool(
+      'execute_action_chain',
+      description:
+          'Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed. '
+          'Eliminates multi-turn LLM latency when the sequence of steps is already known.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'actions': JsonSchema.array(
+            items: JsonSchema.object(),
+            description:
+                'List of action objects, e.g. [{"action": "tap", "target": "Icon[\'menu\']"}, {"action": "enterText", "target": "TextField[\'Search\']", "text": "theme"}].',
+          ),
+        },
+        required: ['actions'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.executeActionChain', {
+          'actions': json.encode(p['actions']),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final executed = res.data?['executedCount'] ?? 0;
+        final total = res.data?['totalActions'] ?? 0;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Action Chain executed successfully: $executed/$total actions completed natively.',
+            ),
+          ],
+        );
+      },
+    );
   }
 }

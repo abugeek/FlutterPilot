@@ -554,5 +554,96 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         return res.toCallToolResult();
       },
     );
+
+    // -- Network Fixture Record & Replay -------------------------------------
+    server.registerTool(
+      'record_fixtures',
+      description:
+          'Saves current or recent HTTP/Dio network traffic logs as an offline test fixture JSON file '
+          '(e.g. "test/fixtures/checkout_flow.json"). Enables deterministic offline test execution.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'Fixture name (e.g. "checkout_success").',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final name = p['name'].toString();
+        // Fetch recent network logs
+        final logsRes = await _callExtensionRaw('ext.flutterpilot.getNetworkLogs', {});
+        final logs = logsRes.data?['logs'] as List? ?? [];
+        final file = File('test/fixtures/$name.json');
+        if (!file.parent.existsSync()) {
+          file.parent.createSync(recursive: true);
+        }
+        file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(logs));
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '📼 Saved ${logs.length} network interactions to fixture file: `${file.path}`. '
+                  'Use `replay_fixtures` in offline mode to mock these endpoints.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'replay_fixtures',
+      description:
+          'Loads a recorded network fixture JSON file and registers mock rules for all endpoints, '
+          'enabling full offline application testing without hitting real backend servers.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'Fixture name to load from test/fixtures/<name>.json.',
+          ),
+        },
+        required: ['name'],
+      ),
+      callback: (p, e) async {
+        final name = p['name'].toString();
+        final file = File('test/fixtures/$name.json');
+        if (!file.existsSync()) {
+          return CallToolResult(
+            content: [TextContent(text: 'Fixture file not found: ${file.path}')],
+            isError: true,
+          );
+        }
+        try {
+          final decoded = json.decode(file.readAsStringSync()) as List;
+          int registeredCount = 0;
+          for (final item in decoded) {
+            if (item is Map) {
+              final url = item['url']?.toString() ?? '';
+              final status = item['statusCode'] ?? 200;
+              final body = item['body']?.toString() ?? '{}';
+              if (url.isNotEmpty) {
+                await _callExtensionRaw('ext.flutterpilot.addHttpMock', {
+                  'urlPattern': url,
+                  'statusCode': status.toString(),
+                  'body': body,
+                });
+                registeredCount++;
+              }
+            }
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: '⚡ Successfully loaded fixture "$name": registered $registeredCount offline endpoint mocks!',
+              ),
+            ],
+          );
+        } catch (err) {
+          return CallToolResult(
+            content: [TextContent(text: 'Failed to parse fixture: $err')],
+            isError: true,
+          );
+        }
+      },
+    );
   }
 }

@@ -638,6 +638,75 @@ Generates an animated GIF replay artifact of the interaction session or baseline
 
 **Returns:** `{"status": "exported", "path": "artifacts/session_replay.gif"}`
 
+---
+
+### `execute_action_chain`
+
+Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed.
+
+**Parameters:**
+- `actions` (required array): List of action objects (e.g. `[{"action": "tap", "target": "Icon['menu']"}, {"action": "enterText", "target": "TextField['Search']", "text": "theme"}]`).
+
+**Returns:** `{"status": "success", "executedCount": 2, "totalActions": 2}`
+
+---
+
+### `run_chaos_fuzzing`
+
+Runs autonomous monkey/chaos stress fuzzing against the running Flutter app for a specified duration.
+
+**Parameters:**
+- `durationSeconds` (optional integer): Duration to run chaos fuzzing in seconds (default: `5`).
+- `eventRatePerSecond` (optional integer): Rate of chaos events per second (default: `5`).
+
+**Returns:** `{"status": "passed", "eventsExecuted": 25, "newErrorsCaught": 0}`
+
+---
+
+### `audit_memory_health`
+
+Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, and flags oversized image allocations.
+
+**Parameters:** None
+
+**Returns:** Structured report with cache statistics and oversized allocation warnings.
+
+---
+
+### `record_fixtures`
+
+Saves recent network interactions as an offline test fixture JSON file.
+
+**Parameters:**
+- `name` (required string): Fixture name (e.g. `"checkout_success"`).
+
+**Returns:** `{"status": "saved", "path": "test/fixtures/checkout_success.json"}`
+
+---
+
+### `replay_fixtures`
+
+Loads a recorded network fixture JSON file and registers mock rules for all endpoints.
+
+**Parameters:**
+- `name` (required string): Fixture name.
+
+**Returns:** `{"status": "success", "mocksRegistered": 3}`
+
+---
+
+### `generate_pr_report`
+
+Auto-generates a ready-to-paste GitHub Pull Request Markdown report summarizing verified changes, UI Health Audit, test status, and visual proof links.
+
+**Parameters:**
+- `title` (required string): Pull Request title.
+- `description` (optional string): Description of changes.
+- `generatedTestPath` (optional string): Path to synthesized test suite.
+- `gifPath` (optional string): Path to exported session GIF replay.
+
+**Returns:** Ready-to-paste GitHub PR Markdown string.
+
 **Returns:**
 ```json
 {

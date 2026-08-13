@@ -287,5 +287,68 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         }
       },
     );
+
+    server.registerTool(
+      'generate_pr_report',
+      description:
+          'Auto-generates a ready-to-paste GitHub Pull Request Markdown report summarizing the verified changes, '
+          'UI Health Audit (0 overflows), test results, and visual proof replay links.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'title': JsonSchema.string(
+            description: 'Pull Request title (e.g. "feat: implement responsive product checkout").',
+          ),
+          'description': JsonSchema.string(
+            description: 'Summary of what was built, changed, or fixed.',
+          ),
+          'generatedTestPath': JsonSchema.string(
+            description: 'Path to synthesized test file if generated (e.g. "integration_test/flow_test.dart").',
+          ),
+          'gifPath': JsonSchema.string(
+            description: 'Path to exported session GIF if created (e.g. "artifacts/demo.gif").',
+          ),
+        },
+        required: ['title'],
+      ),
+      callback: (p, e) async {
+        final title = p['title'].toString();
+        final desc = p['description']?.toString();
+        final testPath = p['generatedTestPath']?.toString();
+        final gifPath = p['gifPath']?.toString();
+
+        // Run fresh screen health audit
+        final auditRes = await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final auditData = auditRes.data;
+
+        final buffer = StringBuffer();
+        buffer.writeln('# 🚀 $title\n');
+        if (desc != null && desc.isNotEmpty) {
+          buffer.writeln('## 📝 Description\n$desc\n');
+        }
+
+        final isHealthy = auditData?['isHealthy'] == true;
+        final overflowCount = auditData?['overflowCount'] ?? 0;
+        final a11yCount = auditData?['accessibilityIssueCount'] ?? 0;
+
+        buffer.writeln('## 🏥 Autonomous Quality & Screen Health Audit');
+        buffer.writeln('| Check | Status | Details |');
+        buffer.writeln('|---|---|---|');
+        buffer.writeln('| **Layout Overflows** | ${overflowCount == 0 ? "✅ Passed" : "❌ Failed"} | $overflowCount RenderFlex errors |');
+        buffer.writeln('| **Touch Target Accessibility** | ${a11yCount == 0 ? "✅ Passed" : "⚠️ Warnings"} | $a11yCount touch targets <48x48 dp |');
+        buffer.writeln('| **Overall Health** | ${isHealthy ? "🟢 Clean & Production Ready" : "🟡 Needs Review"} | Verified via FlutterPilot |');
+        buffer.writeln();
+
+        if (gifPath != null && gifPath.isNotEmpty) {
+          buffer.writeln('## 🎬 Visual Proof & Session Replay\n![$title]($gifPath)\n');
+        }
+        if (testPath != null && testPath.isNotEmpty) {
+          buffer.writeln('## 🧪 Synthesized Automated Test\nGenerated test suite available at: `$testPath`\n');
+        }
+        buffer.writeln('---');
+        buffer.writeln('*Automated verification generated with [FlutterPilot](https://github.com/abugeek/FlutterPilot) 🚀*');
+
+        return CallToolResult(content: [TextContent(text: buffer.toString())]);
+      },
+    );
   }
 }
