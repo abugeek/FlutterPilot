@@ -38,10 +38,13 @@ class PilotWidgetInspector {
     return _elementToJson(targetRoot, 0, depth, compact: compact) ?? {'type': 'Empty'};
   }
 
-  /// High-performance Single-Pass Multi-Priority Element Matcher (O(N)).
+  /// High-performance Hierarchical & Positional Element Matcher (O(N)).
   ///
-  /// Evaluates exact keys, semantic selectors, button texts, text widgets,
-  /// tooltips, widget types, and fuzzy similarity in a single tree walk.
+  /// Supports:
+  /// - Exact keys: `"login_btn"`
+  /// - Semantic selectors: `"Button['Submit']"`
+  /// - Chained selectors: `"Card['order_1'] -> Button['Cancel']"`
+  /// - Positional selectors: `"ListTile:nth-child(2)"` or `"Button[index=1]"`
   static Element? findElement(String query) {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
@@ -53,11 +56,42 @@ class PilotWidgetInspector {
     final cached = _keyCache[cleanQuery];
     if (cached != null && cached.mounted) return cached;
 
-    // 2. Parse selector pattern if present (e.g. Type['value'])
+    // 2. Chained Hierarchy Evaluation ("Parent -> Child")
+    if (cleanQuery.contains('->')) {
+      final parts = cleanQuery.split('->').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+      Element? currentScope = root;
+      for (final part in parts) {
+        if (currentScope == null) return null;
+        currentScope = _findSingleElementUnder(currentScope, part);
+      }
+      if (currentScope != null) {
+        _keyCache[cleanQuery] = currentScope;
+      }
+      return currentScope;
+    }
+
+    return _findSingleElementUnder(root, cleanQuery);
+  }
+
+  static Element? _findSingleElementUnder(Element root, String query) {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return null;
+
+    // Check positional indexing (e.g. ListTile:nth-child(2) or Button[index=1])
+    int? targetIndex;
+    var queryToSearch = cleanQuery;
+    final indexMatch = RegExp(r':nth-child\((\d+)\)|\[index=(\d+)\]').firstMatch(cleanQuery);
+    if (indexMatch != null) {
+      final idxStr = indexMatch.group(1) ?? indexMatch.group(2);
+      targetIndex = int.tryParse(idxStr ?? '');
+      queryToSearch = cleanQuery.replaceFirst(indexMatch.group(0)!, '').trim();
+    }
+
+    // Parse selector pattern if present (e.g. Type['value'])
     String? typeTarget;
     String? valueTarget;
     final selectorRegex = RegExp(r'^([a-zA-Z0-9_]+)\[(.*)\]$');
-    final match = selectorRegex.firstMatch(cleanQuery);
+    final match = selectorRegex.firstMatch(queryToSearch);
     if (match != null) {
       typeTarget = match.group(1)!;
       var rawVal = match.group(2)!.trim();
@@ -68,6 +102,7 @@ class PilotWidgetInspector {
       valueTarget = rawVal;
     }
 
+    final matches = <Element>[];
     Element? bestMatch;
     int bestPriority = -1; // Higher is better
     double bestSimilarity = 0.0;
@@ -79,86 +114,98 @@ class PilotWidgetInspector {
 
       // Priority 100: Exact Key Match
       if (widgetKey != null) {
-        if (widgetKey == cleanQuery ||
-            widgetKey == "['$cleanQuery']" ||
-            widgetKey == "[<'$cleanQuery'>]") {
+        if (widgetKey == queryToSearch ||
+            widgetKey == "['$queryToSearch']" ||
+            widgetKey == "[<'$queryToSearch'>]") {
           bestMatch = element;
           bestPriority = 100;
-          _keyCache[cleanQuery] = element;
-          return; // Short-circuit
+          matches.add(element);
+          if (targetIndex == null) return;
         }
       }
 
       // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
-      if (typeTarget != null && bestPriority < 90) {
+      if (typeTarget != null && (targetIndex != null || bestPriority < 90)) {
         if (_isMatchingType(typeName, typeTarget)) {
           if (valueTarget == null || valueTarget.isEmpty) {
             bestMatch = element;
             bestPriority = 90;
+            matches.add(element);
           } else {
             final text = _extractDescendantText(element);
             if (text.toLowerCase().contains(valueTarget.toLowerCase())) {
               bestMatch = element;
               bestPriority = 90;
+              matches.add(element);
             }
           }
         }
       }
 
       // Priority 80: Clickable Button Text Match
-      if (bestPriority < 80 && _isButtonOrClickable(typeName)) {
+      if (_isButtonOrClickable(typeName) && (targetIndex != null || bestPriority < 80)) {
         final text = _extractDescendantText(element);
-        if (text.toLowerCase() == cleanQuery.toLowerCase() ||
-            text.toLowerCase().contains(cleanQuery.toLowerCase())) {
+        if (text.toLowerCase() == queryToSearch.toLowerCase()) {
           bestMatch = element;
           bestPriority = 80;
+          matches.add(element);
+        } else if (text.toLowerCase().contains(queryToSearch.toLowerCase())) {
+          bestMatch = element;
+          bestPriority = 70;
+          matches.add(element);
         }
       }
 
       // Priority 70 / 60: Text / RichText / EditableText Direct Match
-      if (bestPriority < 70) {
-        if (widget is Text) {
-          final data = widget.data ?? '';
-          if (data.toLowerCase() == cleanQuery.toLowerCase()) {
+      if (targetIndex != null || bestPriority < 70) {
+        if (widget is Text && widget.data != null) {
+          if (widget.data!.toLowerCase() == queryToSearch.toLowerCase()) {
             bestMatch = element;
             bestPriority = 70;
-          } else if (bestPriority < 60 && data.toLowerCase().contains(cleanQuery.toLowerCase())) {
+            matches.add(element);
+          } else if ((targetIndex != null || bestPriority < 60) && widget.data!.toLowerCase().contains(queryToSearch.toLowerCase())) {
             bestMatch = element;
             bestPriority = 60;
+            matches.add(element);
           }
         } else if (widget is RichText) {
           final plain = widget.text.toPlainText();
-          if (plain.toLowerCase() == cleanQuery.toLowerCase()) {
+          if (plain.toLowerCase() == queryToSearch.toLowerCase()) {
             bestMatch = element;
             bestPriority = 70;
-          } else if (bestPriority < 60 && plain.toLowerCase().contains(cleanQuery.toLowerCase())) {
+            matches.add(element);
+          } else if ((targetIndex != null || bestPriority < 60) && plain.toLowerCase().contains(queryToSearch.toLowerCase())) {
             bestMatch = element;
             bestPriority = 60;
+            matches.add(element);
           }
-        } else if (widget is EditableText && bestPriority < 60) {
-          if (widget.controller.text.toLowerCase().contains(cleanQuery.toLowerCase())) {
+        } else if (widget is EditableText && (targetIndex != null || bestPriority < 60)) {
+          if (widget.controller.text.toLowerCase().contains(queryToSearch.toLowerCase())) {
             bestMatch = element;
             bestPriority = 60;
+            matches.add(element);
           }
         }
       }
 
       // Priority 50: Tooltip / Semantics
-      if (bestPriority < 50 && widget is Tooltip) {
-        if (widget.message?.toLowerCase().contains(cleanQuery.toLowerCase()) ?? false) {
+      if ((targetIndex != null || bestPriority < 50) && widget is Tooltip) {
+        if (widget.message?.toLowerCase().contains(queryToSearch.toLowerCase()) ?? false) {
           bestMatch = element;
           bestPriority = 50;
+          matches.add(element);
         }
       }
 
       // Priority 40: Type Exact Match
-      if (bestPriority < 40 && typeName.toLowerCase() == cleanQuery.toLowerCase()) {
+      if ((targetIndex != null || bestPriority < 40) && typeName.toLowerCase() == queryToSearch.toLowerCase()) {
         bestMatch = element;
         bestPriority = 40;
+        matches.add(element);
       }
 
       // Priority 10-39: Fuzzy / Similarity Match
-      if (bestPriority < 40) {
+      if (bestPriority < 40 && targetIndex == null) {
         String? candidateText;
         if (widget is Text) {
           candidateText = widget.data;
@@ -169,7 +216,7 @@ class PilotWidgetInspector {
         }
 
         if (candidateText != null && candidateText.isNotEmpty) {
-          final sim = calculateSimilarity(cleanQuery, candidateText);
+          final sim = calculateSimilarity(queryToSearch, candidateText);
           if (sim >= 0.65 && sim > bestSimilarity) {
             bestSimilarity = sim;
             bestMatch = element;
@@ -183,6 +230,17 @@ class PilotWidgetInspector {
     }
 
     evaluateElement(root);
+
+    if (targetIndex != null) {
+      if (targetIndex >= 0 && targetIndex < matches.length) {
+        return matches[targetIndex];
+      }
+      return null;
+    }
+
+    if (bestMatch != null) {
+      _keyCache[cleanQuery] = bestMatch!;
+    }
     return bestMatch;
   }
 

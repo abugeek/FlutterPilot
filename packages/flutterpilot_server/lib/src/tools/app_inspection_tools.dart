@@ -630,5 +630,82 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'profile_frame_budget',
+      description:
+          'Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) '
+          'and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.getFrameBudgetProfile', {});
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'replay_flight_log',
+      description:
+          'Live Autonomous Flight Replay Engine: Re-executes the recorded rolling 30s user actions, '
+          'taps, and gestures live inside the running app in fast-forward mode (~150ms per action). '
+          'Enables instant live reproduction of bugs.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'delayMs': JsonSchema.integer(
+            description: 'Delay between replayed actions in milliseconds (default: 150ms).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 150;
+        final res = await _callExtensionRaw('ext.flutterpilot.replayFlightLog', {
+          'delayMs': delayMs.toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Live Flight Replay finished: ${jsonEncode(res.data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_stream_logs',
+      description:
+          'Real-Time WebSocket & Stream Channel Inspector: Returns captured incoming and outgoing '
+          'real-time messages (WebSockets, Supabase Realtime, EventStreams). '
+          'Supports channel filter.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'channel': JsonSchema.string(
+            description: 'Optional channel name to filter messages by.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final channel = p['channel']?.toString();
+        final res = await _callExtensionRaw('ext.flutterpilot.getStreamLogs', {
+          'channel': ?channel,
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Real-Time Stream Logs:\n${jsonEncode(res.data)}',
+            ),
+          ],
+        );
+      },
+    );
   }
 }

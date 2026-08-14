@@ -332,6 +332,46 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    server.registerTool(
+      'exec_sql_query',
+      description:
+          'Unified SQL Query Executor: Auto-detects active database (Sqflite or Drift) and executes '
+          'a safe SQL query (SELECT, WITH, PRAGMA, EXPLAIN). Returns structured result rows.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'sql': JsonSchema.string(description: 'SQL statement to execute.'),
+          'database': JsonSchema.string(description: 'Optional database name if multiple databases exist.'),
+        },
+        required: ['sql'],
+      ),
+      callback: (p, e) async {
+        final sql = p['sql']?.toString() ?? '';
+        final db = p['database']?.toString();
+
+        // 1. Try sqflite
+        final sqfRes = await _callExtensionRaw('ext.flutterpilot.querySqflite', {
+          'sql': sql,
+          'database': ?db,
+        });
+        if (!sqfRes.isError) return sqfRes.toCallToolResult();
+
+        // 2. Try drift
+        final driftRes = await _callExtensionRaw('ext.flutterpilot.queryDrift', {
+          'sql': sql,
+        });
+        if (!driftRes.isError) return driftRes.toCallToolResult();
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage}',
+            ),
+          ],
+          isError: true,
+        );
+      },
+    );
+
     _registerAppTool(
       name: 'get_shared_preferences',
       description:

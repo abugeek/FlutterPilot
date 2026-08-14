@@ -12,7 +12,8 @@ void main(List<String> args) async {
     ..addCommand(DoctorCommand())
     ..addCommand(ExportTestCommand())
     ..addCommand(SnapshotCommand())
-    ..addCommand(TestCommand());
+    ..addCommand(TestCommand())
+    ..addCommand(AuditCommand());
 
   try {
     await runner.run(args);

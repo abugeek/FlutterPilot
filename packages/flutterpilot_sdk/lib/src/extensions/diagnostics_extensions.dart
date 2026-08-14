@@ -201,5 +201,44 @@ extension _DiagnosticsExtensions on FlutterPilot {
         json.encode({'status': 'success', 'frames': count}),
       );
     });
+
+    // -- ext.flutterpilot.getFrameBudgetProfile ------------------------------
+    registerExtension('ext.flutterpilot.getFrameBudgetProfile', (
+      method,
+      parameters,
+    ) async {
+      final profile = FrameBudgetProfiler.getProfile();
+      return ServiceExtensionResponse.result(json.encode(profile));
+    });
+
+    // -- ext.flutterpilot.auditUiHealth ---------------------------------------
+    registerExtension('ext.flutterpilot.auditUiHealth', (
+      method,
+      parameters,
+    ) async {
+      final health = UiHealthAuditor.audit();
+      return ServiceExtensionResponse.result(json.encode(health));
+    });
+
+    // -- ext.flutterpilot.getStreamLogs ---------------------------------------
+    registerExtension('ext.flutterpilot.getStreamLogs', (
+      method,
+      parameters,
+    ) async {
+      final channel = parameters['channel'];
+      final logs = StreamInspector.getEvents(channelFilter: channel);
+      return ServiceExtensionResponse.result(
+        json.encode({'logs': logs, 'count': logs.length}),
+      );
+    });
+
+    // -- ext.flutterpilot.clearStreamLogs -------------------------------------
+    registerExtension('ext.flutterpilot.clearStreamLogs', (
+      method,
+      parameters,
+    ) async {
+      StreamInspector.clear();
+      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
+    });
   }
 }

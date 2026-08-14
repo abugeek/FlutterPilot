@@ -17,6 +17,8 @@ import 'src/navigation_tracker.dart';
 import 'src/repro_test_generator.dart';
 import 'src/ring_buffer.dart';
 import 'src/state_snapshot_manager.dart';
+import 'src/frame_budget_profiler.dart';
+import 'src/stream_inspector.dart';
 import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
@@ -25,6 +27,7 @@ export 'src/chaos_fuzzer.dart';
 export 'src/error_inspector.dart';
 export 'src/fixture_manager.dart';
 export 'src/flight_recorder.dart';
+export 'src/frame_budget_profiler.dart';
 export 'src/gif_encoder.dart';
 export 'src/interaction_manager.dart';
 export 'src/memory_auditor.dart';
@@ -33,6 +36,7 @@ export 'src/pr_report_generator.dart';
 export 'src/repro_test_generator.dart';
 export 'src/ring_buffer.dart';
 export 'src/state_snapshot_manager.dart';
+export 'src/stream_inspector.dart';
 export 'src/test_synthesizer.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
@@ -193,6 +197,7 @@ class FlutterPilot {
     _registerServiceExtensions();
     _setupFpsCounter();
     _setupDebugPrintCapture();
+    FrameBudgetProfiler.initialize();
     debugPrint('FlutterPilot initialized 🚀');
   }
 

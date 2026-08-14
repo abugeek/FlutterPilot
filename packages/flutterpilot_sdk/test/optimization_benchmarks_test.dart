@@ -169,5 +169,40 @@ void main() {
       expect(diff['added'], contains(contains('badge')));
       expect(diff['removed'], contains(contains('login_btn')));
     });
+
+    testWidgets('findElement matches chained (Parent -> Child) and positional selectors', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Card(
+                  key: const ValueKey('card_a'),
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text('Action Button'),
+                  ),
+                ),
+                Card(
+                  key: const ValueKey('card_b'),
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    child: const Text('Action Button'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Chained lookup inside card_b specifically
+      final chainedEl = PilotWidgetInspector.findElement('card_b -> Button[\'Action Button\']');
+      expect(chainedEl, isNotNull);
+
+      // Positional lookup: 2nd Action Button
+      final positionalEl = PilotWidgetInspector.findElement('Button[\'Action Button\'][index=1]');
+      expect(positionalEl, isNotNull);
+    });
   });
 }

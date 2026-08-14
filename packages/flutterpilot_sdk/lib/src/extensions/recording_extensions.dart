@@ -132,5 +132,48 @@ extension _RecordingExtensions on FlutterPilot {
         json.encode({'status': 'cleared'}),
       );
     });
+
+    // -- ext.flutterpilot.replayFlightLog ------------------------------------
+    registerExtension('ext.flutterpilot.replayFlightLog', (
+      method,
+      parameters,
+    ) async {
+      final speedMs = int.tryParse(parameters['delayMs'] ?? '150') ?? 150;
+      final events = FlightRecorder.getSnapshotEvents();
+      int replayedCount = 0;
+
+      for (final event in events) {
+        final data = event.data;
+        if (event.category == 'gesture' && event.action == 'tapAt') {
+          final x = (data['x'] as num?)?.toDouble();
+          final y = (data['y'] as num?)?.toDouble();
+          if (x != null && y != null) {
+            await InteractionManager.tapAt(Offset(x, y));
+            replayedCount++;
+            await Future.delayed(Duration(milliseconds: speedMs));
+          }
+        } else if (event.category == 'action' && event.action == 'tapWidget') {
+          final key = data['key']?.toString();
+          if (key != null) {
+            final el = PilotWidgetInspector.findElement(key);
+            if (el != null && el.renderObject is RenderBox) {
+              final ro = el.renderObject as RenderBox;
+              final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+              await InteractionManager.tapAt(pos, label: key);
+              replayedCount++;
+              await Future.delayed(Duration(milliseconds: speedMs));
+            }
+          }
+        }
+      }
+
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'replayed',
+          'replayedEventsCount': replayedCount,
+          'totalEventsInFlight': events.length,
+        }),
+      );
+    });
   }
 }
