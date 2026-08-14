@@ -4,9 +4,12 @@ part of '../flutterpilot_server.dart';
 abstract final class _Constants {
   static const int eventBufferMax = 50;
   static const int debugLogBufferMax = 500;
+  static const int eventBufferMaxBytes = 512 * 1024;
+  static const int debugLogBufferMaxBytes = 512 * 1024;
   static const int renderTreeMaxLen = 8000;
   static const int layerTreeMaxLen = 8000;
   static const int maxScreenshotBaselines = 20;
+  static const int maxScreenshotBaselineBytes = 32 * 1024 * 1024;
   static const Duration vmServiceTimeout = Duration(seconds: 10);
   static const Duration extensionCallTimeout = Duration(seconds: 15);
 

@@ -13,23 +13,25 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
           'scale': JsonSchema.number(
-            description: 'Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision.',
+            description:
+                'Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision.',
           ),
           'quality': JsonSchema.integer(
-            description: 'JPEG compression quality 10-100 (default: 80 for jpeg).',
+            description:
+                'JPEG compression quality 10-100 (default: 80 for jpeg).',
           ),
         },
       ),
       callback: (p, e) async {
         final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 1.0;
-        final format = p['format']?.toString().toLowerCase() ?? (scale < 1.0 ? 'jpeg' : 'png');
+        final format =
+            p['format']?.toString().toLowerCase() ??
+            (scale < 1.0 ? 'jpeg' : 'png');
         final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
 
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          {
-            if (scale < 1.0) 'scale': scale.toString(),
-          },
+          {if (scale < 1.0) 'scale': scale.toString()},
         );
         if (res.isError) return res.toCallToolResult();
         final rawBase64 = res.data?['data'] as String?;
@@ -103,13 +105,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        // Evict oldest baseline when at capacity
-        if (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines) {
-          final firstKey = _screenshotBaselines.keys.firstOrNull;
-          if (firstKey != null) {
-            _screenshotBaselines.remove(firstKey);
-          }
-        }
         final Uint8List decoded;
         try {
           decoded = base64Decode(base64Str);
@@ -119,7 +114,32 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
+        if (decoded.length > _Constants.maxScreenshotBaselineBytes) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Screenshot baseline is too large (${decoded.length} bytes). '
+                    'Maximum is ${_Constants.maxScreenshotBaselineBytes} bytes.',
+              ),
+            ],
+            isError: true,
+          );
+        }
+        final previous = _screenshotBaselines.remove(name);
+        _screenshotBaselineBytes -= previous?.length ?? 0;
+        // Evict oldest baselines until both count and total byte budgets fit.
+        while (_screenshotBaselines.length >=
+                _Constants.maxScreenshotBaselines ||
+            _screenshotBaselineBytes + decoded.length >
+                _Constants.maxScreenshotBaselineBytes) {
+          final firstKey = _screenshotBaselines.keys.firstOrNull;
+          if (firstKey == null) break;
+          final removed = _screenshotBaselines.remove(firstKey);
+          _screenshotBaselineBytes -= removed?.length ?? 0;
+        }
         _screenshotBaselines[name] = decoded;
+        _screenshotBaselineBytes += decoded.length;
         return CallToolResult(
           content: [
             TextContent(
@@ -219,7 +239,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           final currBytes = currentImg.toUint8List();
           final baseWords = baseBytes.buffer.asUint32List();
           final currWords = currBytes.buffer.asUint32List();
-          final minLen = baseWords.length < currWords.length ? baseWords.length : currWords.length;
+          final minLen = baseWords.length < currWords.length
+              ? baseWords.length
+              : currWords.length;
 
           for (int i = 0; i < minLen; i++) {
             if (baseWords[i] != currWords[i]) {
@@ -253,10 +275,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        return CallToolResult(
-          content: contentList,
-          isError: !passed,
-        );
+        return CallToolResult(content: contentList, isError: !passed);
       },
     );
 
@@ -293,7 +312,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         if (rootKey != null && rootKey.isNotEmpty) {
           params['rootKey'] = rootKey;
         }
-        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTree', params);
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getWidgetTree',
+          params,
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -318,17 +340,18 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             description: 'Maximum depth to inspect (default: 50).',
           ),
           'compact': JsonSchema.boolean(
-            description: 'Whether to prune intermediate layout wrappers (default: true).',
+            description:
+                'Whether to prune intermediate layout wrappers (default: true).',
           ),
         },
       ),
       callback: (p, e) async {
         final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
         final compact = p['compact'] != false;
-        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTreeDiff', {
-          'maxDepth': maxDepth.toString(),
-          'compact': compact.toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getWidgetTreeDiff',
+          {'maxDepth': maxDepth.toString(), 'compact': compact.toString()},
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -347,14 +370,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'and active route. Call this to check if a user action mutated the UI without fetching a full tree.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.getScreenHash', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getScreenHash',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
-          content: [
-            TextContent(
-              text: jsonEncode(res.data),
-            ),
-          ],
+          content: [TextContent(text: jsonEncode(res.data))],
         );
       },
     );
@@ -422,7 +444,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'outputPath': JsonSchema.string(
-            description: 'Target file path for the GIF (default: "artifacts/session_replay.gif").',
+            description:
+                'Target file path for the GIF (default: "artifacts/session_replay.gif").',
           ),
           'delayMs': JsonSchema.integer(
             description: 'Delay between frames in milliseconds (default: 500).',
@@ -430,23 +453,33 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        final path = p['outputPath']?.toString() ?? 'artifacts/session_replay.gif';
+        final path =
+            p['outputPath']?.toString() ?? 'artifacts/session_replay.gif';
         final delayMs = (p['delayMs'] as num?)?.toInt() ?? 500;
 
         // Capture current screen if baselines empty
         if (_screenshotBaselines.isEmpty) {
-          final res = await _callExtensionRaw('ext.flutterpilot.captureScreenshot', {});
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.captureScreenshot',
+            {},
+          );
           if (res.isError) return res.toCallToolResult();
           final data = res.data?['data'] as String?;
           if (data != null) {
-            _screenshotBaselines['current'] = base64Decode(data);
+            final decoded = base64Decode(data);
+            if (decoded.length <= _Constants.maxScreenshotBaselineBytes) {
+              _screenshotBaselines['current'] = decoded;
+              _screenshotBaselineBytes += decoded.length;
+            }
           }
         }
 
         final frames = _screenshotBaselines.values.toList();
         if (frames.isEmpty) {
           return CallToolResult(
-            content: [TextContent(text: 'No captured frames available to build GIF.')],
+            content: [
+              TextContent(text: 'No captured frames available to build GIF.'),
+            ],
             isError: true,
           );
         }
@@ -461,7 +494,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: '🎬 Session GIF exported to `$path` (${frames.length} frames, ${delayMs}ms delay).',
+                text:
+                    '🎬 Session GIF exported to `$path` (${frames.length} frames, ${delayMs}ms delay).',
               ),
             ],
           );

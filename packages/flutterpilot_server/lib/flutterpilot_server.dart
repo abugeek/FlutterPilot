@@ -38,7 +38,10 @@ abstract class _FlutterPilotServerBase {
   bool get _isReconnecting;
   Queue<Map<String, dynamic>> get _eventBuffer;
   Queue<Map<String, dynamic>> get _debugLogBuffer;
+  void _clearDebugLogBuffer();
   Map<String, Uint8List> get _screenshotBaselines;
+  int get _screenshotBaselineBytes;
+  set _screenshotBaselineBytes(int value);
   SelfHealManager get _selfHealManager;
   FleetManager get _fleetManager;
 
@@ -90,14 +93,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   VmService? _vmService;
   @override
   final Queue<Map<String, dynamic>> _eventBuffer = Queue();
+  int _eventBufferBytes = 0;
   @override
   final Queue<Map<String, dynamic>> _debugLogBuffer = Queue();
+  int _debugLogBufferBytes = 0;
   @override
   late final SelfHealManager _selfHealManager;
   @override
   late final FleetManager _fleetManager = FleetManager();
   @override
   final Map<String, Uint8List> _screenshotBaselines = {};
+  @override
+  int _screenshotBaselineBytes = 0;
 
   // Reconnection state
   @override
@@ -283,7 +290,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               final exception =
                   event.extensionData?.data['exception']?.toString() ??
                   'Unknown Exception';
-              _eventBuffer.add({
+              _appendEvent({
                 'type': 'error',
                 'timestamp': timestamp,
                 'data': event.extensionData?.data,
@@ -297,14 +304,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 },
               );
             } else if (event.extensionKind == 'ext.flutterpilot.action') {
-              _eventBuffer.add({
+              _appendEvent({
                 'type': 'action',
                 'timestamp': timestamp,
                 'data': event.extensionData?.data,
               });
-            }
-            if (_eventBuffer.length > _Constants.eventBufferMax) {
-              _eventBuffer.removeFirst();
             }
           } catch (e) {
             _log.warning('Error processing extension event: $e');
@@ -377,15 +381,40 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     required String logger,
     required String timestamp,
   }) {
-    _debugLogBuffer.add({
+    final entry = <String, dynamic>{
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
       'message': message,
-    });
-    if (_debugLogBuffer.length > _Constants.debugLogBufferMax) {
-      _debugLogBuffer.removeFirst();
+    };
+    _debugLogBuffer.add(entry);
+    _debugLogBufferBytes += _entryBytes(entry);
+    _trimDebugLogBuffer();
+  }
+
+  void _appendEvent(Map<String, dynamic> entry) {
+    _eventBuffer.add(entry);
+    _eventBufferBytes += _entryBytes(entry);
+    while (_eventBuffer.length > _Constants.eventBufferMax ||
+        _eventBufferBytes > _Constants.eventBufferMaxBytes) {
+      _eventBufferBytes -= _entryBytes(_eventBuffer.removeFirst());
     }
+  }
+
+  void _trimDebugLogBuffer() {
+    while (_debugLogBuffer.length > _Constants.debugLogBufferMax ||
+        _debugLogBufferBytes > _Constants.debugLogBufferMaxBytes) {
+      _debugLogBufferBytes -= _entryBytes(_debugLogBuffer.removeFirst());
+    }
+  }
+
+  static int _entryBytes(Map<String, dynamic> entry) =>
+      utf8.encode(jsonEncode(entry)).length;
+
+  @override
+  void _clearDebugLogBuffer() {
+    _debugLogBuffer.clear();
+    _debugLogBufferBytes = 0;
   }
 
   static String _levelToString(int level) {
@@ -575,10 +604,25 @@ Use this guide to understand what tools to call, when, and in what order.
     String Function(Map<String, dynamic> json)? formatResult,
     String? nudge,
   }) {
+    final toolProperties = <String, JsonSchema>{
+      ...?properties,
+      'ifMutation': JsonSchema.integer(
+        description:
+            'Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed.',
+      ),
+      'ifVersion': JsonSchema.integer(description: 'Alias for ifMutation.'),
+      'operationId': JsonSchema.string(
+        description:
+            'Optional caller-supplied ID, enabling cancellation while queued.',
+      ),
+      'operationDeadlineMs': JsonSchema.integer(
+        description: 'Optional server deadline, clamped to 100–120000 ms.',
+      ),
+    };
     server.registerTool(
       name,
       description: description,
-      inputSchema: ToolInputSchema(properties: properties ?? {}),
+      inputSchema: ToolInputSchema(properties: toolProperties),
       callback: (p, e) async {
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();
@@ -613,7 +657,11 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
-    final operationId = 'op-${++_nextOperationId}';
+    final suppliedOperationId = parameters['operationId']?.toString();
+    final operationId =
+        suppliedOperationId == null || suppliedOperationId.isEmpty
+        ? 'op-${++_nextOperationId}'
+        : suppliedOperationId;
     final mutating = !_isReadOnlyExtension(extension);
     final connectionKey = _vmServiceUri ?? 'unconnected';
     final generation = _connectionGeneration;
@@ -656,7 +704,8 @@ Use this guide to understand what tools to call, when, and in what order.
           }
         }
         final callParameters = Map<String, dynamic>.from(parameters)
-          ..remove('operationDeadlineMs');
+          ..remove('operationDeadlineMs')
+          ..remove('operationId');
         final result = await _callExtensionImmediate(extension, callParameters);
         if (generation != _connectionGeneration && !result.isError) {
           return _ExtensionResult.error(

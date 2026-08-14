@@ -596,7 +596,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
         final count = _debugLogBuffer.length;
-        _debugLogBuffer.clear();
+        _clearDebugLogBuffer();
         return CallToolResult(
           content: [TextContent(text: 'Cleared $count log entries.')],
         );
@@ -613,7 +613,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
         final serverCleared = _debugLogBuffer.length;
-        _debugLogBuffer.clear();
+        _clearDebugLogBuffer();
         final res = await _callExtensionRaw(
           'ext.flutterpilot.clearDebugLogs',
           {},
