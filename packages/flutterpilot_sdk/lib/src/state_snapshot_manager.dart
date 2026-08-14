@@ -53,16 +53,29 @@ class StateSnapshotManager {
     final navStack = NavigationTracker.stack.whereType<String>().toList();
     final capturedStates = onCaptureStates != null ? onCaptureStates!() : <String, dynamic>{};
 
+    final clonedStates = _deepClone(capturedStates) as Map<String, dynamic>;
+
     final snapshot = StateSnapshot(
       name: name,
       timestamp: DateTime.now(),
       currentRoute: currentRoute,
       navigationStack: List<String>.from(navStack),
-      states: capturedStates,
+      states: clonedStates,
     );
 
     _snapshots[name] = snapshot;
     return snapshot;
+  }
+
+  static dynamic _deepClone(dynamic val) {
+    if (val is Map) {
+      return val.map((k, v) => MapEntry(k.toString(), _deepClone(v)));
+    } else if (val is List) {
+      return val.map(_deepClone).toList();
+    } else if (val is Set) {
+      return val.map(_deepClone).toSet();
+    }
+    return val;
   }
 
   /// Restores application state to the named snapshot.

@@ -7,10 +7,12 @@ class PilotWidgetInspector {
 
   // Frame-scoped key cache for O(1) lookups
   static final Map<String, Element> _keyCache = {};
+  static Expando<String> _textCache = Expando<String>('textCache');
 
   /// Invalidates the internal frame-scoped element cache.
   static void invalidateCache() {
     _keyCache.clear();
+    _textCache = Expando<String>('textCache');
   }
 
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
@@ -260,6 +262,9 @@ class PilotWidgetInspector {
   }
 
   static String _extractDescendantText(Element element) {
+    final cached = _textCache[element];
+    if (cached != null) return cached;
+
     final buffer = StringBuffer();
     void extract(Element e) {
       final w = e.widget;
@@ -278,7 +283,9 @@ class PilotWidgetInspector {
     }
 
     extract(element);
-    return buffer.toString().trim();
+    final result = buffer.toString().trim();
+    _textCache[element] = result;
+    return result;
   }
 
   static String? _computeSemanticSelector(Element element) {

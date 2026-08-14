@@ -178,7 +178,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        double diffPercent;
+        double diffPercent = 0.0;
         img.Image? diffImg;
         if (baselineImg.width != currentImg.width ||
             baselineImg.height != currentImg.height) {
@@ -188,15 +188,18 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           final total = baselineImg.width * baselineImg.height;
           diffImg = img.Image.from(currentImg);
 
-          for (int y = 0; y < baselineImg.height; y++) {
-            for (int x = 0; x < baselineImg.width; x++) {
-              final bp = baselineImg.getPixel(x, y);
-              final cp = currentImg.getPixel(x, y);
-              if (bp.r != cp.r || bp.g != cp.g || bp.b != cp.b) {
-                diffPixels++;
-                // Highlight changed pixels with vivid magenta (RGBA: 255, 0, 128, 255)
-                diffImg.setPixelRgba(x, y, 255, 0, 128, 255);
-              }
+          final baseBytes = baselineImg.toUint8List();
+          final currBytes = currentImg.toUint8List();
+          final baseWords = baseBytes.buffer.asUint32List();
+          final currWords = currBytes.buffer.asUint32List();
+          final minLen = baseWords.length < currWords.length ? baseWords.length : currWords.length;
+
+          for (int i = 0; i < minLen; i++) {
+            if (baseWords[i] != currWords[i]) {
+              diffPixels++;
+              final x = i % currentImg.width;
+              final y = i ~/ currentImg.width;
+              diffImg.setPixelRgba(x, y, 255, 0, 128, 255);
             }
           }
           diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;

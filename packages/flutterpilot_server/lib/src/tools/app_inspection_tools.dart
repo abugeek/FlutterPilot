@@ -421,18 +421,47 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
-        final lines = entries
-            .map((e) {
-              final logger = (e['logger'] as String?) ?? '';
-              return '[${e['timestamp']}] [${e['level']}] ${logger.isNotEmpty ? '($logger) ' : ''}${e['message']}';
-            })
-            .join('\n');
+        final compacted = <String>[];
+        String? prevMessage;
+        String? prevLevel;
+        String? prevLogger;
+        String? prevTime;
+        int repeatCount = 0;
+
+        void flushPrevious() {
+          if (prevMessage != null) {
+            final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty) ? '($prevLogger) ' : '';
+            final repeatSuffix = repeatCount > 1 ? ' [x$repeatCount occurrences]' : '';
+            compacted.add('[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix');
+          }
+        }
+
+        for (final e in entries) {
+          final msg = e['message']?.toString() ?? '';
+          final lvl = e['level']?.toString() ?? '';
+          final log = e['logger']?.toString() ?? '';
+          final time = e['timestamp']?.toString() ?? '';
+
+          if (msg == prevMessage && lvl == prevLevel && log == prevLogger) {
+            repeatCount++;
+          } else {
+            flushPrevious();
+            prevMessage = msg;
+            prevLevel = lvl;
+            prevLogger = log;
+            prevTime = time;
+            repeatCount = 1;
+          }
+        }
+        flushPrevious();
+
+        final lines = compacted.join('\n');
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  '${entries.length} log entries '
-                  '(buffer total: ${_debugLogBuffer.length}):\n$lines',
+                  '${entries.length} log entries (${compacted.length} compacted, '
+                  'buffer total: ${_debugLogBuffer.length}):\n$lines',
             ),
           ],
         );

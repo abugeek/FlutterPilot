@@ -92,5 +92,21 @@ void main() {
       final simFar = PilotWidgetInspector.calculateSimilarity('a', 'this is a completely different long string');
       expect(simFar, equals(0.0));
     });
+
+    test('StateSnapshotManager clones states cleanly without string overhead', () {
+      final initialData = {
+        'user': {'id': 1, 'name': 'Alice'},
+        'tags': ['flutter', 'ai'],
+      };
+
+      StateSnapshotManager.onCaptureStates = () => initialData;
+      final snapshot = StateSnapshotManager.saveSnapshot('test_snap');
+
+      expect(snapshot.states['user']['name'], equals('Alice'));
+
+      // Modifying original map does not mutate snapshot (deep clone isolation)
+      initialData['tags'] = ['mutated'];
+      expect(snapshot.states['tags'], equals(['flutter', 'ai']));
+    });
   });
 }
