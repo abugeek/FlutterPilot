@@ -106,13 +106,16 @@ class PilotWidgetInspector {
     Element? bestMatch;
     int bestPriority = -1; // Higher is better
     double bestSimilarity = 0.0;
+    bool foundExact = false;
 
     void evaluateElement(Element element) {
+      if (foundExact) return;
+
       final widget = element.widget;
       final typeName = widget.runtimeType.toString();
       final widgetKey = widget.key?.toString();
 
-      // Priority 100: Exact Key Match
+      // Priority 100: Exact Key Match (O(K) early-exit)
       if (widgetKey != null) {
         if (widgetKey == queryToSearch ||
             widgetKey == "['$queryToSearch']" ||
@@ -120,7 +123,10 @@ class PilotWidgetInspector {
           bestMatch = element;
           bestPriority = 100;
           matches.add(element);
-          if (targetIndex == null) return;
+          if (targetIndex == null) {
+            foundExact = true;
+            return;
+          }
         }
       }
 
@@ -225,8 +231,10 @@ class PilotWidgetInspector {
         }
       }
 
-      // Continue single-pass traversal
-      element.visitChildren(evaluateElement);
+      // Continue single-pass traversal if not already resolved by exact key
+      if (!foundExact) {
+        element.visitChildren(evaluateElement);
+      }
     }
 
     evaluateElement(root);
@@ -462,17 +470,24 @@ class PilotWidgetInspector {
     int maxDepth, {
     bool compact = true,
   }) {
-    final List<Map<String, dynamic>> children = [];
-    if (currentDepth < maxDepth) {
-      element.visitChildren((child) {
-        final childJson = _elementToJson(child, currentDepth + 1, maxDepth, compact: compact);
-        if (childJson != null) children.add(childJson);
-      });
-    }
-
     final widget = element.widget;
     final typeName = widget.runtimeType.toString();
     final keyStr = widget.key?.toString();
+
+    // Early Depth Exit: immediately short-circuit if maxDepth reached
+    if (currentDepth >= maxDepth) {
+      return {
+        'type': typeName,
+        if (keyStr != null) 'key': keyStr,
+        'truncated': true,
+      };
+    }
+
+    final List<Map<String, dynamic>> children = [];
+    element.visitChildren((child) {
+      final childJson = _elementToJson(child, currentDepth + 1, maxDepth, compact: compact);
+      if (childJson != null) children.add(childJson);
+    });
 
     // Scoped Direct Text Extraction: avoid deep descendant walk on layout wrappers
     String text = '';

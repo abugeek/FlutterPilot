@@ -603,6 +603,10 @@ Use this guide to understand what tools to call, when, and in what order.
         );
       }
     }
+    final stringArgs = parameters is Map<String, String>
+        ? parameters
+        : {for (final e in parameters.entries) e.key: e.value.toString()};
+
     // Fast-path: use cached isolate ID if available
     if (_cachedMainIsolateId != null) {
       try {
@@ -610,7 +614,7 @@ Use this guide to understand what tools to call, when, and in what order.
             .callServiceExtension(
               extension,
               isolateId: _cachedMainIsolateId!,
-              args: Map<String, String>.from(parameters),
+              args: stringArgs,
             )
             .timeout(_Constants.extensionCallTimeout);
         if (response.json != null) {
@@ -654,7 +658,7 @@ Use this guide to understand what tools to call, when, and in what order.
               .callServiceExtension(
                 extension,
                 isolateId: isolateRef.id!,
-                args: Map<String, String>.from(parameters),
+                args: stringArgs,
               )
               .timeout(_Constants.extensionCallTimeout);
           if (response.json != null) {

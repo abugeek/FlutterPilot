@@ -123,6 +123,86 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    server.registerTool(
+      'get_app_context',
+      description:
+          'High-speed batch context fetcher: Concurrently gathers 360° app overview, '
+          'active errors, and state snapshots (Riverpod/Bloc) in a single ~100ms round-trip. '
+          'Saves 2-3 tool call latencies at the start of an agent session or after navigation.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final results = await Future.wait([
+          _callExtensionRaw('ext.flutterpilot.getSummary', {}),
+          _callExtensionRaw('ext.flutterpilot.getErrors', {}),
+          _callExtensionRaw('ext.flutterpilot.getRiverpodStates', {}),
+          _callExtensionRaw('ext.flutterpilot.getBlocStates', {}),
+        ]);
+
+        final summaryRes = results[0];
+        final errorsRes = results[1];
+        final riverpodRes = results[2];
+        final blocRes = results[3];
+
+        final buffer = StringBuffer();
+        buffer.writeln('=== App Summary ===');
+        if (!summaryRes.isError && summaryRes.data != null) {
+          buffer.writeln(jsonEncode(summaryRes.data));
+        } else {
+          buffer.writeln('Unavailable or error: ${summaryRes.errorMessage}');
+        }
+
+        buffer.writeln('\n=== Active Errors ===');
+        if (!errorsRes.isError && errorsRes.data != null) {
+          final errors = errorsRes.data!['errors'] as List?;
+          if (errors == null || errors.isEmpty) {
+            buffer.writeln('No active errors.');
+          } else {
+            buffer.writeln('${errors.length} error(s) recorded:');
+            for (final err in errors.take(3)) {
+              buffer.writeln(' • ${(err as Map)['exception']}');
+            }
+          }
+        } else {
+          buffer.writeln('No active errors.');
+        }
+
+        if (!riverpodRes.isError && riverpodRes.data != null) {
+          final states = riverpodRes.data!['states'] as Map?;
+          if (states != null && states.isNotEmpty) {
+            buffer.writeln('\n=== Riverpod States ===');
+            for (final entry in states.entries.take(10)) {
+              buffer.writeln(' • ${entry.key}: ${entry.value['value']}');
+            }
+          }
+        }
+
+        if (!blocRes.isError && blocRes.data != null) {
+          final states = blocRes.data!['states'] as Map?;
+          if (states != null && states.isNotEmpty) {
+            buffer.writeln('\n=== Bloc States ===');
+            for (final entry in states.entries.take(10)) {
+              buffer.writeln(' • ${entry.key}: ${entry.value['state']}');
+            }
+          }
+        }
+
+        if (_debugLogBuffer.isNotEmpty) {
+          buffer.writeln('\n=== Recent Debug Logs ===');
+          for (final log in _debugLogBuffer.toList().reversed.take(5).toList().reversed) {
+            buffer.writeln(' [${log['level']}] ${log['message']}');
+          }
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: buffer.toString().trim(),
+            ),
+          ],
+        );
+      },
+    );
+
     _registerAppTool(
       name: 'get_app_summary',
       description:

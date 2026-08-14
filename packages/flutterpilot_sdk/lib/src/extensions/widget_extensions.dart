@@ -629,6 +629,18 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       try {
+        final ifMutation = int.tryParse(parameters['ifMutation'] ?? parameters['ifVersion'] ?? '');
+        if (ifMutation != null &&
+            ifMutation == FlutterPilot.screenMutationCount &&
+            PilotWidgetInspector.lastCapturedTree != null) {
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'changed': false,
+              'mutationCount': FlutterPilot.screenMutationCount,
+            }),
+          );
+        }
+
         final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
         final compact = parameters['compact'] != 'false';
         final rootQuery = parameters['rootKey'] ?? parameters['rootSelector'] ?? parameters['root'];
@@ -640,6 +652,7 @@ extension _WidgetExtensions on FlutterPilot {
         PilotWidgetInspector.lastCapturedTree = tree;
         return ServiceExtensionResponse.result(
           json.encode({
+            'changed': true,
             'tree': tree,
             'mutationCount': FlutterPilot.screenMutationCount,
           }),
