@@ -1,4 +1,4 @@
-import 'dart:collection';
+import 'ring_buffer.dart';
 
 /// Represents a discrete event captured by the Flight Recorder.
 class FlightEvent {
@@ -32,20 +32,17 @@ class FlightEvent {
 /// network calls, and route transitions to enable autonomous bug reproduction.
 class FlightRecorder {
   static const int maxEvents = 100;
-  static final Queue<FlightEvent> _events = Queue<FlightEvent>();
+  static final RingBuffer<FlightEvent> _events = RingBuffer<FlightEvent>(maxEvents);
   static List<FlightEvent>? _frozenCrashSnapshot;
   static DateTime? _crashTime;
   static String? _lastException;
 
-  /// Records a flight event into the rolling circular buffer.
+  /// Records a flight event into the rolling circular buffer in O(1) time.
   static void record(
     String category,
     String action, [
     Map<String, dynamic>? data,
   ]) {
-    if (_events.length >= maxEvents) {
-      _events.removeFirst();
-    }
     _events.add(
       FlightEvent(
         category: category,

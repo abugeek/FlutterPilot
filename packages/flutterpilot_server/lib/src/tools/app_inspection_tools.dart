@@ -139,15 +139,35 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_errors',
       description:
-          'Retrieve the most recent unhandled exceptions and stack traces. CALL THIS whenever you suspect a crash or logic failure.',
+          'Retrieve the most recent unhandled exceptions and stack traces with duplicate aggregation. CALL THIS whenever you suspect a crash or logic failure.',
       extension: 'ext.flutterpilot.getErrors',
       formatResult: (json) {
         final errors = json['errors'] as List?;
         if (errors == null || errors.isEmpty) return 'No recent errors found.';
-        return errors
+
+        // Deduplicate identical errors
+        final Map<String, Map<String, dynamic>> deduped = {};
+        for (final item in errors) {
+          if (item is Map) {
+            final key = item['exception']?.toString() ?? 'unknown';
+            if (!deduped.containsKey(key)) {
+              deduped[key] = {
+                'exception': key,
+                'count': 1,
+                'timestamp': item['timestamp'],
+                'stackTrace': item['stackTrace'],
+              };
+            } else {
+              deduped[key]!['count'] = (deduped[key]!['count'] as int) + 1;
+              deduped[key]!['timestamp'] = item['timestamp'];
+            }
+          }
+        }
+
+        return deduped.values
             .map(
               (e) =>
-                  '--- Error ---\n${e['exception']}\n${e['timestamp']}\n${e['stackTrace']}',
+                  '--- Error (x${e['count']}) ---\n${e['exception']}\nLatest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
             )
             .join('\n\n');
       },
@@ -482,19 +502,22 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'before attempting state inspection or plugin-specific operations.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
-        // Probe which plugins are loaded by attempting extension calls
-        final pluginStatus = <String, String>{};
-        for (final entry in <String, String>{
+        // Probe which plugins are loaded concurrently in parallel
+        final pluginProbes = <String, String>{
           'bloc': 'ext.flutterpilot.getBlocStates',
           'riverpod': 'ext.flutterpilot.getRiverpodStates',
           'dio': 'ext.flutterpilot.getNetworkLogs',
           'hive': 'ext.flutterpilot.getHiveContents',
           'shared_preferences': 'ext.flutterpilot.getSharedPreferences',
           'drift': 'ext.flutterpilot.listDriftTables',
-        }.entries) {
-          final res = await _callExtensionRaw(entry.value, {});
-          pluginStatus[entry.key] = res.isError ? 'not_loaded' : 'loaded';
-        }
+        };
+        final probeResults = await Future.wait(
+          pluginProbes.entries.map((e) async {
+            final res = await _callExtensionRaw(e.value, {});
+            return MapEntry(e.key, res.isError ? 'not_loaded' : 'loaded');
+          }),
+        );
+        final pluginStatus = Map.fromEntries(probeResults);
 
         final capabilities = {
           'connection': {

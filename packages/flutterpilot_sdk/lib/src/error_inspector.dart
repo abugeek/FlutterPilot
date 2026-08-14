@@ -1,4 +1,4 @@
-import 'dart:collection';
+import 'ring_buffer.dart';
 import 'package:flutter/widgets.dart';
 
 /// Intercepts Flutter framework and platform errors and maintains a
@@ -15,7 +15,7 @@ import 'package:flutter/widgets.dart';
 /// This class is initialized automatically by [FlutterPilot.initialize]
 /// and should not be used directly in most cases.
 class ErrorInspector {
-  static final Queue<Map<String, dynamic>> _errorBuffer = Queue();
+  static final RingBuffer<Map<String, dynamic>> _errorBuffer = RingBuffer(10);
   static bool _initialized = false;
 
   /// Optional callback invoked whenever a new error is captured.
@@ -51,9 +51,6 @@ class ErrorInspector {
   }
 
   static void _captureError(FlutterErrorDetails details) {
-    if (_errorBuffer.length >= 10) {
-      _errorBuffer.removeFirst();
-    }
     _errorBuffer.add({
       'exception': details.exceptionAsString(),
       'stackTrace': details.stack?.toString(),
