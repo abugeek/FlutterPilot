@@ -416,6 +416,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     required String timestamp,
   }) {
     final entry = <String, dynamic>{
+      'deviceId': _fleetManager.activeDeviceId ?? 'default',
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
@@ -427,8 +428,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   void _appendEvent(Map<String, dynamic> entry) {
-    _eventBuffer.add(entry);
-    _eventBufferBytes += _entryBytes(entry);
+    final deviceEntry = <String, dynamic>{
+      'deviceId': _fleetManager.activeDeviceId ?? 'default',
+      ...entry,
+    };
+    _eventBuffer.add(deviceEntry);
+    _eventBufferBytes += _entryBytes(deviceEntry);
     while (_eventBuffer.length > _Constants.eventBufferMax ||
         _eventBufferBytes > _Constants.eventBufferMaxBytes) {
       _eventBufferBytes -= _entryBytes(_eventBuffer.removeFirst());

@@ -2,6 +2,16 @@ part of '../../flutterpilot_server.dart';
 
 /// Tools for inspecting application state, errors, events, config, and logs.
 mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
+  String get _activeDeviceId => _fleetManager.activeDeviceId ?? 'default';
+
+  List<Map<String, dynamic>> get _activeDebugLogs => _debugLogBuffer
+      .where((entry) => (entry['deviceId'] ?? 'default') == _activeDeviceId)
+      .toList();
+
+  List<Map<String, dynamic>> get _activeEvents => _eventBuffer
+      .where((entry) => (entry['deviceId'] ?? 'default') == _activeDeviceId)
+      .toList();
+
   void _registerAppInspectionTools() {
     server.registerTool(
       'get_operation',
@@ -267,10 +277,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           }
         }
 
-        if (_debugLogBuffer.isNotEmpty) {
+        final activeLogs = _activeDebugLogs;
+        if (activeLogs.isNotEmpty) {
           buffer.writeln('\n=== Recent Debug Logs ===');
-          for (final log
-              in _debugLogBuffer.toList().reversed.take(5).toList().reversed) {
+          for (final log in activeLogs.reversed.take(5).toList().reversed) {
             buffer.writeln(' [${log['level']}] ${log['message']}');
           }
         }
@@ -339,7 +349,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'Retrieves the last 50 proactive events (errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        if (_eventBuffer.isEmpty) {
+        final activeEvents = _activeEvents;
+        if (activeEvents.isEmpty) {
           return CallToolResult(
             content: [TextContent(text: 'No recent events.')],
           );
@@ -347,7 +358,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: _eventBuffer
+              text: activeEvents
                   .map(
                     (ev) => '[${ev['timestamp']}] ${ev['type']}: ${ev['data']}',
                   )
@@ -555,7 +566,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final loggerFilter = params['logger'] as String?;
         final rawLimit = (params['limit'] as int?) ?? 100;
         final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
-        var entries = _debugLogBuffer.toList();
+        var entries = _activeDebugLogs;
         if (levelFilter != null && levelFilter.isNotEmpty) {
           entries = entries.where((e) => e['level'] == levelFilter).toList();
         }
@@ -627,7 +638,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text:
                   '${entries.length} log entries (${compacted.length} compacted, '
-                  'buffer total: ${_debugLogBuffer.length}):\n$lines',
+                  'buffer total: ${_activeDebugLogs.length}):\n$lines',
             ),
           ],
         );
@@ -739,8 +750,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
               ? <String, dynamic>{'status': 'unavailable'}
               : sdkCapabilities.data,
           'buffers': {
-            'events': _eventBuffer.length,
-            'debugLogs': _debugLogBuffer.length,
+            'events': _activeEvents.length,
+            'debugLogs': _activeDebugLogs.length,
             'screenshotBaselines': _screenshotBaselines.length,
           },
         };
