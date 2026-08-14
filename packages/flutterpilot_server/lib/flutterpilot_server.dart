@@ -624,25 +624,78 @@ Use this guide to understand what tools to call, when, and in what order.
       '(connection=$connectionKey, generation=$generation)',
     );
 
-    return scheduler.schedule(
-      mutating: mutating,
-      operation: () async {
-        if (generation != _connectionGeneration && generation != 0) {
-          return _ExtensionResult.error(
-            'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
-            ErrorCategory.staleOperation,
-          ).withOperationId(operationId);
-        }
-        final result = await _callExtensionImmediate(extension, parameters);
-        if (generation != _connectionGeneration && !result.isError) {
-          return _ExtensionResult.error(
-            'Operation $operationId completed against a stale app connection. Retry against the current device.',
-            ErrorCategory.staleOperation,
-          ).withOperationId(operationId);
-        }
-        return result.withOperationId(operationId);
-      },
+    return scheduler
+        .schedule(
+          mutating: mutating,
+          operation: () async {
+            if (generation != _connectionGeneration && generation != 0) {
+              return _ExtensionResult.error(
+                'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
+                ErrorCategory.staleOperation,
+              ).withOperationId(operationId);
+            }
+            if (mutating) {
+              final expectedMutation = _parseMutationVersion(parameters);
+              if (expectedMutation != null) {
+                final versionResult = await _callExtensionImmediate(
+                  'ext.flutterpilot.getScreenHash',
+                  const {},
+                );
+                final actualMutation = _extractMutationVersion(versionResult);
+                if (actualMutation == null ||
+                    actualMutation != expectedMutation) {
+                  return _ExtensionResult.error(
+                    'Mutation precondition failed for $operationId: expected '
+                    'context version $expectedMutation, but the active app is at '
+                    '${actualMutation ?? 'an unknown version'}. Re-read the screen '
+                    'state and retry with the latest contextVersion.',
+                    ErrorCategory.preconditionFailed,
+                  ).withOperationId(operationId);
+                }
+              }
+            }
+            final callParameters = Map<String, dynamic>.from(parameters)
+              ..remove('operationDeadlineMs');
+            final result = await _callExtensionImmediate(
+              extension,
+              callParameters,
+            );
+            if (generation != _connectionGeneration && !result.isError) {
+              return _ExtensionResult.error(
+                'Operation $operationId completed against a stale app connection. Retry against the current device.',
+                ErrorCategory.staleOperation,
+              ).withOperationId(operationId);
+            }
+            return result.withOperationId(operationId);
+          },
+        )
+        .timeout(
+          _operationDeadline(parameters),
+          onTimeout: () => _ExtensionResult.error(
+            'Operation $operationId exceeded its server deadline. The queued '
+            'operation remains serialized; retry after checking app state.',
+            ErrorCategory.deadlineExceeded,
+          ).withOperationId(operationId),
+        );
+  }
+
+  static int? _parseMutationVersion(Map<String, dynamic> parameters) {
+    final value = parameters['ifMutation'] ?? parameters['ifVersion'];
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static int? _extractMutationVersion(_ExtensionResult result) {
+    if (result.isError) return null;
+    final value = result.data?['mutationCount'];
+    return value is int ? value : int.tryParse(value?.toString() ?? '');
+  }
+
+  static Duration _operationDeadline(Map<String, dynamic> parameters) {
+    final requested = int.tryParse(
+      parameters['operationDeadlineMs']?.toString() ?? '',
     );
+    final milliseconds = (requested ?? 30000).clamp(100, 120000);
+    return Duration(milliseconds: milliseconds);
   }
 
   static bool _isReadOnlyExtension(String extension) {
@@ -889,6 +942,12 @@ enum ErrorCategory {
 
   /// The operation was queued for an older device connection or isolate.
   staleOperation,
+
+  /// The caller's context version no longer matches the active app state.
+  preconditionFailed,
+
+  /// The server-side operation deadline elapsed before completion.
+  deadlineExceeded,
 }
 
 class _ExtensionResult {
