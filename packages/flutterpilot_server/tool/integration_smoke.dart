@@ -18,11 +18,12 @@ Future<void> main(List<String> args) async {
     return;
   }
 
+  final vmServiceUri = _normalizeVmServiceUri(args.single);
   final process = await Process.start('dart', [
     'run',
     'packages/flutterpilot_server/bin/flutterpilot_server.dart',
     '--uri',
-    args.single,
+    vmServiceUri,
   ]);
   final responses = <int, Completer<Map<String, dynamic>>>{};
   var nextId = 0;
@@ -128,4 +129,15 @@ Future<void> main(List<String> args) async {
     process.kill();
     await process.exitCode;
   }
+}
+
+String _normalizeVmServiceUri(String rawUri) {
+  final uri = Uri.tryParse(rawUri);
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    return rawUri;
+  }
+  final path = uri.path.endsWith('/') ? uri.path : '${uri.path}/';
+  return uri
+      .replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws', path: '${path}ws')
+      .toString();
 }
