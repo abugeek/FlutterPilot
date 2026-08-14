@@ -16,6 +16,12 @@ void main(List<String> args) async {
       help: 'Allow non-SELECT queries on databases.',
       negatable: false,
     )
+    ..addFlag(
+      'allow-remote',
+      help:
+          'Allow connecting to non-local VM Service endpoints. Use only with authenticated/private networks.',
+      negatable: false,
+    )
     ..addOption(
       'project-root',
       abbr: 'p',
@@ -33,6 +39,7 @@ void main(List<String> args) async {
   final results = parser.parse(args);
   final uri = results['uri'] as String?;
   final allowDestructive = results['allow-destructive'] as bool;
+  final allowRemote = results['allow-remote'] as bool;
   final projectRootArg = results['project-root'] as String?;
   final projectRoot = projectRootArg != null ? Directory(projectRootArg) : null;
 
@@ -48,6 +55,7 @@ void main(List<String> args) async {
   final server = FlutterPilotServer(
     vmServiceUri: uri,
     allowDestructive: allowDestructive,
+    allowRemoteConnections: allowRemote,
     projectRoot: projectRoot,
   );
 

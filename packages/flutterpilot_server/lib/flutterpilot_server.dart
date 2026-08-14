@@ -33,6 +33,7 @@ abstract class _FlutterPilotServerBase {
   McpServer get server;
   String get vmServiceUri;
   bool get allowDestructive;
+  bool get allowRemoteConnections;
   Directory get _projectRoot;
   VmService? get _vmService;
   bool get _isReconnecting;
@@ -89,6 +90,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   final bool allowDestructive;
   @override
+  final bool allowRemoteConnections;
+  @override
   final Directory _projectRoot;
   @override
   VmService? _vmService;
@@ -130,6 +133,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   FlutterPilotServer({
     String? vmServiceUri,
     this.allowDestructive = false,
+    this.allowRemoteConnections = false,
     Directory? projectRoot,
   }) : _vmServiceUri = vmServiceUri,
        _projectRoot = projectRoot ?? Directory.current,
@@ -164,6 +168,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   Future<bool> _connectWithUri([String? targetUri]) async {
     if (targetUri != null && targetUri.isNotEmpty) {
+      if (!_isAllowedConnectionUri(targetUri)) {
+        _log.warning(
+          'Blocked remote VM Service URI; enable allowRemoteConnections to connect.',
+        );
+        return false;
+      }
       _vmServiceUri = targetUri;
     }
     if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
@@ -202,6 +212,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         return;
       }
     }
+    if (!_isAllowedConnectionUri(_vmServiceUri!)) {
+      _log.warning(
+        'Blocked remote VM Service URI; enable allowRemoteConnections to connect.',
+      );
+      return;
+    }
     _log.info('Connecting to VM Service: $_vmServiceUri');
     _vmService = await vmServiceConnectUri(_vmServiceUri!);
     _log.info('Connected to VM Service at $_vmServiceUri');
@@ -225,6 +241,16 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         });
 
     await _setupEventStreaming();
+  }
+
+  bool _isAllowedConnectionUri(String rawUri) {
+    if (allowRemoteConnections) return true;
+    final uri = Uri.tryParse(rawUri);
+    final host = uri?.host.toLowerCase();
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1' ||
+        host == '[::1]';
   }
 
   void _scheduleReconnect() {

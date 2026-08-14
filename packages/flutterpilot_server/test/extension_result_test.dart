@@ -7,6 +7,7 @@ void main() {
       final server = FlutterPilotServer(vmServiceUri: 'ws://localhost:8888');
       expect(server.allowDestructive, isFalse);
       expect(server.vmServiceUri, 'ws://localhost:8888');
+      expect(server.allowRemoteConnections, isFalse);
       expect(server.server, isNotNull);
     });
 
@@ -16,6 +17,14 @@ void main() {
         allowDestructive: true,
       );
       expect(server.allowDestructive, isTrue);
+    });
+
+    test('can explicitly allow remote VM Service connections', () {
+      final server = FlutterPilotServer(
+        vmServiceUri: 'ws://10.0.0.8:9999/token',
+        allowRemoteConnections: true,
+      );
+      expect(server.allowRemoteConnections, isTrue);
     });
 
     test('server has correct MCP implementation info', () {
