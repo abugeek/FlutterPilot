@@ -632,13 +632,20 @@ Use this guide to understand what tools to call, when, and in what order.
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  '${nudge != null ? '$text\n\n$nudge' : text}\n[operationId: ${res.operationId}]',
+              text: _boundToolText(
+                '${nudge != null ? '$text\n\n$nudge' : text}\n[operationId: ${res.operationId}]',
+              ),
             ),
           ],
         );
       },
     );
+  }
+
+  static String _boundToolText(String text) {
+    final bytes = utf8.encode(text);
+    if (bytes.length <= _Constants.maxToolResponseBytes) return text;
+    return '${utf8.decode(bytes.take(_Constants.maxToolResponseBytes).toList(), allowMalformed: true)}\n[response truncated]';
   }
 
   @override
@@ -1056,8 +1063,10 @@ class _ExtensionResult {
       content: [
         TextContent(
           text: operationId == null
-              ? message
-              : '$message\n[operationId: $operationId]',
+              ? FlutterPilotServer._boundToolText(message)
+              : FlutterPilotServer._boundToolText(
+                  '$message\n[operationId: $operationId]',
+                ),
         ),
       ],
       isError: isError,

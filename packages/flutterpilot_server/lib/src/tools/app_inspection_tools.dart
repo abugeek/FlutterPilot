@@ -676,8 +676,12 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'config': {
             'allowDestructive': allowDestructive,
             'eventBufferMax': _Constants.eventBufferMax,
+            'eventBufferMaxBytes': _Constants.eventBufferMaxBytes,
             'debugLogBufferMax': _Constants.debugLogBufferMax,
+            'debugLogBufferMaxBytes': _Constants.debugLogBufferMaxBytes,
             'maxScreenshotBaselines': _Constants.maxScreenshotBaselines,
+            'maxScreenshotBaselineBytes': _Constants.maxScreenshotBaselineBytes,
+            'maxToolResponseBytes': _Constants.maxToolResponseBytes,
           },
           'plugins': pluginStatus,
           'buffers': {

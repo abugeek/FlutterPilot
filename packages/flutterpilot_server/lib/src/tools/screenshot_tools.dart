@@ -210,7 +210,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        final threshold = (p['threshold'] as num?)?.toDouble() ?? 1.0;
+        final threshold = ((p['threshold'] as num?)?.toDouble() ?? 1.0).clamp(
+          0.0,
+          100.0,
+        );
 
         // Decode both PNGs and compare pixel-by-pixel.
         final baselineImg = img.decodePng(baseline);

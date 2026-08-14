@@ -33,14 +33,19 @@ class PilotWidgetInspector {
       }
       element.visitChildren(visit);
     }
+
     visit(root);
     _keyIndexValid = true;
   }
 
   static Element? _findIndexedKey(Element root, String query) {
-    if (query.contains('->') || query.contains('[') || query.contains(':')) return null;
+    if (query.contains('->') || query.contains('[') || query.contains(':')) {
+      return null;
+    }
     _buildKeyIndex(root);
-    return _keyIndex[query] ?? _keyIndex["['$query']"] ?? _keyIndex["[<'$query'>]"];
+    return _keyIndex[query] ??
+        _keyIndex["['$query']"] ??
+        _keyIndex["[<'$query'>]"];
   }
 
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
@@ -53,16 +58,21 @@ class PilotWidgetInspector {
     Element? rootElement,
   }) {
     Element? targetRoot = rootElement;
-    if (targetRoot == null && rootQuery != null && rootQuery.trim().isNotEmpty) {
+    if (targetRoot == null &&
+        rootQuery != null &&
+        rootQuery.trim().isNotEmpty) {
       targetRoot = findElement(rootQuery);
       if (targetRoot == null) {
-        return {'error': 'Scoped root widget not found for query: "$rootQuery"'};
+        return {
+          'error': 'Scoped root widget not found for query: "$rootQuery"',
+        };
       }
     }
     targetRoot ??= WidgetsBinding.instance.rootElement;
     if (targetRoot == null) return {'error': 'No root element found'};
     final depth = maxDepth ?? defaultMaxDepth;
-    return _elementToJson(targetRoot, 0, depth, compact: compact) ?? {'type': 'Empty'};
+    return _elementToJson(targetRoot, 0, depth, compact: compact) ??
+        {'type': 'Empty'};
   }
 
   /// High-performance Hierarchical & Positional Element Matcher (O(N)).
@@ -90,7 +100,11 @@ class PilotWidgetInspector {
 
     // 2. Chained Hierarchy Evaluation ("Parent -> Child")
     if (cleanQuery.contains('->')) {
-      final parts = cleanQuery.split('->').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+      final parts = cleanQuery
+          .split('->')
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .toList();
       Element? currentScope = root;
       for (final part in parts) {
         if (currentScope == null) return null;
@@ -112,7 +126,9 @@ class PilotWidgetInspector {
     // Check positional indexing (e.g. ListTile:nth-child(2) or Button[index=1])
     int? targetIndex;
     var queryToSearch = cleanQuery;
-    final indexMatch = RegExp(r':nth-child\((\d+)\)|\[index=(\d+)\]').firstMatch(cleanQuery);
+    final indexMatch = RegExp(
+      r':nth-child\((\d+)\)|\[index=(\d+)\]',
+    ).firstMatch(cleanQuery);
     if (indexMatch != null) {
       final idxStr = indexMatch.group(1) ?? indexMatch.group(2);
       targetIndex = int.tryParse(idxStr ?? '');
@@ -181,7 +197,8 @@ class PilotWidgetInspector {
       }
 
       // Priority 80: Clickable Button Text Match
-      if (_isButtonOrClickable(typeName) && (targetIndex != null || bestPriority < 80)) {
+      if (_isButtonOrClickable(typeName) &&
+          (targetIndex != null || bestPriority < 80)) {
         final text = _extractDescendantText(element);
         if (text.toLowerCase() == queryToSearch.toLowerCase()) {
           bestMatch = element;
@@ -201,7 +218,10 @@ class PilotWidgetInspector {
             bestMatch = element;
             bestPriority = 70;
             matches.add(element);
-          } else if ((targetIndex != null || bestPriority < 60) && widget.data!.toLowerCase().contains(queryToSearch.toLowerCase())) {
+          } else if ((targetIndex != null || bestPriority < 60) &&
+              widget.data!.toLowerCase().contains(
+                queryToSearch.toLowerCase(),
+              )) {
             bestMatch = element;
             bestPriority = 60;
             matches.add(element);
@@ -212,13 +232,17 @@ class PilotWidgetInspector {
             bestMatch = element;
             bestPriority = 70;
             matches.add(element);
-          } else if ((targetIndex != null || bestPriority < 60) && plain.toLowerCase().contains(queryToSearch.toLowerCase())) {
+          } else if ((targetIndex != null || bestPriority < 60) &&
+              plain.toLowerCase().contains(queryToSearch.toLowerCase())) {
             bestMatch = element;
             bestPriority = 60;
             matches.add(element);
           }
-        } else if (widget is EditableText && (targetIndex != null || bestPriority < 60)) {
-          if (widget.controller.text.toLowerCase().contains(queryToSearch.toLowerCase())) {
+        } else if (widget is EditableText &&
+            (targetIndex != null || bestPriority < 60)) {
+          if (widget.controller.text.toLowerCase().contains(
+            queryToSearch.toLowerCase(),
+          )) {
             bestMatch = element;
             bestPriority = 60;
             matches.add(element);
@@ -228,7 +252,10 @@ class PilotWidgetInspector {
 
       // Priority 50: Tooltip / Semantics
       if ((targetIndex != null || bestPriority < 50) && widget is Tooltip) {
-        if (widget.message?.toLowerCase().contains(queryToSearch.toLowerCase()) ?? false) {
+        if (widget.message?.toLowerCase().contains(
+              queryToSearch.toLowerCase(),
+            ) ??
+            false) {
           bestMatch = element;
           bestPriority = 50;
           matches.add(element);
@@ -236,7 +263,8 @@ class PilotWidgetInspector {
       }
 
       // Priority 40: Type Exact Match
-      if ((targetIndex != null || bestPriority < 40) && typeName.toLowerCase() == queryToSearch.toLowerCase()) {
+      if ((targetIndex != null || bestPriority < 40) &&
+          typeName.toLowerCase() == queryToSearch.toLowerCase()) {
         bestMatch = element;
         bestPriority = 40;
         matches.add(element);
@@ -438,7 +466,9 @@ class PilotWidgetInspector {
         return;
       } else if (w is Tooltip && w.message != null && w.message!.isNotEmpty) {
         buffer.write('${w.message} ');
-      } else if (w is IconButton && w.tooltip != null && w.tooltip!.isNotEmpty) {
+      } else if (w is IconButton &&
+          w.tooltip != null &&
+          w.tooltip!.isNotEmpty) {
         buffer.write('${w.tooltip} ');
       }
       e.visitChildren(extract);
@@ -456,13 +486,17 @@ class PilotWidgetInspector {
 
     if (_isButtonOrClickable(type)) {
       if (text.isNotEmpty) {
-        final cleanText = text.length > 25 ? '${text.substring(0, 25)}...' : text;
+        final cleanText = text.length > 25
+            ? '${text.substring(0, 25)}...'
+            : text;
         return "$type['$cleanText']";
       }
       return type;
     }
 
-    if (type == 'TextField' || type == 'TextFormField' || type == 'EditableText') {
+    if (type == 'TextField' ||
+        type == 'TextFormField' ||
+        type == 'EditableText') {
       if (text.isNotEmpty) {
         return "$type['$text']";
       }
@@ -524,7 +558,12 @@ class PilotWidgetInspector {
 
     final List<Map<String, dynamic>> children = [];
     element.visitChildren((child) {
-      final childJson = _elementToJson(child, currentDepth + 1, maxDepth, compact: compact);
+      final childJson = _elementToJson(
+        child,
+        currentDepth + 1,
+        maxDepth,
+        compact: compact,
+      );
       if (childJson != null) children.add(childJson);
     });
 
@@ -594,7 +633,9 @@ class PilotWidgetInspector {
       if (!oldNodes.containsKey(entry.key)) {
         added.add(entry.value);
       } else if (oldNodes[entry.key] != entry.value) {
-        modified.add('${entry.key}: changed from "${oldNodes[entry.key]}" to "${entry.value}"');
+        modified.add(
+          '${entry.key}: changed from "${oldNodes[entry.key]}" to "${entry.value}"',
+        );
       }
     }
 
@@ -605,7 +646,8 @@ class PilotWidgetInspector {
     }
 
     return {
-      'hasChanges': added.isNotEmpty || removed.isNotEmpty || modified.isNotEmpty,
+      'hasChanges':
+          added.isNotEmpty || removed.isNotEmpty || modified.isNotEmpty,
       'addedCount': added.length,
       'removedCount': removed.length,
       'modifiedCount': modified.length,
@@ -623,8 +665,13 @@ class PilotWidgetInspector {
       final text = current['text']?.toString();
       final selector = current['selector']?.toString();
 
-      final nodeIdentifier = key ?? selector ?? '$type#$path';
-      final nodeDescription = '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
+      // Keys and semantic selectors are not guaranteed to be unique. Keep the
+      // structural path in the identity so repeated list rows do not overwrite
+      // one another in the diff map.
+      final semanticIdentity = key ?? selector ?? type;
+      final nodeIdentifier = '$path:$semanticIdentity';
+      final nodeDescription =
+          '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
       result[nodeIdentifier] = nodeDescription;
 
       final children = current['children'] as List?;
