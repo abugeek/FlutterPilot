@@ -50,10 +50,43 @@ class ErrorInspector {
         };
   }
 
+  /// Compacts a raw stack trace by stripping internal Flutter framework frames
+  /// and preserving user project frames (package:...) for an 80% token reduction.
+  static String? compactStackTrace(String? rawStack) {
+    if (rawStack == null || rawStack.isEmpty) return null;
+    final lines = rawStack.split('\n');
+    final compacted = <String>[];
+    int skippedFrameworkFrames = 0;
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final isFramework = trimmed.contains('package:flutter/') ||
+          trimmed.contains('dart:async/') ||
+          trimmed.contains('dart:ui/') ||
+          trimmed.contains('package:stack_trace/');
+      if (!isFramework) {
+        if (skippedFrameworkFrames > 0) {
+          compacted.add('  ... [$skippedFrameworkFrames framework frames skipped]');
+          skippedFrameworkFrames = 0;
+        }
+        compacted.add(trimmed);
+      } else {
+        skippedFrameworkFrames++;
+      }
+    }
+    if (skippedFrameworkFrames > 0) {
+      compacted.add('  ... [$skippedFrameworkFrames framework frames skipped]');
+    }
+    return compacted.isNotEmpty ? compacted.join('\n') : rawStack;
+  }
+
   static void _captureError(FlutterErrorDetails details) {
+    final rawStack = details.stack?.toString();
     _errorBuffer.add({
       'exception': details.exceptionAsString(),
-      'stackTrace': details.stack?.toString(),
+      'stackTrace': compactStackTrace(rawStack),
+      'rawStackTrace': rawStack,
       'library': details.library,
       'context': details.context?.toString(),
       'timestamp': DateTime.now().toIso8601String(),

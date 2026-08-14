@@ -34,11 +34,11 @@ enum NetworkCondition {
 /// dio.interceptors.add(DioPilotInterceptor());
 /// ```
 class DioPilotInterceptor extends Interceptor {
-  static final List<Map<String, dynamic>> _logs = [];
+  static const int maxLogEntries = 100;
+  static final RingBuffer<Map<String, dynamic>> _logs = RingBuffer(maxLogEntries);
   static bool _initialized = false;
   static NetworkCondition _condition = NetworkCondition.normal;
   static final Map<String, Map<String, dynamic>> _mocks = {};
-  static const int maxLogEntries = 100;
   static const int _maxDelayMs = 60000;
 
   DioPilotInterceptor() {
@@ -60,7 +60,7 @@ class DioPilotInterceptor extends Interceptor {
       method,
       parameters,
     ) async {
-      return ServiceExtensionResponse.result(json.encode({'logs': _logs}));
+      return ServiceExtensionResponse.result(json.encode({'logs': _logs.toList()}));
     });
 
     registerExtension('ext.flutterpilot.simulateNetwork', (
@@ -250,8 +250,5 @@ class DioPilotInterceptor extends Interceptor {
 
   void _addLog(Map<String, dynamic> log) {
     _logs.add(log);
-    while (_logs.length > maxLogEntries) {
-      _logs.removeAt(0);
-    }
   }
 }

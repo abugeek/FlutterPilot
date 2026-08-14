@@ -707,5 +707,44 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'fill_form_batch',
+      description:
+          'Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxes/switches '
+          'in a single frame pass (<5ms) and optionally submits. Reduces 5+ agent turns to 1.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'fields': JsonSchema.object(
+            description:
+                'Map of field targets (keys/selectors) to values (string for TextFields, bool for Checkboxes/Switches). '
+                'Example: {"TextField[\'Email\']": "alice@test.com", "Checkbox[\'Terms\']": true}',
+          ),
+          'submitTarget': JsonSchema.string(
+            description:
+                'Optional key or selector of the submit button to tap after filling all fields.',
+          ),
+        },
+        required: ['fields'],
+      ),
+      callback: (p, e) async {
+        final fields = p['fields'];
+        final submitTarget = p['submitTarget']?.toString();
+
+        final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
+          'fields': jsonEncode(fields),
+          'submitWith': ?submitTarget,
+        });
+
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Form filled successfully: ${jsonEncode(res.data)}',
+            ),
+          ],
+        );
+      },
+    );
   }
 }

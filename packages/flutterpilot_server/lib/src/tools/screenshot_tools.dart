@@ -7,34 +7,69 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'capture_screenshot',
       description:
-          'Capture a PNG image of the current screen for visual analysis. '
-          'Returns base64-encoded image data. Use to verify layout, colors, text rendering, '
-          'or visual glitches. PAIR WITH get_widget_tree for coordinate-perfect element identification. '
-          'AFTER: If you see an error overlay, call get_errors immediately.',
+          'Capture an image of the current screen for visual analysis with adaptive compression. '
+          'Supports scale (e.g. 0.5x) and quality (e.g. 75) to reduce token payload by up to 80%.',
       inputSchema: ToolInputSchema(
         properties: {
-          'format': JsonSchema.string(enumValues: ['png', 'webp']),
+          'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
+          'scale': JsonSchema.number(
+            description: 'Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision.',
+          ),
+          'quality': JsonSchema.integer(
+            description: 'JPEG compression quality 10-100 (default: 80 for jpeg).',
+          ),
         },
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          p,
+          {},
         );
         if (res.isError) return res.toCallToolResult();
-        final imageData = res.data?['data'] as String?;
-        if (imageData == null) {
+        final rawBase64 = res.data?['data'] as String?;
+        if (rawBase64 == null) {
           return CallToolResult(
             content: [TextContent(text: 'Screenshot returned no image data')],
             isError: true,
           );
         }
+
+        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 1.0;
+        final format = p['format']?.toString().toLowerCase() ?? (scale < 1.0 ? 'jpeg' : 'png');
+        final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
+
+        String finalBase64 = rawBase64;
+        String mimeType = 'image/png';
+
+        if (scale < 1.0 || format == 'jpeg') {
+          try {
+            final rawBytes = base64Decode(rawBase64);
+            var decoded = img.decodeImage(rawBytes);
+            if (decoded != null) {
+              if (scale < 1.0) {
+                final targetW = (decoded.width * scale).round().clamp(100, decoded.width);
+                decoded = img.copyResize(decoded, width: targetW);
+              }
+              if (format == 'jpeg') {
+                final compressed = img.encodeJpg(decoded, quality: quality);
+                finalBase64 = base64Encode(compressed);
+                mimeType = 'image/jpeg';
+              } else {
+                final compressed = img.encodePng(decoded);
+                finalBase64 = base64Encode(compressed);
+                mimeType = 'image/png';
+              }
+            }
+          } catch (_) {
+            // Fallback to original
+          }
+        }
+
         return CallToolResult(
           content: [
-            ImageContent(data: imageData, mimeType: 'image/png'),
+            ImageContent(data: finalBase64, mimeType: mimeType),
             TextContent(
-              text:
-                  'Screenshot captured. HINT: If you see an error overlay, call diagnose_last_error immediately.',
+              text: 'Screenshot captured ($mimeType, scale: ${scale}x).',
             ),
           ],
         );

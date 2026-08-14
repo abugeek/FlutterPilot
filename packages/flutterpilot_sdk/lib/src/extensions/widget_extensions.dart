@@ -921,32 +921,53 @@ extension _WidgetExtensions on FlutterPilot {
         int filledCount = 0;
         for (final entry in fields.entries) {
           final target = entry.key;
-          final text = entry.value.toString();
+          final val = entry.value;
           final element = PilotWidgetInspector.findElement(target);
           if (element != null) {
-            bool entered = false;
-            void findText(Element e) {
-              if (entered) return;
-              if (e is StatefulElement && e.state is EditableTextState) {
-                try {
-                  final state = e.state as EditableTextState;
-                  state.updateEditingValue(TextEditingValue(text: text));
-                  entered = true;
-                } catch (_) {
-                  try {
-                    (e.state as dynamic).controller.text = text;
-                    entered = true;
-                  } catch (_) {}
-                }
-                if (entered && FlutterPilot._isRecording) {
-                  FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
-                }
-                return;
-              }
-              e.visitChildren(findText);
+            if (element.renderObject is! RenderBox || !(element.renderObject as RenderBox).hasSize) {
+              try {
+                await Scrollable.ensureVisible(
+                  element,
+                  duration: const Duration(milliseconds: 100),
+                  alignment: 0.5,
+                );
+                await InteractionManager.pumpAndSettleAdaptive();
+              } catch (_) {}
             }
-            findText(element);
-            if (entered) filledCount++;
+
+            if (val is bool) {
+              final ro = element.renderObject;
+              if (ro is RenderBox && ro.hasSize) {
+                final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+                await InteractionManager.tapAt(pos, label: target);
+                filledCount++;
+              }
+            } else {
+              final text = val.toString();
+              bool entered = false;
+              void findText(Element e) {
+                if (entered) return;
+                if (e is StatefulElement && e.state is EditableTextState) {
+                  try {
+                    final state = e.state as EditableTextState;
+                    state.updateEditingValue(TextEditingValue(text: text));
+                    entered = true;
+                  } catch (_) {
+                    try {
+                      (e.state as dynamic).controller.text = text;
+                      entered = true;
+                    } catch (_) {}
+                  }
+                  if (entered && FlutterPilot._isRecording) {
+                    FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
+                  }
+                  return;
+                }
+                e.visitChildren(findText);
+              }
+              findText(element);
+              if (entered) filledCount++;
+            }
           }
         }
 
@@ -954,8 +975,19 @@ extension _WidgetExtensions on FlutterPilot {
         if (submitWith != null && submitWith.isNotEmpty) {
           final submitElem = PilotWidgetInspector.findElement(submitWith);
           if (submitElem != null) {
-            final ro = submitElem.renderObject;
-            if (ro is RenderBox && ro.hasSize) {
+            RenderObject? ro = submitElem.renderObject;
+            if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
+              try {
+                await Scrollable.ensureVisible(
+                  submitElem,
+                  duration: const Duration(milliseconds: 100),
+                  alignment: 0.5,
+                );
+                await InteractionManager.pumpAndSettleAdaptive();
+                ro = submitElem.renderObject;
+              } catch (_) {}
+            }
+            if (ro is RenderBox && ro.hasSize && ro.attached) {
               final pos = ro.localToGlobal(ro.size.center(Offset.zero));
               if (FlutterPilot._isRecording) {
                 FlutterPilot._recordAction('tapWidget', {'key': submitWith});
