@@ -5,6 +5,7 @@ part of '../../flutterpilot_sdk.dart';
 /// Registers the following `ext.flutterpilot.*` service extensions:
 /// - `getSummary` — High-level app snapshot
 /// - `ping` — Health-check endpoint
+/// - `getCapabilities` — Registered SDK/plugin capability metadata
 /// - `getErrors` — Buffered error list
 /// - `getPerfMetrics` — FPS estimate
 /// - `getSemanticsTree` — Accessibility semantics tree
@@ -38,6 +39,19 @@ extension _DiagnosticsExtensions on FlutterPilot {
     registerExtension('ext.flutterpilot.ping', (method, parameters) async {
       return ServiceExtensionResponse.result(
         json.encode({'status': 'ok', 'version': '0.0.1'}),
+      );
+    });
+
+    // -- ext.flutterpilot.getCapabilities ------------------------------------
+    registerExtension('ext.flutterpilot.getCapabilities', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'protocolVersion': '1',
+          'capabilities': FlutterPilot.capabilities,
+        }),
       );
     });
 

@@ -712,6 +712,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             return MapEntry(e.key, res.isError ? 'not_loaded' : 'loaded');
           }),
         );
+        final sdkCapabilities = await _callExtensionRaw(
+          'ext.flutterpilot.getCapabilities',
+          {},
+        );
         final pluginStatus = Map.fromEntries(probeResults);
 
         final capabilities = {
@@ -731,6 +735,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             'maxToolResponseBytes': _Constants.maxToolResponseBytes,
           },
           'plugins': pluginStatus,
+          'sdkCapabilities': sdkCapabilities.isError
+              ? <String, dynamic>{'status': 'unavailable'}
+              : sdkCapabilities.data,
           'buffers': {
             'events': _eventBuffer.length,
             'debugLogs': _debugLogBuffer.length,

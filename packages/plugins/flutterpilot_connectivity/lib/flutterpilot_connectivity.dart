@@ -45,6 +45,16 @@ class ConnectivityPilotInspector {
   /// ConnectivityPilotInspector.register();
   /// ```
   static void register() {
+    FlutterPilot.registerCapability(
+      'connectivity',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getConnectivity',
+        'ext.flutterpilot.getConnectivityHistory',
+        'ext.flutterpilot.simulateOffline',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] ConnectivityPilotInspector.register called before '

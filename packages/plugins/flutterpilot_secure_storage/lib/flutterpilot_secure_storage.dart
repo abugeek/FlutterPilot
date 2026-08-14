@@ -62,6 +62,17 @@ class SecureStoragePilotInspector {
     FlutterSecureStorage storage, {
     Set<String>? alwaysRedactPatterns,
   }) {
+    FlutterPilot.registerCapability(
+      'secure_storage',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getSecureStorageKeys',
+        'ext.flutterpilot.readSecureStorageKey',
+        'ext.flutterpilot.setSecureStorageKey',
+        'ext.flutterpilot.deleteSecureStorageKey',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] SecureStoragePilotInspector.register called before '

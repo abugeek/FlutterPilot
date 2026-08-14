@@ -97,7 +97,31 @@ class FlutterPilot {
   /// the core SDK is ready.
   static bool get isInitialized => _initialized;
 
+  /// Registers machine-readable metadata for an SDK integration/plugin.
+  ///
+  /// Plugins should call this once during registration so agents can discover
+  /// the exact extension surface without relying on hard-coded tool lists.
+  static void registerCapability(
+    String id, {
+    required String version,
+    required List<String> extensions,
+    bool mutating = false,
+  }) {
+    _capabilities[id] = {
+      'id': id,
+      'version': version,
+      'extensions': List<String>.unmodifiable(extensions),
+      'mutating': mutating,
+    };
+  }
+
+  /// Returns a snapshot of registered integration capabilities.
+  static List<Map<String, dynamic>> get capabilities => _capabilities.values
+      .map((value) => Map<String, dynamic>.from(value))
+      .toList();
+
   static final Map<String, Function> _customTools = {};
+  static final Map<String, Map<String, dynamic>> _capabilities = {};
   static final Map<String, Future<dynamic> Function(String name, dynamic value)>
   _stateSetters = {};
   static final Map<String, String? Function(String name)> _stateReaders = {};

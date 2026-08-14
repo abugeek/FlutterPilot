@@ -35,6 +35,11 @@ base class RiverpodPilotObserver extends ProviderObserver {
   }
 
   void _registerExtension() {
+    FlutterPilot.registerCapability(
+      'riverpod',
+      version: '1',
+      extensions: ['ext.flutterpilot.getRiverpodStates'],
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: RiverpodPilotObserver registered before '

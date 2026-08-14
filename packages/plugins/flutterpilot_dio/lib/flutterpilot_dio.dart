@@ -49,6 +49,17 @@ class DioPilotInterceptor extends Interceptor {
   }
 
   void _registerExtensions() {
+    FlutterPilot.registerCapability(
+      'dio',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getNetworkLogs',
+        'ext.flutterpilot.simulateNetwork',
+        'ext.flutterpilot.addHttpMock',
+        'ext.flutterpilot.clearHttpMocks',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: DioPilotInterceptor registered before '

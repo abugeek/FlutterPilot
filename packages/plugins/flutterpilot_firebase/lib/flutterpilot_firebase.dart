@@ -61,6 +61,20 @@ class FirebasePilotInspector {
     FirebasePerformance? performance,
     FirebaseMessaging? messaging,
   }) {
+    FlutterPilot.registerCapability(
+      'firebase',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getFirebaseStatus',
+        'ext.flutterpilot.getAnalyticsLog',
+        'ext.flutterpilot.logAnalyticsEvent',
+        'ext.flutterpilot.getFcmToken',
+        'ext.flutterpilot.recordCrashlyticsError',
+        'ext.flutterpilot.startPerformanceTrace',
+        'ext.flutterpilot.stopPerformanceTrace',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] FirebasePilotInspector.register called before '

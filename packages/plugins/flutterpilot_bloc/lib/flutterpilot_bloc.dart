@@ -32,6 +32,11 @@ class BlocPilotObserver extends BlocObserver {
   }
 
   void _registerExtension() {
+    FlutterPilot.registerCapability(
+      'bloc',
+      version: '1',
+      extensions: ['ext.flutterpilot.getBlocStates'],
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: BlocPilotObserver registered before '

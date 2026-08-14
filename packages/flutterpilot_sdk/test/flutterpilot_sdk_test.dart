@@ -39,6 +39,27 @@ void main() {
       );
     });
 
+    test('registers machine-readable plugin capabilities', () {
+      FlutterPilot.registerCapability(
+        'test_plugin',
+        version: '1',
+        extensions: ['ext.flutterpilot.testPlugin'],
+        mutating: true,
+      );
+
+      expect(
+        FlutterPilot.capabilities,
+        contains(
+          predicate<Map<String, dynamic>>(
+            (capability) =>
+                capability['id'] == 'test_plugin' &&
+                capability['version'] == '1' &&
+                capability['mutating'] == true,
+          ),
+        ),
+      );
+    });
+
     test('redacts bearer credentials and bounds captured console messages', () {
       FlutterPilot.initialize();
       final secret = 'Bearer test-secret-token-123';

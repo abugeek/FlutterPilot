@@ -96,6 +96,16 @@ class SharedPrefsPilotInspector {
   /// }
   /// ```
   static void register(SharedPreferences prefs) {
+    FlutterPilot.registerCapability(
+      'shared_preferences',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getSharedPreferences',
+        'ext.flutterpilot.setSharedPreference',
+        'ext.flutterpilot.clearSharedPreferences',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] SharedPrefsPilotInspector.register called before '

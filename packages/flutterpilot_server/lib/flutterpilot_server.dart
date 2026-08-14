@@ -244,13 +244,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   bool _isAllowedConnectionUri(String rawUri) {
-    if (allowRemoteConnections) return true;
     final uri = Uri.tryParse(rawUri);
     final host = uri?.host.toLowerCase();
-    return host == 'localhost' ||
+    final local =
+        host == 'localhost' ||
         host == '127.0.0.1' ||
         host == '::1' ||
         host == '[::1]';
+    if (local) return true;
+    if (!allowRemoteConnections || uri == null) return false;
+    // Dart VM service authentication is carried in the URI path token.
+    // Refuse remote endpoints without one, even when remote access is enabled.
+    return uri.pathSegments.any((segment) => segment.isNotEmpty);
   }
 
   void _scheduleReconnect() {

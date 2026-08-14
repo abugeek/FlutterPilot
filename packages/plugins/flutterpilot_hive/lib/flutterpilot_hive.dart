@@ -39,6 +39,11 @@ class HivePilotInspector {
   }
 
   static void _registerExtension() {
+    FlutterPilot.registerCapability(
+      'hive',
+      version: '1',
+      extensions: ['ext.flutterpilot.getHiveContents'],
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: HivePilotInspector registered before '

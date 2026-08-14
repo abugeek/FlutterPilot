@@ -53,6 +53,17 @@ class GoRouterPilotInspector {
   /// GoRouterPilotInspector.register(router);
   /// ```
   static void register(GoRouter router) {
+    FlutterPilot.registerCapability(
+      'gorouter',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getGoRouterConfig',
+        'ext.flutterpilot.getGoRouterHistory',
+        'ext.flutterpilot.getGoRouterState',
+        'ext.flutterpilot.goRouterNavigate',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] GoRouterPilotInspector.register called before '

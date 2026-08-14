@@ -110,6 +110,15 @@ class SqflitePilotInspector {
   static bool isSafeReadOnlyForTest(String sql) => _isSafeReadOnly(sql);
 
   static void _registerExtensions() {
+    FlutterPilot.registerCapability(
+      'sqflite',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.listSqfliteDatabases',
+        'ext.flutterpilot.listSqfliteTables',
+        'ext.flutterpilot.querySqflite',
+      ],
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: SqflitePilotInspector registered before '

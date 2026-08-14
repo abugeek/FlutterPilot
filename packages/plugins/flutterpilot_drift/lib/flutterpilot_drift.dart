@@ -95,6 +95,14 @@ class DriftPilotInspector {
   static bool isSafeReadOnlyForTest(String sql) => _isSafeReadOnly(sql);
 
   static void _registerExtensions() {
+    FlutterPilot.registerCapability(
+      'drift',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.listDriftTables',
+        'ext.flutterpilot.queryDrift',
+      ],
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         'FlutterPilot: DriftPilotInspector registered before '

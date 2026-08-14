@@ -46,6 +46,18 @@ class SupabasePilotInspector {
   /// SupabasePilotInspector.register(Supabase.instance.client);
   /// ```
   static void register(SupabaseClient client) {
+    FlutterPilot.registerCapability(
+      'supabase',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getSupabaseAuth',
+        'ext.flutterpilot.getSupabaseRealtime',
+        'ext.flutterpilot.querySupabaseTable',
+        'ext.flutterpilot.supabaseRefreshSession',
+        'ext.flutterpilot.supabaseSignOut',
+      ],
+      mutating: true,
+    );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] SupabasePilotInspector.register called before '
