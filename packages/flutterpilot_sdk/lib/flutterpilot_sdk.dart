@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:ui' as ui;
@@ -16,6 +15,7 @@ import 'src/interaction_manager.dart';
 import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
 import 'src/repro_test_generator.dart';
+import 'src/ring_buffer.dart';
 import 'src/state_snapshot_manager.dart';
 import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
@@ -31,6 +31,7 @@ export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
 export 'src/pr_report_generator.dart';
 export 'src/repro_test_generator.dart';
+export 'src/ring_buffer.dart';
 export 'src/state_snapshot_manager.dart';
 export 'src/test_synthesizer.dart';
 export 'src/ui_health_auditor.dart';
@@ -97,8 +98,8 @@ class FlutterPilot {
   _stateSetters = {};
   static final Map<String, String? Function(String name)> _stateReaders = {};
   static bool _isRecording = false;
-  static final List<Map<String, dynamic>> _recordedActions = [];
   static const int _maxRecordedActions = 5000;
+  static final RingBuffer<Map<String, dynamic>> _recordedActions = RingBuffer(_maxRecordedActions);
   // Held to keep the semantics tree alive once enabled.
   static SemanticsHandle? _semanticsHandle;
 
@@ -149,8 +150,8 @@ class FlutterPilot {
 
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
-  static final Queue<Map<String, dynamic>> _consoleBuffer = Queue();
   static const int _consoleBufferMax = 500;
+  static final RingBuffer<Map<String, dynamic>> _consoleBuffer = RingBuffer(_consoleBufferMax);
 
   /// Returns a copy of the captured console log buffer (up to 500 entries).
   /// Each entry has keys: `timestamp`, `level`, `logger`, `message`.
@@ -270,9 +271,6 @@ class FlutterPilot {
       'logger': logger,
       'message': message,
     };
-    if (_consoleBuffer.length >= _consoleBufferMax) {
-      _consoleBuffer.removeFirst();
-    }
     _consoleBuffer.add(entry);
     // Forward to dart:developer so the VM Logging stream carries it too.
     log(message, name: logger.isEmpty ? 'flutterpilot' : logger);
@@ -356,9 +354,6 @@ class FlutterPilot {
 
   static void _recordAction(String type, Map<String, dynamic> data) {
     if (!_isRecording) return;
-    if (_recordedActions.length >= _maxRecordedActions) {
-      _recordedActions.removeAt(0);
-    }
     _recordedActions.add({
       'type': type,
       'timestamp': DateTime.now().toIso8601String(),

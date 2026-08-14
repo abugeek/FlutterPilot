@@ -32,7 +32,7 @@ extension _RecordingExtensions on FlutterPilot {
     ) async {
       FlutterPilot._isRecording = false;
       return ServiceExtensionResponse.result(
-        json.encode({'actions': FlutterPilot._recordedActions}),
+        json.encode({'actions': FlutterPilot._recordedActions.toList()}),
       );
     });
 
