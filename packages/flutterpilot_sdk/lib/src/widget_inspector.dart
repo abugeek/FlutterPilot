@@ -473,7 +473,21 @@ class PilotWidgetInspector {
     final widget = element.widget;
     final typeName = widget.runtimeType.toString();
     final keyStr = widget.key?.toString();
-    final text = _extractDescendantText(element);
+
+    // Scoped Direct Text Extraction: avoid deep descendant walk on layout wrappers
+    String text = '';
+    if (widget is Text) {
+      text = widget.data ?? '';
+    } else if (widget is RichText) {
+      text = widget.text.toPlainText();
+    } else if (widget is Tooltip) {
+      text = widget.message ?? '';
+    } else if (widget is EditableText) {
+      text = widget.controller.text;
+    } else if (_isButtonOrClickable(typeName)) {
+      text = _extractDescendantText(element);
+    }
+
     final selector = _computeSemanticSelector(element);
 
     // If compact mode is enabled, collapse intermediate single-child layout wrappers without keys

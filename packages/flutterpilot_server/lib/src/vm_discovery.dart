@@ -76,8 +76,7 @@ class VmDiscoveryService {
       final tempDir = Directory.systemTemp;
       if (!tempDir.existsSync()) return null;
 
-      final entities = tempDir.listSync();
-      for (final entity in entities) {
+      await for (final entity in tempDir.list()) {
         if (entity is File &&
             (entity.path.contains('flutter_service_info') ||
                 entity.path.contains('dart_vm_service'))) {
@@ -100,14 +99,20 @@ class VmDiscoveryService {
   static Future<String?> _probeLocalhostPorts({
     required Duration timeout,
   }) async {
-    // Check standard Dart / Flutter VM service ports first
+    // Check standard Dart / Flutter VM service ports concurrently
     final primaryPorts = [8181, 5858, 8080, 8081, 9100, 9101];
 
-    for (final port in primaryPorts) {
+    final futures = primaryPorts.map((port) async {
       final uri = 'http://127.0.0.1:$port/';
       if (await _verifyVmUri(uri)) {
         return uri;
       }
+      return null;
+    });
+
+    final results = await Future.wait(futures);
+    for (final res in results) {
+      if (res != null) return res;
     }
     return null;
   }

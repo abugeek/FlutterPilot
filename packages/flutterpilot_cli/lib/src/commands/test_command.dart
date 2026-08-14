@@ -154,7 +154,12 @@ class TestCommand extends Command<void> {
       runInShell: true,
     );
 
+    // Drain stdout and stderr concurrently to prevent OS pipe deadlocks
+    final stdoutFuture = process.stdout.drain<void>();
+    final stderrFuture = process.stderr.drain<void>();
+
     final exitCode = await process.exitCode;
+    await Future.wait([stdoutFuture, stderrFuture]);
     return exitCode == 0;
   }
 }

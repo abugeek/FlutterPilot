@@ -21,9 +21,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 1.0;
+        final format = p['format']?.toString().toLowerCase() ?? (scale < 1.0 ? 'jpeg' : 'png');
+        final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
+
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          {},
+          {
+            if (scale < 1.0) 'scale': scale.toString(),
+          },
         );
         if (res.isError) return res.toCallToolResult();
         final rawBase64 = res.data?['data'] as String?;
@@ -34,31 +40,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 1.0;
-        final format = p['format']?.toString().toLowerCase() ?? (scale < 1.0 ? 'jpeg' : 'png');
-        final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
-
         String finalBase64 = rawBase64;
         String mimeType = 'image/png';
 
-        if (scale < 1.0 || format == 'jpeg') {
+        if (format == 'jpeg') {
           try {
             final rawBytes = base64Decode(rawBase64);
-            var decoded = img.decodeImage(rawBytes);
+            final decoded = img.decodeImage(rawBytes);
             if (decoded != null) {
-              if (scale < 1.0) {
-                final targetW = (decoded.width * scale).round().clamp(100, decoded.width);
-                decoded = img.copyResize(decoded, width: targetW);
-              }
-              if (format == 'jpeg') {
-                final compressed = img.encodeJpg(decoded, quality: quality);
-                finalBase64 = base64Encode(compressed);
-                mimeType = 'image/jpeg';
-              } else {
-                final compressed = img.encodePng(decoded);
-                finalBase64 = base64Encode(compressed);
-                mimeType = 'image/png';
-              }
+              final compressed = img.encodeJpg(decoded, quality: quality);
+              finalBase64 = base64Encode(compressed);
+              mimeType = 'image/jpeg';
             }
           } catch (_) {
             // Fallback to original

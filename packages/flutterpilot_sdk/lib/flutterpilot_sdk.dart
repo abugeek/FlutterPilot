@@ -553,15 +553,16 @@ class FlutterPilot {
     }
   }
 
-  static Future<Uint8List?> _captureScreenshot() async {
+  static Future<Uint8List?> _captureScreenshot({double scale = 1.0}) async {
     try {
-      final pixelRatio =
+      final basePixelRatio =
           WidgetsBinding
               .instance
               .platformDispatcher
               .implicitView
               ?.devicePixelRatio ??
           1.0;
+      final targetPixelRatio = (basePixelRatio * scale).clamp(0.2, basePixelRatio);
       RenderRepaintBoundary? boundary;
       void findBoundary(RenderObject object) {
         if (boundary != null) return;
@@ -576,7 +577,7 @@ class FlutterPilot {
         findBoundary(rv);
       }
       if (boundary != null) {
-        final image = await boundary!.toImage(pixelRatio: pixelRatio);
+        final image = await boundary!.toImage(pixelRatio: targetPixelRatio);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         return byteData?.buffer.asUint8List();
       }

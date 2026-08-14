@@ -96,6 +96,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   bool _isReconnecting = false;
   bool _disposed = false;
+  String? _cachedMainIsolateId;
   Timer? _reconnectTimer;
   StreamSubscription<Event>? _eventStreamSubscription;
   StreamSubscription<Event>? _loggingStreamSubscription;
@@ -208,6 +209,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     if (_isReconnecting || _disposed) return;
     _isReconnecting = true;
     _vmService = null;
+    _cachedMainIsolateId = null;
     _attemptReconnect();
   }
 
@@ -601,6 +603,48 @@ Use this guide to understand what tools to call, when, and in what order.
         );
       }
     }
+    // Fast-path: use cached isolate ID if available
+    if (_cachedMainIsolateId != null) {
+      try {
+        final response = await _vmService!
+            .callServiceExtension(
+              extension,
+              isolateId: _cachedMainIsolateId!,
+              args: Map<String, String>.from(parameters),
+            )
+            .timeout(_Constants.extensionCallTimeout);
+        if (response.json != null) {
+          if (response.json!['error'] != null) {
+            return _ExtensionResult.error(
+              'Error: ${response.json!['error']}',
+              ErrorCategory.extensionError,
+            );
+          }
+          return _ExtensionResult.success(response.json!);
+        }
+      } on RPCError catch (e) {
+        if (e.code == -32601) {
+          final fallback = await _handleZeroCodeFallback(
+            extension,
+            parameters,
+            _cachedMainIsolateId!,
+          );
+          if (fallback != null) return fallback;
+        } else if (e.code == 105 || e.message.contains('Isolate')) {
+          _cachedMainIsolateId = null;
+        } else {
+          return _ExtensionResult.error(
+            e.data?['details'] as String? ?? 'Extension error: ${e.message}',
+            ErrorCategory.extensionError,
+          );
+        }
+      } on TimeoutException {
+        // Fall back to full isolate refresh
+      } catch (_) {
+        _cachedMainIsolateId = null;
+      }
+    }
+
     try {
       final vm = await _vmService!.getVM().timeout(_Constants.vmServiceTimeout);
       for (final isolateRef in vm.isolates ?? []) {
@@ -620,6 +664,7 @@ Use this guide to understand what tools to call, when, and in what order.
                 ErrorCategory.extensionError,
               );
             }
+            _cachedMainIsolateId = isolateRef.id;
             return _ExtensionResult.success(response.json!);
           }
         } on RPCError catch (e) {

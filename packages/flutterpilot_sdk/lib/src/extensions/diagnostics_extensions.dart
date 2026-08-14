@@ -138,7 +138,8 @@ extension _DiagnosticsExtensions on FlutterPilot {
       parameters,
     ) async {
       try {
-        final bytes = await FlutterPilot._captureScreenshot();
+        final scale = double.tryParse(parameters['scale'] ?? '') ?? 1.0;
+        final bytes = await FlutterPilot._captureScreenshot(scale: scale);
         if (bytes == null) {
           return ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
