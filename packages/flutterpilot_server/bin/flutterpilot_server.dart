@@ -23,6 +23,11 @@ void main(List<String> args) async {
       negatable: false,
     )
     ..addOption(
+      'remote-token',
+      help:
+          'Optional additional token that must match the VM-service URI path when using --allow-remote.',
+    )
+    ..addOption(
       'project-root',
       abbr: 'p',
       help:
@@ -40,6 +45,7 @@ void main(List<String> args) async {
   final uri = results['uri'] as String?;
   final allowDestructive = results['allow-destructive'] as bool;
   final allowRemote = results['allow-remote'] as bool;
+  final remoteToken = results['remote-token'] as String?;
   final projectRootArg = results['project-root'] as String?;
   final projectRoot = projectRootArg != null ? Directory(projectRootArg) : null;
 
@@ -56,6 +62,7 @@ void main(List<String> args) async {
     vmServiceUri: uri,
     allowDestructive: allowDestructive,
     allowRemoteConnections: allowRemote,
+    remoteAccessToken: remoteToken,
     projectRoot: projectRoot,
   );
 

@@ -32,8 +32,10 @@ final _log = logging.Logger('FlutterPilotServer');
 abstract class _FlutterPilotServerBase {
   McpServer get server;
   String get vmServiceUri;
+  String get _rawVmServiceUri;
   bool get allowDestructive;
   bool get allowRemoteConnections;
+  String? get remoteAccessToken;
   Directory get _projectRoot;
   VmService? get _vmService;
   bool get _isReconnecting;
@@ -86,11 +88,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   final McpServer server;
   String? _vmServiceUri;
   @override
-  String get vmServiceUri => _vmServiceUri ?? '';
+  String get vmServiceUri => _redactVmServiceUri(_vmServiceUri ?? '');
+  @override
+  String get _rawVmServiceUri => _vmServiceUri ?? '';
   @override
   final bool allowDestructive;
   @override
   final bool allowRemoteConnections;
+  @override
+  final String? remoteAccessToken;
   @override
   final Directory _projectRoot;
   @override
@@ -134,6 +140,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     String? vmServiceUri,
     this.allowDestructive = false,
     this.allowRemoteConnections = false,
+    this.remoteAccessToken,
     Directory? projectRoot,
   }) : _vmServiceUri = vmServiceUri,
        _projectRoot = projectRoot ?? Directory.current,
@@ -218,9 +225,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       );
       return;
     }
-    _log.info('Connecting to VM Service: $_vmServiceUri');
+    _log.info(
+      'Connecting to VM Service: ${_redactVmServiceUri(_vmServiceUri!)}',
+    );
     _vmService = await vmServiceConnectUri(_vmServiceUri!);
-    _log.info('Connected to VM Service at $_vmServiceUri');
+    _log.info(
+      'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
+    );
     _connectionGeneration++;
 
     _currentBackoff = _minBackoff;
@@ -255,7 +266,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     if (!allowRemoteConnections || uri == null) return false;
     // Dart VM service authentication is carried in the URI path token.
     // Refuse remote endpoints without one, even when remote access is enabled.
-    return uri.pathSegments.any((segment) => segment.isNotEmpty);
+    final hasVmToken = uri.pathSegments.any((segment) => segment.isNotEmpty);
+    if (!hasVmToken) return false;
+    if (remoteAccessToken == null || remoteAccessToken!.isEmpty) return true;
+    return uri.pathSegments
+        .map(Uri.decodeComponent)
+        .contains(remoteAccessToken);
+  }
+
+  static String _redactVmServiceUri(String rawUri) {
+    final uri = Uri.tryParse(rawUri);
+    if (uri == null || uri.pathSegments.isEmpty) return rawUri;
+    return uri.replace(path: '/<redacted>').toString();
   }
 
   void _scheduleReconnect() {

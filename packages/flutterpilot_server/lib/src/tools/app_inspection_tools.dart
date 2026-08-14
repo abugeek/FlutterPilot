@@ -112,7 +112,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final uri = params['uri'] as String?;
         final success = await _connectWithUri(uri);
         if (success) {
-          _fleetManager.registerDevice('default', vmServiceUri);
+          _fleetManager.registerDevice('default', _rawVmServiceUri);
           return CallToolResult(
             content: [
               TextContent(

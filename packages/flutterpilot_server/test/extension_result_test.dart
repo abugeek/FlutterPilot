@@ -23,8 +23,10 @@ void main() {
       final server = FlutterPilotServer(
         vmServiceUri: 'ws://10.0.0.8:9999/token',
         allowRemoteConnections: true,
+        remoteAccessToken: 'token',
       );
       expect(server.allowRemoteConnections, isTrue);
+      expect(server.remoteAccessToken, 'token');
     });
 
     test('server has correct MCP implementation info', () {

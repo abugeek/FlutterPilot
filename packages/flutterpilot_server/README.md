@@ -2,6 +2,8 @@
 
 The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes a versioned tool set via the VM service; use `get_capabilities` to discover the exact tools available at runtime.
 
+Remote VM-service connections are blocked by default. Use `--allow-remote` only on a trusted network; optionally add `--remote-token` to require an additional token matching the VM-service URI path.
+
 > **What is MCP?** The Model Context Protocol is an open standard for connecting AI models (Claude, Gemini, etc.) to external tools. FlutterPilot Server implements MCP to let AI agents see and control your Flutter app in real-time.
 
 ## Prerequisites
