@@ -108,5 +108,42 @@ void main() {
       initialData['tags'] = ['mutated'];
       expect(snapshot.states['tags'], equals(['flutter', 'ai']));
     });
+
+    testWidgets('Scoped subtree capture extracts only targeted dialog/container', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const Text('Header Background'),
+                Container(
+                  key: const ValueKey('scoped_form'),
+                  child: Column(
+                    children: [
+                      const Text('Form Field 1'),
+                      ElevatedButton(
+                        onPressed: () {},
+                        child: const Text('Submit Form'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Text('Footer Background'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final fullTree = PilotWidgetInspector.captureWidgetTree();
+      final scopedTree = PilotWidgetInspector.captureWidgetTree(rootQuery: 'scoped_form');
+
+      final fullJson = json.encode(fullTree);
+      final scopedJson = json.encode(scopedTree);
+
+      expect(scopedJson.length, lessThan(fullJson.length));
+      expect(scopedJson, contains('Submit Form'));
+      expect(scopedJson, isNot(contains('Header Background')));
+    });
   });
 }

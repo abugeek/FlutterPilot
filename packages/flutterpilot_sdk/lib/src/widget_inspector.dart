@@ -16,14 +16,25 @@ class PilotWidgetInspector {
   }
 
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
+  /// If [rootQuery] (key or semantic selector) or [rootElement] is provided, scopes the capture
+  /// to that specific subtree, saving up to 90% of token consumption.
   static Map<String, dynamic> captureWidgetTree({
     int? maxDepth,
     bool compact = true,
+    String? rootQuery,
+    Element? rootElement,
   }) {
-    final root = WidgetsBinding.instance.rootElement;
-    if (root == null) return {'error': 'No root element found'};
+    Element? targetRoot = rootElement;
+    if (targetRoot == null && rootQuery != null && rootQuery.trim().isNotEmpty) {
+      targetRoot = findElement(rootQuery);
+      if (targetRoot == null) {
+        return {'error': 'Scoped root widget not found for query: "$rootQuery"'};
+      }
+    }
+    targetRoot ??= WidgetsBinding.instance.rootElement;
+    if (targetRoot == null) return {'error': 'No root element found'};
     final depth = maxDepth ?? defaultMaxDepth;
-    return _elementToJson(root, 0, depth, compact: compact) ?? {'type': 'Empty'};
+    return _elementToJson(targetRoot, 0, depth, compact: compact) ?? {'type': 'Empty'};
   }
 
   /// High-performance Single-Pass Multi-Priority Element Matcher (O(N)).

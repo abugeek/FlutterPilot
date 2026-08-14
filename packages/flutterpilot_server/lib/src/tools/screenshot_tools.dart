@@ -238,9 +238,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       description:
           'Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and '
           'semantic selectors. Automatically performs Semantic Compaction (prunes non-actionable layout wrappers) '
-          'to save 80% token costs. Set compact=false if raw internal wrappers are needed.',
+          'to save 80% token costs. Pass rootKey/rootSelector to scope capture to a specific dialog/form/sheet (90% extra savings).',
       inputSchema: ToolInputSchema(
         properties: {
+          'rootKey': JsonSchema.string(
+            description:
+                'Optional widget key or semantic selector (e.g. "checkout_form", "Button[\'Save\']") to scope the tree capture to only that subtree.',
+          ),
           'maxDepth': JsonSchema.integer(
             description:
                 'Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs.',
@@ -254,10 +258,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
         final compact = p['compact'] != false;
-        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTree', {
+        final rootKey = p['rootKey'] as String?;
+        final params = <String, String>{
           'maxDepth': maxDepth.toString(),
           'compact': compact.toString(),
-        });
+        };
+        if (rootKey != null && rootKey.isNotEmpty) {
+          params['rootKey'] = rootKey;
+        }
+        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTree', params);
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [

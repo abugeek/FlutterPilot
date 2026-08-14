@@ -50,6 +50,61 @@ extension _StateExtensions on FlutterPilot {
       }
     });
 
+    // -- ext.flutterpilot.batchSetState ---------------------------------------
+    registerExtension('ext.flutterpilot.batchSetState', (
+      method,
+      parameters,
+    ) async {
+      final type = parameters['type'] ?? 'riverpod';
+      final statesJson = parameters['states'];
+
+      if (statesJson == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing states JSON parameter',
+        );
+      }
+
+      final setter = FlutterPilot._stateSetters[type];
+      if (setter == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'No setter registered for type: $type',
+        );
+      }
+
+      try {
+        final decoded = json.decode(statesJson);
+        if (decoded is! Map) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.invalidParams,
+            'States must be a JSON map of key-value pairs',
+          );
+        }
+
+        final results = <String, dynamic>{};
+        for (final entry in decoded.entries) {
+          final key = entry.key.toString();
+          final val = entry.value;
+          final res = await setter(key, val);
+          results[key] = FlutterPilot._safeJsonEncode(res);
+        }
+
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'updatedCount': results.length,
+            'results': results,
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Batch state injection failed: $e',
+        );
+      }
+    });
+
     // -- ext.flutterpilot.waitForState ----------------------------------------
     registerExtension('ext.flutterpilot.waitForState', (
       method,

@@ -615,5 +615,97 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    server.registerTool(
+      'tap_and_wait',
+      description:
+          'Macro composite tool: Taps a target widget and immediately waits for an expected widget '
+          'to appear. Replaces 2 separate round-trip tool calls with 1 fast step.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'target': JsonSchema.string(
+            description:
+                'Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button[\'Submit\']").',
+          ),
+          'expect': JsonSchema.string(
+            description:
+                'Key, semantic selector, or text of the widget expected to appear (e.g. "home_dashboard", "Text[\'Welcome\']").',
+          ),
+          'timeout': JsonSchema.integer(
+            description: 'Timeout in milliseconds to wait for the expected widget (default: 5000ms).',
+          ),
+        },
+        required: ['target', 'expect'],
+      ),
+      callback: (p, e) async {
+        final target = p['target'].toString();
+        final expectKey = p['expect'].toString();
+        final timeoutMs = (p['timeout'] as num?)?.toInt() ?? 5000;
+
+        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {'target': target});
+        if (tapRes.isError) return tapRes.toCallToolResult();
+
+        final waitRes = await _callExtensionRaw('ext.flutterpilot.waitForWidget', {
+          'key': expectKey,
+          'timeout': timeoutMs.toString(),
+        });
+        if (waitRes.isError) return waitRes.toCallToolResult();
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'enter_text_and_submit',
+      description:
+          'Macro composite tool: Enters text into an input field and immediately taps a submit button. '
+          'Executes both steps in a single tool call.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'target': JsonSchema.string(
+            description:
+                'Key or semantic selector of the text field (e.g. "email_input", "TextField[\'Email\']").',
+          ),
+          'text': JsonSchema.string(
+            description: 'Text string to enter into the field.',
+          ),
+          'submitTarget': JsonSchema.string(
+            description:
+                'Key or semantic selector of the submit button to tap after entering text (e.g. "submit_btn", "Button[\'Continue\']").',
+          ),
+        },
+        required: ['target', 'text', 'submitTarget'],
+      ),
+      callback: (p, e) async {
+        final target = p['target'].toString();
+        final text = p['text'].toString();
+        final submitTarget = p['submitTarget'].toString();
+
+        final enterRes = await _callExtensionRaw('ext.flutterpilot.enterText', {
+          'key': target,
+          'text': text,
+        });
+        if (enterRes.isError) return enterRes.toCallToolResult();
+
+        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+          'target': submitTarget,
+        });
+        if (tapRes.isError) return tapRes.toCallToolResult();
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Entered text into "$target" and tapped "$submitTarget".',
+            ),
+          ],
+        );
+      },
+    );
   }
 }

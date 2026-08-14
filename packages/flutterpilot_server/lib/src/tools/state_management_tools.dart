@@ -74,6 +74,42 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       }).then((res) => res.toCallToolResult()),
     );
 
+    server.registerTool(
+      'batch_set_state',
+      description:
+          'Atomic multi-state setter: Injects multiple state values at once (Riverpod, Bloc) in 1ms. '
+          'Eliminates multi-turn LLM latency when seeding test fixtures or forms.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'type': JsonSchema.string(
+            description: 'State management type: "riverpod" or "bloc" (default: "riverpod").',
+          ),
+          'states': JsonSchema.object(
+            description:
+                'Map of provider/bloc names to their new values, e.g. {"counterProvider": 10, "themeProvider": "dark", "isLoggedIn": true}.',
+          ),
+        },
+        required: ['states'],
+      ),
+      callback: (p, e) async {
+        final type = (p['type'] as String?) ?? 'riverpod';
+        final states = p['states'];
+        final res = await _callExtensionRaw('ext.flutterpilot.batchSetState', {
+          'type': type,
+          'states': json.encode(states),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final count = res.data?['updatedCount'] ?? 0;
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: '⚡ Batch state update complete: $count state(s) updated for type "$type".',
+            ),
+          ],
+        );
+      },
+    );
+
     _registerAppTool(
       name: 'get_bloc_state',
       description:

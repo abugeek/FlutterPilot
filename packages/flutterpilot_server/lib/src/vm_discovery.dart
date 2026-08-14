@@ -45,6 +45,8 @@ class VmDiscoveryService {
     if (root == null || !root.existsSync()) return null;
 
     final candidates = [
+      p.join(root.path, '.dart_tool', 'flutterpilot_session.json'),
+      p.join(root.path, '.flutterpilot', 'session.json'),
       p.join(root.path, '.dart_tool', 'service_info.json'),
       p.join(root.path, '.dart_tool', 'daemon.json'),
       p.join(root.path, '.dart_tool', 'flutter_service_info.json'),

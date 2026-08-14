@@ -114,9 +114,25 @@ class SecureStoragePilotInspector {
       try {
         final all = await storage.readAll();
         final showValues = parameters['showValues'] == 'true';
+        final keysOnly = parameters['keysOnly'] == 'true';
+        final exactKey = parameters['key'];
+        final truncateLength = int.tryParse(parameters['truncateLength'] ?? '150') ?? 150;
+
+        if (keysOnly) {
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'keys': all.keys.toList(),
+              'count': all.length,
+            }),
+          );
+        }
 
         final entries = <String, dynamic>{};
-        for (final entry in all.entries) {
+        final targetEntries = exactKey != null && exactKey.isNotEmpty
+            ? all.entries.where((e) => e.key == exactKey)
+            : all.entries;
+
+        for (final entry in targetEntries) {
           if (!showValues || _isAlwaysRedacted(entry.key)) {
             entries[entry.key] = {
               'hasValue': entry.value.isNotEmpty,
@@ -124,10 +140,13 @@ class SecureStoragePilotInspector {
               'redacted': true,
             };
           } else {
+            final val = entry.value;
+            final isTruncated = exactKey == null && val.length > truncateLength;
             entries[entry.key] = {
-              'value': entry.value,
-              'length': entry.value.length,
+              'value': isTruncated ? '${val.substring(0, truncateLength)}... [truncated]' : val,
+              'length': val.length,
               'redacted': false,
+              if (isTruncated) 'truncated': true,
             };
           }
         }
