@@ -73,11 +73,52 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  Future<String> submitAsync(
+    String name,
+    Map<String, dynamic> arguments,
+  ) async {
+    final response = await call('tools/call', {
+      'name': name,
+      'arguments': {...arguments, 'async': true},
+    });
+    final content = (response['result'] as Map?)?['content'];
+    final first = content is List && content.isNotEmpty ? content.first : null;
+    final text = first is Map ? first['text']?.toString() ?? '' : '';
+    final match = RegExp(r'op-[0-9]+').firstMatch(text);
+    if (match == null) {
+      throw StateError('No operation ID returned by $name: $text');
+    }
+    return match.group(0)!;
+  }
+
+  Future<void> waitForOperation(String operationId) async {
+    for (var attempt = 0; attempt < 30; attempt++) {
+      final response = await call('tools/call', {
+        'name': 'get_operation',
+        'arguments': {'operationId': operationId},
+      });
+      final content = (response['result'] as Map?)?['content'];
+      final first = content is List && content.isNotEmpty
+          ? content.first
+          : null;
+      final text = first is Map ? first['text']?.toString() ?? '' : '';
+      if (!text.contains('"status":"pending"')) {
+        if ((response['result'] as Map?)?['isError'] == true) {
+          throw StateError('Async operation failed: $text');
+        }
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    throw TimeoutException('Timed out waiting for operation $operationId');
+  }
+
   try {
     await Future<void>.delayed(const Duration(seconds: 2));
     await assertTool('get_capabilities', const {});
     await assertTool('get_screen_hash', const {});
-    await assertTool('get_widget_tree', const {'async': true});
+    final operationId = await submitAsync('get_app_summary', const {});
+    await waitForOperation(operationId);
     stdout.writeln('FlutterPilot integration smoke test passed.');
   } catch (error) {
     stderr.writeln('FlutterPilot integration smoke test failed: $error');

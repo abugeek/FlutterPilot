@@ -734,6 +734,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             'vmServiceUri': vmServiceUri,
             'connected': _vmService != null,
             'reconnecting': _isReconnecting,
+            'activeDevice': _fleetManager.activeDeviceId ?? 'default',
           },
           'config': {
             'allowDestructive': allowDestructive,
@@ -753,6 +754,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             'events': _activeEvents.length,
             'debugLogs': _activeDebugLogs.length,
             'screenshotBaselines': _screenshotBaselines.length,
+          },
+          'fleet': {
+            'activeDevice': _fleetManager.activeDeviceId ?? 'default',
+            'deviceCount': _fleetManager.listDevices()['total'],
           },
         };
 
