@@ -29,6 +29,24 @@ part 'src/tools/ui_automation_tools.dart';
 
 final _log = logging.Logger('FlutterPilotServer');
 
+JsonSchema _deviceIdProperty() => JsonSchema.string(
+  description:
+      'Optional target device. Registered devices can be addressed directly; '
+      'when omitted, the active device is used.',
+);
+
+Map<String, dynamic> _withDeviceId(
+  Map<String, dynamic> parameters, [
+  Map<String, dynamic>? values,
+]) {
+  final result = <String, dynamic>{...?values};
+  final deviceId = parameters['deviceId'];
+  if (deviceId != null && deviceId.toString().isNotEmpty) {
+    result['deviceId'] = deviceId;
+  }
+  return result;
+}
+
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
   McpServer get server;
@@ -50,6 +68,8 @@ abstract class _FlutterPilotServerBase {
   FleetManager get _fleetManager;
 
   Future<bool> _connectWithUri([String? targetUri]);
+
+  Future<VmService?> _vmServiceForParameters(Map<String, dynamic> parameters);
 
   bool _cancelOperation(String operationId);
   _BackgroundOperation? _getBackgroundOperation(String operationId);
@@ -226,6 +246,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _log.info(
       'Connecting to VM Service: ${_redactVmServiceUri(_vmServiceUri!)}',
     );
+
     _vmService = await vmServiceConnectUri(_vmServiceUri!);
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
@@ -248,14 +269,21 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _currentBackoff = _minBackoff;
 
     // ignore: unawaited_futures
-    _vmService!.onDone
+    final connectedService = _vmService!;
+    connectedService.onDone
         .then((_) {
+          if (identical(_vmService, connectedService)) {
+            _vmService = null;
+          }
           if (!_disposed) {
             _log.warning('VM Service connection lost');
             _scheduleReconnect();
           }
         })
         .catchError((Object e) {
+          if (identical(_vmService, connectedService)) {
+            _vmService = null;
+          }
           if (!_disposed) {
             _log.warning('Error in VM Service done handler: $e');
             _scheduleReconnect();
@@ -391,6 +419,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           _log.info('Extension event stream closed');
           context.service = null;
           context.connectionGeneration++;
+          if (context.deviceId == _fleetManager.activeDeviceId) {
+            _vmService = null;
+          }
           if (!_disposed && context.deviceId == _fleetManager.activeDeviceId) {
             _scheduleReconnect();
           }
@@ -755,23 +786,12 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
-    final activeDevice = _fleetManager.activeDeviceId ?? 'default';
-    final targetDevice = parameters['deviceId']?.toString();
-    final deviceId = targetDevice == null || targetDevice.isEmpty
-        ? activeDevice
-        : targetDevice;
-    if (deviceId == activeDevice && _vmService == null) {
-      await _connectWithUri();
-    }
-    final context = deviceId == activeDevice && _vmService != null
-        ? (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
-            deviceId: deviceId,
-            uri: _vmServiceUri ?? '',
-          ))
-        : await _ensureDeviceContext(deviceId);
-    if (context != null && deviceId == activeDevice) {
-      context.service ??= _vmService;
-    }
+    final context = await _deviceContextForParameters(parameters);
+    final deviceId =
+        context?.deviceId ??
+        parameters['deviceId']?.toString() ??
+        _fleetManager.activeDeviceId ??
+        'default';
     if (context == null || context.service == null) {
       return _ExtensionResult.error(
         'No VM-service connection is available for device "$deviceId".',
@@ -832,6 +852,34 @@ Use this guide to understand what tools to call, when, and in what order.
         : suppliedOperationId;
     return _callExtensionScheduled(extension, parameters, operationId, context);
   }
+
+  Future<DeviceRuntimeContext?> _deviceContextForParameters(
+    Map<String, dynamic> parameters,
+  ) async {
+    final activeDevice = _fleetManager.activeDeviceId ?? 'default';
+    final targetDevice = parameters['deviceId']?.toString();
+    final deviceId = targetDevice == null || targetDevice.isEmpty
+        ? activeDevice
+        : targetDevice;
+    if (deviceId == activeDevice && _vmService == null) {
+      await _connectWithUri();
+    }
+    final context = deviceId == activeDevice && _vmService != null
+        ? (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
+            deviceId: deviceId,
+            uri: _vmServiceUri ?? '',
+          ))
+        : await _ensureDeviceContext(deviceId);
+    if (context != null && deviceId == activeDevice) {
+      context.service ??= _vmService;
+    }
+    return context;
+  }
+
+  @override
+  Future<VmService?> _vmServiceForParameters(
+    Map<String, dynamic> parameters,
+  ) async => (await _deviceContextForParameters(parameters))?.service;
 
   Future<_ExtensionResult> _callExtensionScheduled(
     String extension,
@@ -984,6 +1032,9 @@ Use this guide to understand what tools to call, when, and in what order.
     context.service = null;
     context.cachedMainIsolateId = null;
     context.connectionGeneration++;
+    if (context.deviceId == _fleetManager.activeDeviceId) {
+      _vmService = null;
+    }
     if (context.deviceId == _fleetManager.activeDeviceId) {
       _scheduleReconnect();
     }

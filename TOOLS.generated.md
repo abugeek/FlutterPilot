@@ -575,6 +575,7 @@ Retrieves the chronological 30-60 second rolling flight recorder timeline (user 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `generate_repro_test`
 
@@ -605,6 +606,7 @@ Clears the flight recorder event buffer.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `diagnose_last_error`
 
@@ -619,6 +621,7 @@ Trigger a source code hot reload. CALL THIS after you have modified a .dart file
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `hot_restart`
 
@@ -626,6 +629,7 @@ Trigger a full app hot restart. CALL THIS for structural code changes (main(), p
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `generate_pr_report`
 
@@ -898,6 +902,7 @@ Starts recording manual interactions. User should perform the flow in the app wh
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `stop_and_generate_test`
 
@@ -905,6 +910,7 @@ Stops recording and returns a log of actions. Use your LLM capability to convert
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `list_custom_tools`
 
@@ -976,6 +982,7 @@ Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizatio
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `run_chaos_fuzzing`
 
@@ -992,6 +999,7 @@ Returns a detailed memory breakdown of the running app: heap used, heap capacity
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_allocation_profile`
 
@@ -1000,6 +1008,7 @@ Returns the top Dart classes by current heap allocation (like the DevTools Memor
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | integer | no | Number of top classes to show, sorted by heap bytes (default: 30). |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_http_profile`
 
@@ -1016,6 +1025,7 @@ Clears the HTTP request history so you get a clean baseline before triggering a 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_render_tree`
 
@@ -1023,6 +1033,7 @@ Dumps the render object tree — the layout/paint layer beneath the widget tree.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_layer_tree`
 
@@ -1030,6 +1041,7 @@ Dumps the compositing layer tree — the GPU-level representation of the scene. 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_vm_info`
 
@@ -1037,6 +1049,7 @@ Returns Dart VM version, process ID, all running isolates and their pause/run st
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_repaint_rainbow`
 
@@ -1045,6 +1058,7 @@ Enables or disables the repaint rainbow overlay (each layer that repaints cycles
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to enable the repaint rainbow overlay, false to disable. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_debug_paint`
 
@@ -1053,6 +1067,7 @@ Enables or disables debug paint — shows layout padding (blue), widget boundari
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to show debug paint boundaries and padding, false to hide. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_slow_animations`
 
@@ -1061,6 +1076,7 @@ Slows all animations to 1/5 speed (timeDilation=5) or restores normal speed (tim
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `enable_widget_rebuild_tracking`
 
@@ -1069,6 +1085,7 @@ Enables or disables per-widget rebuild counting (equivalent to DevTools "Track W
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to start tracking per-widget rebuild counts, false to stop. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_gc_stats`
 
@@ -1076,6 +1093,7 @@ Returns garbage collection statistics for all Dart isolates: number of GC rounds
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `audit_memory_health`
 
@@ -1083,6 +1101,7 @@ Audits Flutter ImageCache memory, checks total allocated megabytes against thres
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_supabase_auth`
 

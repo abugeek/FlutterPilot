@@ -8,10 +8,12 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'start_recording',
       description:
           'Starts recording manual interactions. User should perform the flow in the app while this is active.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.startRecording',
-        {},
+        p,
       ).then((res) => res.toCallToolResult()),
     );
 
@@ -19,11 +21,13 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'stop_and_generate_test',
       description:
           'Stops recording and returns a log of actions. Use your LLM capability to convert this log into a Flutter `testWidgets` block.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.stopRecording',
-          {},
+          _withDeviceId(p),
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
@@ -111,7 +115,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         };
         return _callExtensionRaw(
           'ext.flutterpilot.assertTextVisible',
-          args,
+          _withDeviceId(p, args),
         ).then((res) => res.toCallToolResult());
       },
     );
@@ -139,7 +143,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         };
         return _callExtensionRaw(
           'ext.flutterpilot.assertWidgetCount',
-          args,
+          _withDeviceId(p, args),
         ).then((res) => res.toCallToolResult());
       },
     );
@@ -162,7 +166,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetEnabled',
-          {'key': p['key'].toString()},
+          _withDeviceId(p, {'key': p['key'].toString()}),
         );
         return res.toCallToolResult();
       },
@@ -186,7 +190,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetDisabled',
-          {'key': p['key'].toString()},
+          _withDeviceId(p, {'key': p['key'].toString()}),
         );
         return res.toCallToolResult();
       },
@@ -196,18 +200,21 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'get_perf_metrics',
       description:
           'Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizations actually improved performance.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
         final fpsRes = await _callExtensionRaw(
           'ext.flutterpilot.getPerfMetrics',
-          {},
+          _withDeviceId(p),
         );
         String memory = 'N/A';
-        if (_vmService != null) {
-          final vm = await _vmService!.getVM();
+        final vmService = await _vmServiceForParameters(p);
+        if (vmService != null) {
+          final vm = await vmService.getVM();
           final mainIsolateId = vm.isolates?.firstOrNull?.id;
           if (mainIsolateId != null) {
-            final usage = await _vmService!.getMemoryUsage(mainIsolateId);
+            final usage = await vmService.getMemoryUsage(mainIsolateId);
             memory =
                 '${((usage.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(2)} MB';
           }
@@ -231,7 +238,8 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'durationSeconds': JsonSchema.integer(
-            description: 'Duration to run chaos fuzzing in seconds (default: 5).',
+            description:
+                'Duration to run chaos fuzzing in seconds (default: 5).',
           ),
           'eventRatePerSecond': JsonSchema.integer(
             description: 'Rate of chaos events per second (default: 5).',
@@ -239,10 +247,15 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.runChaosFuzzing', {
-          if (p['durationSeconds'] != null) 'durationSeconds': p['durationSeconds'].toString(),
-          if (p['eventRatePerSecond'] != null) 'eventRatePerSecond': p['eventRatePerSecond'].toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.runChaosFuzzing',
+          _withDeviceId(p, {
+            if (p['durationSeconds'] != null)
+              'durationSeconds': p['durationSeconds'].toString(),
+            if (p['eventRatePerSecond'] != null)
+              'eventRatePerSecond': p['eventRatePerSecond'].toString(),
+          }),
+        );
         if (res.isError) return res.toCallToolResult();
         final events = res.data?['eventsExecuted'] ?? 0;
         final errors = res.data?['newErrorsCaught'] ?? 0;
@@ -250,7 +263,8 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '🐒 **Chaos Fuzzing Finished (${(duration / 1000).toStringAsFixed(1)}s):**\n'
+              text:
+                  '🐒 **Chaos Fuzzing Finished (${(duration / 1000).toStringAsFixed(1)}s):**\n'
                   '- Events Executed: $events\n'
                   '- Unhandled Crashes Caught: $errors\n'
                   '- Result: ${errors == 0 ? "🟢 APP STABLE (0 Crashes)" : "🚨 UNHANDLED EXCEPTIONS DETECTED - Call get_flight_log"}',

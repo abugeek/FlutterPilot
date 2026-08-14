@@ -38,14 +38,20 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'get_flight_log',
       description:
           'Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.getFlightLog', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getFlightLog',
+          _withDeviceId(p),
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
             TextContent(
-              text: '### 🛫 Continuous Flight Recorder Log\n```json\n${json.encode(res.data)}\n```',
+              text:
+                  '### 🛫 Continuous Flight Recorder Log\n```json\n${json.encode(res.data)}\n```',
             ),
           ],
         );
@@ -63,26 +69,34 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
             description: 'Optional descriptive name for the test.',
           ),
           'widgetName': JsonSchema.string(
-            description: 'Root widget or screen name to mount (default: "MyApp()").',
+            description:
+                'Root widget or screen name to mount (default: "MyApp()").',
           ),
           'writeToDisk': JsonSchema.boolean(
-            description: 'Whether to automatically write the test to test/repro_test.dart (default: false).',
+            description:
+                'Whether to automatically write the test to test/repro_test.dart (default: false).',
           ),
           'filePath': JsonSchema.string(
-            description: 'Custom file path to write to (default: "test/repro_test.dart").',
+            description:
+                'Custom file path to write to (default: "test/repro_test.dart").',
           ),
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.generateReproTest', {
-          if (p['testName'] != null) 'testName': p['testName'].toString(),
-          if (p['widgetName'] != null) 'widgetName': p['widgetName'].toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.generateReproTest',
+          _withDeviceId(p, {
+            if (p['testName'] != null) 'testName': p['testName'].toString(),
+            if (p['widgetName'] != null)
+              'widgetName': p['widgetName'].toString(),
+          }),
+        );
         if (res.isError) return res.toCallToolResult();
 
         final code = res.data?['code']?.toString() ?? '';
         final writeToDisk = p['writeToDisk'] == true;
-        final targetPath = (p['filePath']?.toString() ?? 'test/repro_test.dart');
+        final targetPath =
+            (p['filePath']?.toString() ?? 'test/repro_test.dart');
 
         if (writeToDisk && !allowDestructive) {
           return _destructiveOperationDenied();
@@ -96,7 +110,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
               file.parent.createSync(recursive: true);
             }
             file.writeAsStringSync(code);
-            diskStatus = '\n\n✅ Wrote reproduction test to `$targetPath`. Run with:\n`flutter test $targetPath`';
+            diskStatus =
+                '\n\n✅ Wrote reproduction test to `$targetPath`. Run with:\n`flutter test $targetPath`';
           } catch (err) {
             diskStatus = '\n\n⚠️ Failed to write to disk: $err';
           }
@@ -105,7 +120,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '### 🧪 Auto-Generated Reproduction Test$diskStatus\n\n```dart\n$code\n```',
+              text:
+                  '### 🧪 Auto-Generated Reproduction Test$diskStatus\n\n```dart\n$code\n```',
             ),
           ],
         );
@@ -120,30 +136,35 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'framework': JsonSchema.string(
-            description: 'Target test framework: "patrol", "integration_test", or "widget_test" (default: "patrol").',
+            description:
+                'Target test framework: "patrol", "integration_test", or "widget_test" (default: "patrol").',
             enumValues: ['patrol', 'integration_test', 'widget_test'],
           ),
-          'testName': JsonSchema.string(
-            description: 'Descriptive test name.',
-          ),
+          'testName': JsonSchema.string(description: 'Descriptive test name.'),
           'appWidget': JsonSchema.string(
-            description: 'Target app/screen widget name (e.g. "MyApp()", "CheckoutScreen()").',
+            description:
+                'Target app/screen widget name (e.g. "MyApp()", "CheckoutScreen()").',
           ),
           'writeToDisk': JsonSchema.boolean(
-            description: 'Whether to write generated test to disk (default: false).',
+            description:
+                'Whether to write generated test to disk (default: false).',
           ),
           'filePath': JsonSchema.string(
-            description: 'File path to write (e.g. "integration_test/checkout_flow_test.dart").',
+            description:
+                'File path to write (e.g. "integration_test/checkout_flow_test.dart").',
           ),
         },
       ),
       callback: (p, e) async {
         final framework = p['framework']?.toString() ?? 'patrol';
-        final res = await _callExtensionRaw('ext.flutterpilot.exportTestSuite', {
-          'framework': framework,
-          if (p['testName'] != null) 'testName': p['testName'].toString(),
-          if (p['appWidget'] != null) 'appWidget': p['appWidget'].toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.exportTestSuite',
+          _withDeviceId(p, {
+            'framework': framework,
+            if (p['testName'] != null) 'testName': p['testName'].toString(),
+            if (p['appWidget'] != null) 'appWidget': p['appWidget'].toString(),
+          }),
+        );
         if (res.isError) return res.toCallToolResult();
 
         final code = res.data?['code']?.toString() ?? '';
@@ -174,7 +195,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '### 🧪 Auto-Generated Test Suite ($framework)$diskStatus\n\n```dart\n$code\n```',
+              text:
+                  '### 🧪 Auto-Generated Test Suite ($framework)$diskStatus\n\n```dart\n$code\n```',
             ),
           ],
         );
@@ -184,9 +206,14 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'clear_flight_log',
       description: 'Clears the flight recorder event buffer.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.clearFlightLog', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.clearFlightLog',
+          _withDeviceId(p),
+        );
         return res.toCallToolResult();
       },
     );
@@ -213,15 +240,18 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'hot_reload',
       description:
           'Trigger a source code hot reload. CALL THIS after you have modified a .dart file to apply the fix to the running app.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(p);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'Not connected')],
             isError: true,
           );
         }
-        final vm = await _vmService!.getVM();
+        final vm = await vmService.getVM();
         final mainIsolateId = vm.isolates?.firstOrNull?.id;
         if (mainIsolateId == null) {
           return CallToolResult(
@@ -230,8 +260,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           );
         }
         try {
-          await _vmService!.reloadSources(mainIsolateId);
-          await _vmService!.callServiceExtension(
+          await vmService.reloadSources(mainIsolateId);
+          await vmService.callServiceExtension(
             'ext.flutter.reassemble',
             isolateId: mainIsolateId,
           );
@@ -257,15 +287,18 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'hot_restart',
       description:
           'Trigger a full app hot restart. CALL THIS for structural code changes (main(), providers) or to reset app state.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(p);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'Not connected')],
             isError: true,
           );
         }
-        final vm = await _vmService!.getVM();
+        final vm = await vmService.getVM();
         final mainIsolateId = vm.isolates?.firstOrNull?.id;
         if (mainIsolateId == null) {
           return CallToolResult(
@@ -274,7 +307,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           );
         }
         try {
-          await _vmService!.callServiceExtension(
+          await vmService.callServiceExtension(
             'ext.flutter.hotRestart',
             isolateId: mainIsolateId,
           );
@@ -304,16 +337,19 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'title': JsonSchema.string(
-            description: 'Pull Request title (e.g. "feat: implement responsive product checkout").',
+            description:
+                'Pull Request title (e.g. "feat: implement responsive product checkout").',
           ),
           'description': JsonSchema.string(
             description: 'Summary of what was built, changed, or fixed.',
           ),
           'generatedTestPath': JsonSchema.string(
-            description: 'Path to synthesized test file if generated (e.g. "integration_test/flow_test.dart").',
+            description:
+                'Path to synthesized test file if generated (e.g. "integration_test/flow_test.dart").',
           ),
           'gifPath': JsonSchema.string(
-            description: 'Path to exported session GIF if created (e.g. "artifacts/demo.gif").',
+            description:
+                'Path to exported session GIF if created (e.g. "artifacts/demo.gif").',
           ),
         },
         required: ['title'],
@@ -325,7 +361,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         final gifPath = p['gifPath']?.toString();
 
         // Run fresh screen health audit
-        final auditRes = await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final auditRes = await _callExtensionRaw(
+          'ext.flutterpilot.auditScreenHealth',
+          _withDeviceId(p),
+        );
         final auditData = auditRes.data;
 
         final buffer = StringBuffer();
@@ -341,19 +380,31 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         buffer.writeln('## 🏥 Autonomous Quality & Screen Health Audit');
         buffer.writeln('| Check | Status | Details |');
         buffer.writeln('|---|---|---|');
-        buffer.writeln('| **Layout Overflows** | ${overflowCount == 0 ? "✅ Passed" : "❌ Failed"} | $overflowCount RenderFlex errors |');
-        buffer.writeln('| **Touch Target Accessibility** | ${a11yCount == 0 ? "✅ Passed" : "⚠️ Warnings"} | $a11yCount touch targets <48x48 dp |');
-        buffer.writeln('| **Overall Health** | ${isHealthy ? "🟢 Clean & Production Ready" : "🟡 Needs Review"} | Verified via FlutterPilot |');
+        buffer.writeln(
+          '| **Layout Overflows** | ${overflowCount == 0 ? "✅ Passed" : "❌ Failed"} | $overflowCount RenderFlex errors |',
+        );
+        buffer.writeln(
+          '| **Touch Target Accessibility** | ${a11yCount == 0 ? "✅ Passed" : "⚠️ Warnings"} | $a11yCount touch targets <48x48 dp |',
+        );
+        buffer.writeln(
+          '| **Overall Health** | ${isHealthy ? "🟢 Clean & Production Ready" : "🟡 Needs Review"} | Verified via FlutterPilot |',
+        );
         buffer.writeln();
 
         if (gifPath != null && gifPath.isNotEmpty) {
-          buffer.writeln('## 🎬 Visual Proof & Session Replay\n![$title]($gifPath)\n');
+          buffer.writeln(
+            '## 🎬 Visual Proof & Session Replay\n![$title]($gifPath)\n',
+          );
         }
         if (testPath != null && testPath.isNotEmpty) {
-          buffer.writeln('## 🧪 Synthesized Automated Test\nGenerated test suite available at: `$testPath`\n');
+          buffer.writeln(
+            '## 🧪 Synthesized Automated Test\nGenerated test suite available at: `$testPath`\n',
+          );
         }
         buffer.writeln('---');
-        buffer.writeln('*Automated verification generated with [FlutterPilot](https://github.com/abugeek/FlutterPilot) 🚀*');
+        buffer.writeln(
+          '*Automated verification generated with [FlutterPilot](https://github.com/abugeek/FlutterPilot) 🚀*',
+        );
 
         return CallToolResult(content: [TextContent(text: buffer.toString())]);
       },

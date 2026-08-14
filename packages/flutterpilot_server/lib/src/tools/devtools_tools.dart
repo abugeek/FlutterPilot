@@ -11,15 +11,18 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'heap capacity, external (native) memory, and RSS for every Dart isolate. '
           'Use this to detect memory leaks or unexpected growth. '
           'Heap > 200 MB or external > 50 MB usually warrants investigation.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(params);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'No VM Service connection.')],
           );
         }
         try {
-          final vm = await _vmService!.getVM();
+          final vm = await vmService.getVM();
           final buf = StringBuffer('Memory details:\n');
           int totalHeapUsed = 0;
           int totalHeapCapacity = 0;
@@ -27,7 +30,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           for (final iso in vm.isolates ?? []) {
             if (iso.id == null) continue;
             try {
-              final m = await _vmService!.getMemoryUsage(iso.id!);
+              final m = await vmService.getMemoryUsage(iso.id!);
               final heapUsedMb = ((m.heapUsage ?? 0) / (1024 * 1024))
                   .toStringAsFixed(2);
               final heapCapMb = ((m.heapCapacity ?? 0) / (1024 * 1024))
@@ -73,24 +76,26 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'Number of top classes to show, sorted by heap bytes (default: 30).',
           ),
+          'deviceId': _deviceIdProperty(),
         },
       ),
       callback: (params, extra) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(params);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'No VM Service connection.')],
           );
         }
         final limit = ((params['limit'] as int?) ?? 30).clamp(1, 500);
         try {
-          final vm = await _vmService!.getVM();
+          final vm = await vmService.getVM();
           final isolateId = vm.isolates?.firstOrNull?.id;
           if (isolateId == null) {
             return CallToolResult(
               content: [TextContent(text: 'No isolate available.')],
             );
           }
-          final profile = await _vmService!.getAllocationProfile(isolateId);
+          final profile = await vmService.getAllocationProfile(isolateId);
           final members = profile.members ?? [];
           members.sort(
             (a, b) => (b.bytesCurrent ?? 0).compareTo(a.bytesCurrent ?? 0),
@@ -144,7 +149,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       callback: (params, extra) async {
         final limit = ((params['limit'] as int?) ?? 50).clamp(1, 500);
         final statusFilter = params['status_filter'] as int?;
-        final res = await _callExtensionRaw('ext.dart.io.getHttpProfile', {});
+        final res = await _callExtensionRaw(
+          'ext.dart.io.getHttpProfile',
+          _withDeviceId(params),
+        );
         if (res.isError) {
           return CallToolResult(
             content: [
@@ -202,9 +210,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       description:
           'Clears the HTTP request history so you get a clean baseline '
           'before triggering a specific API call. Pair with get_http_profile.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
-        final res = await _callExtensionRaw('ext.dart.io.clearHttpProfile', {});
+        final res = await _callExtensionRaw(
+          'ext.dart.io.clearHttpProfile',
+          _withDeviceId(params),
+        );
         if (res.isError) {
           return CallToolResult(
             content: [TextContent(text: 'Clear failed: ${res.errorMessage}')],
@@ -224,11 +237,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'widget tree. Use this to debug layout issues, overflow errors, or '
           'understand exactly how Flutter is sizing and positioning widgets. '
           'This is the DevTools Layout Explorer equivalent for AI agents.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
         final res = await _callExtensionRaw(
           'ext.flutter.debugDumpRenderTree',
-          {},
+          _withDeviceId(params),
         );
         if (res.isError) return res.toCallToolResult();
         final tree =
@@ -249,11 +264,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Dumps the compositing layer tree — the GPU-level representation of '
           'the scene. Use this to debug performance issues caused by unnecessary '
           'repaint layers, or to understand why widgets are not composited efficiently.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
         final res = await _callExtensionRaw(
           'ext.flutter.debugDumpLayerTree',
-          {},
+          _withDeviceId(params),
         );
         if (res.isError) return res.toCallToolResult();
         final tree =
@@ -274,15 +291,18 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Returns Dart VM version, process ID, all running isolates and their '
           'pause/run state. Use this to confirm which Dart version the app is '
           'running on, or to check isolate health.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(params);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'No VM Service connection.')],
           );
         }
         try {
-          final vm = await _vmService!.getVM();
+          final vm = await vmService.getVM();
           final buf = StringBuffer();
           buf.writeln('VM version: ${vm.version ?? 'unknown'}');
           buf.writeln('PID: ${vm.pid ?? 'unknown'}');
@@ -314,14 +334,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to enable the repaint rainbow overlay, false to disable.',
           ),
+          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw('ext.flutter.repaintRainbow', {
-          'enabled': enabled.toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutter.repaintRainbow',
+          _withDeviceId(params, {'enabled': enabled.toString()}),
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -348,14 +370,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to show debug paint boundaries and padding, false to hide.',
           ),
+          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw('ext.flutter.debugPaint', {
-          'enabled': enabled.toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutter.debugPaint',
+          _withDeviceId(params, {'enabled': enabled.toString()}),
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -381,15 +405,17 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.',
           ),
+          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
         final dilation = enabled ? '5.0' : '1.0';
-        final res = await _callExtensionRaw('ext.flutter.timeDilation', {
-          'timeDilation': dilation,
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutter.timeDilation',
+          _withDeviceId(params, {'timeDilation': dilation}),
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -418,14 +444,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to start tracking per-widget rebuild counts, false to stop.',
           ),
+          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw('ext.flutter.profileWidgetBuilds', {
-          'enabled': enabled.toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutter.profileWidgetBuilds',
+          _withDeviceId(params, {'enabled': enabled.toString()}),
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -446,20 +474,23 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Returns garbage collection statistics for all Dart isolates: '
           'number of GC rounds, total bytes collected, and current heap pressure. '
           'High GC frequency (>5/sec) can cause jank.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (params, extra) async {
-        if (_vmService == null) {
+        final vmService = await _vmServiceForParameters(params);
+        if (vmService == null) {
           return CallToolResult(
             content: [TextContent(text: 'No VM Service connection.')],
           );
         }
         try {
-          final vm = await _vmService!.getVM();
+          final vm = await vmService.getVM();
           final buf = StringBuffer('GC statistics:\n');
           for (final iso in vm.isolates ?? []) {
             if (iso.id == null) continue;
             try {
-              final profile = await _vmService!.getAllocationProfile(
+              final profile = await vmService.getAllocationProfile(
                 iso.id!,
                 gc: false,
               );
@@ -494,17 +525,26 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       description:
           'Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, '
           'and identifies oversized image allocations (>4x layout size) causing memory bloat.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {'deviceId': _deviceIdProperty()},
+      ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.auditMemoryHealth', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.auditMemoryHealth',
+          _withDeviceId(p),
+        );
         if (res.isError) return res.toCallToolResult();
         final isHealthy = res.data?['isHealthy'] == true;
         final cache = res.data?['imageCache'] as Map? ?? {};
         final warnings = res.data?['warnings'] as List? ?? [];
 
         final buf = StringBuffer('🧠 **Memory & Resource Health Audit:**\n');
-        buf.writeln('- Image Cache: ${cache['cachedImagesCount'] ?? 0} images (${cache['cachedMegaBytes']} MB / ${cache['maxMegaBytes']} MB max)');
-        buf.writeln('- Health Status: ${isHealthy ? "🟢 Optimal" : "⚠️ Memory Pressure / Inefficiencies Detected"}');
+        buf.writeln(
+          '- Image Cache: ${cache['cachedImagesCount'] ?? 0} images (${cache['cachedMegaBytes']} MB / ${cache['maxMegaBytes']} MB max)',
+        );
+        buf.writeln(
+          '- Health Status: ${isHealthy ? "🟢 Optimal" : "⚠️ Memory Pressure / Inefficiencies Detected"}',
+        );
 
         if (warnings.isNotEmpty) {
           buf.writeln('\n### ⚠️ Oversized Allocations (${warnings.length}):');
