@@ -1,122 +1,142 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, time-travel state snapshots, crash flight recorder, visual regression diffing, network chaos mocking, and runtime self-healing via FlutterPilot MCP tools.
+description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, composite macros, time-travel state snapshots, crash flight recorder, visual regression diffing, memory sentinels, and autonomous chaos fuzzing via FlutterPilot MCP tools.
 ---
 
 # FlutterPilot Agent Skill
 
-This skill guides AI agents on orchestrating FlutterPilot MCP tools to test, debug, and develop Flutter applications autonomously.
+This skill guides AI coding agents (Antigravity, Claude, Cursor, Copilot, Cline, Windsurf, Devin) on orchestrating FlutterPilot MCP tools to inspect, test, debug, and develop Flutter applications autonomously with zero friction and minimal token overhead.
 
 ## When to Use
-- Autonomous UI verification (filling forms, clicking buttons, testing user journeys).
-- Interacting with Flutter widgets using Virtual Semantic Selectors without requiring manual `ValueKey`s.
-- Time-Travel State Snapshots & instant state rewind (<100ms) across Riverpod, Bloc, and local storage.
-- Continuous Crash Flight Recording & auto-synthesizing executable `repro_test.dart` reproduction tests.
-- Exporting production-ready Patrol, Integration, and Widget test suites.
-- Visual regression testing with pixel diff detection.
-- Debugging state management (Riverpod, Bloc), network calls (Dio), databases (Drift, SQLite), or local storage (Hive, SharedPreferences, SecureStorage).
-- Simulating network chaos (offline mode, slow 3G latency, synthetic 500 error mocks).
-- Multi-device fleet testing across iOS, Android, and Web.
-- Catching unhandled runtime exceptions and auto-applying hot reloads.
+- **Autonomous UI Driving**: Filling forms, tapping buttons, and navigating complex user journeys without requiring manual `ValueKey`s.
+- **High-Speed Composite Macros**: Using `tap_and_wait` and `enter_text_and_submit` to execute multi-step user actions in 1 fast LLM turn.
+- **Subtree Scoping & Token Savings**: Using `get_widget_tree(rootKey: "form_id")` to inspect specific dialogs or forms with 90% fewer tokens.
+- **Time-Travel State Snapshots**: Instant point-in-time state checkpointing and restoration (`save_state_snapshot`, `restore_state_snapshot`, `batch_set_state`).
+- **Autonomous Crash Flight Recording**: Automatically retrieving rolling 30s crash timelines (`get_flight_log`) and synthesizing executable `repro_test.dart` reproduction tests.
+- **Autonomous Chaos & Stress Fuzzing**: Simulating aggressive monkey testing (`run_chaos_fuzzing`) to discover edge cases and unhandled exceptions.
+- **Memory & Asset Health Audits**: Checking for image memory bloat, uncompressed asset leaks, and oversize decodes (`audit_memory_health`).
+- **Production Test Suite Synthesis**: Exporting full Patrol, Integration, and Widget test suites (`export_test_suite`).
+- **Visual Regression Engine**: Word-aligned 32-bit pixel diff detection with magenta highlighting (`compare_screenshot`).
+- **Automated Pull Request Reports**: Generating structured markdown PR descriptions with reproduction steps, test coverage, and screenshots (`generate_pr_report`).
+
+---
 
 ## Step-by-Step Autonomous Workflow
 
 ```mermaid
 flowchart TD
     A[Connect Session] --> B[get_app_summary]
-    B --> C[capture_screenshot]
-    C --> D[get_widget_tree]
-    D --> E[Semantic Interaction: tap_widget / enter_text]
-    E --> F[Save State Checkpoint: save_state_snapshot]
-    F --> G[Verify State / Network Logs / Diff]
-    G --> H{Error Detected?}
-    H -- Yes --> I[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
-    H -- No --> J[Complete Task]
+    B --> C[get_widget_tree / Scoped Tree]
+    C --> D{Perform Action}
+    D -->|Single Action| E[tap_widget / enter_text]
+    D -->|Composite Action| F[tap_and_wait / enter_text_and_submit]
+    D -->|Batch Sequence| G[execute_action_chain]
+    E & F & G --> H[Save State Checkpoint: save_state_snapshot]
+    H --> I[Verify UI / State / Diff]
+    I --> J{Error or Crash?}
+    J -- Yes --> K[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
+    J -- No --> L[generate_pr_report -> Complete Task]
 ```
 
-### 1. Initial State Reconnaissance
-```json
-// 1. Get summary
-call_tool("get_app_summary", {})
+---
 
-// 2. See visual UI
+## Tool Cheat Sheet for AI Agents
+
+### 1. Fast UI Reconnaissance (Minimal Tokens)
+```json
+// Inspect full compacted widget hierarchy (75-85% token reduction)
+call_tool("get_widget_tree", {"compact": true})
+
+// Scope inspection to only an active dialog, form, or bottom sheet (90% extra savings)
+call_tool("get_widget_tree", {"rootKey": "login_form", "compact": true})
+
+// Quick visual screenshot
 call_tool("capture_screenshot", {})
-
-// 3. Inspect widget hierarchy with semantic selectors (PII automatically masked)
-call_tool("get_widget_tree", {"maxDepth": 250})
 ```
 
-### 2. UI Driving via Virtual Semantic Selectors
-You can interact using explicit keys, semantic selectors, or visible button text:
+### 2. High-Speed UI Driving & Composite Macros
 ```json
-// Fill input field using semantic selector or label
-call_tool("enter_text", {"key": "TextField['Email']", "text": "user@example.com"})
-
-// Scroll if off-screen
-call_tool("scroll_into_view", {"key": "Button['Submit']"})
-
-// Tap button via semantic selector or text (triggers live AI visual pointer on app screen)
-call_tool("tap_widget", {"key": "ElevatedButton['Sign In']"})
-// Or simply by visible text:
-call_tool("tap_widget", {"key": "Sign In"})
-
-// Advance frames
-call_tool("pump_frames", {"count": 10})
-```
-
-### 3. Time-Travel State Snapshots
-```json
-// Save current point-in-time state checkpoint
-call_tool("save_state_snapshot", {"name": "onboarding_step_2"})
-
-// Rewind app state anytime in <100ms without restarting
-call_tool("restore_state_snapshot", {"name": "onboarding_step_2"})
-```
-
-### 4. Visual Regression Diff Engine
-```json
-// 1. Establish golden baseline
-call_tool("save_screenshot_baseline", {"name": "checkout_screen"})
-
-// 2. After making modifications, compare:
-call_tool("compare_screenshot", {"name": "checkout_screen", "threshold": 0.5})
-```
-
-### 5. Network Chaos & Mocking
-```json
-// Mock endpoint with synthetic 500 error
-call_tool("mock_http_response", {
-  "urlPattern": "/api/v1/payment",
-  "statusCode": 500,
-  "body": "{\"error\": \"Payment processor unavailable\"}",
-  "delayMs": 1000
+// 1-Turn Macro: Tap button and wait until next screen/widget appears
+call_tool("tap_and_wait", {
+  "target": "Button['Log In']",
+  "expect": "home_dashboard",
+  "timeout": 5000
 })
 
-// Simulate slow 3G or offline
-call_tool("simulate_network", {"condition": "slow_3g"})
-call_tool("simulate_offline", {"enabled": "true"})
+// 1-Turn Macro: Enter text into input and immediately submit
+call_tool("enter_text_and_submit", {
+  "target": "TextField['Email']",
+  "text": "alice@example.com",
+  "submitTarget": "Button['Continue']"
+})
+
+// High-speed native action batch (executes inside Flutter engine in 2ms)
+call_tool("execute_action_chain", {
+  "actions": [
+    {"action": "enterText", "target": "TextField['Username']", "text": "alice"},
+    {"action": "enterText", "target": "TextField['Password']", "text": "secret123"},
+    {"action": "tap", "target": "Button['Sign In']"}
+  ]
+})
 ```
 
-### 6. Multi-Device Fleet Manager
+### 3. State Management & Atomic Seeding
 ```json
-// List connected iOS/Android/Web instances
-call_tool("list_connected_devices", {})
+// Atomic multi-variable state update in 1ms pass (Riverpod / Bloc)
+call_tool("batch_set_state", {
+  "type": "riverpod",
+  "states": {
+    "themeProvider": "dark",
+    "isLoggedIn": true,
+    "userProfile": {"name": "Alice", "role": "admin"}
+  }
+})
 
-// Switch target device
-call_tool("switch_device", {"id": "android_emu"})
+// Time-Travel: Save state checkpoint before risky action
+call_tool("save_state_snapshot", {"name": "pre_checkout"})
+
+// Time-Travel: Rewind state in <100ms
+call_tool("restore_state_snapshot", {"name": "pre_checkout"})
 ```
 
-### 7. Crash Flight Recorder & Self-Healing
+### 4. Continuous Diagnostics, Memory Health & Chaos Fuzzing
 ```json
-// 1. Inspect the 30s rolling flight timeline
+// Audit memory health (ImageCache, decode dimensions, oversize assets)
+call_tool("audit_memory_health", {})
+
+// Run autonomous chaos monkey testing (random taps, text entries, back navigations)
+call_tool("run_chaos_fuzzing", {
+  "iterations": 25,
+  "intensity": "high",
+  "injectNetworkErrors": true
+})
+
+// Inspect deduplicated recent errors
+call_tool("get_errors", {})
+
+// Retrieve 30s rolling flight timeline
 call_tool("get_flight_log", {})
+```
 
-// 2. Auto-generate reproduction test to disk
+### 5. Automated Test Generation & PR Reports
+```json
+// Synthesize standalone executable reproduction test to disk
 call_tool("generate_repro_test", {
-  "testName": "Reproduce checkout crash",
+  "testName": "Reproduce checkout payment failure",
   "writeToDisk": true
 })
 
-// 3. After editing Dart file in workspace, hot reload:
-call_tool("hot_reload", {})
+// Export production-ready Patrol or Integration test suite
+call_tool("export_test_suite", {
+  "framework": "patrol",
+  "testName": "User Onboarding Flow",
+  "filePath": "integration_test/onboarding_flow_test.dart"
+})
+
+// Generate formatted GitHub PR markdown description
+call_tool("generate_pr_report", {
+  "title": "Fix authentication race condition in token refresh",
+  "includeRepro": true,
+  "includeChecklist": true
+})
 ```

@@ -23,6 +23,17 @@ part of '../../flutterpilot_sdk.dart';
 /// - `assertWidgetDisabled` — Assert a widget is disabled
 /// - `unfocusAll` — Remove focus from all widgets
 extension _WidgetExtensions on FlutterPilot {
+  static String _makeWidgetNotFoundMessage(String target) {
+    final suggestions = PilotWidgetInspector.getAvailableActionableTargets();
+    if (suggestions.isNotEmpty) {
+      return 'Widget not found matching: "$target".\n'
+          'HINT: Visible actionable targets on current screen:\n'
+          '${suggestions.map((s) => ' • "$s"').join('\n')}\n'
+          'Or call get_widget_tree() to inspect the full widget hierarchy.';
+    }
+    return 'Widget not found matching: "$target". HINT: Call get_widget_tree() to inspect available widgets on screen.';
+  }
+
   static void register() {
     // -- ext.flutterpilot.tapWidget -------------------------------------------
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
@@ -37,7 +48,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found matching: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final routeBefore = NavigationTracker.currentRoute;
@@ -81,7 +92,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       bool found = false;

@@ -217,6 +217,51 @@ class PilotWidgetInspector {
     return (2.0 * intersection) / (bigramsA.length + bigramsB.length);
   }
 
+  /// Collects top visible actionable targets (buttons, inputs, key names) on screen.
+  /// Used to provide actionable suggestions to AI agents when an element is not found.
+  static List<String> getAvailableActionableTargets({int limit = 6}) {
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return [];
+
+    final suggestions = <String>{};
+    void collect(Element element) {
+      if (suggestions.length >= limit) return;
+      final widget = element.widget;
+      final typeName = widget.runtimeType.toString();
+      final key = widget.key?.toString();
+
+      if (widget.key is ValueKey) {
+        final val = (widget.key as ValueKey).value.toString();
+        suggestions.add(val);
+      } else if (key != null &&
+          key.isNotEmpty &&
+          !key.startsWith('[<#') &&
+          !key.contains('GlobalKey') &&
+          !key.contains('RawViewKey') &&
+          !key.contains('_MaterialApp') &&
+          !key.contains('_WidgetsApp') &&
+          !key.contains('OverlayState')) {
+        var cleanKey = key;
+        if (cleanKey.startsWith("['") && cleanKey.endsWith("']")) {
+          cleanKey = cleanKey.substring(2, cleanKey.length - 2);
+        } else if (cleanKey.startsWith("[<'") && cleanKey.endsWith("'>]")) {
+          cleanKey = cleanKey.substring(3, cleanKey.length - 3);
+        }
+        suggestions.add(cleanKey);
+      } else if (_isButtonOrClickable(typeName)) {
+        final selector = _computeSemanticSelector(element);
+        if (selector != null) suggestions.add(selector);
+      } else if (typeName == 'TextField' || typeName == 'TextFormField') {
+        final selector = _computeSemanticSelector(element);
+        if (selector != null) suggestions.add(selector);
+      }
+      element.visitChildren(collect);
+    }
+
+    collect(root);
+    return suggestions.take(limit).toList();
+  }
+
   /// Finds an [Element] by Key string.
   static Element? findElementByKey(String keyString) {
     final cached = _keyCache[keyString];
