@@ -3,6 +3,9 @@ part of '../../flutterpilot_server.dart';
 /// Tools for capturing screenshots, comparing baselines, and inspecting
 /// the widget tree, widget properties, and semantics tree.
 mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
+  String _baselineKey(String name) =>
+      '${_fleetManager.activeDeviceId ?? 'default'}::$name';
+
   void _registerScreenshotTools() {
     server.registerTool(
       'capture_screenshot',
@@ -126,7 +129,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        final previous = _screenshotBaselines.remove(name);
+        final baselineKey = _baselineKey(name);
+        final previous = _screenshotBaselines.remove(baselineKey);
         _screenshotBaselineBytes -= previous?.length ?? 0;
         // Evict oldest baselines until both count and total byte budgets fit.
         while (_screenshotBaselines.length >=
@@ -138,13 +142,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           final removed = _screenshotBaselines.remove(firstKey);
           _screenshotBaselineBytes -= removed?.length ?? 0;
         }
-        _screenshotBaselines[name] = decoded;
+        _screenshotBaselines[baselineKey] = decoded;
         _screenshotBaselineBytes += decoded.length;
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  'Baseline "$name" saved (${_screenshotBaselines[name]!.length} bytes). '
+                  'Baseline "$name" saved for device "${_fleetManager.activeDeviceId ?? 'default'}" '
+                  '(${_screenshotBaselines[baselineKey]!.length} bytes). '
                   'HINT: Run compare_screenshot after making visual changes.',
             ),
           ],
@@ -176,7 +181,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        final baseline = _screenshotBaselines[name];
+        final baseline = _screenshotBaselines[_baselineKey(name)];
         if (baseline == null) {
           return CallToolResult(
             content: [
@@ -461,7 +466,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final delayMs = (p['delayMs'] as num?)?.toInt() ?? 500;
 
         // Capture current screen if baselines empty
-        if (_screenshotBaselines.isEmpty) {
+        final activePrefix = '${_fleetManager.activeDeviceId ?? 'default'}::';
+        if (!_screenshotBaselines.keys.any(
+          (key) => key.startsWith(activePrefix),
+        )) {
           final res = await _callExtensionRaw(
             'ext.flutterpilot.captureScreenshot',
             {},
@@ -471,13 +479,19 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           if (data != null) {
             final decoded = base64Decode(data);
             if (decoded.length <= _Constants.maxScreenshotBaselineBytes) {
-              _screenshotBaselines['current'] = decoded;
+              final baselineKey = _baselineKey('current');
+              final previous = _screenshotBaselines[baselineKey];
+              _screenshotBaselineBytes -= previous?.length ?? 0;
+              _screenshotBaselines[baselineKey] = decoded;
               _screenshotBaselineBytes += decoded.length;
             }
           }
         }
 
-        final frames = _screenshotBaselines.values.toList();
+        final frames = _screenshotBaselines.entries
+            .where((entry) => entry.key.startsWith(activePrefix))
+            .map((entry) => entry.value)
+            .toList();
         if (frames.isEmpty) {
           return CallToolResult(
             content: [
