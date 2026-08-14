@@ -11,16 +11,64 @@ class OperationScheduler {
   Future<T> schedule<T>({
     required bool mutating,
     required Future<T> Function() operation,
+  }) => scheduleCancellable<T>(mutating: mutating, operation: operation).future;
+
+  ScheduledOperation<T> scheduleCancellable<T>({
+    required bool mutating,
+    required Future<T> Function() operation,
   }) {
-    if (!mutating) {
-      return _mutationTail.then((_) => operation());
+    final completer = Completer<T>();
+    var cancelled = false;
+    var started = false;
+
+    Future<T> run() async {
+      if (cancelled) throw const OperationCancelledException();
+      started = true;
+      return operation();
     }
 
-    final result = _mutationTail.then((_) => operation());
-    _mutationTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
+    final result = _mutationTail.then((_) => run());
+    if (mutating) {
+      _mutationTail = result.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {},
+      );
+    }
+
+    result.then(
+      (value) {
+        if (!completer.isCompleted) completer.complete(value);
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) completer.completeError(error, stackTrace);
+      },
     );
-    return result;
+
+    return ScheduledOperation<T>._(completer.future, () {
+      if (started || cancelled) return false;
+      cancelled = true;
+      if (!completer.isCompleted) {
+        completer.completeError(const OperationCancelledException());
+      }
+      return true;
+    });
   }
+}
+
+/// A queued operation that can be cancelled before it starts running.
+class ScheduledOperation<T> {
+  final Future<T> future;
+  final bool Function() _cancelCallback;
+
+  ScheduledOperation._(this.future, this._cancelCallback);
+
+  /// Returns false when the operation has already started or finished.
+  bool cancel() => _cancelCallback();
+}
+
+class OperationCancelledException implements Exception {
+  const OperationCancelledException();
+
+  @override
+  String toString() => 'Operation was cancelled before it started';
 }

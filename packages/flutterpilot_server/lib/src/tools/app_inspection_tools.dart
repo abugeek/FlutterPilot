@@ -4,6 +4,41 @@ part of '../../flutterpilot_server.dart';
 mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
   void _registerAppInspectionTools() {
     server.registerTool(
+      'cancel_operation',
+      description:
+          'Cancels a queued FlutterPilot operation before it starts. '
+          'Already-running VM calls are allowed to finish safely.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'operationId': JsonSchema.string(
+            description: 'The operation ID returned by the original tool call.',
+          ),
+        },
+        required: ['operationId'],
+      ),
+      callback: (params, extra) async {
+        final operationId = params['operationId'] as String?;
+        if (operationId == null || operationId.isEmpty) {
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: 'Missing operationId.')],
+          );
+        }
+        final cancelled = _cancelOperation(operationId);
+        return CallToolResult(
+          isError: !cancelled,
+          content: [
+            TextContent(
+              text: cancelled
+                  ? 'Cancelled queued operation $operationId.'
+                  : 'Operation $operationId was not queued or has already started.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
       'connect_app',
       description:
           'Connects or reconnects FlutterPilot to a running Flutter application. '
@@ -49,9 +84,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         return CallToolResult(
-          content: [
-            TextContent(text: _fleetManager.toJsonString()),
-          ],
+          content: [TextContent(text: _fleetManager.toJsonString())],
         );
       },
     );
@@ -63,7 +96,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'id': JsonSchema.string(
-            description: 'A unique identifier or name (e.g. "ios_pro_max", "pixel_8", "web_chrome").',
+            description:
+                'A unique identifier or name (e.g. "ios_pro_max", "pixel_8", "web_chrome").',
           ),
           'uri': JsonSchema.string(
             description: 'The VM Service WebSocket URI for that device.',
@@ -76,9 +110,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final uri = p['uri'] as String;
         _fleetManager.registerDevice(id, uri);
         return CallToolResult(
-          content: [
-            TextContent(text: 'Registered device "$id" with URI $uri'),
-          ],
+          content: [TextContent(text: 'Registered device "$id" with URI $uri')],
         );
       },
     );
@@ -90,7 +122,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'id': JsonSchema.string(
-            description: 'The ID or name of the registered device to switch to.',
+            description:
+                'The ID or name of the registered device to switch to.',
           ),
         },
         required: ['id'],
@@ -103,7 +136,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             isError: true,
             content: [
               TextContent(
-                text: 'Device "$id" not found in fleet. Call list_connected_devices to see available devices.',
+                text:
+                    'Device "$id" not found in fleet. Call list_connected_devices to see available devices.',
               ),
             ],
           );
@@ -188,17 +222,14 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
 
         if (_debugLogBuffer.isNotEmpty) {
           buffer.writeln('\n=== Recent Debug Logs ===');
-          for (final log in _debugLogBuffer.toList().reversed.take(5).toList().reversed) {
+          for (final log
+              in _debugLogBuffer.toList().reversed.take(5).toList().reversed) {
             buffer.writeln(' [${log['level']}] ${log['message']}');
           }
         }
 
         return CallToolResult(
-          content: [
-            TextContent(
-              text: buffer.toString().trim(),
-            ),
-          ],
+          content: [TextContent(text: buffer.toString().trim())],
         );
       },
     );
@@ -354,7 +385,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           final resolved = file.resolveSymbolicLinksSync();
           final projectCanonical = _projectRoot.resolveSymbolicLinksSync();
           final relative = path.relative(resolved, from: projectCanonical);
-          if (relative == '..' || relative.startsWith('..${Platform.pathSeparator}')) {
+          if (relative == '..' ||
+              relative.startsWith('..${Platform.pathSeparator}')) {
             return CallToolResult(
               content: [
                 TextContent(
@@ -511,9 +543,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
 
         void flushPrevious() {
           if (prevMessage != null) {
-            final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty) ? '($prevLogger) ' : '';
-            final repeatSuffix = repeatCount > 1 ? ' [x$repeatCount occurrences]' : '';
-            compacted.add('[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix');
+            final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty)
+                ? '($prevLogger) '
+                : '';
+            final repeatSuffix = repeatCount > 1
+                ? ' [x$repeatCount occurrences]'
+                : '';
+            compacted.add(
+              '[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix',
+            );
           }
         }
 
@@ -663,7 +701,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'Returns a single structured health verdict.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.auditUiHealth', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.auditUiHealth',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -689,16 +730,20 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         });
 
         // 2. Hot restart
-        final restartRes = await _callExtensionRaw('ext.flutterpilot.hotRestart', {});
+        final restartRes = await _callExtensionRaw(
+          'ext.flutterpilot.hotRestart',
+          {},
+        );
         if (restartRes.isError) return restartRes.toCallToolResult();
 
         // 3. Wait for app rebuild
         await Future.delayed(const Duration(milliseconds: 600));
 
         // 4. Restore state
-        final restoreRes = await _callExtensionRaw('ext.flutterpilot.restoreSnapshot', {
-          'name': '_auto_hot_restart',
-        });
+        final restoreRes = await _callExtensionRaw(
+          'ext.flutterpilot.restoreSnapshot',
+          {'name': '_auto_hot_restart'},
+        );
 
         return CallToolResult(
           content: [
@@ -719,7 +764,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.getFrameBudgetProfile', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getFrameBudgetProfile',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -740,15 +788,17 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'delayMs': JsonSchema.integer(
-            description: 'Delay between replayed actions in milliseconds (default: 150ms).',
+            description:
+                'Delay between replayed actions in milliseconds (default: 150ms).',
           ),
         },
       ),
       callback: (p, e) async {
         final delayMs = (p['delayMs'] as num?)?.toInt() ?? 150;
-        final res = await _callExtensionRaw('ext.flutterpilot.replayFlightLog', {
-          'delayMs': delayMs.toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.replayFlightLog',
+          {'delayMs': delayMs.toString()},
+        );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [

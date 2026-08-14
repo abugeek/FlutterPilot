@@ -80,4 +80,47 @@ void main() {
     await Future.wait([mutation, read]);
     expect(readRan, isTrue);
   });
+
+  test('cancels a queued mutation before it starts', () async {
+    final scheduler = OperationScheduler();
+    final release = Completer<void>();
+    var ran = false;
+
+    final first = scheduler.schedule<void>(
+      mutating: true,
+      operation: () => release.future,
+    );
+    final queued = scheduler.scheduleCancellable<void>(
+      mutating: true,
+      operation: () async => ran = true,
+    );
+
+    expect(queued.cancel(), isTrue);
+    await expectLater(
+      queued.future,
+      throwsA(isA<OperationCancelledException>()),
+    );
+    release.complete();
+    await first;
+    await Future<void>.delayed(Duration.zero);
+    expect(ran, isFalse);
+  });
+
+  test('cannot cancel an operation after it starts', () async {
+    final scheduler = OperationScheduler();
+    final started = Completer<void>();
+    final release = Completer<void>();
+
+    final operation = scheduler.scheduleCancellable<void>(
+      mutating: true,
+      operation: () async {
+        started.complete();
+        await release.future;
+      },
+    );
+    await started.future;
+    expect(operation.cancel(), isFalse);
+    release.complete();
+    await operation.future;
+  });
 }

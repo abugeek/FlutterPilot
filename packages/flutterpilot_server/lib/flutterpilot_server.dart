@@ -44,6 +44,8 @@ abstract class _FlutterPilotServerBase {
 
   Future<bool> _connectWithUri([String? targetUri]);
 
+  bool _cancelOperation(String operationId);
+
   Future<_ExtensionResult> _callExtensionRaw(
     String extension,
     Map<String, dynamic> parameters,
@@ -113,6 +115,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   int _connectionGeneration = 0;
   int _nextOperationId = 0;
   final Map<String, OperationScheduler> _operationSchedulers = {};
+  final Map<String, bool Function()> _operationCancellers = {};
 
   FlutterPilotServer({
     String? vmServiceUri,
@@ -624,60 +627,69 @@ Use this guide to understand what tools to call, when, and in what order.
       '(connection=$connectionKey, generation=$generation)',
     );
 
-    return scheduler
-        .schedule(
-          mutating: mutating,
-          operation: () async {
-            if (generation != _connectionGeneration && generation != 0) {
-              return _ExtensionResult.error(
-                'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
-                ErrorCategory.staleOperation,
-              ).withOperationId(operationId);
-            }
-            if (mutating) {
-              final expectedMutation = _parseMutationVersion(parameters);
-              if (expectedMutation != null) {
-                final versionResult = await _callExtensionImmediate(
-                  'ext.flutterpilot.getScreenHash',
-                  const {},
-                );
-                final actualMutation = _extractMutationVersion(versionResult);
-                if (actualMutation == null ||
-                    actualMutation != expectedMutation) {
-                  return _ExtensionResult.error(
-                    'Mutation precondition failed for $operationId: expected '
-                    'context version $expectedMutation, but the active app is at '
-                    '${actualMutation ?? 'an unknown version'}. Re-read the screen '
-                    'state and retry with the latest contextVersion.',
-                    ErrorCategory.preconditionFailed,
-                  ).withOperationId(operationId);
-                }
-              }
-            }
-            final callParameters = Map<String, dynamic>.from(parameters)
-              ..remove('operationDeadlineMs');
-            final result = await _callExtensionImmediate(
-              extension,
-              callParameters,
+    final scheduled = scheduler.scheduleCancellable(
+      mutating: mutating,
+      operation: () async {
+        if (generation != _connectionGeneration && generation != 0) {
+          return _ExtensionResult.error(
+            'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
+            ErrorCategory.staleOperation,
+          ).withOperationId(operationId);
+        }
+        if (mutating) {
+          final expectedMutation = _parseMutationVersion(parameters);
+          if (expectedMutation != null) {
+            final versionResult = await _callExtensionImmediate(
+              'ext.flutterpilot.getScreenHash',
+              const {},
             );
-            if (generation != _connectionGeneration && !result.isError) {
+            final actualMutation = _extractMutationVersion(versionResult);
+            if (actualMutation == null || actualMutation != expectedMutation) {
               return _ExtensionResult.error(
-                'Operation $operationId completed against a stale app connection. Retry against the current device.',
-                ErrorCategory.staleOperation,
+                'Mutation precondition failed for $operationId: expected '
+                'context version $expectedMutation, but the active app is at '
+                '${actualMutation ?? 'an unknown version'}. Re-read the screen '
+                'state and retry with the latest contextVersion.',
+                ErrorCategory.preconditionFailed,
               ).withOperationId(operationId);
             }
-            return result.withOperationId(operationId);
-          },
-        )
-        .timeout(
-          _operationDeadline(parameters),
-          onTimeout: () => _ExtensionResult.error(
-            'Operation $operationId exceeded its server deadline. The queued '
-            'operation remains serialized; retry after checking app state.',
-            ErrorCategory.deadlineExceeded,
-          ).withOperationId(operationId),
-        );
+          }
+        }
+        final callParameters = Map<String, dynamic>.from(parameters)
+          ..remove('operationDeadlineMs');
+        final result = await _callExtensionImmediate(extension, callParameters);
+        if (generation != _connectionGeneration && !result.isError) {
+          return _ExtensionResult.error(
+            'Operation $operationId completed against a stale app connection. Retry against the current device.',
+            ErrorCategory.staleOperation,
+          ).withOperationId(operationId);
+        }
+        return result.withOperationId(operationId);
+      },
+    );
+    _operationCancellers[operationId] = scheduled.cancel;
+    try {
+      return await scheduled.future.timeout(
+        _operationDeadline(parameters),
+        onTimeout: () => _ExtensionResult.error(
+          'Operation $operationId exceeded its server deadline. The queued '
+          'operation remains serialized; retry after checking app state.',
+          ErrorCategory.deadlineExceeded,
+        ).withOperationId(operationId),
+      );
+    } on OperationCancelledException {
+      return _ExtensionResult.error(
+        'Operation $operationId was cancelled before it started.',
+        ErrorCategory.cancelled,
+      ).withOperationId(operationId);
+    } finally {
+      _operationCancellers.remove(operationId);
+    }
   }
+
+  @override
+  bool _cancelOperation(String operationId) =>
+      _operationCancellers[operationId]?.call() ?? false;
 
   static int? _parseMutationVersion(Map<String, dynamic> parameters) {
     final value = parameters['ifMutation'] ?? parameters['ifVersion'];
@@ -948,6 +960,9 @@ enum ErrorCategory {
 
   /// The server-side operation deadline elapsed before completion.
   deadlineExceeded,
+
+  /// The operation was cancelled before it started running.
+  cancelled,
 }
 
 class _ExtensionResult {
