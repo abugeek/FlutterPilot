@@ -2,6 +2,8 @@
 
 Complete reference of the MCP tools available through FlutterPilot Server. The runtime set is versioned and may vary with installed plugins; call `get_capabilities` for the authoritative list.
 
+The schema-derived snapshot is generated at [TOOLS.generated.md](TOOLS.generated.md). Refresh it from the repository root with `dart run packages/flutterpilot_server/tool/generate_tools_doc.dart` after changing tool registration.
+
 **Table of Contents:**
 - [Screenshots & Visual Regression](#screenshots--layout) (5 tools)
 - [UI Automation & Visual AI Overlay](#ui-automation) (15 tools)
