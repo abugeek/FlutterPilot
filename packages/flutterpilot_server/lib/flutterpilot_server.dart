@@ -48,6 +48,7 @@ abstract class _FlutterPilotServerBase {
   Future<bool> _connectWithUri([String? targetUri]);
 
   bool _cancelOperation(String operationId);
+  _BackgroundOperation? _getBackgroundOperation(String operationId);
 
   Future<_ExtensionResult> _callExtensionRaw(
     String extension,
@@ -123,6 +124,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   int _nextOperationId = 0;
   final Map<String, OperationScheduler> _operationSchedulers = {};
   final Map<String, bool Function()> _operationCancellers = {};
+  final Map<String, _BackgroundOperation> _backgroundOperations = {};
+  static const int _maxBackgroundOperations = 100;
 
   FlutterPilotServer({
     String? vmServiceUri,
@@ -618,6 +621,10 @@ Use this guide to understand what tools to call, when, and in what order.
       'operationDeadlineMs': JsonSchema.integer(
         description: 'Optional server deadline, clamped to 100–120000 ms.',
       ),
+      'async': JsonSchema.boolean(
+        description:
+            'Return immediately with an operation ID; poll using get_operation.',
+      ),
     };
     server.registerTool(
       name,
@@ -664,11 +671,62 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
+    final asyncRequested =
+        parameters['async'] == true ||
+        parameters['async']?.toString().toLowerCase() == 'true';
+    if (asyncRequested) {
+      final suppliedOperationId = parameters['operationId']?.toString();
+      final operationId =
+          suppliedOperationId == null || suppliedOperationId.isEmpty
+          ? 'op-${++_nextOperationId}'
+          : suppliedOperationId;
+      if (_backgroundOperations.containsKey(operationId)) {
+        return _ExtensionResult.error(
+          'Operation ID "$operationId" is already in use.',
+          ErrorCategory.validation,
+        ).withOperationId(operationId);
+      }
+      final asyncParameters = Map<String, dynamic>.from(parameters)
+        ..remove('async')
+        ..['operationId'] = operationId;
+      final background = _BackgroundOperation(operationId);
+      _backgroundOperations[operationId] = background;
+      while (_backgroundOperations.length > _maxBackgroundOperations) {
+        _backgroundOperations.remove(_backgroundOperations.keys.first);
+      }
+      final future = _callExtensionScheduled(
+        extension,
+        asyncParameters,
+        operationId,
+      );
+      background.future = future;
+      future.then<void>(
+        (result) => background.result = result,
+        onError: (Object error, StackTrace stackTrace) {
+          background.result = _ExtensionResult.error(
+            error.toString(),
+            ErrorCategory.extensionError,
+          ).withOperationId(operationId);
+        },
+      );
+      return _ExtensionResult.success({
+        'status': 'accepted',
+        'operationId': operationId,
+      }).withOperationId(operationId);
+    }
     final suppliedOperationId = parameters['operationId']?.toString();
     final operationId =
         suppliedOperationId == null || suppliedOperationId.isEmpty
         ? 'op-${++_nextOperationId}'
         : suppliedOperationId;
+    return _callExtensionScheduled(extension, parameters, operationId);
+  }
+
+  Future<_ExtensionResult> _callExtensionScheduled(
+    String extension,
+    Map<String, dynamic> parameters,
+    String operationId,
+  ) async {
     final mutating = !_isReadOnlyExtension(extension);
     final connectionKey = _vmServiceUri ?? 'unconnected';
     final generation = _connectionGeneration;
@@ -746,6 +804,10 @@ Use this guide to understand what tools to call, when, and in what order.
   @override
   bool _cancelOperation(String operationId) =>
       _operationCancellers[operationId]?.call() ?? false;
+
+  @override
+  _BackgroundOperation? _getBackgroundOperation(String operationId) =>
+      _backgroundOperations[operationId];
 
   static int? _parseMutationVersion(Map<String, dynamic> parameters) {
     final value = parameters['ifMutation'] ?? parameters['ifVersion'];
@@ -986,6 +1048,14 @@ Use this guide to understand what tools to call, when, and in what order.
 // ---------------------------------------------------------------------------
 // Internal DTO for VM extension call results
 // ---------------------------------------------------------------------------
+
+class _BackgroundOperation {
+  _BackgroundOperation(this.operationId);
+
+  final String operationId;
+  Future<_ExtensionResult>? future;
+  _ExtensionResult? result;
+}
 
 /// Category of error returned by a tool call, enabling AI agents to decide
 /// whether to retry, call a different tool, or report the failure.

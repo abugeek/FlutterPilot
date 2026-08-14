@@ -4,6 +4,53 @@ part of '../../flutterpilot_server.dart';
 mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
   void _registerAppInspectionTools() {
     server.registerTool(
+      'get_operation',
+      description:
+          'Polls an asynchronous operation submitted with async:true. '
+          'Returns pending, completed, or failed status.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'operationId': JsonSchema.string(
+            description: 'The operation ID returned by the async submission.',
+          ),
+        },
+        required: ['operationId'],
+      ),
+      callback: (params, extra) async {
+        final operationId = params['operationId'] as String?;
+        if (operationId == null || operationId.isEmpty) {
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: 'Missing operationId.')],
+          );
+        }
+        final operation = _getBackgroundOperation(operationId);
+        if (operation == null) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'Unknown or expired operation $operationId.'),
+            ],
+          );
+        }
+        final result = operation.result;
+        if (result == null) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: jsonEncode({
+                  'status': 'pending',
+                  'operationId': operationId,
+                }),
+              ),
+            ],
+          );
+        }
+        return result.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
       'cancel_operation',
       description:
           'Cancels a queued FlutterPilot operation before it starts. '
