@@ -52,8 +52,20 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final routeBefore = NavigationTracker.currentRoute;
-      final ro = element.renderObject;
-      if (ro is RenderBox && ro.hasSize) {
+      RenderObject? ro = element.renderObject;
+      if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
+        try {
+          await Scrollable.ensureVisible(
+            element,
+            duration: const Duration(milliseconds: 150),
+            alignment: 0.5,
+          );
+          await InteractionManager.pumpAndSettleAdaptive();
+          ro = element.renderObject;
+        } catch (_) {}
+      }
+
+      if (ro is RenderBox && ro.hasSize && ro.attached) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('tapWidget', {'key': target});
@@ -620,13 +632,16 @@ extension _WidgetExtensions on FlutterPilot {
         final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
         final compact = parameters['compact'] != 'false';
         final rootQuery = parameters['rootKey'] ?? parameters['rootSelector'] ?? parameters['root'];
+        final tree = PilotWidgetInspector.captureWidgetTree(
+          maxDepth: maxDepth,
+          compact: compact,
+          rootQuery: rootQuery,
+        );
+        PilotWidgetInspector.lastCapturedTree = tree;
         return ServiceExtensionResponse.result(
           json.encode({
-            'tree': PilotWidgetInspector.captureWidgetTree(
-              maxDepth: maxDepth,
-              compact: compact,
-              rootQuery: rootQuery,
-            ),
+            'tree': tree,
+            'mutationCount': FlutterPilot.screenMutationCount,
           }),
         );
       } catch (e) {
@@ -635,6 +650,48 @@ extension _WidgetExtensions on FlutterPilot {
           'Error: $e',
         );
       }
+    });
+
+    // -- ext.flutterpilot.getWidgetTreeDiff -----------------------------------
+    registerExtension('ext.flutterpilot.getWidgetTreeDiff', (
+      method,
+      parameters,
+    ) async {
+      try {
+        final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
+        final compact = parameters['compact'] != 'false';
+        final currentTree = PilotWidgetInspector.captureWidgetTree(
+          maxDepth: maxDepth,
+          compact: compact,
+        );
+        final oldTree = PilotWidgetInspector.lastCapturedTree ?? {'type': 'Empty'};
+        final diff = PilotWidgetInspector.diffWidgetTrees(oldTree, currentTree);
+        PilotWidgetInspector.lastCapturedTree = currentTree;
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'diff': diff,
+            'mutationCount': FlutterPilot.screenMutationCount,
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Error: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.getScreenHash ---------------------------------------
+    registerExtension('ext.flutterpilot.getScreenHash', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'mutationCount': FlutterPilot.screenMutationCount,
+          'currentRoute': NavigationTracker.currentRoute,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.assertWidgetVisible ---------------------------------

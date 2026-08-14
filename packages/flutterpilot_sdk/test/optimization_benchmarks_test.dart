@@ -145,5 +145,29 @@ void main() {
       expect(scopedJson, contains('Submit Form'));
       expect(scopedJson, isNot(contains('Header Background')));
     });
+
+    test('diffWidgetTrees calculates delta between two states accurately', () {
+      final tree1 = {
+        'type': 'Column',
+        'children': [
+          {'type': 'Text', 'text': 'Welcome User'},
+          {'type': 'ElevatedButton', 'key': 'login_btn', 'text': 'Login'},
+        ],
+      };
+
+      final tree2 = {
+        'type': 'Column',
+        'children': [
+          {'type': 'Text', 'text': 'Welcome Alice!'},
+          {'type': 'ElevatedButton', 'key': 'logout_btn', 'text': 'Logout'},
+          {'type': 'Text', 'key': 'badge', 'text': 'Pro Member'},
+        ],
+      };
+
+      final diff = PilotWidgetInspector.diffWidgetTrees(tree1, tree2);
+      expect(diff['hasChanges'], isTrue);
+      expect(diff['added'], contains(contains('badge')));
+      expect(diff['removed'], contains(contains('login_btn')));
+    });
   });
 }

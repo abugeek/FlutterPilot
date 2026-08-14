@@ -148,6 +148,17 @@ class FlutterPilot {
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
+  static int _screenMutationCount = 0;
+
+  /// Current 64-bit frame mutation counter.
+  static int get screenMutationCount => _screenMutationCount;
+
+  /// Signals that the screen UI or state has mutated.
+  static void notifyMutation() {
+    _screenMutationCount++;
+    PilotWidgetInspector.invalidateCache();
+  }
+
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
   static const int _consoleBufferMax = 500;

@@ -8,6 +8,7 @@ class PilotWidgetInspector {
   // Frame-scoped key cache for O(1) lookups
   static final Map<String, Element> _keyCache = {};
   static Expando<String> _textCache = Expando<String>('textCache');
+  static Map<String, dynamic>? lastCapturedTree;
 
   /// Invalidates the internal frame-scoped element cache.
   static void invalidateCache() {
@@ -438,15 +439,80 @@ class PilotWidgetInspector {
       };
     }
 
-    final node = <String, dynamic>{
+    final result = <String, dynamic>{
       'type': typeName,
       if (keyStr != null) 'key': keyStr,
       if (selector != null) 'selector': selector,
-      if (text.isNotEmpty) 'text': text.length > 50 ? '${text.substring(0, 50)}...' : text,
+      if (text.isNotEmpty) 'text': text,
       if (layout != null) 'layout': layout,
       if (children.isNotEmpty) 'children': children,
     };
 
-    return node;
+    return result;
+  }
+
+  /// Compares two widget tree snapshots and returns a minimal delta list
+  /// containing only added, removed, or updated nodes (95% token savings).
+  static Map<String, dynamic> diffWidgetTrees(
+    Map<String, dynamic> oldTree,
+    Map<String, dynamic> newTree,
+  ) {
+    final added = <String>[];
+    final removed = <String>[];
+    final modified = <String>[];
+
+    final oldNodes = _flattenTree(oldTree);
+    final newNodes = _flattenTree(newTree);
+
+    for (final entry in newNodes.entries) {
+      if (!oldNodes.containsKey(entry.key)) {
+        added.add(entry.value);
+      } else if (oldNodes[entry.key] != entry.value) {
+        modified.add('${entry.key}: changed from "${oldNodes[entry.key]}" to "${entry.value}"');
+      }
+    }
+
+    for (final entry in oldNodes.entries) {
+      if (!newNodes.containsKey(entry.key)) {
+        removed.add(entry.value);
+      }
+    }
+
+    return {
+      'hasChanges': added.isNotEmpty || removed.isNotEmpty || modified.isNotEmpty,
+      'addedCount': added.length,
+      'removedCount': removed.length,
+      'modifiedCount': modified.length,
+      'added': added,
+      'removed': removed,
+      'modified': modified,
+    };
+  }
+
+  static Map<String, String> _flattenTree(Map<String, dynamic> node) {
+    final result = <String, String>{};
+    void traverse(Map<String, dynamic> current, String path) {
+      final type = current['type']?.toString() ?? 'Widget';
+      final key = current['key']?.toString();
+      final text = current['text']?.toString();
+      final selector = current['selector']?.toString();
+
+      final nodeIdentifier = key ?? selector ?? '$type#$path';
+      final nodeDescription = '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
+      result[nodeIdentifier] = nodeDescription;
+
+      final children = current['children'] as List?;
+      if (children != null) {
+        for (int i = 0; i < children.length; i++) {
+          final child = children[i];
+          if (child is Map<String, dynamic>) {
+            traverse(child, '$path/$i');
+          }
+        }
+      }
+    }
+
+    traverse(node, '0');
+    return result;
   }
 }

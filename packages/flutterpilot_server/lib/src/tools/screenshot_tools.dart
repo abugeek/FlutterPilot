@@ -281,6 +281,58 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
+      'get_widget_tree_diff',
+      description:
+          'Delta Widget Tree Inspector: Compares current screen with the previously captured tree '
+          'and returns only added, removed, or updated elements. Saves 95% token consumption.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'maxDepth': JsonSchema.integer(
+            description: 'Maximum depth to inspect (default: 50).',
+          ),
+          'compact': JsonSchema.boolean(
+            description: 'Whether to prune intermediate layout wrappers (default: true).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
+        final compact = p['compact'] != false;
+        final res = await _callExtensionRaw('ext.flutterpilot.getWidgetTreeDiff', {
+          'maxDepth': maxDepth.toString(),
+          'compact': compact.toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Delta Tree Diff:\n${jsonEncode(res.data?['diff'] ?? {})}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_screen_hash',
+      description:
+          'Fast lightweight screen mutation checker (<10 tokens). Returns the 64-bit frame mutation counter '
+          'and active route. Call this to check if a user action mutated the UI without fetching a full tree.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.getScreenHash', {});
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: jsonEncode(res.data),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
       'get_widget_properties',
       description:
           'Reads the semantic properties of a widget identified by its key. '

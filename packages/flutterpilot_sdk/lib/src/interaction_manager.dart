@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'ai_overlay_manager.dart';
 
@@ -82,17 +83,32 @@ class InteractionManager {
     return {'x': position.dx, 'y': position.dy};
   }
 
-  /// Simulates a physical tap (pointer down + 50 ms delay + pointer up) at
-  /// the given screen [position].
-  ///
-  /// Used by the `ext.flutterpilot.tapAt` and `ext.flutterpilot.tapWidget`
-  /// service extensions to drive the UI programmatically.
+  /// Adaptively waits for any active Flutter frame animations or microtasks to settle.
+  /// Resolves in ~16ms for static taps instead of waiting for arbitrary fixed delays.
+  static Future<void> pumpAndSettleAdaptive({
+    Duration timeout = const Duration(milliseconds: 1000),
+    Duration step = const Duration(milliseconds: 16),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final scheduler = SchedulerBinding.instance;
+      final hasPendingFrame = scheduler.hasScheduledFrame || scheduler.transientCallbackCount > 0;
+      if (!hasPendingFrame) {
+        await Future.microtask(() {});
+        return;
+      }
+      await Future.delayed(step);
+    }
+  }
+
+  /// Simulates a physical tap at the given screen [position] and adaptively settles.
   static Future<void> tapAt(Offset position, {String? label}) async {
     AiOverlayManager.showAction(position, label ?? 'Tap');
     final pointer = TestPointer(1, PointerDeviceKind.touch);
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
-    await Future.delayed(const Duration(milliseconds: 50));
+    await Future.delayed(const Duration(milliseconds: 30));
     GestureBinding.instance.handlePointerEvent(pointer.up());
+    await pumpAndSettleAdaptive();
   }
 
   /// Simulates a double-tap at [position].
