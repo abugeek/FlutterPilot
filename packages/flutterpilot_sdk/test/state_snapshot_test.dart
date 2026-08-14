@@ -9,6 +9,11 @@ void main() {
     setUp(() {
       StateSnapshotManager.clear();
       NavigationTracker.reset();
+      StateSnapshotManager.onCaptureStates = null;
+      StateSnapshotManager.onRestoreStates = null;
+      StateSnapshotManager.onCaptureStorage = null;
+      StateSnapshotManager.onRestoreStorage = null;
+      StateSnapshotManager.onRestoreNavigation = null;
     });
 
     test('saves named state snapshot with route and state values', () {
@@ -25,7 +30,9 @@ void main() {
       expect(list.first['name'], equals('test_checkout'));
     });
 
-    testWidgets('restores named state snapshot and executes restore delegate', (tester) async {
+    testWidgets('restores named state snapshot and executes restore delegate', (
+      tester,
+    ) async {
       final mockState = {'riverpod:counter': 100};
       StateSnapshotManager.onCaptureStates = () => mockState;
       StateSnapshotManager.saveSnapshot('snap_100');
@@ -52,7 +59,10 @@ void main() {
       final deleted = StateSnapshotManager.deleteSnapshot('snap_a');
       expect(deleted, isTrue);
       expect(StateSnapshotManager.listSnapshots().length, equals(1));
-      expect(StateSnapshotManager.listSnapshots().first['name'], equals('snap_b'));
+      expect(
+        StateSnapshotManager.listSnapshots().first['name'],
+        equals('snap_b'),
+      );
     });
 
     test('exports and imports snapshots JSON', () {
@@ -70,6 +80,41 @@ void main() {
       expect(count, equals(1));
       expect(StateSnapshotManager.listSnapshots().length, equals(1));
       expect(StateSnapshotManager.getSnapshot('export_test'), isNotNull);
+    });
+
+    test('captures and restores storage and navigation delegates', () async {
+      StateSnapshotManager.onCaptureStates = () => {'state': 1};
+      StateSnapshotManager.onCaptureStorage = () => {'session': 'test'};
+      final snapshot = StateSnapshotManager.saveSnapshot('complete');
+
+      expect(snapshot.storage['session'], equals('test'));
+
+      Map<String, dynamic>? restoredStorage;
+      String? restoredRoute;
+      List<String>? restoredStack;
+      StateSnapshotManager.onRestoreStorage = (storage) async {
+        restoredStorage = storage;
+      };
+      StateSnapshotManager.onRestoreNavigation = (route, stack) async {
+        restoredRoute = route;
+        restoredStack = stack;
+      };
+
+      expect(await StateSnapshotManager.restoreSnapshot('complete'), isTrue);
+      expect(restoredStorage, equals({'session': 'test'}));
+      expect(restoredRoute, equals('Unknown'));
+      expect(restoredStack, isEmpty);
+    });
+
+    test('converts sets and custom values to JSON-safe snapshot values', () {
+      StateSnapshotManager.onCaptureStates = () => {
+        'set': {'a', 'b'},
+        'date': DateTime.utc(2026, 1, 1),
+        'custom': Object(),
+      };
+      StateSnapshotManager.saveSnapshot('json_safe');
+
+      expect(() => StateSnapshotManager.exportJson(), returnsNormally);
     });
   });
 }

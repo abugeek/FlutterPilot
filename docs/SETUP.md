@@ -460,7 +460,7 @@ After setup:
 1. **Verify tools work**: Run `get_app_summary` → should show current route
 2. **Check plugins**: Run `get_capabilities` → shows loaded plugins
 3. **Test AI integration**: Try with Claude or Cursor
-4. **Read [TOOLS.md](../TOOLS.md)** → All 83 tools reference
+4. **Read [TOOLS.md](../TOOLS.md)** → MCP tools reference; call `get_capabilities` for the runtime set
 
 ---
 

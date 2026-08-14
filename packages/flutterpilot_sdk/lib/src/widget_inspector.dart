@@ -7,13 +7,40 @@ class PilotWidgetInspector {
 
   // Frame-scoped key cache for O(1) lookups
   static final Map<String, Element> _keyCache = {};
+  static final Map<String, Element> _keyIndex = {};
+  static bool _keyIndexValid = false;
   static Expando<String> _textCache = Expando<String>('textCache');
   static Map<String, dynamic>? lastCapturedTree;
 
   /// Invalidates the internal frame-scoped element cache.
   static void invalidateCache() {
     _keyCache.clear();
+    _keyIndex.clear();
+    _keyIndexValid = false;
     _textCache = Expando<String>('textCache');
+  }
+
+  static void _buildKeyIndex(Element root) {
+    if (_keyIndexValid) return;
+    _keyIndex.clear();
+    void visit(Element element) {
+      final key = element.widget.key;
+      if (key != null) {
+        _keyIndex.putIfAbsent(key.toString(), () => element);
+        if (key is ValueKey) {
+          _keyIndex.putIfAbsent(key.value.toString(), () => element);
+        }
+      }
+      element.visitChildren(visit);
+    }
+    visit(root);
+    _keyIndexValid = true;
+  }
+
+  static Element? _findIndexedKey(Element root, String query) {
+    if (query.contains('->') || query.contains('[') || query.contains(':')) return null;
+    _buildKeyIndex(root);
+    return _keyIndex[query] ?? _keyIndex["['$query']"] ?? _keyIndex["[<'$query'>]"];
   }
 
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
@@ -55,6 +82,11 @@ class PilotWidgetInspector {
     // 1. O(1) Key Cache Lookup
     final cached = _keyCache[cleanQuery];
     if (cached != null && cached.mounted) return cached;
+    final indexed = _findIndexedKey(root, cleanQuery);
+    if (indexed != null && indexed.mounted) {
+      _keyCache[cleanQuery] = indexed;
+      return indexed;
+    }
 
     // 2. Chained Hierarchy Evaluation ("Parent -> Child")
     if (cleanQuery.contains('->')) {
@@ -333,6 +365,14 @@ class PilotWidgetInspector {
   static Element? findElementByKey(String keyString) {
     final cached = _keyCache[keyString];
     if (cached != null && cached.mounted) return cached;
+    final root = WidgetsBinding.instance.rootElement;
+    if (root != null) {
+      final indexed = _findIndexedKey(root, keyString);
+      if (indexed != null && indexed.mounted) {
+        _keyCache[keyString] = indexed;
+        return indexed;
+      }
+    }
 
     Element? found;
     void search(Element element) {
@@ -348,7 +388,6 @@ class PilotWidgetInspector {
       element.visitChildren(search);
     }
 
-    final root = WidgetsBinding.instance.rootElement;
     if (root != null) search(root);
     return found;
   }

@@ -353,7 +353,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         try {
           final resolved = file.resolveSymbolicLinksSync();
           final projectCanonical = _projectRoot.resolveSymbolicLinksSync();
-          if (!resolved.startsWith(projectCanonical)) {
+          final relative = path.relative(resolved, from: projectCanonical);
+          if (relative == '..' || relative.startsWith('..${Platform.pathSeparator}')) {
             return CallToolResult(
               content: [
                 TextContent(

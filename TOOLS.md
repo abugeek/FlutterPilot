@@ -1,6 +1,6 @@
 # FlutterPilot Tools Reference
 
-Complete reference of all **110+ MCP tools** available through FlutterPilot Server.
+Complete reference of the MCP tools available through FlutterPilot Server. The runtime set is versioned and may vary with installed plugins; call `get_capabilities` for the authoritative list.
 
 **Table of Contents:**
 - [Screenshots & Visual Regression](#screenshots--layout) (5 tools)

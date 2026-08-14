@@ -1,4 +1,5 @@
 import 'ring_buffer.dart';
+import 'diagnostic_payload.dart';
 
 /// Real-time stream and WebSocket event inspector for FlutterPilot.
 ///
@@ -19,7 +20,7 @@ class StreamInspector {
       'channel': channel,
       'direction': direction,
       'type': type ?? 'message',
-      'payload': payload,
+      'payload': DiagnosticPayload.sanitize(payload),
       'timestamp': DateTime.now().toIso8601String(),
     });
   }

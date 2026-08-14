@@ -54,5 +54,13 @@ void main() {
       expect(buffer.isEmpty, isTrue);
       expect(buffer.length, equals(0));
     });
+
+    test('Removes the oldest element in FIFO order', () {
+      final buffer = RingBuffer<int>(3);
+      buffer.addAll([1, 2, 3]);
+      expect(buffer.removeFirst(), equals(1));
+      expect(buffer.toList(), equals([2, 3]));
+      expect(buffer.removeFirst(), equals(2));
+    });
   });
 }

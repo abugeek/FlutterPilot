@@ -103,7 +103,9 @@ class FlutterPilot {
   static final Map<String, String? Function(String name)> _stateReaders = {};
   static bool _isRecording = false;
   static const int _maxRecordedActions = 5000;
-  static final RingBuffer<Map<String, dynamic>> _recordedActions = RingBuffer(_maxRecordedActions);
+  static final RingBuffer<Map<String, dynamic>> _recordedActions = RingBuffer(
+    _maxRecordedActions,
+  );
   // Held to keep the semantics tree alive once enabled.
   static SemanticsHandle? _semanticsHandle;
 
@@ -166,7 +168,11 @@ class FlutterPilot {
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
   static const int _consoleBufferMax = 500;
-  static final RingBuffer<Map<String, dynamic>> _consoleBuffer = RingBuffer(_consoleBufferMax);
+  static const int _consoleBufferMaxBytes = 1024 * 1024;
+  static final RingBuffer<Map<String, dynamic>> _consoleBuffer = RingBuffer(
+    _consoleBufferMax,
+  );
+  static int _consoleBufferBytes = 0;
 
   /// Returns a copy of the captured console log buffer (up to 500 entries).
   /// Each entry has keys: `timestamp`, `level`, `logger`, `message`.
@@ -204,7 +210,10 @@ class FlutterPilot {
   static void _setupModules() {
     // Navigation
     NavigationTracker.onStateChange = (source, name, value) {
-      FlightRecorder.recordRoute(name, {'source': source, 'value': _safeJsonEncode(value)});
+      FlightRecorder.recordRoute(name, {
+        'source': source,
+        'value': _safeJsonEncode(value),
+      });
       logStateChange(source, name, value);
     };
 
@@ -281,15 +290,27 @@ class FlutterPilot {
     String level = 'info',
     String logger = '',
   }) {
+    final safeMessage = _redactDiagnosticText(message);
     final entry = {
       'timestamp': DateTime.now().toIso8601String(),
       'level': level,
       'logger': logger,
-      'message': message,
+      'message': safeMessage,
     };
+    _consoleBufferBytes += utf8.encode(jsonEncode(entry)).length;
     _consoleBuffer.add(entry);
+    while (_consoleBufferBytes > _consoleBufferMaxBytes &&
+        _consoleBuffer.isNotEmpty) {
+      final removed = _consoleBuffer.removeFirst();
+      _consoleBufferBytes -= utf8.encode(jsonEncode(removed)).length;
+    }
     // Forward to dart:developer so the VM Logging stream carries it too.
-    log(message, name: logger.isEmpty ? 'flutterpilot' : logger);
+    log(safeMessage, name: logger.isEmpty ? 'flutterpilot' : logger);
+  }
+
+  static void _clearConsoleBuffer() {
+    _consoleBuffer.clear();
+    _consoleBufferBytes = 0;
   }
 
   /// Registers a custom tool that can be invoked remotely via the
@@ -533,23 +554,60 @@ class FlutterPilot {
     }
   }
 
-  static dynamic _safeJsonEncode(dynamic object, [int depth = 0]) {
+  static const int _maxDiagnosticStringLength = 10000;
+  static const int _maxDiagnosticCollectionItems = 500;
+  static final RegExp _sensitiveKey = RegExp(
+    r'(password|passwd|secret|token|api[_-]?key|authorization|cookie|private[_-]?key|client[_-]?secret)',
+    caseSensitive: false,
+  );
+
+  static String _redactDiagnosticText(String value) {
+    if (value.length > _maxDiagnosticStringLength) {
+      value = '${value.substring(0, _maxDiagnosticStringLength)}…<truncated>';
+    }
+    return value.replaceAll(
+      RegExp(r'(Bearer\s+)[A-Za-z0-9._~-]+', caseSensitive: false),
+      r'${1}<redacted>',
+    );
+  }
+
+  static dynamic _safeJsonEncode(dynamic object, [int depth = 0, String? key]) {
     if (depth > 10) return '<max depth exceeded>';
+    if (key != null && _sensitiveKey.hasMatch(key)) return '<redacted>';
     if (object == null || object is num || object is bool || object is String) {
-      return object;
+      return object is String ? _redactDiagnosticText(object) : object;
     }
     if (object is Map) {
-      return object.map(
-        (k, v) => MapEntry(k.toString(), _safeJsonEncode(v, depth + 1)),
-      );
+      final entries = object.entries.take(_maxDiagnosticCollectionItems);
+      final result = <String, dynamic>{
+        for (final entry in entries)
+          entry.key.toString(): _safeJsonEncode(
+            entry.value,
+            depth + 1,
+            entry.key.toString(),
+          ),
+      };
+      if (object.length > _maxDiagnosticCollectionItems) {
+        result['<truncated>'] = object.length - _maxDiagnosticCollectionItems;
+      }
+      return result;
     }
     if (object is Iterable) {
-      return object.map((e) => _safeJsonEncode(e, depth + 1)).toList();
+      final values = object
+          .take(_maxDiagnosticCollectionItems)
+          .map((e) => _safeJsonEncode(e, depth + 1))
+          .toList();
+      if (object.length > _maxDiagnosticCollectionItems) {
+        values.add(
+          '<truncated: ${object.length - _maxDiagnosticCollectionItems} items>',
+        );
+      }
+      return values;
     }
     try {
-      return (object as dynamic).toJson();
+      return _safeJsonEncode((object as dynamic).toJson(), depth + 1, key);
     } on NoSuchMethodError catch (_) {
-      return object.toString();
+      return _redactDiagnosticText(object.toString());
     }
   }
 
@@ -562,7 +620,10 @@ class FlutterPilot {
               .implicitView
               ?.devicePixelRatio ??
           1.0;
-      final targetPixelRatio = (basePixelRatio * scale).clamp(0.2, basePixelRatio);
+      final targetPixelRatio = (basePixelRatio * scale).clamp(
+        0.2,
+        basePixelRatio,
+      );
       RenderRepaintBoundary? boundary;
       void findBoundary(RenderObject object) {
         if (boundary != null) return;

@@ -15,7 +15,7 @@ How to use FlutterPilot with Claude, ChatGPT, Cursor, and other AI coding assist
 
 ## Overview
 
-FlutterPilot exposes all app state and UI through **83 MCP tools**. AI agents can:
+FlutterPilot exposes app state and UI through a versioned MCP tool set. AI agents should call `get_capabilities` first to discover the exact tools and plugins available at runtime:
 
 ✅ **Understand** the current UI and state  
 ✅ **Inspect** widgets, navigation, and state managers  
@@ -101,7 +101,7 @@ Close and reopen Claude Desktop. In a new conversation, you should see:
 ```
 MCP Server: flutterpilot
 Status: Connected ✓
-Available Tools: 83
+Available Tools: discover at runtime with `get_capabilities`
 ```
 
 #### Step 4: Use FlutterPilot

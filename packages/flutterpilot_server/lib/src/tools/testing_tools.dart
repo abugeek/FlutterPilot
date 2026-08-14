@@ -59,10 +59,14 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         },
         required: ['name'],
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.callCustomTool',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.callCustomTool',
+          p,
+        );
+        return res.toCallToolResult();
+      },
     );
 
     server.registerTool(

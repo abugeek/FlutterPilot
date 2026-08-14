@@ -13,7 +13,7 @@ FlutterPilot documentation is organized into focused guides:
 
 ### **Using FlutterPilot**
 - **[AI_AGENTS.md](./AI_AGENTS.md)** — How to use with Claude, ChatGPT, Cursor
-- **[TOOLS.md](../TOOLS.md)** — Complete reference for all 83 MCP tools
+- **[TOOLS.md](../TOOLS.md)** — Complete reference for the current MCP tool set
 - **[BEST_PRACTICES.md](./BEST_PRACTICES.md)** — Production patterns and recommendations
 
 ### **Development**
@@ -46,7 +46,7 @@ FlutterPilot documentation is organized into focused guides:
 
 #### Know what tools are available
 → Go to [../TOOLS.md](../TOOLS.md)
-- 83 tools reference with examples
+- MCP tools reference with examples
 - Categorized by function
 - Parameter documentation
 

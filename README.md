@@ -5,9 +5,9 @@
 [![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.0-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-%5E3.11-0175C2?logo=dart)](https://dart.dev)
 
-**FlutterPilot** is a production-ready MCP (Model Context Protocol) toolkit that gives AI agents complete runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, network chaos mocking, visual regression diffing, and AI-native development workflows.
+**FlutterPilot** is an MCP (Model Context Protocol) toolkit that gives AI agents runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, network chaos mocking, visual regression diffing, and AI-native development workflows.
 
-> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with **110+ tools** for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage.
+> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with a broad, versioned tool set for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage. Call `get_capabilities` to discover the exact runtime set.
 
 ## 🚀 Quick Start (Choose Your Workflow)
 
@@ -52,7 +52,7 @@ void main() {
 
 ## 📋 What You Get
 
-### 110+ MCP Tools Across 10 Categories
+### MCP Tools Across 10 Categories
 
 #### 🎬 **Screenshots & Visual Regression Diff Engine** (5 tools)
 - `capture_screenshot` — PNG screenshot as MCP Image
@@ -179,7 +179,7 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │          flutterpilot_server (modular)               │
-│  • 105 MCP tools with full schemas + param descriptions│
+│  • Versioned MCP tools with full schemas + parameter descriptions│
 │  • Organized into 9 tool categories (part files)      │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge with auto-reconnect             │

@@ -26,6 +26,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'currentRoute': NavigationTracker.currentRoute,
           'errorCount': ErrorInspector.errors.length,
           'isRecording': FlutterPilot._isRecording,
+          'contextVersion': FlutterPilot.screenMutationCount,
           'widgetCount': root != null
               ? PilotWidgetInspector.countElements(root)
               : 0,
@@ -184,7 +185,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      FlutterPilot._consoleBuffer.clear();
+      FlutterPilot._clearConsoleBuffer();
       return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
 

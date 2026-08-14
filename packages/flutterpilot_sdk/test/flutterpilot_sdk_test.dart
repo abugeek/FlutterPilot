@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
@@ -36,6 +37,15 @@ void main() {
         () => FlutterPilot.logStateChange('source', 'name', 'value'),
         returnsNormally,
       );
+    });
+
+    test('redacts bearer credentials and bounds captured console messages', () {
+      FlutterPilot.initialize();
+      final secret = 'Bearer test-secret-token-123';
+      debugPrint(secret);
+      final message = FlutterPilot.consoleBuffer.last['message'] as String;
+      expect(message, isNot(contains('test-secret-token-123')));
+      expect(message, contains('<redacted>'));
     });
   });
 }

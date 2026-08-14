@@ -67,11 +67,15 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         },
         required: ['provider', 'value'],
       ),
-      callback: (p, e) => _callExtensionRaw('ext.flutterpilot.setState', {
-        'type': 'riverpod',
-        'name': p['provider'],
-        'value': p['value'],
-      }).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = await _callExtensionRaw('ext.flutterpilot.setState', {
+          'type': 'riverpod',
+          'name': p['provider'],
+          'value': p['value'],
+        });
+        return res.toCallToolResult();
+      },
     );
 
     server.registerTool(
@@ -92,6 +96,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         required: ['states'],
       ),
       callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
         final type = (p['type'] as String?) ?? 'riverpod';
         final states = p['states'];
         final res = await _callExtensionRaw('ext.flutterpilot.batchSetState', {
@@ -143,11 +148,15 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         },
         required: ['cubit', 'state'],
       ),
-      callback: (p, e) => _callExtensionRaw('ext.flutterpilot.setState', {
-        'type': 'bloc',
-        'name': p['cubit'],
-        'value': p['state'],
-      }).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = await _callExtensionRaw('ext.flutterpilot.setState', {
+          'type': 'bloc',
+          'name': p['cubit'],
+          'value': p['state'],
+        });
+        return res.toCallToolResult();
+      },
     );
 
     _registerAppTool(
@@ -347,6 +356,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final sql = p['sql']?.toString() ?? '';
         final db = p['database']?.toString();
+        if (!allowDestructive && !_isReadOnlySql(sql)) {
+          return _destructiveOperationDenied();
+        }
 
         // 1. Try sqflite
         final sqfRes = await _callExtensionRaw('ext.flutterpilot.querySqflite', {
@@ -412,6 +424,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         required: ['key', 'value'],
       ),
       callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
         final res =
             await _callExtensionRaw('ext.flutterpilot.setSharedPreference', {
               'key': p['key'].toString(),
@@ -442,6 +455,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
         final res =
             await _callExtensionRaw('ext.flutterpilot.clearSharedPreferences', {
               if (p['key'] != null) 'key': p['key'].toString(),
@@ -574,6 +588,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         required: ['name'],
       ),
       callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
         final res = await _callExtensionRaw('ext.flutterpilot.restoreStateSnapshot', {
           'name': p['name'].toString(),
         });
@@ -624,6 +639,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         required: ['name'],
       ),
       callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
         final res = await _callExtensionRaw('ext.flutterpilot.deleteStateSnapshot', {
           'name': p['name'].toString(),
         });

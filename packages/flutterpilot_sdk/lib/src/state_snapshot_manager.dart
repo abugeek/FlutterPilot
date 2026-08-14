@@ -21,22 +21,22 @@ class StateSnapshot {
   });
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'timestamp': timestamp.toIso8601String(),
-        'currentRoute': currentRoute,
-        'navigationStack': navigationStack,
-        'states': states,
-        'storage': storage,
-      };
+    'name': name,
+    'timestamp': timestamp.toIso8601String(),
+    'currentRoute': currentRoute,
+    'navigationStack': navigationStack,
+    'states': states,
+    'storage': storage,
+  };
 
   factory StateSnapshot.fromJson(Map<String, dynamic> json) => StateSnapshot(
-        name: json['name'] as String,
-        timestamp: DateTime.parse(json['timestamp'] as String),
-        currentRoute: json['currentRoute'] as String?,
-        navigationStack: List<String>.from(json['navigationStack'] as List? ?? []),
-        states: Map<String, dynamic>.from(json['states'] as Map? ?? {}),
-        storage: Map<String, dynamic>.from(json['storage'] as Map? ?? {}),
-      );
+    name: json['name'] as String,
+    timestamp: DateTime.parse(json['timestamp'] as String),
+    currentRoute: json['currentRoute'] as String?,
+    navigationStack: List<String>.from(json['navigationStack'] as List? ?? []),
+    states: Map<String, dynamic>.from(json['states'] as Map? ?? {}),
+    storage: Map<String, dynamic>.from(json['storage'] as Map? ?? {}),
+  );
 }
 
 /// Manages in-memory and serialized time-travel state snapshots.
@@ -46,14 +46,24 @@ class StateSnapshotManager {
   // State capture and restoration delegates
   static Map<String, dynamic> Function()? onCaptureStates;
   static Future<void> Function(Map<String, dynamic> states)? onRestoreStates;
+  static Map<String, dynamic> Function()? onCaptureStorage;
+  static Future<void> Function(Map<String, dynamic> storage)? onRestoreStorage;
+  static Future<void> Function(String? route, List<String> stack)?
+  onRestoreNavigation;
 
   /// Saves the current point-in-time state as a named snapshot.
   static StateSnapshot saveSnapshot(String name) {
     final currentRoute = NavigationTracker.currentRoute;
     final navStack = NavigationTracker.stack.whereType<String>().toList();
-    final capturedStates = onCaptureStates != null ? onCaptureStates!() : <String, dynamic>{};
+    final capturedStates = onCaptureStates != null
+        ? onCaptureStates!()
+        : <String, dynamic>{};
+    final capturedStorage = onCaptureStorage != null
+        ? onCaptureStorage!()
+        : <String, dynamic>{};
 
     final clonedStates = _deepClone(capturedStates) as Map<String, dynamic>;
+    final clonedStorage = _deepClone(capturedStorage) as Map<String, dynamic>;
 
     final snapshot = StateSnapshot(
       name: name,
@@ -61,6 +71,7 @@ class StateSnapshotManager {
       currentRoute: currentRoute,
       navigationStack: List<String>.from(navStack),
       states: clonedStates,
+      storage: clonedStorage,
     );
 
     _snapshots[name] = snapshot;
@@ -73,9 +84,15 @@ class StateSnapshotManager {
     } else if (val is List) {
       return val.map(_deepClone).toList();
     } else if (val is Set) {
-      return val.map(_deepClone).toSet();
+      // JSON has no set type. Preserve the values while making the snapshot
+      // exportable and deterministic.
+      return val.map(_deepClone).toList();
+    } else if (val is DateTime) {
+      return val.toIso8601String();
+    } else if (val is num || val is bool || val is String || val == null) {
+      return val;
     }
-    return val;
+    return val.toString();
   }
 
   /// Restores application state to the named snapshot.
@@ -86,6 +103,17 @@ class StateSnapshotManager {
     // 1. Restore state values via delegate
     if (onRestoreStates != null && snapshot.states.isNotEmpty) {
       await onRestoreStates!(snapshot.states);
+    }
+
+    if (onRestoreStorage != null && snapshot.storage.isNotEmpty) {
+      await onRestoreStorage!(snapshot.storage);
+    }
+
+    if (onRestoreNavigation != null) {
+      await onRestoreNavigation!(
+        snapshot.currentRoute,
+        List<String>.unmodifiable(snapshot.navigationStack),
+      );
     }
 
     // 2. Rebuild the Flutter widget tree to reflect state changes immediately

@@ -1,4 +1,5 @@
 import 'ring_buffer.dart';
+import 'diagnostic_payload.dart';
 
 /// Represents a discrete event captured by the Flight Recorder.
 class FlightEvent {
@@ -47,7 +48,7 @@ class FlightRecorder {
       FlightEvent(
         category: category,
         action: action,
-        data: data ?? {},
+        data: DiagnosticPayload.boundedMap(data ?? {}),
       ),
     );
   }

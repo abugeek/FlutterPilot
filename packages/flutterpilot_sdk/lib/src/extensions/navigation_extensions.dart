@@ -173,21 +173,28 @@ extension _NavigationExtensions on FlutterPilot {
     ) async {
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+      var stableFrames = 0;
       while (DateTime.now().isBefore(deadline)) {
-        if (!SchedulerBinding.instance.hasScheduledFrame) {
-          await Future.delayed(const Duration(milliseconds: 16));
-          if (!SchedulerBinding.instance.hasScheduledFrame) {
+        final scheduler = SchedulerBinding.instance;
+        final busy = scheduler.hasScheduledFrame || scheduler.transientCallbackCount > 0;
+        if (busy) {
+          stableFrames = 0;
+        } else {
+          stableFrames++;
+          if (stableFrames >= 2) {
+            await WidgetsBinding.instance.endOfFrame;
             return ServiceExtensionResponse.result(
-              json.encode({'status': 'settled'}),
+              json.encode({'status': 'settled', 'stableFrames': stableFrames}),
             );
           }
         }
-        await Future.delayed(const Duration(milliseconds: 50));
+        await Future.delayed(const Duration(milliseconds: 16));
       }
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'timeout',
           'note': 'Animation may still be running',
+          'transientCallbackCount': SchedulerBinding.instance.transientCallbackCount,
         }),
       );
     });

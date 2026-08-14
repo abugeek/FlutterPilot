@@ -11,6 +11,11 @@ class FrameBudgetProfiler {
   static final RingBuffer<Map<String, dynamic>> _frameTimings = RingBuffer(bufferSize);
   static bool _installed = false;
 
+  static double get _frameBudgetMs {
+    final refreshRate = WidgetsBinding.instance.platformDispatcher.implicitView?.display.refreshRate ?? 60.0;
+    return 1000.0 / refreshRate.clamp(1.0, 240.0);
+  }
+
   /// Installs the frame timing listener. Safe to call multiple times.
   static void initialize() {
     if (_installed) return;
@@ -26,7 +31,7 @@ class FrameBudgetProfiler {
       final buildMs = t.buildDuration.inMicroseconds / 1000.0;
       final rasterMs = t.rasterDuration.inMicroseconds / 1000.0;
       final totalMs = t.totalSpan.inMicroseconds / 1000.0;
-      final isJanky = totalMs > 16.67;
+      final isJanky = totalMs > _frameBudgetMs;
 
       _frameTimings.add({
         'buildMs': buildMs,
@@ -46,6 +51,7 @@ class FrameBudgetProfiler {
         'status': 'no_frames_recorded',
         'sampleCount': 0,
         'fps': 60.0,
+        'frameBudgetMs': double.parse(_frameBudgetMs.toStringAsFixed(2)),
         'jankPercentage': 0.0,
       };
     }
@@ -67,19 +73,20 @@ class FrameBudgetProfiler {
 
     String? diagnosis;
     if (jankyCount > 0) {
-      if (avgBuild > 16.0) {
+      if (avgBuild > _frameBudgetMs * 0.9) {
         diagnosis = 'UI Thread Bottleneck: Build/Layout phase is taking ${avgBuild.toStringAsFixed(1)}ms on average. '
             'Check for expensive operations inside build() or non-lazy list rendering.';
-      } else if (avgRaster > 16.0) {
+      } else if (avgRaster > _frameBudgetMs * 0.9) {
         diagnosis = 'GPU Thread Bottleneck: Rasterization phase is taking ${avgRaster.toStringAsFixed(1)}ms on average. '
             'Check for excessive saveLayer calls, uncompressed image decodes, or complex clipping masks.';
       } else {
-        diagnosis = 'Occasional frame spikes detected ($jankyCount of $count frames exceeded 16.6ms budget).';
+        diagnosis = 'Occasional frame spikes detected ($jankyCount of $count frames exceeded the ${_frameBudgetMs.toStringAsFixed(2)}ms budget).';
       }
     }
 
     return {
       'sampleCount': count,
+      'frameBudgetMs': double.parse(_frameBudgetMs.toStringAsFixed(2)),
       'jankCount': jankyCount,
       'jankPercentage': (jankyCount / count) * 100.0,
       'avgFrameDurationMs': double.parse(avgTotal.toStringAsFixed(2)),

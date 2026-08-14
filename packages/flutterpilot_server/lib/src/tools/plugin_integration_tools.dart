@@ -451,10 +451,15 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         },
         required: ['key', 'value'],
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.setSecureStorageKey',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) {
+        if (!allowDestructive) {
+          return Future.value(_destructiveOperationDenied());
+        }
+        return _callExtensionRaw(
+          'ext.flutterpilot.setSecureStorageKey',
+          p,
+        ).then((res) => res.toCallToolResult());
+      },
     );
 
     server.registerTool(
@@ -476,11 +481,15 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) =>
-          _callExtensionRaw('ext.flutterpilot.deleteSecureStorageKey', {
-            if (p['key'] != null) 'key': p['key'].toString(),
-            if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
-          }).then((res) => res.toCallToolResult()),
+      callback: (p, e) {
+        if (!allowDestructive) {
+          return Future.value(_destructiveOperationDenied());
+        }
+        return _callExtensionRaw('ext.flutterpilot.deleteSecureStorageKey', {
+          if (p['key'] != null) 'key': p['key'].toString(),
+          if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+        }).then((res) => res.toCallToolResult());
+      },
     );
   }
 }

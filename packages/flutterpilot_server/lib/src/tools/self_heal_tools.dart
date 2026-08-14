@@ -84,6 +84,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         final writeToDisk = p['writeToDisk'] == true;
         final targetPath = (p['filePath']?.toString() ?? 'test/repro_test.dart');
 
+        if (writeToDisk && !allowDestructive) {
+          return _destructiveOperationDenied();
+        }
+
         String diskStatus = '';
         if (writeToDisk && code.isNotEmpty) {
           try {
@@ -148,6 +152,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
             ? 'test/flow_test.dart'
             : 'integration_test/flow_test.dart';
         final targetPath = p['filePath']?.toString() ?? defaultPath;
+
+        if (writeToDisk && !allowDestructive) {
+          return _destructiveOperationDenied();
+        }
 
         String diskStatus = '';
         if (writeToDisk && code.isNotEmpty) {

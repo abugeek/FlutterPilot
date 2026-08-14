@@ -4,8 +4,8 @@ import 'dart:collection';
 /// zero memory shifting, and FIFO eviction.
 class RingBuffer<T> with IterableMixin<T> {
   RingBuffer(this.capacity)
-      : assert(capacity > 0, 'Capacity must be positive'),
-        _buffer = List<T?>.filled(capacity, null);
+    : assert(capacity > 0, 'Capacity must be positive'),
+      _buffer = List<T?>.filled(capacity, null);
 
   /// Maximum number of items the buffer can hold.
   final int capacity;
@@ -43,6 +43,16 @@ class RingBuffer<T> with IterableMixin<T> {
     }
   }
 
+  /// Removes and returns the oldest element in O(1) time.
+  T removeFirst() {
+    if (_count == 0) throw StateError('Cannot remove from an empty buffer');
+    final value = _buffer[_start] as T;
+    _buffer[_start] = null;
+    _start = (_start + 1) % capacity;
+    _count--;
+    return value;
+  }
+
   /// Clears all elements from the buffer in O(1) time.
   void clear() {
     _buffer.fillRange(0, capacity, null);
@@ -53,7 +63,13 @@ class RingBuffer<T> with IterableMixin<T> {
   /// Returns the element at [index] (0 is the oldest element).
   T operator [](int index) {
     if (index < 0 || index >= _count) {
-      throw RangeError.index(index, this, 'index', 'Index out of bounds', _count);
+      throw RangeError.index(
+        index,
+        this,
+        'index',
+        'Index out of bounds',
+        _count,
+      );
     }
     return _buffer[(_start + index) % capacity] as T;
   }

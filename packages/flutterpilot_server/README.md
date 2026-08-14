@@ -1,6 +1,6 @@
 # FlutterPilot Server
 
-The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes 83 tools via the VM service.
+The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes a versioned tool set via the VM service; use `get_capabilities` to discover the exact tools available at runtime.
 
 > **What is MCP?** The Model Context Protocol is an open standard for connecting AI models (Claude, Gemini, etc.) to external tools. FlutterPilot Server implements MCP to let AI agents see and control your Flutter app in real-time.
 
@@ -96,7 +96,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ---
 
-## 83 MCP Tools Reference
+## MCP Tools Reference
 
 > **Tip for AI Agents:** Call the `flutterpilot_guide` MCP prompt at the start of your session to get a structured cheat sheet covering all tools, recommended workflows, and key rules.
 

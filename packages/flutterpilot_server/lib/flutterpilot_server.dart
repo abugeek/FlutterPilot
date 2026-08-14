@@ -11,6 +11,7 @@ import 'package:path/path.dart' as path;
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 import 'src/fleet_manager.dart';
+import 'src/operation_scheduler.dart';
 import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
 
@@ -56,6 +57,10 @@ abstract class _FlutterPilotServerBase {
     String Function(Map<String, dynamic> json)? formatResult,
     String? nudge,
   });
+
+  /// Returns an MCP error for an operation that mutates app data when the
+  /// server was not explicitly started with --allow-destructive.
+  CallToolResult _destructiveOperationDenied();
 }
 
 /// FlutterPilot MCP Server — bridges AI agents to a running Flutter app.
@@ -105,6 +110,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   static const Duration _minBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
   static final Random _random = Random();
+  int _connectionGeneration = 0;
+  int _nextOperationId = 0;
+  final Map<String, OperationScheduler> _operationSchedulers = {};
 
   FlutterPilotServer({
     String? vmServiceUri,
@@ -184,6 +192,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _log.info('Connecting to VM Service: $_vmServiceUri');
     _vmService = await vmServiceConnectUri(_vmServiceUri!);
     _log.info('Connected to VM Service at $_vmServiceUri');
+    _connectionGeneration++;
 
     _currentBackoff = _minBackoff;
 
@@ -575,7 +584,10 @@ Use this guide to understand what tools to call, when, and in what order.
             : res.data.toString();
         return CallToolResult(
           content: [
-            TextContent(text: nudge != null ? '$text\n\n$nudge' : text),
+            TextContent(
+              text:
+                  '${nudge != null ? '$text\n\n$nudge' : text}\n[operationId: ${res.operationId}]',
+            ),
           ],
         );
       },
@@ -583,7 +595,70 @@ Use this guide to understand what tools to call, when, and in what order.
   }
 
   @override
+  CallToolResult _destructiveOperationDenied() => CallToolResult(
+    content: [
+      TextContent(
+        text:
+            'Destructive operation blocked. Restart FlutterPilot with --allow-destructive to enable app data mutation.',
+      ),
+    ],
+    isError: true,
+  );
+
+  @override
   Future<_ExtensionResult> _callExtensionRaw(
+    String extension,
+    Map<String, dynamic> parameters,
+  ) async {
+    final operationId = 'op-${++_nextOperationId}';
+    final mutating = !_isReadOnlyExtension(extension);
+    final connectionKey = _vmServiceUri ?? 'unconnected';
+    final generation = _connectionGeneration;
+    final scheduler = _operationSchedulers.putIfAbsent(
+      connectionKey,
+      OperationScheduler.new,
+    );
+
+    _log.fine(
+      '[$operationId] ${mutating ? 'mutation' : 'read'} $extension '
+      '(connection=$connectionKey, generation=$generation)',
+    );
+
+    return scheduler.schedule(
+      mutating: mutating,
+      operation: () async {
+        if (generation != _connectionGeneration && generation != 0) {
+          return _ExtensionResult.error(
+            'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
+            ErrorCategory.staleOperation,
+          ).withOperationId(operationId);
+        }
+        final result = await _callExtensionImmediate(extension, parameters);
+        if (generation != _connectionGeneration && !result.isError) {
+          return _ExtensionResult.error(
+            'Operation $operationId completed against a stale app connection. Retry against the current device.',
+            ErrorCategory.staleOperation,
+          ).withOperationId(operationId);
+        }
+        return result.withOperationId(operationId);
+      },
+    );
+  }
+
+  static bool _isReadOnlyExtension(String extension) {
+    return extension.startsWith('ext.flutterpilot.get') ||
+        extension.startsWith('ext.flutterpilot.list') ||
+        extension.startsWith('ext.flutterpilot.wait') ||
+        extension.startsWith('ext.flutterpilot.assert') ||
+        extension.startsWith('ext.flutterpilot.capture') ||
+        extension.startsWith('ext.flutterpilot.compare') ||
+        extension.startsWith('ext.flutterpilot.diagnose') ||
+        extension.startsWith('ext.flutterpilot.ping') ||
+        extension.startsWith('ext.dart.io.get') ||
+        extension == 'ext.flutter.inspector.getRootWidgetTree';
+  }
+
+  Future<_ExtensionResult> _callExtensionImmediate(
     String extension,
     Map<String, dynamic> parameters,
   ) async {
@@ -741,10 +816,10 @@ Use this guide to understand what tools to call, when, and in what order.
           'flutterVersion': vm.version ?? 'Unknown',
           'isolateCount': vm.isolates?.length ?? 1,
           'memory': {
-            'heapUsageMb':
-                ((memory.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(1),
-            'heapCapacityMb':
-                ((memory.heapCapacity ?? 0) / (1024 * 1024)).toStringAsFixed(1),
+            'heapUsageMb': ((memory.heapUsage ?? 0) / (1024 * 1024))
+                .toStringAsFixed(1),
+            'heapCapacityMb': ((memory.heapCapacity ?? 0) / (1024 * 1024))
+                .toStringAsFixed(1),
           },
           'hint':
               'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
@@ -811,6 +886,9 @@ enum ErrorCategory {
 
   /// Input validation failed (missing/invalid parameters).
   validation,
+
+  /// The operation was queued for an older device connection or isolate.
+  staleOperation,
 }
 
 class _ExtensionResult {
@@ -818,23 +896,48 @@ class _ExtensionResult {
   final String? errorMessage;
   final bool isError;
   final ErrorCategory? errorCategory;
+  final String? operationId;
   _ExtensionResult.success(this.data)
     : errorMessage = null,
       isError = false,
-      errorCategory = null;
+      errorCategory = null,
+      operationId = null;
   _ExtensionResult.error(this.errorMessage, [this.errorCategory])
     : data = null,
-      isError = true;
-  CallToolResult toCallToolResult() => CallToolResult(
-    content: [
-      TextContent(
-        text: isError
-            ? (errorCategory != null
-                  ? '[${errorCategory!.name}] ${errorMessage ?? 'Unknown error'}'
-                  : (errorMessage ?? 'Unknown error'))
-            : jsonEncode(data ?? {}),
-      ),
-    ],
-    isError: isError,
+      isError = true,
+      operationId = null;
+  _ExtensionResult._withOperationId(
+    this.data,
+    this.errorMessage,
+    this.isError,
+    this.errorCategory,
+    this.operationId,
   );
+
+  _ExtensionResult withOperationId(String id) =>
+      _ExtensionResult._withOperationId(
+        data,
+        errorMessage,
+        isError,
+        errorCategory,
+        id,
+      );
+
+  CallToolResult toCallToolResult() {
+    final message = isError
+        ? (errorCategory != null
+              ? '[${errorCategory!.name}] ${errorMessage ?? 'Unknown error'}'
+              : (errorMessage ?? 'Unknown error'))
+        : jsonEncode(data ?? {});
+    return CallToolResult(
+      content: [
+        TextContent(
+          text: operationId == null
+              ? message
+              : '$message\n[operationId: $operationId]',
+        ),
+      ],
+      isError: isError,
+    );
+  }
 }
