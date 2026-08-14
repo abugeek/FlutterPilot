@@ -683,6 +683,10 @@ Use this guide to understand what tools to call, when, and in what order.
         description:
             'Return immediately with an operation ID; poll using get_operation.',
       ),
+      'deviceId': JsonSchema.string(
+        description:
+            'Optional target device. It must be the currently active device; call switch_device first.',
+      ),
     };
     server.registerTool(
       name,
@@ -729,6 +733,17 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
+    final requestedDevice = parameters['deviceId']?.toString();
+    final activeDevice = _fleetManager.activeDeviceId ?? 'default';
+    if (requestedDevice != null &&
+        requestedDevice.isNotEmpty &&
+        requestedDevice != activeDevice) {
+      return _ExtensionResult.error(
+        'Device "$requestedDevice" is not active. Switch to it first; '
+        'parallel device execution is not enabled in this server.',
+        ErrorCategory.validation,
+      );
+    }
     final asyncRequested =
         parameters['async'] == true ||
         parameters['async']?.toString().toLowerCase() == 'true';
@@ -828,7 +843,8 @@ Use this guide to understand what tools to call, when, and in what order.
         }
         final callParameters = Map<String, dynamic>.from(parameters)
           ..remove('operationDeadlineMs')
-          ..remove('operationId');
+          ..remove('operationId')
+          ..remove('deviceId');
         final result = await _callExtensionImmediate(extension, callParameters);
         if (generation != _connectionGeneration && !result.isError) {
           return _ExtensionResult.error(
