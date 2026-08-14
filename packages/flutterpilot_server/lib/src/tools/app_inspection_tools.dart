@@ -758,8 +758,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'fleet': {
             'activeDevice': _fleetManager.activeDeviceId ?? 'default',
             'deviceCount': _fleetManager.listDevices()['total'],
-            'parallelOperations': false,
-            'routing': 'active-device-only',
+            'parallelOperations': true,
+            'routing': 'per-device-context',
           },
         };
 

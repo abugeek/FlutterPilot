@@ -27,16 +27,21 @@ class FleetManager {
   /// Returns the ID/name of the currently active device.
   String? get activeDeviceId => _activeDeviceId;
 
+  /// Returns the registered VM-service URI for [name], if present.
+  String? uriFor(String name) => _devices[name];
+
   /// Lists all registered devices and the active status.
   Map<String, dynamic> listDevices() {
     return {
       'activeDevice': _activeDeviceId,
       'devices': _devices.entries
-          .map((e) => {
-                'id': e.key,
-                'uri': e.value,
-                'isActive': e.key == _activeDeviceId,
-              })
+          .map(
+            (e) => {
+              'id': e.key,
+              'uri': e.value,
+              'isActive': e.key == _activeDeviceId,
+            },
+          )
           .toList(),
       'total': _devices.length,
     };

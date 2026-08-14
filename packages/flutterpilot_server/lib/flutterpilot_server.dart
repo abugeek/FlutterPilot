@@ -11,6 +11,7 @@ import 'package:path/path.dart' as path;
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 import 'src/fleet_manager.dart';
+import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
@@ -122,16 +123,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   bool _disposed = false;
   String? _cachedMainIsolateId;
   Timer? _reconnectTimer;
-  StreamSubscription<Event>? _eventStreamSubscription;
-  StreamSubscription<Event>? _loggingStreamSubscription;
-  StreamSubscription<Event>? _stdoutStreamSubscription;
   Duration _currentBackoff = const Duration(seconds: 1);
   static const Duration _minBackoff = Duration(seconds: 1);
   static const Duration _maxBackoff = Duration(seconds: 30);
   static final Random _random = Random();
   int _connectionGeneration = 0;
   int _nextOperationId = 0;
-  final Map<String, OperationScheduler> _operationSchedulers = {};
+  final Map<String, DeviceRuntimeContext> _deviceContexts = {};
   final Map<String, bool Function()> _operationCancellers = {};
   final Map<String, _BackgroundOperation> _backgroundOperations = {};
   static const int _maxBackgroundOperations = 100;
@@ -233,6 +231,19 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
     );
     _connectionGeneration++;
+    final activeDevice = _fleetManager.activeDeviceId ?? 'default';
+    final activeContext =
+        _deviceContexts[activeDevice] ??
+        DeviceRuntimeContext(deviceId: activeDevice, uri: _vmServiceUri!);
+    if (activeContext.service != null &&
+        !identical(activeContext.service, _vmService)) {
+      await activeContext.dispose();
+    }
+    activeContext.uri = _vmServiceUri!;
+    _deviceContexts[activeDevice] = activeContext;
+    activeContext.service = _vmService;
+    activeContext.connectionGeneration = _connectionGeneration;
+    activeContext.cachedMainIsolateId = null;
 
     _currentBackoff = _minBackoff;
 
@@ -251,7 +262,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           }
         });
 
-    await _setupEventStreaming();
+    await _setupEventStreaming(activeContext);
   }
 
   bool _isAllowedConnectionUri(String rawUri) {
@@ -326,19 +337,20 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   // Event streaming
   // ---------------------------------------------------------------------------
 
-  Future<void> _setupEventStreaming() async {
-    if (_vmService == null) return;
+  Future<void> _setupEventStreaming(DeviceRuntimeContext context) async {
+    final service = context.service;
+    if (service == null) return;
 
-    await _eventStreamSubscription?.cancel();
-    _eventStreamSubscription = null;
-    await _loggingStreamSubscription?.cancel();
-    _loggingStreamSubscription = null;
-    await _stdoutStreamSubscription?.cancel();
-    _stdoutStreamSubscription = null;
+    await context.extensionEvents?.cancel();
+    context.extensionEvents = null;
+    await context.loggingEvents?.cancel();
+    context.loggingEvents = null;
+    await context.stdoutEvents?.cancel();
+    context.stdoutEvents = null;
 
     try {
-      await _vmService!.streamListen(EventStreams.kExtension);
-      _eventStreamSubscription = _vmService!.onExtensionEvent.listen(
+      await service.streamListen(EventStreams.kExtension);
+      context.extensionEvents = service.onExtensionEvent.listen(
         (Event event) async {
           try {
             final timestamp = DateTime.now().toIso8601String();
@@ -350,12 +362,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 'type': 'error',
                 'timestamp': timestamp,
                 'data': event.extensionData?.data,
-              });
+              }, deviceId: context.deviceId);
 
               await _selfHealManager.handleCrash(
                 exception: exception,
                 callExtension: (ext) async {
-                  final res = await _callExtensionRaw(ext, {});
+                  final res = await _callExtensionRaw(ext, {
+                    'deviceId': context.deviceId,
+                  });
                   return res.isError ? 'N/A' : res.data;
                 },
               );
@@ -364,7 +378,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 'type': 'action',
                 'timestamp': timestamp,
                 'data': event.extensionData?.data,
-              });
+              }, deviceId: context.deviceId);
             }
           } catch (e) {
             _log.warning('Error processing extension event: $e');
@@ -375,7 +389,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         },
         onDone: () {
           _log.info('Extension event stream closed');
-          if (!_disposed) _scheduleReconnect();
+          context.service = null;
+          context.connectionGeneration++;
+          if (!_disposed && context.deviceId == _fleetManager.activeDeviceId) {
+            _scheduleReconnect();
+          }
         },
       );
     } catch (e) {
@@ -383,8 +401,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     }
 
     try {
-      await _vmService!.streamListen(EventStreams.kLogging);
-      _loggingStreamSubscription = _vmService!.onLoggingEvent.listen(
+      await service.streamListen(EventStreams.kLogging);
+      context.loggingEvents = service.onLoggingEvent.listen(
         (Event event) {
           final record = event.logRecord;
           if (record == null) return;
@@ -393,6 +411,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             level: _levelToString(record.level ?? 0),
             logger: record.loggerName?.valueAsString ?? '',
             timestamp: DateTime.now().toIso8601String(),
+            deviceId: context.deviceId,
           );
         },
         onError: (Object error) {
@@ -406,8 +425,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     }
 
     try {
-      await _vmService!.streamListen(EventStreams.kStdout);
-      _stdoutStreamSubscription = _vmService!.onStdoutEvent.listen(
+      await service.streamListen(EventStreams.kStdout);
+      context.stdoutEvents = service.onStdoutEvent.listen(
         (Event event) {
           final bytes = event.bytes;
           if (bytes == null || bytes.isEmpty) return;
@@ -418,6 +437,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             level: 'info',
             logger: 'stdout',
             timestamp: DateTime.now().toIso8601String(),
+            deviceId: context.deviceId,
           );
         },
         onError: (Object error) {
@@ -436,9 +456,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     required String level,
     required String logger,
     required String timestamp,
+    String? deviceId,
   }) {
     final entry = <String, dynamic>{
-      'deviceId': _fleetManager.activeDeviceId ?? 'default',
+      'deviceId': deviceId ?? _fleetManager.activeDeviceId ?? 'default',
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
@@ -449,9 +470,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _trimDebugLogBuffer();
   }
 
-  void _appendEvent(Map<String, dynamic> entry) {
+  void _appendEvent(Map<String, dynamic> entry, {String? deviceId}) {
     final deviceEntry = <String, dynamic>{
-      'deviceId': _fleetManager.activeDeviceId ?? 'default',
+      'deviceId': deviceId ?? _fleetManager.activeDeviceId ?? 'default',
       ...entry,
     };
     _eventBuffer.add(deviceEntry);
@@ -685,7 +706,8 @@ Use this guide to understand what tools to call, when, and in what order.
       ),
       'deviceId': JsonSchema.string(
         description:
-            'Optional target device. It must be the currently active device; call switch_device first.',
+            'Optional target device. Registered devices can be addressed directly; '
+            'when omitted, the active device is used.',
       ),
     };
     server.registerTool(
@@ -733,17 +755,32 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
-    final requestedDevice = parameters['deviceId']?.toString();
     final activeDevice = _fleetManager.activeDeviceId ?? 'default';
-    if (requestedDevice != null &&
-        requestedDevice.isNotEmpty &&
-        requestedDevice != activeDevice) {
+    final targetDevice = parameters['deviceId']?.toString();
+    final deviceId = targetDevice == null || targetDevice.isEmpty
+        ? activeDevice
+        : targetDevice;
+    if (deviceId == activeDevice && _vmService == null) {
+      await _connectWithUri();
+    }
+    final context = deviceId == activeDevice && _vmService != null
+        ? (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
+            deviceId: deviceId,
+            uri: _vmServiceUri ?? '',
+          ))
+        : await _ensureDeviceContext(deviceId);
+    if (context != null && deviceId == activeDevice) {
+      context.service ??= _vmService;
+    }
+    if (context == null || context.service == null) {
       return _ExtensionResult.error(
-        'Device "$requestedDevice" is not active. Switch to it first; '
-        'parallel device execution is not enabled in this server.',
-        ErrorCategory.validation,
+        'No VM-service connection is available for device "$deviceId".',
+        ErrorCategory.connectionLost,
       );
     }
+    context.connectionGeneration = context.connectionGeneration == 0
+        ? _connectionGeneration
+        : context.connectionGeneration;
     final asyncRequested =
         parameters['async'] == true ||
         parameters['async']?.toString().toLowerCase() == 'true';
@@ -771,6 +808,7 @@ Use this guide to understand what tools to call, when, and in what order.
         extension,
         asyncParameters,
         operationId,
+        context,
       );
       background.future = future;
       future.then<void>(
@@ -792,31 +830,28 @@ Use this guide to understand what tools to call, when, and in what order.
         suppliedOperationId == null || suppliedOperationId.isEmpty
         ? 'op-${++_nextOperationId}'
         : suppliedOperationId;
-    return _callExtensionScheduled(extension, parameters, operationId);
+    return _callExtensionScheduled(extension, parameters, operationId, context);
   }
 
   Future<_ExtensionResult> _callExtensionScheduled(
     String extension,
     Map<String, dynamic> parameters,
     String operationId,
+    DeviceRuntimeContext context,
   ) async {
     final mutating = !_isReadOnlyExtension(extension);
-    final connectionKey = _vmServiceUri ?? 'unconnected';
-    final generation = _connectionGeneration;
-    final scheduler = _operationSchedulers.putIfAbsent(
-      connectionKey,
-      OperationScheduler.new,
-    );
+    final generation = context.connectionGeneration;
+    final scheduler = context.scheduler;
 
     _log.fine(
       '[$operationId] ${mutating ? 'mutation' : 'read'} $extension '
-      '(connection=$connectionKey, generation=$generation)',
+      '(device=${context.deviceId}, connection=${context.uri}, generation=$generation)',
     );
 
     final scheduled = scheduler.scheduleCancellable(
       mutating: mutating,
       operation: () async {
-        if (generation != _connectionGeneration && generation != 0) {
+        if (generation != context.connectionGeneration && generation != 0) {
           return _ExtensionResult.error(
             'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
             ErrorCategory.staleOperation,
@@ -828,6 +863,7 @@ Use this guide to understand what tools to call, when, and in what order.
             final versionResult = await _callExtensionImmediate(
               'ext.flutterpilot.getScreenHash',
               const {},
+              context: context,
             );
             final actualMutation = _extractMutationVersion(versionResult);
             if (actualMutation == null || actualMutation != expectedMutation) {
@@ -845,8 +881,12 @@ Use this guide to understand what tools to call, when, and in what order.
           ..remove('operationDeadlineMs')
           ..remove('operationId')
           ..remove('deviceId');
-        final result = await _callExtensionImmediate(extension, callParameters);
-        if (generation != _connectionGeneration && !result.isError) {
+        final result = await _callExtensionImmediate(
+          extension,
+          callParameters,
+          context: context,
+        );
+        if (generation != context.connectionGeneration && !result.isError) {
           return _ExtensionResult.error(
             'Operation $operationId completed against a stale app connection. Retry against the current device.',
             ErrorCategory.staleOperation,
@@ -883,6 +923,27 @@ Use this guide to understand what tools to call, when, and in what order.
   _BackgroundOperation? _getBackgroundOperation(String operationId) =>
       _backgroundOperations[operationId];
 
+  Future<DeviceRuntimeContext?> _ensureDeviceContext(String deviceId) async {
+    final uri = _fleetManager.uriFor(deviceId);
+    if (uri == null || uri.isEmpty) return null;
+    if (!_isAllowedConnectionUri(uri)) return null;
+
+    var context = _deviceContexts[deviceId];
+    if (context != null && context.uri != uri) {
+      await context.dispose();
+      _deviceContexts.remove(deviceId);
+      context = null;
+    }
+    context ??= DeviceRuntimeContext(deviceId: deviceId, uri: uri);
+    _deviceContexts[deviceId] = context;
+    if (context.service == null) {
+      context.service = await vmServiceConnectUri(uri);
+      context.connectionGeneration++;
+      await _setupEventStreaming(context);
+    }
+    return context;
+  }
+
   static int? _parseMutationVersion(Map<String, dynamic> parameters) {
     final value = parameters['ifMutation'] ?? parameters['ifVersion'];
     return int.tryParse(value?.toString() ?? '');
@@ -915,11 +976,37 @@ Use this guide to understand what tools to call, when, and in what order.
         extension == 'ext.flutter.inspector.getRootWidgetTree';
   }
 
+  void _markContextConnectionLost(DeviceRuntimeContext? context) {
+    if (context == null) {
+      _scheduleReconnect();
+      return;
+    }
+    context.service = null;
+    context.cachedMainIsolateId = null;
+    context.connectionGeneration++;
+    if (context.deviceId == _fleetManager.activeDeviceId) {
+      _scheduleReconnect();
+    }
+  }
+
   Future<_ExtensionResult> _callExtensionImmediate(
     String extension,
-    Map<String, dynamic> parameters,
-  ) async {
-    if (_vmService == null) {
+    Map<String, dynamic> parameters, {
+    DeviceRuntimeContext? context,
+  }) async {
+    final vmService = context?.service ?? _vmService;
+    String? cachedIsolateId =
+        context?.cachedMainIsolateId ?? _cachedMainIsolateId;
+    void cacheIsolate(String? isolateId) {
+      if (context != null) {
+        context.cachedMainIsolateId = isolateId;
+      } else {
+        _cachedMainIsolateId = isolateId;
+      }
+      cachedIsolateId = isolateId;
+    }
+
+    if (vmService == null) {
       // Attempt quick auto-connect if disconnected
       await _connectWithUri();
       if (_vmService == null) {
@@ -940,12 +1027,12 @@ Use this guide to understand what tools to call, when, and in what order.
         : {for (final e in parameters.entries) e.key: e.value.toString()};
 
     // Fast-path: use cached isolate ID if available
-    if (_cachedMainIsolateId != null) {
+    if (cachedIsolateId != null) {
       try {
-        final response = await _vmService!
+        final response = await vmService!
             .callServiceExtension(
               extension,
-              isolateId: _cachedMainIsolateId!,
+              isolateId: cachedIsolateId!,
               args: stringArgs,
             )
             .timeout(_Constants.extensionCallTimeout);
@@ -963,11 +1050,12 @@ Use this guide to understand what tools to call, when, and in what order.
           final fallback = await _handleZeroCodeFallback(
             extension,
             parameters,
-            _cachedMainIsolateId!,
+            cachedIsolateId!,
+            context: context,
           );
           if (fallback != null) return fallback;
         } else if (e.code == 105 || e.message.contains('Isolate')) {
-          _cachedMainIsolateId = null;
+          cacheIsolate(null);
         } else {
           return _ExtensionResult.error(
             e.data?['details'] as String? ?? 'Extension error: ${e.message}',
@@ -977,16 +1065,16 @@ Use this guide to understand what tools to call, when, and in what order.
       } on TimeoutException {
         // Fall back to full isolate refresh
       } catch (_) {
-        _cachedMainIsolateId = null;
+        cacheIsolate(null);
       }
     }
 
     try {
-      final vm = await _vmService!.getVM().timeout(_Constants.vmServiceTimeout);
+      final vm = await vmService!.getVM().timeout(_Constants.vmServiceTimeout);
       for (final isolateRef in vm.isolates ?? []) {
         if (isolateRef.id == null) continue;
         try {
-          final response = await _vmService!
+          final response = await vmService
               .callServiceExtension(
                 extension,
                 isolateId: isolateRef.id!,
@@ -1000,7 +1088,7 @@ Use this guide to understand what tools to call, when, and in what order.
                 ErrorCategory.extensionError,
               );
             }
-            _cachedMainIsolateId = isolateRef.id;
+            cacheIsolate(isolateRef.id);
             return _ExtensionResult.success(response.json!);
           }
         } on RPCError catch (e) {
@@ -1009,6 +1097,7 @@ Use this guide to understand what tools to call, when, and in what order.
               extension,
               parameters,
               isolateRef.id!,
+              context: context,
             );
             if (fallback != null) return fallback;
             continue;
@@ -1035,21 +1124,21 @@ Use this guide to understand what tools to call, when, and in what order.
       );
     } on StateError catch (e) {
       _log.warning('VM Service connection error during call', e);
-      _scheduleReconnect();
+      _markContextConnectionLost(context);
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
         ErrorCategory.connectionLost,
       );
     } on WebSocketException catch (e) {
       _log.warning('WebSocket error during VM Service call', e);
-      _scheduleReconnect();
+      _markContextConnectionLost(context);
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
         ErrorCategory.connectionLost,
       );
     } on IOException catch (e) {
       _log.warning('IO error during VM Service call', e);
-      _scheduleReconnect();
+      _markContextConnectionLost(context);
       return _ExtensionResult.error(
         'VM Service connection lost. Reconnecting...',
         ErrorCategory.connectionLost,
@@ -1060,13 +1149,15 @@ Use this guide to understand what tools to call, when, and in what order.
   Future<_ExtensionResult?> _handleZeroCodeFallback(
     String extension,
     Map<String, dynamic> parameters,
-    String isolateId,
-  ) async {
-    if (_vmService == null) return null;
+    String isolateId, {
+    DeviceRuntimeContext? context,
+  }) async {
+    final vmService = context?.service ?? _vmService;
+    if (vmService == null) return null;
     try {
       if (extension == 'ext.flutterpilot.getSummary') {
-        final vm = await _vmService!.getVM();
-        final memory = await _vmService!.getMemoryUsage(isolateId);
+        final vm = await vmService.getVM();
+        final memory = await vmService.getMemoryUsage(isolateId);
         return _ExtensionResult.success({
           'sdkMode': 'zero-code (core Flutter VM)',
           'status': 'connected',
@@ -1082,13 +1173,13 @@ Use this guide to understand what tools to call, when, and in what order.
               'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
         });
       } else if (extension == 'ext.flutterpilot.hotReload') {
-        await _vmService!.callServiceExtension(
+        await vmService.callServiceExtension(
           'ext.flutter.reassemble',
           isolateId: isolateId,
         );
         return _ExtensionResult.success({'status': 'hot_reload_applied'});
       } else if (extension == 'ext.flutterpilot.getWidgetTree') {
-        final res = await _vmService!.callServiceExtension(
+        final res = await vmService.callServiceExtension(
           'ext.flutter.inspector.getRootWidgetTree',
           isolateId: isolateId,
           args: {'isSummaryTree': 'true'},
@@ -1109,13 +1200,11 @@ Use this guide to understand what tools to call, when, and in what order.
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    await _eventStreamSubscription?.cancel();
-    _eventStreamSubscription = null;
-    await _loggingStreamSubscription?.cancel();
-    _loggingStreamSubscription = null;
-    await _stdoutStreamSubscription?.cancel();
-    _stdoutStreamSubscription = null;
-    await _vmService?.dispose();
+    for (final context in _deviceContexts.values) {
+      await context.dispose();
+    }
+    _deviceContexts.clear();
+    _vmService = null;
   }
 }
 
