@@ -297,9 +297,8 @@ class FlutterPilot {
     _lastFps = 0;
   }
 
-  // Intercepts debugPrint so that every message is also routed through
-  // dart:developer log() — this makes it visible on the VM service Logging
-  // stream and in the FlutterPilot debug console buffer.
+  // Intercepts debugPrint so that every message is captured in FlutterPilot's
+  // internal diagnostic buffer without duplicating console output.
   static void _setupDebugPrintCapture() {
     _originalDebugPrint = debugPrint;
     debugPrint = (String? message, {int? wrapWidth}) {
@@ -328,8 +327,6 @@ class FlutterPilot {
       final removed = _consoleBuffer.removeFirst();
       _consoleBufferBytes -= utf8.encode(jsonEncode(removed)).length;
     }
-    // Forward to dart:developer so the VM Logging stream carries it too.
-    log(safeMessage, name: logger.isEmpty ? 'flutterpilot' : logger);
   }
 
   static void _clearConsoleBuffer() {
