@@ -62,7 +62,11 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'generate_repro_test',
       description:
           'Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. '
-          'Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix.',
+          'Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix. '
+          'CRASH-REPRODUCTION ONLY — do not use this to verify a routine tap/form/navigation change on the '
+          'already-running app; spinning up a cold `flutter test` process is far slower than the delta already '
+          'returned by tap_widget/enter_text/execute_action_chain, or a direct assert_widget_visible / '
+          'assert_text_visible / assert_widget_count check against the live app.',
       inputSchema: ToolInputSchema(
         properties: {
           'testName': JsonSchema.string(

@@ -83,6 +83,15 @@ class InteractionManager {
     return {'x': position.dx, 'y': position.dy};
   }
 
+  /// Timeout for settle calls made purely to read post-action state (route,
+  /// widget-tree diff) rather than to wait out a gesture's own animation.
+  /// [AiOverlayManager]'s decorative tap ripple keeps a real ticker running
+  /// for ~700ms, which would otherwise make every settle call pay close to
+  /// [pumpAndSettleAdaptive]'s full default timeout just waiting for cosmetic
+  /// UI — a functional rebuild from setState commits within 1-2 frames, so
+  /// this stays short on purpose.
+  static const Duration postMutationSettleTimeout = Duration(milliseconds: 150);
+
   /// Adaptively waits for any active Flutter frame animations or microtasks to settle.
   /// Resolves in ~16ms for static taps instead of waiting for arbitrary fixed delays.
   static Future<void> pumpAndSettleAdaptive({
@@ -108,7 +117,7 @@ class InteractionManager {
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
     await Future.delayed(const Duration(milliseconds: 30));
     GestureBinding.instance.handlePointerEvent(pointer.up());
-    await pumpAndSettleAdaptive();
+    await pumpAndSettleAdaptive(timeout: postMutationSettleTimeout);
   }
 
   /// Simulates a double-tap at [position].
@@ -130,6 +139,7 @@ class InteractionManager {
     GestureBinding.instance.handlePointerEvent(pointer.down(position));
     await Future.delayed(duration);
     GestureBinding.instance.handlePointerEvent(pointer.up());
+    await pumpAndSettleAdaptive(timeout: postMutationSettleTimeout);
   }
 
   /// Simulates a swipe from [start] to [end] over [duration].
@@ -152,6 +162,7 @@ class InteractionManager {
       GestureBinding.instance.handlePointerEvent(pointer.move(pos));
     }
     GestureBinding.instance.handlePointerEvent(pointer.up());
+    await pumpAndSettleAdaptive(timeout: postMutationSettleTimeout);
   }
 
   /// Drags the widget at [from] to the position of the widget at [to].

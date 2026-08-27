@@ -1,5 +1,57 @@
 part of '../../flutterpilot_server.dart';
 
+/// Renders the capped `widgetDiff` block (see
+/// `PilotWidgetInspector.diffWidgetTrees`) into a short summary line plus a
+/// handful of sample changes. Empty string when nothing changed.
+String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
+  if (widgetDiff == null || widgetDiff['hasChanges'] != true) return '';
+  final added = widgetDiff['addedCount'] ?? 0;
+  final removed = widgetDiff['removedCount'] ?? 0;
+  final modified = widgetDiff['modifiedCount'] ?? 0;
+  final buffer = StringBuffer(' Widget tree: +$added / -$removed / ~$modified.');
+  final samples = <String>[
+    ...(widgetDiff['added'] as List? ?? const []).map((s) => '+ $s'),
+    ...(widgetDiff['modified'] as List? ?? const []).map((s) => '~ $s'),
+    ...(widgetDiff['removed'] as List? ?? const []).map((s) => '- $s'),
+  ];
+  if (samples.isNotEmpty) {
+    buffer.write('\n  ${samples.take(5).join('\n  ')}');
+  }
+  if (widgetDiff['note'] != null) {
+    buffer.write('\n  (${widgetDiff['note']})');
+  }
+  return buffer.toString();
+}
+
+/// Formats the `delta` block (route change + widget-tree diff) that
+/// mutating SDK extensions attach to their response into a postcondition
+/// summary, so the agent gets "did this do anything" for free instead of
+/// needing a follow-up get_widget_tree/capture_screenshot round-trip.
+/// Only falls back to suggesting a screenshot when truly nothing
+/// observable changed — no route change and no widget-tree diff.
+String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
+  final delta = data?['delta'] as Map<String, dynamic>?;
+  if (delta == null) return '$verb.';
+  final navigated = delta['navigated'] == true;
+  final diffText = _widgetDiffSummary(delta['widgetDiff'] as Map<String, dynamic>?);
+
+  final buffer = StringBuffer(verb);
+  if (navigated) {
+    buffer.write('. Route changed: ${delta['fromRoute']} → ${delta['toRoute']}.');
+  } else {
+    buffer.write('. Route unchanged (${delta['toRoute'] ?? delta['fromRoute'] ?? 'unknown'}).');
+  }
+  buffer.write(diffText);
+  if (!navigated && diffText.isEmpty) {
+    buffer.write(
+      ' No widget-tree changes detected either. HINT: If you expected a purely '
+      'visual-only change (color, animation frame, pixel-level effect with no '
+      'structural diff), call capture_screenshot to confirm.',
+    );
+  }
+  return buffer.toString();
+}
+
 /// Tools for tapping, typing, scrolling, swiping, and other UI interactions.
 mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
   void _registerUiAutomationTools() {
@@ -40,7 +92,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']", "Button[\'Submit\']", or plain visible button text "Log In") and taps its center. '
           'Works reliably across all devices without needing hardcoded coordinates. '
           'PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. '
-          'AFTER: Verify the tap worked with capture_screenshot or a state inspection tool.',
+          'The response already reports whether the route changed and a capped widget-tree diff — '
+          'usually no follow-up call is needed to confirm the tap did something.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -55,10 +108,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text:
-                  'Widget tapped. HINT: The UI should have changed. Use capture_screenshot to verify.',
-            ),
+            TextContent(text: _formatActionDelta(res.data, verb: 'Widget tapped')),
           ],
         );
       },
@@ -89,7 +139,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'Text entered. HINT: You may need to tap a "Submit" or "Save" button now.',
+                  '${_formatActionDelta(res.data, verb: 'Text entered')} You may need to tap a "Submit" or "Save" button now.',
             ),
           ],
         );
@@ -136,9 +186,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: 'Double-tapped. Use capture_screenshot to verify.',
-            ),
+            TextContent(text: _formatActionDelta(res.data, verb: 'Double-tapped')),
           ],
         );
       },
@@ -172,10 +220,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text:
-                  'Long press complete. Use capture_screenshot to verify the context menu or action.',
-            ),
+            TextContent(text: _formatActionDelta(res.data, verb: 'Long press complete')),
           ],
         );
       },
@@ -213,10 +258,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text:
-                  'Swipe complete. Use capture_screenshot or get_widget_tree to verify.',
-            ),
+            TextContent(text: _formatActionDelta(res.data, verb: 'Swipe complete')),
           ],
         );
       },
@@ -244,10 +286,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text:
-                  'Drag complete. Use capture_screenshot to verify the new position.',
-            ),
+            TextContent(text: _formatActionDelta(res.data, verb: 'Drag complete')),
           ],
         );
       },
@@ -395,7 +434,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         });
         return res.isError
             ? res.toCallToolResult()
-            : CallToolResult(content: [TextContent(text: 'Toggled.')]);
+            : CallToolResult(
+                content: [TextContent(text: _formatActionDelta(res.data, verb: 'Toggled'))],
+              );
       },
     );
 
@@ -498,10 +539,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final filled = res.data?['fieldsFilled'] ?? 0;
         final total = res.data?['totalFields'] ?? 0;
         final submitted = res.data?['submitted'] == true;
+        final delta = res.data?['delta'] as Map<String, dynamic>?;
+        final navigated = delta?['navigated'] == true;
+        final routeNote = navigated
+            ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
+            : submitted
+                ? ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).'
+                : '';
+        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
         return CallToolResult(
           content: [
             TextContent(
-              text: '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}',
+              text: '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}$routeNote$diffNote',
             ),
           ],
         );
@@ -606,13 +655,25 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         final executed = res.data?['executedCount'] ?? 0;
         final total = res.data?['totalActions'] ?? 0;
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '⚡ Action Chain executed successfully: $executed/$total actions completed natively.',
-            ),
-          ],
+        final steps = res.data?['steps'] as List? ?? const [];
+        final failed = steps.where((s) => s is Map && s['status'] != 'ok').toList();
+        final delta = res.data?['delta'] as Map<String, dynamic>?;
+        final navigated = delta?['navigated'] == true;
+        final buffer = StringBuffer(
+          '⚡ Action Chain: $executed/$total actions completed natively.',
         );
+        if (navigated) {
+          buffer.write(' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.');
+        }
+        buffer.write(_widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?));
+        if (failed.isNotEmpty) {
+          buffer.write('\n⚠️ ${failed.length} step(s) did not execute:');
+          for (final s in failed) {
+            final m = s as Map;
+            buffer.write('\n  - step ${m['index']}: ${m['action']}("${m['target']}") → ${m['status']}');
+          }
+        }
+        return CallToolResult(content: [TextContent(text: buffer.toString())]);
       },
     );
 
@@ -651,10 +712,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         });
         if (waitRes.isError) return waitRes.toCallToolResult();
 
+        final delta = tapRes.data?['delta'] as Map<String, dynamic>?;
+        final routeNote = delta?['navigated'] == true
+            ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
+            : '';
+        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
         return CallToolResult(
           content: [
             TextContent(
-              text: '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.',
+              text: '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.$routeNote$diffNote',
             ),
           ],
         );
@@ -698,10 +764,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         });
         if (tapRes.isError) return tapRes.toCallToolResult();
 
+        final delta = tapRes.data?['delta'] as Map<String, dynamic>?;
+        final routeNote = delta?['navigated'] == true
+            ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
+            : ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).';
+        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
         return CallToolResult(
           content: [
             TextContent(
-              text: '⚡ Entered text into "$target" and tapped "$submitTarget".',
+              text: '⚡ Entered text into "$target" and tapped "$submitTarget".$routeNote$diffNote',
             ),
           ],
         );

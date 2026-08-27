@@ -34,6 +34,24 @@ extension _WidgetExtensions on FlutterPilot {
     return 'Widget not found matching: "$target". HINT: Call get_widget_tree() to inspect available widgets on screen.';
   }
 
+  /// Builds the postcondition `delta` block returned by every mutating
+  /// extension: whether navigation happened, plus a capped widget-tree
+  /// diff so the caller usually doesn't need a follow-up get_widget_tree
+  /// or capture_screenshot call just to see what an action did.
+  static Map<String, dynamic> _buildActionDelta({
+    required String? routeBefore,
+    required String? routeAfter,
+    required Map<String, dynamic> treeBefore,
+    required Map<String, dynamic> treeAfter,
+  }) {
+    return {
+      'navigated': routeBefore != routeAfter,
+      'fromRoute': routeBefore,
+      'toRoute': routeAfter,
+      'widgetDiff': PilotWidgetInspector.diffWidgetTrees(treeBefore, treeAfter),
+    };
+  }
+
   static void register() {
     // -- ext.flutterpilot.tapWidget -------------------------------------------
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
@@ -52,6 +70,7 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       RenderObject? ro = element.renderObject;
       if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
         try {
@@ -76,11 +95,12 @@ extension _WidgetExtensions on FlutterPilot {
           json.encode({
             'status': 'success',
             'target': target,
-            'delta': {
-              'navigated': routeBefore != routeAfter,
-              'fromRoute': routeBefore,
-              'toRoute': routeAfter,
-            },
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: routeAfter,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
           }),
         );
       }
@@ -107,6 +127,8 @@ extension _WidgetExtensions on FlutterPilot {
           _makeWidgetNotFoundMessage(target),
         );
       }
+      final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       bool found = false;
       void findText(Element e) {
         if (found) return;
@@ -132,12 +154,27 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       findText(element);
-      return found
-          ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
-          : ServiceExtensionResponse.error(
-              ServiceExtensionResponse.extensionError,
-              'Not text field: $target',
-            );
+      if (!found) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Not text field: $target',
+        );
+      }
+      await InteractionManager.pumpAndSettleAdaptive(
+        timeout: InteractionManager.postMutationSettleTimeout,
+      );
+      final routeAfter = NavigationTracker.currentRoute;
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
+          ),
+        }),
+      );
     });
 
     // -- ext.flutterpilot.scrollIntoView --------------------------------------
@@ -190,9 +227,20 @@ extension _WidgetExtensions on FlutterPilot {
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('doubleTapWidget', {'key': target});
         }
+        final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         await InteractionManager.doubleTapAt(pos, label: target);
+        final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success'}),
+          json.encode({
+            'status': 'success',
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: routeAfter,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
+          }),
         );
       }
       return ServiceExtensionResponse.error(
@@ -230,13 +278,24 @@ extension _WidgetExtensions on FlutterPilot {
             'durationMs': ms,
           });
         }
+        final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         await InteractionManager.longPressAt(
           pos,
           duration: Duration(milliseconds: ms),
           label: target,
         );
+        final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success'}),
+          json.encode({
+            'status': 'success',
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: routeAfter,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
+          }),
         );
       }
       return ServiceExtensionResponse.error(
@@ -298,9 +357,20 @@ extension _WidgetExtensions on FlutterPilot {
           'distance': distance,
         });
       }
+      final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.swipeFromTo(start, end);
+      final routeAfter = NavigationTracker.currentRoute;
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success'}),
+        json.encode({
+          'status': 'success',
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
+          ),
+        }),
       );
     });
 
@@ -350,9 +420,20 @@ extension _WidgetExtensions on FlutterPilot {
           'toKey': toTarget,
         });
       }
+      final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.dragFromTo(from, to);
+      final routeAfter = NavigationTracker.currentRoute;
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success'}),
+        json.encode({
+          'status': 'success',
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
+          ),
+        }),
       );
     });
 
@@ -491,12 +572,23 @@ extension _WidgetExtensions on FlutterPilot {
       final box = renderBox!;
       final offset = box.localToGlobal(Offset.zero);
       final center = offset + Offset(box.size.width / 2, box.size.height / 2);
+      final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.tapAt(center, label: target);
+      final routeAfter = NavigationTracker.currentRoute;
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('toggleCheckbox', {'key': target});
       }
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success'}),
+        json.encode({
+          'status': 'success',
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
+          ),
+        }),
       );
     });
 
@@ -931,6 +1023,8 @@ extension _WidgetExtensions on FlutterPilot {
             ? Map<String, dynamic>.from(decoded)
             : <String, dynamic>{};
 
+        final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         int filledCount = 0;
         for (final entry in fields.entries) {
           final target = entry.key;
@@ -1011,12 +1105,19 @@ extension _WidgetExtensions on FlutterPilot {
           }
         }
 
+        final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
             'fieldsFilled': filledCount,
             'totalFields': fields.length,
             'submitted': submitted,
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: routeAfter,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
           }),
         );
       } catch (e) {
@@ -1060,47 +1161,93 @@ extension _WidgetExtensions on FlutterPilot {
           );
         }
 
+        final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         int executedCount = 0;
-        for (final item in decoded) {
-          if (item is Map) {
-            final action = item['action']?.toString();
-            final target = item['target']?.toString() ?? item['key']?.toString();
-            if (action == 'tap' && target != null) {
-              final element = PilotWidgetInspector.findElement(target);
-              if (element != null) {
-                final ro = element.renderObject;
-                if (ro is RenderBox && ro.hasSize) {
-                  final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-                  await InteractionManager.tapAt(pos, label: target);
-                  executedCount++;
-                }
-              }
-            } else if (action == 'enterText' && target != null) {
-              final text = item['text']?.toString() ?? '';
-              final element = PilotWidgetInspector.findElement(target);
-              if (element != null) {
-                bool entered = false;
-                void findText(Element e) {
-                  if (entered) return;
-                  if (e is StatefulElement && e.state is EditableTextState) {
-                    try {
-                      (e.state as EditableTextState).updateEditingValue(TextEditingValue(text: text));
-                      entered = true;
-                    } catch (_) {}
-                    return;
-                  }
-                  e.visitChildren(findText);
-                }
-                findText(element);
-                if (entered) executedCount++;
+        final steps = <Map<String, dynamic>>[];
+        for (var i = 0; i < decoded.length; i++) {
+          final item = decoded[i];
+          if (item is! Map) {
+            steps.add({'index': i, 'status': 'invalidStep'});
+            continue;
+          }
+          final action = item['action']?.toString();
+          final target = item['target']?.toString() ?? item['key']?.toString();
+          String status;
+          if (action == 'tap' && target != null) {
+            final element = PilotWidgetInspector.findElement(target);
+            if (element == null) {
+              status = 'notFound';
+            } else {
+              final ro = element.renderObject;
+              if (ro is RenderBox && ro.hasSize) {
+                final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+                await InteractionManager.tapAt(pos, label: target);
+                executedCount++;
+                status = 'ok';
+              } else {
+                status = 'noLayout';
               }
             }
-            await Future.delayed(const Duration(milliseconds: 50));
+          } else if (action == 'enterText' && target != null) {
+            final text = item['text']?.toString() ?? '';
+            final element = PilotWidgetInspector.findElement(target);
+            if (element == null) {
+              status = 'notFound';
+            } else {
+              bool entered = false;
+              void findText(Element e) {
+                if (entered) return;
+                if (e is StatefulElement && e.state is EditableTextState) {
+                  try {
+                    (e.state as EditableTextState).updateEditingValue(TextEditingValue(text: text));
+                    entered = true;
+                  } catch (_) {}
+                  return;
+                }
+                e.visitChildren(findText);
+              }
+              findText(element);
+              if (entered) {
+                executedCount++;
+                status = 'ok';
+              } else {
+                status = 'noTextField';
+              }
+            }
+          } else {
+            status = 'unsupportedAction';
+          }
+          steps.add({
+            'index': i,
+            'action': action,
+            'target': target,
+            'status': status,
+          });
+          // 'tap' already settles inside InteractionManager.tapAt — only
+          // 'enterText' needs an explicit settle here to let its onChanged
+          // rebuild commit before the next step or the final tree capture.
+          if (status == 'ok' && action == 'enterText') {
+            await InteractionManager.pumpAndSettleAdaptive(
+              timeout: InteractionManager.postMutationSettleTimeout,
+            );
           }
         }
 
+        final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', 'executedCount': executedCount, 'totalActions': decoded.length}),
+          json.encode({
+            'status': 'success',
+            'executedCount': executedCount,
+            'totalActions': decoded.length,
+            'steps': steps,
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: routeAfter,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
+          }),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
