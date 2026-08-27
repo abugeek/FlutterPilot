@@ -197,8 +197,10 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         if (udid == null) {
           return _noSimulatorError(await _listBootedSimulators());
         }
-        final x = (p['x'] as num).toString();
-        final y = (p['y'] as num).toString();
+        // idb ui tap requires integer coordinates — widget/accessibility frames
+        // are frequently fractional (e.g. 275.0), so round rather than pass through.
+        final x = (p['x'] as num).round().toString();
+        final y = (p['y'] as num).round().toString();
         final result = await Process.run('idb', ['ui', 'tap', x, y, '--udid', udid]);
         if (result.exitCode != 0) {
           return CallToolResult(
