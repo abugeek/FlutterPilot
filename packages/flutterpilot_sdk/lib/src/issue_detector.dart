@@ -379,6 +379,24 @@ class IssueDetector {
           );
         }
       }
+
+      final design = res['designIssues'] as List?;
+      if (design != null && design.isNotEmpty) {
+        for (final d in design) {
+          final target = d['target'] ?? 'Element';
+          final type = d['type'] ?? 'Widget';
+          final cat = d['category'] ?? 'design';
+          final msg = d['message'] ?? '';
+          final rec = d['recommendation'] ?? '';
+          recordIssue(
+            severity: IssueSeverity.warning,
+            category: IssueCategory.uiLayout,
+            title: 'Design/Layout [$cat]: $type $target',
+            details: '$msg\nRecommendation: $rec',
+            metadata: Map<String, dynamic>.from(d as Map),
+          );
+        }
+      }
     } catch (_) {}
   }
 

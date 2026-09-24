@@ -434,6 +434,93 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
+      'audit_ui_design',
+      description:
+          'Comprehensive UI/UX Layout & Visual Design Quality Auditor: '
+          'Evaluates the active screen against professional Flutter design standards. '
+          'Detects layout overflows, touch target sizing (<48dp), asymmetric horizontal dead space/margins, '
+          'micro-typography legibility (<11sp), and component role mismatches (e.g. action buttons containing multi-line card text). '
+          'Returns a Design Quality Score (0-100), letter grade (A+ to F), and prioritized, actionable refactoring recommendations.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.auditUiDesign', {});
+        if (res.isError) return res.toCallToolResult();
+        final data = res.data ?? {};
+        final isHealthy = data['isHealthy'] == true;
+        final score = data['designScore'] ?? 100;
+        final grade = data['designGrade'] ?? 'A+';
+        final overflows = (data['overflows'] as List?) ?? [];
+        final accessibility = (data['accessibilityIssues'] as List?) ?? [];
+        final designIssues = (data['designIssues'] as List?) ?? [];
+
+        final buffer = StringBuffer();
+        buffer.writeln('🎨 FlutterPilot UI/UX Design Quality Audit');
+        buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        buffer.writeln('• Overall Design Score: $score/100 [$grade]');
+        buffer.writeln('• Layout Overflows: ${overflows.length}');
+        buffer.writeln('• Touch Target Violations: ${accessibility.length}');
+        buffer.writeln('• Visual Design Flaws: ${designIssues.length}');
+        buffer.writeln('');
+
+        if (isHealthy) {
+          buffer.writeln(
+            '🌟 Outstanding! The current screen meets all design, layout, and accessibility best practices.',
+          );
+          return CallToolResult(
+            content: [TextContent(text: buffer.toString().trim())],
+          );
+        }
+
+        if (overflows.isNotEmpty) {
+          buffer.writeln('🚨 RenderFlex Overflows:');
+          for (final o in overflows) {
+            buffer.writeln('  - [${o['type']}] ${o['details']}');
+          }
+          buffer.writeln('');
+        }
+
+        if (accessibility.isNotEmpty) {
+          buffer.writeln(
+            '⚠️ Accessibility Touch Target Violations (<48x48 dp):',
+          );
+          for (final a in accessibility) {
+            buffer.writeln('  - [${a['type']}] ${a['target']}: ${a['issue']}');
+          }
+          buffer.writeln('');
+        }
+
+        if (designIssues.isNotEmpty) {
+          buffer.writeln('⚠️ Visual Layout & UX Design Defects:');
+          for (final d in designIssues) {
+            final cat = d['category'] ?? 'design';
+            final target = d['target'] ?? '';
+            final type = d['type'] ?? '';
+            final msg = d['message'] ?? '';
+            final rec = d['recommendation'] ?? '';
+            buffer.writeln('  - [$cat] $type $target:');
+            buffer.writeln('    Issue: $msg');
+            buffer.writeln('    Fix: $rec');
+          }
+          buffer.writeln('');
+        }
+
+        buffer.writeln(
+          'Actionable Next Steps: Refactor the highlighted components to achieve a 100/100 A+ score.',
+        );
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${buffer.toString().trim()}\n\nFull Diagnostic JSON:\n${jsonEncode(data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
       'get_recent_events',
       description:
           'Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.',

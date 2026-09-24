@@ -296,6 +296,7 @@ class FlutterPilot {
       final frameProfile = FrameBudgetProfiler.getProfile();
       final jankPct = (frameProfile['jankPercentage'] as num?)?.toDouble() ?? 0.0;
       final avgDuration = (frameProfile['avgFrameDurationMs'] as num?)?.toDouble() ?? 16.6;
+      IssueDetector.auditUiTree();
       final issuesSummary = IssueDetector.getSummaryJson();
 
       return {
@@ -345,6 +346,7 @@ class FlutterPilot {
           .take(8)
           .toList();
 
+      IssueDetector.auditUiTree();
       final issueAlert = IssueDetector.getActionAlertSummary();
       final issuesSummary = IssueDetector.getSummaryJson();
 

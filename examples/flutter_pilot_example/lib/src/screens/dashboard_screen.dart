@@ -10,36 +10,64 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isLoggedIn = ref.watch(authProvider);
     final user = ref.watch(userProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('FlutterPilot Dashboard')),
+      appBar: AppBar(
+        title: const Text('FlutterPilot Dashboard'),
+        centerTitle: false,
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Status: ${isLoggedIn ? "Authenticated" : "Guest"}',
-              style: Theme.of(context).textTheme.headlineSmall,
-              key: const Key('auth_status_text'),
+            // Status & User Banner
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Status: ${isLoggedIn ? "Authenticated" : "Guest"}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      key: const Key('auth_status_text'),
+                    ),
+                    if (user != null)
+                      Text(
+                        'User: ${user.name} (${user.email})',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        key: const Key('user_info_text'),
+                      ),
+                  ],
+                ),
+                Chip(
+                  avatar: Icon(
+                    isLoggedIn ? Icons.lock_open : Icons.person_outline,
+                    size: 16,
+                  ),
+                  label: Text(isLoggedIn ? 'Active' : 'Guest'),
+                ),
+              ],
             ),
-            if (user != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                'User: ${user.name} (${user.email})',
-                key: const Key('user_info_text'),
-              ),
-            ],
-            const SizedBox(height: 20),
-            const Text(
-              'Welcome to the FlutterPilot reference app! This app is designed to be fully introspectable by AI agents.',
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Mission Control Card
             Card(
               key: const Key('pilot_control_center_card'),
-              elevation: 2,
-              color: Colors.indigo.shade50,
-              margin: const EdgeInsets.only(bottom: 20),
+              elevation: 0,
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                ),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -47,160 +75,287 @@ class DashboardScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.flight_takeoff, color: Colors.indigo),
+                        Icon(
+                          Icons.flight_takeoff,
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'FlutterPilot Mission Control',
-                          style: TextStyle(
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: Colors.indigo.shade900,
-                            fontSize: 16,
+                            color: theme.colorScheme.primary,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Autonomous agent is connected and controlling the emulator session in real-time.',
-                      key: Key('pilot_mission_status_text'),
-                      style: TextStyle(fontSize: 13),
+                      key: const Key('pilot_mission_status_text'),
+                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12.5),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     FilledButton.icon(
                       key: const Key('run_health_sweep_button'),
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('⚡ FlutterPilot Autonomous Health Sweep Executed! All systems operational.'),
+                            content: Text(
+                              '⚡ FlutterPilot Autonomous Health Sweep Executed! All systems operational.',
+                            ),
                             backgroundColor: Colors.green,
                           ),
                         );
                       },
-                      icon: const Icon(Icons.verified),
+                      icon: const Icon(Icons.verified, size: 18),
                       label: const Text('Execute Autonomous Health Sweep'),
                     ),
                   ],
                 ),
               ),
             ),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _NavButton(
+            const SizedBox(height: 20),
+
+            // Section 1: Core Architecture
+            _buildSectionHeader(
+              context,
+              title: 'State & Data Architecture',
+              icon: Icons.hub_outlined,
+            ),
+            const SizedBox(height: 10),
+            _buildModuleGrid(
+              context,
+              modules: const [
+                _ModuleItem(
                   label: 'State Injection',
                   route: '/state',
                   icon: Icons.input,
                   subtitle: 'Bloc, Riverpod, state injection',
                 ),
-                _NavButton(
+                _ModuleItem(
                   label: 'Network & Logs',
                   route: '/network',
                   icon: Icons.network_check,
                   subtitle: 'HTTP, mock responses, logs',
                 ),
-                _NavButton(
+                _ModuleItem(
                   label: 'Storage (Hive)',
                   route: '/storage',
                   icon: Icons.storage,
                   subtitle: 'Hive key-value inspector',
                 ),
-                _NavButton(
-                  label: 'Chaos (Self-Heal)',
-                  route: '/chaos',
-                  icon: Icons.auto_fix_high,
-                  subtitle: 'Error injection & recovery',
-                ),
-                _NavButton(
-                  label: 'UI Automation',
-                  route: '/ui_automation',
-                  icon: Icons.touch_app,
-                  subtitle: 'Tap, type, scroll, sliders, forms',
-                ),
-                _NavButton(
-                  label: 'Navigation',
-                  route: '/navigation',
-                  icon: Icons.navigation,
-                  subtitle: 'Routes, theme, locale, deep links',
-                ),
-                _NavButton(
-                  label: 'Debug & Performance',
-                  route: '/debug_perf',
-                  icon: Icons.speed,
-                  subtitle: 'Logs, overlays, memory, render tree',
-                ),
-                _NavButton(
-                  label: 'Accessibility',
-                  route: '/accessibility',
-                  icon: Icons.accessibility_new,
-                  subtitle: 'Semantics, text scale, widget states',
-                ),
-                _NavButton(
-                  label: 'Testing & Screenshots',
-                  route: '/testing',
-                  icon: Icons.camera_alt,
-                  subtitle: 'Screenshots, recording, pump_frames',
-                ),
-                _NavButton(
+                _ModuleItem(
                   label: 'Connectivity',
                   route: '/connectivity',
                   icon: Icons.wifi,
                   subtitle: 'Network status, offline simulation',
                 ),
-                _NavButton(
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Section 2: UI & User Experience
+            _buildSectionHeader(
+              context,
+              title: 'UI & User Experience',
+              icon: Icons.palette_outlined,
+            ),
+            const SizedBox(height: 10),
+            _buildModuleGrid(
+              context,
+              modules: const [
+                _ModuleItem(
+                  label: 'UI Automation',
+                  route: '/ui_automation',
+                  icon: Icons.touch_app,
+                  subtitle: 'Tap, type, scroll, forms',
+                ),
+                _ModuleItem(
+                  label: 'Navigation',
+                  route: '/navigation',
+                  icon: Icons.navigation,
+                  subtitle: 'Routes, theme, locale',
+                ),
+                _ModuleItem(
+                  label: 'Accessibility',
+                  route: '/accessibility',
+                  icon: Icons.accessibility_new,
+                  subtitle: 'Semantics, touch-targets',
+                ),
+                _ModuleItem(
                   label: 'Animation Lab',
                   route: '/animation_lab',
                   icon: Icons.animation,
-                  subtitle: 'High-frequency physics animation',
+                  subtitle: 'Physics & spring curves',
                 ),
               ],
             ),
+            const SizedBox(height: 24),
+
+            // Section 3: Reliability & DevTools
+            _buildSectionHeader(
+              context,
+              title: 'Reliability & Inspection',
+              icon: Icons.health_and_safety_outlined,
+            ),
+            const SizedBox(height: 10),
+            _buildModuleGrid(
+              context,
+              modules: const [
+                _ModuleItem(
+                  label: 'Chaos (Self-Heal)',
+                  route: '/chaos',
+                  icon: Icons.auto_fix_high,
+                  subtitle: 'Error injection & recovery',
+                ),
+                _ModuleItem(
+                  label: 'Debug & Performance',
+                  route: '/debug_perf',
+                  icon: Icons.speed,
+                  subtitle: 'Logs, memory, frame budget',
+                ),
+                _ModuleItem(
+                  label: 'Testing & Screenshots',
+                  route: '/testing',
+                  icon: Icons.camera_alt,
+                  subtitle: 'Screenshots, golden baselines',
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildSectionHeader(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+  }) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: theme.colorScheme.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModuleGrid(
+    BuildContext context, {
+    required List<_ModuleItem> modules,
+  }) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: modules.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.25,
+      ),
+      itemBuilder: (context, index) {
+        final item = modules[index];
+        return _NavCard(item: item);
+      },
+    );
+  }
 }
 
-class _NavButton extends StatelessWidget {
+class _ModuleItem {
   final String label;
   final String route;
   final IconData icon;
   final String subtitle;
-  const _NavButton({
+
+  const _ModuleItem({
     required this.label,
     required this.route,
     required this.icon,
     required this.subtitle,
   });
+}
+
+class _NavCard extends StatelessWidget {
+  final _ModuleItem item;
+
+  const _NavCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 160,
-      child: ElevatedButton(
-        key: Key('nav_${route.substring(1)}_button'),
-        onPressed: () => context.push(route),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+    final theme = Theme.of(context);
+    final keyName = 'nav_${item.route.substring(1)}_button';
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 10),
-            ),
-          ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: Key(keyName),
+        onTap: () => context.push(item.route),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  item.icon,
+                  size: 18,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: 11.0,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

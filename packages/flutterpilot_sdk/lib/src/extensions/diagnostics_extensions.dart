@@ -245,6 +245,15 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode(health));
     });
 
+    // -- ext.flutterpilot.auditUiDesign ---------------------------------------
+    registerExtension('ext.flutterpilot.auditUiDesign', (
+      method,
+      parameters,
+    ) async {
+      final health = UiHealthAuditor.audit();
+      return ServiceExtensionResponse.result(json.encode(health));
+    });
+
     // -- ext.flutterpilot.getStreamLogs ---------------------------------------
     registerExtension('ext.flutterpilot.getStreamLogs', (
       method,
