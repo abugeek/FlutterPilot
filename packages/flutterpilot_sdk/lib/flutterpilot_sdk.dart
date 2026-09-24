@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:ui' as ui;
@@ -7,6 +8,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+
+import 'src/flutterpilot_binding.dart';
 
 import 'src/chaos_fuzzer.dart';
 import 'src/error_inspector.dart';
@@ -18,6 +21,10 @@ import 'src/repro_test_generator.dart';
 import 'src/ring_buffer.dart';
 import 'src/state_snapshot_manager.dart';
 import 'src/frame_budget_profiler.dart';
+import 'src/hit_test_utils.dart';
+import 'src/issue_detector.dart';
+import 'src/keyboard_simulator.dart';
+import 'src/scroll_simulator.dart';
 import 'src/stream_inspector.dart';
 import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
@@ -27,14 +34,19 @@ export 'src/chaos_fuzzer.dart';
 export 'src/error_inspector.dart';
 export 'src/fixture_manager.dart';
 export 'src/flight_recorder.dart';
+export 'src/flutterpilot_binding.dart';
 export 'src/frame_budget_profiler.dart';
 export 'src/gif_encoder.dart';
+export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
+export 'src/issue_detector.dart';
+export 'src/keyboard_simulator.dart';
 export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
 export 'src/pr_report_generator.dart';
 export 'src/repro_test_generator.dart';
 export 'src/ring_buffer.dart';
+export 'src/scroll_simulator.dart';
 export 'src/state_snapshot_manager.dart';
 export 'src/stream_inspector.dart';
 export 'src/test_synthesizer.dart';
@@ -42,6 +54,7 @@ export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
 
 part 'src/extensions/widget_extensions.dart';
+
 part 'src/extensions/navigation_extensions.dart';
 part 'src/extensions/state_extensions.dart';
 part 'src/extensions/diagnostics_extensions.dart';
@@ -203,6 +216,153 @@ class FlutterPilot {
   static List<Map<String, dynamic>> get consoleBuffer =>
       List.unmodifiable(_consoleBuffer.toList());
 
+  /// One-line zero-configuration launcher for FlutterPilot apps.
+  ///
+  /// Replaces boilerplate in `main.dart` with a single call:
+  /// ```dart
+  /// void main() => FlutterPilot.run(const MyApp());
+  /// ```
+  ///
+  /// Automatically:
+  /// 1. Ensures FlutterPilot custom binding is initialized.
+  /// 2. Intercepts all unhandled asynchronous errors and exceptions.
+  /// 3. Intercepts all standard `print()` and `debugPrint()` calls into structured logs.
+  /// 4. Launches [runApp] in a protected telemetry zone.
+  static void run(Widget app) {
+    FlutterPilotBinding.ensureInitialized();
+    runZonedGuarded(
+      () => runApp(app),
+      (error, stack) {
+        ErrorInspector.recordError(error, stack);
+        FlightRecorder.recordError(error.toString(), stack.toString());
+        postEvent('ext.flutterpilot.error', {
+          'exception': error.toString(),
+          'stack': stack.toString(),
+        });
+      },
+      zoneSpecification: ZoneSpecification(
+        print: (self, parent, zone, line) {
+          _captureConsoleLine(line, level: 'info', logger: 'print');
+          parent.print(zone, line);
+        },
+      ),
+    );
+  }
+
+  /// Returns a comprehensive, consolidated snapshot of the running application
+  /// in sub-millisecond execution time.
+  ///
+  /// Combines:
+  /// - Current route and navigation stack depth
+  /// - All visible and hittable interactive widgets
+  /// - Currently focused element and text value
+  /// - Recent unhandled errors
+  /// - Recent console logs
+  /// - FPS and screen mutation counter
+  /// - Device viewport dimensions
+  static Map<String, dynamic> getAppSnapshot() {
+    final currentRoute = NavigationTracker.currentRoute;
+    final navStack = NavigationTracker.stack;
+    final interactiveElements = PilotWidgetInspector.getInteractiveElements();
+
+    Map<String, dynamic>? focusedInfo;
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus != null && primaryFocus.context is Element) {
+      final element = primaryFocus.context! as Element;
+      final widget = element.widget;
+      final key = PilotWidgetInspector.extractCleanKey(widget.key);
+      String? textValue;
+      if (element is StatefulElement && element.state is EditableTextState) {
+        textValue = (element.state as EditableTextState).textEditingValue.text;
+      }
+      focusedInfo = {
+        'type': widget.runtimeType.toString(),
+        'key': ?key,
+        'text': ?textValue,
+        'hasFocus': true,
+      };
+    }
+
+    final recentErrors = ErrorInspector.errors;
+    final logs = _consoleBuffer.toList();
+    final recentLogs = logs.length > 15 ? logs.sublist(logs.length - 15) : logs;
+
+    final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+    final physicalSize = view?.physicalSize ?? ui.Size.zero;
+    final devicePixelRatio = view?.devicePixelRatio ?? 1.0;
+    final logicalWidth = physicalSize.width / devicePixelRatio;
+    final logicalHeight = physicalSize.height / devicePixelRatio;
+
+      final frameProfile = FrameBudgetProfiler.getProfile();
+      final jankPct = (frameProfile['jankPercentage'] as num?)?.toDouble() ?? 0.0;
+      final avgDuration = (frameProfile['avgFrameDurationMs'] as num?)?.toDouble() ?? 16.6;
+      final issuesSummary = IssueDetector.getSummaryJson();
+
+      return {
+        'timestamp': DateTime.now().toIso8601String(),
+        'route': {
+          'current': currentRoute,
+          'stackDepth': navStack.length,
+          'history': navStack.whereType<String>().toList(),
+        },
+        'viewport': {
+          'width': logicalWidth.round(),
+          'height': logicalHeight.round(),
+          'devicePixelRatio': devicePixelRatio,
+        },
+        'interactiveElements': interactiveElements,
+        'focusedElement': focusedInfo,
+        'performance': {
+          'fps': _lastFps,
+          'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
+          'mutationCount': _screenMutationCount,
+          'frameCount': _frameCount,
+          'jankPercentage': jankPct,
+          'avgFrameDurationMs': avgDuration,
+          if (frameProfile['diagnosis'] != null)
+            'diagnosis': frameProfile['diagnosis'],
+        },
+        'issues': issuesSummary,
+        'recentErrors': recentErrors.take(5).toList(),
+        'recentLogs': recentLogs,
+      };
+    }
+
+    /// Extracts instant post-action state for telemetry and feedback.
+    static Map<String, dynamic> getPostActionState({String? previousRoute}) {
+      final currentRoute = NavigationTracker.currentRoute;
+      String? focusedKey;
+      final primaryFocus = FocusManager.instance.primaryFocus;
+      if (primaryFocus != null && primaryFocus.context is Element) {
+        focusedKey =
+            PilotWidgetInspector.extractCleanKey(primaryFocus.context!.widget.key);
+      }
+      final interactive = PilotWidgetInspector.getInteractiveElements();
+      final elementsSummary = interactive
+          .map((e) => (e['label'] as String?)?.isNotEmpty == true
+              ? e['label']
+              : (e['key'] ?? e['identifier'] ?? e['type']))
+          .take(8)
+          .toList();
+
+      final issueAlert = IssueDetector.getActionAlertSummary();
+      final issuesSummary = IssueDetector.getSummaryJson();
+
+      return {
+        'route': currentRoute,
+        if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
+        'mutationCount': _screenMutationCount,
+        'focusedElement': ?focusedKey,
+        'interactiveElementsCount': interactive.length,
+        'visibleInteractiveElements': elementsSummary,
+        'errorCount': ErrorInspector.errors.length,
+        'issueAlert': ?issueAlert,
+        'perfAlert': ?issueAlert,
+        'activeIssuesCount': issuesSummary['totalActive'],
+        'criticalIssuesCount': issuesSummary['criticalCount'],
+      };
+    }
+
   /// Initializes the FlutterPilot SDK.
   ///
   /// This is the main entry point and **must be called before `runApp`**.
@@ -224,10 +384,11 @@ class FlutterPilot {
     _initialized = true;
 
     _setupModules();
-    _registerServiceExtensions();
+    registerServiceExtensions();
     _setupFpsCounter();
     _setupDebugPrintCapture();
     FrameBudgetProfiler.initialize();
+    IssueDetector.initialize();
     debugPrint('FlutterPilot initialized 🚀');
   }
 
@@ -244,6 +405,7 @@ class FlutterPilot {
     // Errors
     ErrorInspector.initialize();
     ErrorInspector.onErrorCaptured = (details) {
+      IssueDetector.sniffError(details);
       FlightRecorder.recordError(
         details.exceptionAsString(),
         details.stack?.toString(),
@@ -314,6 +476,7 @@ class FlutterPilot {
     String logger = '',
   }) {
     final safeMessage = _redactDiagnosticText(message);
+    IssueDetector.sniffLog(safeMessage, level: level);
     final entry = {
       'timestamp': DateTime.now().toIso8601String(),
       'level': level,
@@ -351,6 +514,67 @@ class FlutterPilot {
   /// Registered tools are listed by `ext.flutterpilot.listCustomTools`.
   static void registerCustomTool(String name, Function callback) {
     _customTools[name] = callback;
+  }
+
+  /// Records an issue into the centralized automatic issue detector.
+  static AppIssue recordIssue({
+    required IssueSeverity severity,
+    required IssueCategory category,
+    required String title,
+    String details = '',
+    Map<String, dynamic>? metadata,
+  }) {
+    return IssueDetector.recordIssue(
+      severity: severity,
+      category: category,
+      title: title,
+      details: details,
+      metadata: metadata,
+    );
+  }
+
+  /// Records a database or offline sync failure (e.g. Supabase RLS, SQLite, sync conflict).
+  static AppIssue recordSyncError(
+    String title, {
+    dynamic error,
+    int? queueLength,
+    String? details,
+    Map<String, dynamic>? metadata,
+  }) {
+    return IssueDetector.recordIssue(
+      severity: IssueSeverity.critical,
+      category: IssueCategory.dataSync,
+      title: title,
+      details: '${error ?? details ?? ''}',
+      metadata: {
+        'queueLength': ?queueLength,
+        'error': ?error?.toString(),
+        ...?metadata,
+      },
+    );
+  }
+
+  /// Records an HTTP or remote network failure.
+  static AppIssue recordNetworkError(
+    String title, {
+    int? statusCode,
+    String? url,
+    dynamic error,
+    Map<String, dynamic>? metadata,
+  }) {
+    final isCritical = statusCode != null &&
+        (statusCode == 401 || statusCode == 403 || statusCode >= 500);
+    return IssueDetector.recordIssue(
+      severity: isCritical ? IssueSeverity.critical : IssueSeverity.warning,
+      category: IssueCategory.dataSync,
+      title: title,
+      details: '${error ?? ''}',
+      metadata: {
+        'statusCode': ?statusCode,
+        'url': ?url,
+        ...?metadata,
+      },
+    );
   }
 
   /// Registers a state setter for a specific state-management [type].
@@ -431,7 +655,7 @@ class FlutterPilot {
   // sent as string representations and are parsed internally.
   // ---------------------------------------------------------------------------
 
-  static void _registerServiceExtensions() {
+  static void registerServiceExtensions() {
     // tapAt stays in the main file as it is a simple coordinate-based action
     // that doesn't fit neatly into any extension group.
     registerExtension('ext.flutterpilot.tapAt', (method, parameters) async {
@@ -659,6 +883,17 @@ class FlutterPilot {
         findBoundary(rv);
       }
       if (boundary != null) {
+        if (boundary!.debugNeedsPaint) {
+          final completer = Completer<void>();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!completer.isCompleted) completer.complete();
+          });
+          WidgetsBinding.instance.scheduleFrame();
+          await completer.future.timeout(
+            const Duration(milliseconds: 100),
+            onTimeout: () {},
+          );
+        }
         final image = await boundary!.toImage(pixelRatio: targetPixelRatio);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         return byteData?.buffer.asUint8List();

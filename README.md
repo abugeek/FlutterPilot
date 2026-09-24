@@ -33,7 +33,7 @@ flutter run
 dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
 ```
 
-### Option C: Manual SDK Integration
+### Option C: Manual SDK Integration (1-Line Zero-Config)
 ```bash
 flutter pub add --dev flutterpilot_sdk
 ```
@@ -41,11 +41,14 @@ In `main.dart`:
 ```dart
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  FlutterPilot.initialize();
-  runApp(MyApp());
-}
+// Option 1: 1-line zero-config launcher (captures print logs, errors, and sets up custom binding)
+void main() => FlutterPilot.run(const MyApp());
+
+// Option 2: Explicit initialization
+// void main() {
+//   FlutterPilotBinding.ensureInitialized();
+//   runApp(const MyApp());
+// }
 ```
 
 ---
@@ -54,22 +57,30 @@ void main() {
 
 ### MCP Tools Across 10 Categories
 
-#### 🎬 **Screenshots & Visual Regression Diff Engine** (5 tools)
-- `capture_screenshot` — PNG screenshot as MCP Image
-- `get_widget_tree` — Full widget hierarchy with positions (PII automatically masked)
+#### ⚡ **Instant State & 360° Telemetry** (All-in-One <5ms)
+- `get_app_snapshot` — Complete instant consolidated state in ONE call: active route & stack, all visible hittable buttons/inputs, focused element, unhandled errors, recent logs, FPS, screen mutation count, and viewport size. Eliminates 5+ redundant roundtrip calls!
+- `get_logs` / `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, log level ("debug", "info", "warning", "error"), and `since_seconds` recency filtering.
+- **⚡ Live Post-Action Feedback**: Every interaction (`tap`, `enter_text`, `press_key`, `secondary_tap`) automatically returns instant post-action status (route changes, focused element, newly visible actions, error count) in the same turn!
+
+#### 🎬 **Screenshots, Elements & Visual Inspection** (6 tools)
+- `get_interactive_elements` — Auto-discovers all actionable, visible, and hittable widgets (buttons, inputs, switches)
+- `capture_screenshot` — PNG screenshot as MCP Image with adaptive compression
+- `get_widget_tree` — Full widget hierarchy with positions and semantic compaction
 - `get_widget_properties` — Read text, enabled state, value, bounds from any widget
 - `save_screenshot_baseline` — Save baseline image for visual regression tests
 - `compare_screenshot` — Pixel-by-pixel regression comparison with automatic magenta visual diff generation
 
-#### 🖱️ **UI Automation & Live Visual AI Overlay** (15 tools)
-- `tap_widget(key)` — Tap a widget by key (triggers live animated ripple & `🤖 AI: Tap` badge on screen)
-- `tap_at(x, y)` — Tap at screen coordinates
+#### 🖱️ **UI Automation & Gesture Simulator** (18 tools)
+- `tap / tap_widget(key, identifier, text, type, x, y)` — Robust widget tapping by Key, Semantics identifier, text, or coordinates
+- `enter_text(text, key, identifier, focused_element)` — Type text into targeted or currently focused text field
+- `press_key(key, modifiers)` — Hardware keyboard key dispatch (Enter, Tab, Escape, modifiers)
+- `secondary_tap(key/coordinates)` — Right click / context menu gesture
+- `pinch_zoom(scale)` — Two-finger pinch-to-zoom gesture
+- `scroll_into_view(key/identifier/text)` — Actively scrolls scrollables (including lazy ListViews) until item mounts
+- `scroll_by(dx, dy)` — Scroll by pixel amount
 - `double_tap_widget(key)` — Double-tap a widget
 - `long_press_widget(key)` — Long-press a widget
-- `enter_text(key, text)` — Type into a text field
 - `clear_text_field(key)` — Clear a text field
-- `scroll_into_view(key)` — Scroll until widget is visible
-- `scroll_by(dx, dy)` — Scroll by pixel amount
 - `press_back` — Pop current route (hardware back button)
 - `set_slider_value(key, value)` — Set slider to numeric value
 - `toggle_checkbox(key)` — Toggle checkbox/switch/radio
@@ -90,23 +101,6 @@ void main() {
 - `list_connected_devices` — List all registered iOS, Android, and Web instances
 - `register_device(id, uri)` — Register new simulator/device in the fleet
 - `switch_device(id)` — Switch active target device on the fly
-
-#### 🖱️ **UI Automation** (15 tools)
-- `tap_at(x, y)` — Tap at screen coordinates
-- `tap_widget(key)` — Tap a widget by its key
-- `double_tap_widget(key)` — Double-tap a widget
-- `long_press_widget(key)` — Long-press a widget
-- `enter_text(key, text)` — Type into a text field
-- `clear_text_field(key)` — Clear a text field
-- `scroll_into_view(key)` — Scroll until widget is visible
-- `scroll_by(dx, dy)` — Scroll by pixel amount
-- `press_back` — Pop current route (hardware back button)
-- `set_slider_value(key, value)` — Set slider to numeric value
-- `toggle_checkbox(key)` — Toggle checkbox/switch/radio
-- `focus_widget(key)` — Request focus on a widget
-- `unfocus_all` — Dismiss keyboard
-- `set_text_scale_factor(scale)` — Accessibility text scaling
-- `pump_frames(count)` — Wait for N animation frames
 
 #### 🧭 **Navigation & Routing** (8 tools)
 - `navigate_to(route)` — Push a named route

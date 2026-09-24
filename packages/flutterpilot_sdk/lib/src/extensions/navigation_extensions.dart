@@ -12,6 +12,30 @@ part of '../../flutterpilot_sdk.dart';
 /// - `simulateDeepLink` — Simulate a deep link URL open
 /// - `setOrientation` — Switch device orientation
 extension _NavigationExtensions on FlutterPilot {
+  static NavigatorState? _resolveNavigatorState() {
+    final nav = NavigationTracker.navigatorState;
+    if (nav != null && nav.mounted) return nav;
+
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return null;
+
+    NavigatorState? found;
+    void visit(Element element) {
+      if (found != null) return;
+      if (element is StatefulElement && element.state is NavigatorState) {
+        final state = element.state as NavigatorState;
+        if (state.mounted) {
+          found = state;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
   static void register() {
     // -- ext.flutterpilot.navigateTo ------------------------------------------
     registerExtension('ext.flutterpilot.navigateTo', (
@@ -26,7 +50,19 @@ extension _NavigationExtensions on FlutterPilot {
         );
       }
       try {
-        final nav = NavigationTracker.navigatorState;
+        if (NavigationTracker.customNavigateHandler != null) {
+          final handled = await NavigationTracker.customNavigateHandler!(route);
+          if (handled) {
+            if (FlutterPilot._isRecording) {
+              FlutterPilot._recordAction('navigate', {'route': route});
+            }
+            return ServiceExtensionResponse.result(
+              json.encode({'status': 'success', 'route': route}),
+            );
+          }
+        }
+
+        final nav = _resolveNavigatorState();
         if (nav != null && nav.mounted) {
           if (FlutterPilot._isRecording) {
             FlutterPilot._recordAction('navigate', {'route': route});
@@ -36,20 +72,10 @@ extension _NavigationExtensions on FlutterPilot {
             json.encode({'status': 'success', 'route': route}),
           );
         }
-        final context = WidgetsBinding.instance.rootElement;
-        if (context != null) {
-          if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('navigate', {'route': route});
-          }
-          Navigator.of(context, rootNavigator: true).pushNamed(route);
-          return ServiceExtensionResponse.result(
-            json.encode({'status': 'success', 'route': route}),
-          );
-        }
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'No Navigator available. Ensure NavigationTracker() is added to '
-          'navigatorObservers in your MaterialApp.',
+          'navigatorObservers in your MaterialApp, or that your app contains a Navigator.',
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
@@ -63,17 +89,13 @@ extension _NavigationExtensions on FlutterPilot {
     registerExtension('ext.flutterpilot.pressBack', (method, parameters) async {
       try {
         bool popped = false;
-        final nav = NavigationTracker.navigatorState;
-        if (nav != null && nav.mounted) {
-          popped = await nav.maybePop();
+        if (NavigationTracker.customPopHandler != null) {
+          popped = await NavigationTracker.customPopHandler!();
         }
         if (!popped) {
-          final context = WidgetsBinding.instance.rootElement;
-          if (context != null) {
-            popped = await Navigator.of(
-              context,
-              rootNavigator: true,
-            ).maybePop();
+          final nav = _resolveNavigatorState();
+          if (nav != null && nav.mounted) {
+            popped = await nav.maybePop();
           }
         }
         if (FlutterPilot._isRecording) {

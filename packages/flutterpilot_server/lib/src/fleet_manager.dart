@@ -30,15 +30,21 @@ class FleetManager {
   /// Returns the registered VM-service URI for [name], if present.
   String? uriFor(String name) => _devices[name];
 
+  static String _redactUri(String rawUri) {
+    final uri = Uri.tryParse(rawUri);
+    if (uri == null || uri.pathSegments.isEmpty) return rawUri;
+    return uri.replace(path: '/<redacted>').toString();
+  }
+
   /// Lists all registered devices and the active status.
-  Map<String, dynamic> listDevices() {
+  Map<String, dynamic> listDevices({bool redact = true}) {
     return {
       'activeDevice': _activeDeviceId,
       'devices': _devices.entries
           .map(
             (e) => {
               'id': e.key,
-              'uri': e.value,
+              'uri': redact ? _redactUri(e.value) : e.value,
               'isActive': e.key == _activeDeviceId,
             },
           )
@@ -48,5 +54,6 @@ class FleetManager {
   }
 
   /// Serializes device list to formatted JSON.
-  String toJsonString() => jsonEncode(listDevices());
+  String toJsonString({bool redact = true}) =>
+      jsonEncode(listDevices(redact: redact));
 }

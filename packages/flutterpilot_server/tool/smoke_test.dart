@@ -135,10 +135,12 @@ void main(List<String> args) async {
   // Category 1: App Overview
   print('── App Overview ──');
   await test('get_app_summary', 'get_app_summary');
+  await test('get_app_snapshot', 'get_app_snapshot');
 
   // Category 2: Widget Inspection
   print('── Widget Inspection ──');
   await test('get_widget_tree', 'get_widget_tree');
+  await test('get_interactive_elements', 'get_interactive_elements');
   await test('get_widget_properties', 'get_widget_properties', {
     'key': 'test_key_that_may_not_exist',
   });
@@ -147,9 +149,10 @@ void main(List<String> args) async {
   print('── Navigation ──');
   await test('get_navigation_stack', 'get_navigation_stack');
 
-  // Category 4: Error Inspection
-  print('── Error Inspection ──');
+  // Category 4: Error & Issue Inspection
+  print('── Error & Issue Inspection ──');
   await test('get_errors', 'get_errors');
+  await test('get_app_issues', 'get_app_issues');
 
   // Category 5: Screenshots
   print('── Screenshots ──');
@@ -170,6 +173,7 @@ void main(List<String> args) async {
   // Category 9: Debug Console
   print('── Debug Console ──');
   await test('get_debug_logs', 'get_debug_logs');
+  await test('get_logs', 'get_logs');
 
   // Category 10: DevTools Deep Inspection
   print('── DevTools ──');

@@ -104,7 +104,7 @@ class VmDiscoveryService {
 
     final futures = primaryPorts.map((port) async {
       final uri = 'http://127.0.0.1:$port/';
-      if (await _verifyVmUri(uri)) {
+      if (await _verifyVmUri(uri, timeout: timeout)) {
         return uri;
       }
       return null;
@@ -118,13 +118,22 @@ class VmDiscoveryService {
   }
 
   /// Verifies if a given URI points to an active Dart VM service.
-  static Future<bool> _verifyVmUri(String rawUri) async {
+  static Future<bool> _verifyVmUri(
+    String rawUri, {
+    Duration timeout = const Duration(seconds: 1),
+  }) async {
     final client = HttpClient();
-    client.connectionTimeout = const Duration(milliseconds: 300);
+    final connectTimeout = Duration(
+      milliseconds: (timeout.inMilliseconds * 0.4).round().clamp(100, 1000),
+    );
+    final responseTimeout = Duration(
+      milliseconds: (timeout.inMilliseconds * 0.6).round().clamp(150, 2000),
+    );
+    client.connectionTimeout = connectTimeout;
     try {
       final uri = Uri.parse(rawUri);
       final req = await client.getUrl(uri);
-      final resp = await req.close().timeout(const Duration(milliseconds: 400));
+      final resp = await req.close().timeout(responseTimeout);
       if (resp.statusCode == HttpStatus.ok ||
           resp.statusCode == HttpStatus.found) {
         return true;

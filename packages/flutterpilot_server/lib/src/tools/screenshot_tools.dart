@@ -220,14 +220,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           100.0,
         );
 
-        // Decode both PNGs and compare pixel-by-pixel.
-        final baselineImg = img.decodePng(baseline);
-        final currentImg = img.decodePng(currentBytes);
+        // Decode both images format-agnostically (PNG, JPEG, etc.) and compare pixel-by-pixel.
+        final baselineImg = img.decodeImage(baseline);
+        final currentImg = img.decodeImage(currentBytes);
 
         if (baselineImg == null || currentImg == null) {
           return CallToolResult(
             content: [
-              TextContent(text: 'Failed to decode PNG images for comparison'),
+              TextContent(text: 'Failed to decode screenshot images for comparison'),
             ],
             isError: true,
           );
@@ -331,6 +331,139 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               text:
                   '${jsonEncode(res.data)}\n\n'
                   'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_interactive_elements',
+      description:
+          'Discovers all actionable, interactive widgets currently visible and hittable on screen '
+          '(buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). '
+          'Filters out offstage, occluded, or covered widgets using Flutter hit testing. '
+          'Returns a clean, compact list with bounds, keys, identifiers, and visible labels.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'types': JsonSchema.array(
+            items: JsonSchema.string(),
+            description:
+                'Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getInteractiveElements',
+          p,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: jsonEncode(res.data),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_app_snapshot',
+      description:
+          'Instant 360-Degree Runtime Snapshot (<5ms): Returns complete consolidated application state in ONE call — '
+          'current route, all visible & hittable interactive elements (with keys, labels & bounds), '
+          'currently focused widget, recent uncaught errors, recent logs, FPS, screen mutation counter, and viewport dimensions. '
+          'Use this as your PRIMARY exploration and verification tool to eliminate 5+ redundant roundtrip tool calls.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getAppSnapshot',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        final data = res.data ?? {};
+        final route = data['route']?['current'] ?? '/';
+        final depth = data['route']?['stackDepth'] ?? 1;
+        final elements = (data['interactiveElements'] as List?) ?? [];
+        final errors = (data['recentErrors'] as List?) ?? [];
+        final logs = (data['recentLogs'] as List?) ?? [];
+        final perf = data['performance'] ?? {};
+        final fps = perf['fps'] ?? 0;
+        final effectiveFps = perf['effectiveFps'] ?? fps;
+        final jankPct = (perf['jankPercentage'] as num?)?.toDouble() ?? 0.0;
+        final avgMs = (perf['avgFrameDurationMs'] as num?)?.toDouble();
+        final diagnosis = perf['diagnosis']?.toString();
+        final focused = data['focusedElement'];
+        final vp = data['viewport'] ?? {};
+
+        final summary = StringBuffer();
+        summary.writeln('📱 Flutter App Runtime Snapshot:');
+        summary.writeln('• Route: $route (Depth: $depth)');
+        summary.writeln(
+          '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
+        );
+        summary.writeln(
+          '• Focused Element: ${focused != null ? "${focused['type']} (key: ${focused['key'] ?? 'none'}, text: \"${focused['text'] ?? ''}\")" : "None"}',
+        );
+        final perfStr = StringBuffer('• Performance: $effectiveFps FPS');
+        if (avgMs != null) perfStr.write(' | Frame: ${avgMs.toStringAsFixed(1)}ms');
+        if (jankPct > 0.0) perfStr.write(' | Jank: ${jankPct.toStringAsFixed(1)}%');
+        perfStr.write(' | Screen Mutations: ${perf['mutationCount']}');
+        summary.writeln(perfStr.toString());
+        if (jankPct >= 20.0 || (avgMs != null && avgMs > 20.0)) {
+          summary.writeln(
+            '  ⚠️ PERF WARNING: Dropping frames ($jankPct% jank). ${diagnosis ?? ""}',
+          );
+        }
+        final issues = data['issues'] as Map<String, dynamic>?;
+        if (issues != null) {
+          final isHealthy = issues['isHealthy'] == true;
+          final crit = issues['criticalCount'] ?? 0;
+          final warn = issues['warningCount'] ?? 0;
+          if (isHealthy) {
+            summary.writeln('• App Health: 🟢 Clean (0 Defects)');
+          } else {
+            summary.writeln(
+              '• App Health: 🚨 $crit Critical, ⚠️ $warn Warnings (call get_app_issues for details)',
+            );
+          }
+        }
+        summary.writeln(
+          '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
+        );
+        summary.writeln(
+          '• Hittable Interactive Elements (${elements.length}):',
+        );
+        for (final el in elements.take(15)) {
+          final label = el['label']?.toString() ?? '';
+          final key = (el['key'] ?? el['identifier'] ?? '').toString();
+          final type = el['type']?.toString() ?? 'Widget';
+          final bounds = el['bounds'] != null
+              ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
+              : '';
+          final keyInfo =
+              key.isNotEmpty && key != label ? ' [key: $key]' : '';
+          summary.writeln(
+            '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo',
+          );
+        }
+        if (elements.length > 15) {
+          summary.writeln('  ... and ${elements.length - 15} more elements');
+        }
+        if (logs.isNotEmpty) {
+          summary.writeln('• Recent Console Logs (${logs.length}):');
+          for (final log in logs.take(5)) {
+            summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
+          }
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${summary.toString().trim()}\n\nFull JSON Data:\n${jsonEncode(data)}',
             ),
           ],
         );
@@ -506,13 +639,37 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           if (!file.parent.existsSync()) {
             file.parent.createSync(recursive: true);
           }
-          // Write animated GIF or frame summary
-          file.writeAsBytesSync(frames.first);
+
+          // Decode all frames and assemble into an animated GIF.
+          final frameDurationHundredths = (delayMs / 10).round().clamp(1, 6000);
+          img.Image? animation;
+          for (final frameBytes in frames) {
+            final decoded = img.decodeImage(frameBytes);
+            if (decoded == null) continue;
+            decoded.frameDuration = frameDurationHundredths;
+            if (animation == null) {
+              animation = decoded;
+            } else {
+              animation.addFrame(decoded);
+            }
+          }
+
+          if (animation == null) {
+            return CallToolResult(
+              content: [
+                TextContent(text: 'Failed to decode frames for GIF generation.'),
+              ],
+              isError: true,
+            );
+          }
+
+          final gifBytes = img.encodeGif(animation);
+          file.writeAsBytesSync(gifBytes);
           return CallToolResult(
             content: [
               TextContent(
                 text:
-                    '🎬 Session GIF exported to `$path` (${frames.length} frames, ${delayMs}ms delay).',
+                    '🎬 Session GIF exported to `$path` (${animation.numFrames} frames, ${delayMs}ms delay).',
               ),
             ],
           );

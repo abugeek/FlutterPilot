@@ -138,7 +138,7 @@ void main() {
     });
 
     test('reset clears onStateChange callback', () {
-      NavigationTracker.onStateChange = (_, __, ___) {};
+      NavigationTracker.onStateChange = (_, _, _) {};
       NavigationTracker.reset();
 
       // After reset, the callback should be null

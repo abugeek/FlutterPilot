@@ -324,6 +324,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _isReconnecting = true;
     _vmService = null;
     _cachedMainIsolateId = null;
+    final activeContext = _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
+    if (activeContext != null) {
+      activeContext.cachedMainIsolateId = null;
+      activeContext.service = null;
+      activeContext.connectionGeneration++;
+    }
     _attemptReconnect();
   }
 
@@ -563,7 +569,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       title: 'FlutterPilot Usage Guide',
       description:
           'Complete guide on how to use FlutterPilot tools effectively. '
-          'Call this prompt at the start of a session to understand all 83 tools, '
+          'Call this prompt at the start of a session to understand all available tools, '
           'when to use each one, and recommended workflows.',
       callback: (args, extra) async {
         return GetPromptResult(
@@ -574,7 +580,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               content: TextContent(
                 text: '''# FlutterPilot — AI Agent Guide
 
-You are connected to a live Flutter app via FlutterPilot (83 MCP tools).
+You are connected to a live Flutter app via FlutterPilot.
 Use this guide to understand what tools to call, when, and in what order.
 
 ## First Steps (always start here)
@@ -616,12 +622,8 @@ Use this guide to understand what tools to call, when, and in what order.
 ## Debug Console (replaces manual VS Code copy-paste)
 - `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
 - `clear_debug_logs` — Clear buffer before a test
-- `set_log_filter` — Clear both server + in-app log buffers
-
-## DevTools-Level Deep Inspection
-- `get_memory_details` — Heap used/capacity/external per isolate
-- `get_allocation_profile(limit)` — Top Dart classes by heap bytes (find leaks)
-- `get_gc_stats` — GC heap pressure
+- `clear_all_logs` — Clear both server + in-app log buffers
+- `get_gc_stats` — Heap pressure snapshot (used vs. capacity)
 - `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
 - `clear_http_profile` — Reset before testing a specific API call
 - `get_render_tree` — Render object layout tree
@@ -1019,6 +1021,11 @@ Use this guide to understand what tools to call, when, and in what order.
         extension.startsWith('ext.flutterpilot.capture') ||
         extension.startsWith('ext.flutterpilot.compare') ||
         extension.startsWith('ext.flutterpilot.diagnose') ||
+        extension.startsWith('ext.flutterpilot.audit') ||
+        extension.startsWith('ext.flutterpilot.profile') ||
+        extension.startsWith('ext.flutterpilot.query') ||
+        extension.startsWith('ext.flutterpilot.export') ||
+        extension.startsWith('ext.flutterpilot.generate') ||
         extension.startsWith('ext.flutterpilot.ping') ||
         extension.startsWith('ext.dart.io.get') ||
         extension == 'ext.flutter.inspector.getRootWidgetTree';
@@ -1034,8 +1041,6 @@ Use this guide to understand what tools to call, when, and in what order.
     context.connectionGeneration++;
     if (context.deviceId == _fleetManager.activeDeviceId) {
       _vmService = null;
-    }
-    if (context.deviceId == _fleetManager.activeDeviceId) {
       _scheduleReconnect();
     }
   }
@@ -1115,7 +1120,8 @@ Use this guide to understand what tools to call, when, and in what order.
         }
       } on TimeoutException {
         // Fall back to full isolate refresh
-      } catch (_) {
+      } catch (e) {
+        _log.fine('Unexpected error calling extension on cached isolate, clearing cache: $e');
         cacheIsolate(null);
       }
     }
@@ -1238,8 +1244,27 @@ Use this guide to understand what tools to call, when, and in what order.
         if (res.json != null) {
           return _ExtensionResult.success(res.json!);
         }
+      } else if (extension.startsWith('ext.flutterpilot.tap') ||
+          extension.startsWith('ext.flutterpilot.enter') ||
+          extension.startsWith('ext.flutterpilot.navigate') ||
+          extension.startsWith('ext.flutterpilot.pressBack') ||
+          extension.startsWith('ext.flutterpilot.scroll') ||
+          extension.startsWith('ext.flutterpilot.swipe') ||
+          extension.startsWith('ext.flutterpilot.drag') ||
+          extension.startsWith('ext.flutterpilot.doubleTap') ||
+          extension.startsWith('ext.flutterpilot.longPress') ||
+          extension.startsWith('ext.flutterpilot.pinchZoom') ||
+          extension == 'ext.flutterpilot.captureScreenshot') {
+        return _ExtensionResult.error(
+          'Zero-Code mode is active. Interactive automation tools ($extension) require '
+          'flutterpilot_sdk in your Flutter app. Run "flutterpilot init" in your project directory '
+          'to install and initialize the SDK, then restart your app with "flutter run".',
+          ErrorCategory.toolNotFound,
+        );
       }
-    } catch (_) {}
+    } catch (e) {
+      _log.fine('Zero-code fallback failed for $extension: $e');
+    }
     return null;
   }
 
@@ -1249,6 +1274,7 @@ Use this guide to understand what tools to call, when, and in what order.
 
   Future<void> stop() async {
     _disposed = true;
+    _isReconnecting = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     for (final context in _deviceContexts.values) {

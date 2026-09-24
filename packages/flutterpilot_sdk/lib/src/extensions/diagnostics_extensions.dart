@@ -15,6 +15,15 @@ part of '../../flutterpilot_sdk.dart';
 /// - `pumpFrames` — Wait for N animation frames
 extension _DiagnosticsExtensions on FlutterPilot {
   static void register() {
+    // -- ext.flutterpilot.getAppSnapshot --------------------------------------
+    registerExtension('ext.flutterpilot.getAppSnapshot', (
+      method,
+      parameters,
+    ) async {
+      final snapshot = FlutterPilot.getAppSnapshot();
+      return ServiceExtensionResponse.result(json.encode(snapshot));
+    });
+
     // -- ext.flutterpilot.getSummary ------------------------------------------
     registerExtension('ext.flutterpilot.getSummary', (
       method,
@@ -254,6 +263,36 @@ extension _DiagnosticsExtensions on FlutterPilot {
       parameters,
     ) async {
       StreamInspector.clear();
+      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
+    });
+
+    // -- ext.flutterpilot.getAppIssues ---------------------------------------
+    registerExtension('ext.flutterpilot.getAppIssues', (
+      method,
+      parameters,
+    ) async {
+      final sevStr = parameters['severity']?.toLowerCase() ?? 'warning';
+      final unseenOnly = parameters['unseenOnly'] == 'true';
+      IssueSeverity minSev = IssueSeverity.warning;
+      if (sevStr == 'critical') {
+        minSev = IssueSeverity.critical;
+      } else if (sevStr == 'info' || sevStr == 'all') {
+        minSev = IssueSeverity.info;
+      }
+
+      final summary = IssueDetector.getSummaryJson(
+        minSeverity: minSev,
+        unseenOnly: unseenOnly,
+      );
+      return ServiceExtensionResponse.result(json.encode(summary));
+    });
+
+    // -- ext.flutterpilot.clearAppIssues -------------------------------------
+    registerExtension('ext.flutterpilot.clearAppIssues', (
+      method,
+      parameters,
+    ) async {
+      IssueDetector.clear();
       return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
   }

@@ -23,37 +23,150 @@ part of '../../flutterpilot_sdk.dart';
 /// - `assertWidgetDisabled` — Assert a widget is disabled
 /// - `unfocusAll` — Remove focus from all widgets
 extension _WidgetExtensions on FlutterPilot {
+  static final KeyboardSimulator _keyboardSimulator = KeyboardSimulator();
+
   static String _makeWidgetNotFoundMessage(String target) {
     final suggestions = PilotWidgetInspector.getAvailableActionableTargets();
     if (suggestions.isNotEmpty) {
       return 'Widget not found matching: "$target".\n'
           'HINT: Visible actionable targets on current screen:\n'
           '${suggestions.map((s) => ' • "$s"').join('\n')}\n'
-          'Or call get_widget_tree() to inspect the full widget hierarchy.';
+          'Or call get_widget_tree() / get_interactive_elements() to inspect the UI hierarchy.';
     }
-    return 'Widget not found matching: "$target". HINT: Call get_widget_tree() to inspect available widgets on screen.';
+    return 'Widget not found matching: "$target". HINT: Call get_interactive_elements() or get_widget_tree() to inspect available widgets.';
   }
 
   static void register() {
     // -- ext.flutterpilot.tapWidget -------------------------------------------
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
-      final target = parameters['key'] ?? parameters['target'];
+      final xVal = double.tryParse(parameters['x'] ?? '');
+      final yVal = double.tryParse(parameters['y'] ?? '');
+      if (xVal != null && yVal != null) {
+        final routeBefore = NavigationTracker.currentRoute;
+        if (FlutterPilot._isRecording) {
+          FlutterPilot._recordAction('tapAt', {'x': xVal, 'y': yVal});
+        }
+        await InteractionManager.tapAt(
+          Offset(xVal, yVal),
+          label: '(${xVal.round()}, ${yVal.round()})',
+        );
+        final routeAfter = NavigationTracker.currentRoute;
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'coordinates': {'x': xVal, 'y': yVal},
+            'delta': {
+              'navigated': routeBefore != routeAfter,
+              'fromRoute': routeBefore,
+              'toRoute': routeAfter,
+            },
+          }),
+        );
+      }
+
+      int? semanticsId = int.tryParse(parameters['semanticsId'] ?? '');
+      final rawTarget = parameters['key'] ??
+          parameters['target'] ??
+          parameters['identifier'] ??
+          parameters['text'] ??
+          parameters['type'];
+
+      if (semanticsId == null && rawTarget != null) {
+        final semMatch = RegExp(r'^(?:semantics:|Semantics#|id:)(\d+)$', caseSensitive: false)
+            .firstMatch(rawTarget.toString().trim());
+        if (semMatch != null) {
+          semanticsId = int.tryParse(semMatch.group(1)!);
+        }
+      }
+
+      if (semanticsId != null) {
+        FlutterPilot._semanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
+        SemanticsNode? root;
+        try {
+          root = RendererBinding.instance.rootPipelineOwner.semanticsOwner?.rootSemanticsNode;
+        } catch (_) {}
+
+        SemanticsNode? targetNode;
+        if (root != null) {
+          void search(SemanticsNode node) {
+            if (targetNode != null) return;
+            if (node.id == semanticsId) {
+              targetNode = node;
+              return;
+            }
+            node.visitChildren((child) {
+              search(child);
+              return targetNode == null;
+            });
+          }
+          search(root);
+        }
+
+        if (targetNode != null) {
+          Matrix4 transform = Matrix4.identity();
+          SemanticsNode? curr = targetNode;
+          while (curr != null) {
+            if (curr.transform != null) {
+              transform = curr.transform!.multiplied(transform);
+            }
+            curr = curr.parent;
+          }
+          final globalRect = MatrixUtils.transformRect(transform, targetNode!.rect);
+          final center = globalRect.center;
+          final routeBefore = NavigationTracker.currentRoute;
+          if (FlutterPilot._isRecording) {
+            FlutterPilot._recordAction('tapWidget', {'semanticsId': semanticsId});
+          }
+          await InteractionManager.tapAt(center, label: 'Semantics #$semanticsId');
+          final routeAfter = NavigationTracker.currentRoute;
+          final postActionState = FlutterPilot.getPostActionState(previousRoute: routeBefore);
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'success',
+              'semanticsId': semanticsId,
+              'coordinates': {'x': center.dx, 'y': center.dy},
+              'postActionState': postActionState,
+              'delta': {
+                'navigated': routeBefore != routeAfter,
+                'fromRoute': routeBefore,
+                'toRoute': routeAfter,
+              },
+            }),
+          );
+        } else {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'SemanticsNode with id $semanticsId not found in the current semantics tree.',
+          );
+        }
+      }
+
+      final target = rawTarget;
+      final maxAttempts = int.tryParse(parameters['maxAttempts'] ?? '') ?? 8;
+
       if (target == null || target.isEmpty) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key or target parameter',
+          'Missing key, target, identifier, text, semanticsId, or coordinates (x, y)',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
+
+      var element = PilotWidgetInspector.findElement(target);
+      if (element == null || !HitTestUtils.isElementHittable(element)) {
+        await ScrollSimulator.scrollUntilVisible(target, maxAttempts: maxAttempts);
+        element = PilotWidgetInspector.findElement(target);
+      }
+
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           _makeWidgetNotFoundMessage(target),
         );
       }
+
       final routeBefore = NavigationTracker.currentRoute;
       RenderObject? ro = element.renderObject;
-      if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
+      if (ro is! RenderBox || !ro.hasSize || !ro.attached || !HitTestUtils.isElementHittable(element)) {
         try {
           await Scrollable.ensureVisible(
             element,
@@ -72,10 +185,13 @@ extension _WidgetExtensions on FlutterPilot {
         }
         await InteractionManager.tapAt(pos, label: target);
         final routeAfter = NavigationTracker.currentRoute;
+        final postActionState =
+            FlutterPilot.getPostActionState(previousRoute: routeBefore);
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
             'target': target,
+            'postActionState': postActionState,
             'delta': {
               'navigated': routeBefore != routeAfter,
               'fromRoute': routeBefore,
@@ -90,54 +206,274 @@ extension _WidgetExtensions on FlutterPilot {
       );
     });
 
-    // -- ext.flutterpilot.enterText -------------------------------------------
-    registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
-      final target = parameters['key'] ?? parameters['target'];
-      final text = parameters['text'];
-      if (target == null || text == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing target or text params',
+    // -- ext.flutterpilot.secondaryTapWidget ----------------------------------
+    registerExtension('ext.flutterpilot.secondaryTapWidget', (
+      method,
+      parameters,
+    ) async {
+      final xVal = double.tryParse(parameters['x'] ?? '');
+      final yVal = double.tryParse(parameters['y'] ?? '');
+      if (xVal != null && yVal != null) {
+        await InteractionManager.secondaryTapAt(
+          Offset(xVal, yVal),
+          label: 'Right Click (${xVal.round()}, ${yVal.round()})',
+        );
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'coordinates': {'x': xVal, 'y': yVal}}),
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
+
+      final target = parameters['key'] ??
+          parameters['target'] ??
+          parameters['identifier'] ??
+          parameters['text'];
+
+      if (target == null || target.isEmpty) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key, target, identifier, or coordinates',
+        );
+      }
+
+      var element = PilotWidgetInspector.findElement(target);
+      if (element == null || !HitTestUtils.isElementHittable(element)) {
+        await ScrollSimulator.scrollUntilVisible(target);
+        element = PilotWidgetInspector.findElement(target);
+      }
+
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           _makeWidgetNotFoundMessage(target),
         );
       }
-      bool found = false;
-      void findText(Element e) {
-        if (found) return;
-        if (e is StatefulElement && e.state is EditableTextState) {
-          try {
-            final state = e.state;
-            if (state is EditableTextState) {
-              state.updateEditingValue(TextEditingValue(text: text));
-              found = true;
-            }
-          } catch (_) {
-            try {
-              (e.state as dynamic).controller.text = text;
-              found = true;
-            } catch (_) {}
-          }
-          if (found && FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
-          }
-          return;
-        }
-        e.visitChildren(findText);
+
+      final ro = element.renderObject;
+      if (ro is RenderBox && ro.hasSize && ro.attached) {
+        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+        await InteractionManager.secondaryTapAt(pos, label: 'Right Click: $target');
+        final postActionState = FlutterPilot.getPostActionState();
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'target': target,
+            'postActionState': postActionState,
+          }),
+        );
       }
 
-      findText(element);
-      return found
-          ? ServiceExtensionResponse.result(json.encode({'status': 'success'}))
-          : ServiceExtensionResponse.error(
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'No layout for target: $target',
+      );
+    });
+
+    // -- ext.flutterpilot.enterText -------------------------------------------
+    registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
+      final target = parameters['key'] ??
+          parameters['target'] ??
+          parameters['identifier'] ??
+          parameters['text'];
+      final text = parameters['text'] ?? parameters['value'];
+      final isFocusedRequested = parameters['focused_element'] == 'true' ||
+          target == 'focused' ||
+          target == null ||
+          target.isEmpty;
+
+      if (text == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing text parameter',
+        );
+      }
+
+      EditableTextState? editableTextState;
+
+      // 1. Try focused element if requested or no target given
+      if (isFocusedRequested) {
+        final focusNode = FocusManager.instance.primaryFocus;
+        final ctx = focusNode?.context;
+        if (ctx != null) {
+          ctx.visitAncestorElements((e) {
+            if (e is StatefulElement && e.state is EditableTextState) {
+              editableTextState = e.state as EditableTextState;
+              return false;
+            }
+            return true;
+          });
+        }
+      }
+
+      // 2. If not found or target was explicit, find via widget inspector
+      if (editableTextState == null && target != null && target.isNotEmpty) {
+        var element = PilotWidgetInspector.findElement(target);
+        if (element == null) {
+          await ScrollSimulator.scrollUntilVisible(target);
+          element = PilotWidgetInspector.findElement(target);
+        }
+        if (element == null) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            _makeWidgetNotFoundMessage(target),
+          );
+        }
+
+        void findText(Element e) {
+          if (editableTextState != null) return;
+          if (e is StatefulElement && e.state is EditableTextState) {
+            editableTextState = e.state as EditableTextState;
+            return;
+          }
+          e.visitChildren(findText);
+        }
+
+        findText(element);
+      }
+
+      if (editableTextState != null) {
+        editableTextState!.updateEditingValue(
+          TextEditingValue(
+            text: text,
+            selection: TextSelection.collapsed(offset: text.length),
+          ),
+        );
+        WidgetsBinding.instance.scheduleFrame();
+        await InteractionManager.pumpAndSettleAdaptive();
+
+        if (FlutterPilot._isRecording) {
+          FlutterPilot._recordAction('enterText', {
+            'key': target ?? 'focused',
+            'text': text,
+          });
+        }
+
+        final postActionState = FlutterPilot.getPostActionState();
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'text': text,
+            'postActionState': postActionState,
+          }),
+        );
+      }
+
+      return ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        'Could not find text input field for "${target ?? 'focused element'}"',
+      );
+    });
+
+    // -- ext.flutterpilot.pressKey --------------------------------------------
+    registerExtension('ext.flutterpilot.pressKey', (method, parameters) async {
+      final key = parameters['key'];
+      if (key == null || key.isEmpty) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing key parameter (e.g. "enter", "tab", "backspace", "escape", "a")',
+        );
+      }
+      final modifiersStr = parameters['modifiers'] ?? '';
+      final modifiers = modifiersStr
+          .split(',')
+          .map((m) => m.trim())
+          .where((m) => m.isNotEmpty)
+          .toSet();
+
+      try {
+        await _keyboardSimulator.pressKey(key, modifiers: modifiers);
+        if (FlutterPilot._isRecording) {
+          FlutterPilot._recordAction('pressKey', {
+            'key': key,
+            'modifiers': modifiers.toList(),
+          });
+        }
+        final postActionState = FlutterPilot.getPostActionState();
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'key': key,
+            'modifiers': modifiers.toList(),
+            'postActionState': postActionState,
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          e.toString(),
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.getInteractiveElements ------------------------------
+    registerExtension('ext.flutterpilot.getInteractiveElements', (
+      method,
+      parameters,
+    ) async {
+      final elements = PilotWidgetInspector.getInteractiveElements();
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'count': elements.length,
+          'elements': elements,
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.pinchZoomWidget -------------------------------------
+    registerExtension('ext.flutterpilot.pinchZoomWidget', (
+      method,
+      parameters,
+    ) async {
+      final scaleStr = parameters['scale'];
+      final scale = double.tryParse(scaleStr ?? '');
+      if (scale == null || scale <= 0) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'scale must be a positive number (e.g. 1.5 to zoom in, 0.5 to zoom out)',
+        );
+      }
+
+      Offset center;
+      final xVal = double.tryParse(parameters['x'] ?? '');
+      final yVal = double.tryParse(parameters['y'] ?? '');
+      if (xVal != null && yVal != null) {
+        center = Offset(xVal, yVal);
+      } else {
+        final target = parameters['key'] ?? parameters['target'];
+        if (target != null && target.isNotEmpty) {
+          final element = PilotWidgetInspector.findElement(target);
+          if (element == null) {
+            return ServiceExtensionResponse.error(
               ServiceExtensionResponse.extensionError,
-              'Not text field: $target',
+              'Widget not found: $target',
             );
+          }
+          final ro = element.renderObject;
+          if (ro is! RenderBox || !ro.hasSize) {
+            return ServiceExtensionResponse.error(
+              ServiceExtensionResponse.extensionError,
+              'No layout for target: $target',
+            );
+          }
+          center = ro.localToGlobal(ro.size.center(Offset.zero));
+        } else {
+          final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+          final size = view?.physicalSize ?? Size.zero;
+          final ratio = view?.devicePixelRatio ?? 1.0;
+          center = Offset(size.width / ratio / 2, size.height / ratio / 2);
+        }
+      }
+
+      await InteractionManager.pinchZoomAt(center, scale: scale);
+      final postActionState = FlutterPilot.getPostActionState();
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'scale': scale,
+          'center': {'x': center.dx, 'y': center.dy},
+          'postActionState': postActionState,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.scrollIntoView --------------------------------------
@@ -145,25 +481,29 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final target = parameters['key'] ?? parameters['target'];
-      if (target == null) {
+      final target = parameters['key'] ??
+          parameters['target'] ??
+          parameters['identifier'] ??
+          parameters['text'];
+      if (target == null || target.isEmpty) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key or target',
+          'Missing key or target parameter',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
-      if (element == null) {
+      final maxAttempts = int.tryParse(parameters['maxAttempts'] ?? '') ?? 8;
+      final success = await ScrollSimulator.scrollUntilVisible(target, maxAttempts: maxAttempts);
+      if (!success) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          'Could not scroll "$target" into visible view',
         );
       }
-      Scrollable.ensureVisible(element);
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success'}),
+        json.encode({'status': 'success', 'target': target}),
       );
     });
+
 
     // -- ext.flutterpilot.doubleTapWidget -------------------------------------
     registerExtension('ext.flutterpilot.doubleTapWidget', (

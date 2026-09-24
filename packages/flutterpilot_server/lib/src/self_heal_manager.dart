@@ -132,7 +132,18 @@ class SelfHealManager {
   }
 
   /// Resets the unstable flag (usually after a hot reload).
-  void reset() {
+  ///
+  /// Preserves [lastCrashReport] for post-mortem inspection by default,
+  /// unless [clearReport] is set to true.
+  void reset({bool clearReport = false}) {
     isUnstable = false;
+    if (clearReport) {
+      lastCrashReport = null;
+    }
+  }
+
+  /// Explicitly clears the recorded crash report.
+  void clearCrashReport() {
+    lastCrashReport = null;
   }
 }

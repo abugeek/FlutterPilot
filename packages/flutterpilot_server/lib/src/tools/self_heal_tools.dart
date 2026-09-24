@@ -105,13 +105,15 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         String diskStatus = '';
         if (writeToDisk && code.isNotEmpty) {
           try {
-            final file = File(targetPath);
+            final file = path.isAbsolute(targetPath)
+                ? File(targetPath)
+                : File(path.join(_projectRoot.path, targetPath));
             if (!file.parent.existsSync()) {
               file.parent.createSync(recursive: true);
             }
             file.writeAsStringSync(code);
             diskStatus =
-                '\n\n✅ Wrote reproduction test to `$targetPath`. Run with:\n`flutter test $targetPath`';
+                '\n\n✅ Wrote reproduction test to `${file.path}`. Run with:\n`flutter test ${path.relative(file.path, from: _projectRoot.path)}`';
           } catch (err) {
             diskStatus = '\n\n⚠️ Failed to write to disk: $err';
           }
@@ -181,12 +183,14 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         String diskStatus = '';
         if (writeToDisk && code.isNotEmpty) {
           try {
-            final file = File(targetPath);
+            final file = path.isAbsolute(targetPath)
+                ? File(targetPath)
+                : File(path.join(_projectRoot.path, targetPath));
             if (!file.parent.existsSync()) {
               file.parent.createSync(recursive: true);
             }
             file.writeAsStringSync(code);
-            diskStatus = '\n\n✅ Wrote test suite to `$targetPath`.';
+            diskStatus = '\n\n✅ Wrote test suite to `${file.path}`.';
           } catch (err) {
             diskStatus = '\n\n⚠️ Failed to write to disk: $err';
           }
@@ -221,7 +225,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'diagnose_last_error',
       description:
-          '[DEPRECATED] Use `get_latest_crash_report` or `get_flight_log` instead.',
+          'Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final report = _selfHealManager.lastCrashReport;

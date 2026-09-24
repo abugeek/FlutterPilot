@@ -50,6 +50,13 @@ class ErrorInspector {
         };
   }
 
+  /// Manually records an uncaught error and stack trace into the buffer.
+  static void recordError(Object error, StackTrace? stack) {
+    final details = FlutterErrorDetails(exception: error, stack: stack);
+    _captureError(details);
+    onErrorCaptured?.call(details);
+  }
+
   /// Compacts a raw stack trace by stripping internal Flutter framework frames
   /// and preserving user project frames (package:...) for an 80% token reduction.
   static String? compactStackTrace(String? rawStack) {

@@ -34,6 +34,13 @@ class NavigationTracker extends NavigatorObserver {
   /// from outside the widget tree (e.g., from a VM service extension).
   static NavigatorState? get navigatorState => _instance?.navigator;
 
+  /// Optional router-specific handler (e.g. GoRouter, AutoRoute) to execute
+  /// declarative navigation when `ext.flutterpilot.navigateTo` is called.
+  static Future<bool> Function(String route)? customNavigateHandler;
+
+  /// Optional router-specific handler to pop routes when `ext.flutterpilot.pressBack` is called.
+  static Future<bool> Function()? customPopHandler;
+
   /// Creates a [NavigationTracker] and registers it as the active instance.
   NavigationTracker() {
     _instance = this;

@@ -99,6 +99,12 @@ class DashboardScreen extends ConsumerWidget {
                   icon: Icons.wifi,
                   subtitle: 'Network status, offline simulation',
                 ),
+                _NavButton(
+                  label: 'Animation Lab',
+                  route: '/animation_lab',
+                  icon: Icons.animation,
+                  subtitle: 'High-frequency physics animation',
+                ),
               ],
             ),
           ],

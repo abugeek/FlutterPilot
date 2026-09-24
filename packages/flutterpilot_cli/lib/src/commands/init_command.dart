@@ -116,13 +116,51 @@ class InitCommand extends Command<void> {
           mainContent = mainContent.replaceFirstMapped(mainRegex, (match) {
             return '${match.group(1)}\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();';
           });
-          await mainFile.writeAsString(mainContent);
           stdout.writeln('✅ Injected FlutterPilot.initialize() into lib/main.dart.');
         } else {
           stdout.writeln('⚠️ Note: Could not auto-patch main() in lib/main.dart. Please add `FlutterPilot.initialize();` manually.');
         }
       } else {
         stdout.writeln('ℹ️ FlutterPilot is already initialized in lib/main.dart.');
+      }
+
+      // Inject NavigationTracker into MaterialApp navigatorObservers if present
+      if (!mainContent.contains('NavigationTracker')) {
+        final materialAppRegex = RegExp(r'(MaterialApp\s*\()');
+        if (materialAppRegex.hasMatch(mainContent)) {
+          final navObsRegex = RegExp(r'(navigatorObservers:\s*\[)([^\]]*)(\])');
+          if (navObsRegex.hasMatch(mainContent)) {
+            mainContent = mainContent.replaceFirstMapped(navObsRegex, (match) {
+              final existing = match.group(2)!.trim();
+              final prefix = existing.isEmpty ? '' : '$existing, ';
+              return '${match.group(1)}$prefix NavigationTracker()${match.group(3)}';
+            });
+            stdout.writeln('✅ Added NavigationTracker() to existing navigatorObservers in lib/main.dart.');
+          } else {
+            mainContent = mainContent.replaceFirstMapped(materialAppRegex, (match) {
+              return '${match.group(1)}\n      navigatorObservers: [NavigationTracker()],';
+            });
+            stdout.writeln('✅ Configured navigatorObservers: [NavigationTracker()] in MaterialApp.');
+          }
+        }
+      }
+
+      await mainFile.writeAsString(mainContent);
+    }
+
+    if (detected.isNotEmpty) {
+      stdout.writeln('\n💡 Integration tips for detected frameworks:');
+      if (detected.contains('go_router')) {
+        stdout.writeln('  • GoRouter: Call `GoRouterPilotInspector.register(router);` after creating your GoRouter.');
+      }
+      if (detected.contains('riverpod') || detected.contains('flutter_riverpod')) {
+        stdout.writeln('  • Riverpod: Add `RiverpodPilotObserver()` to your ProviderScope observers.');
+      }
+      if (detected.contains('bloc') || detected.contains('flutter_bloc')) {
+        stdout.writeln('  • Bloc: Set `Bloc.observer = BlocPilotObserver();` in your main() function.');
+      }
+      if (detected.contains('dio')) {
+        stdout.writeln('  • Dio: Attach `dio.interceptors.add(DioPilotInterceptor());` to inspect network logs.');
       }
     }
 

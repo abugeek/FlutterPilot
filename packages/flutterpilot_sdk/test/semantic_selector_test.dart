@@ -152,5 +152,32 @@ void main() {
       checkNode(tree);
       expect(foundSelector, isTrue);
     });
+
+    testWidgets('finds IconButton by icon name without explicit key or tooltip', (
+      WidgetTester tester,
+    ) async {
+      int tapCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () => tapCount++,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final el = PilotWidgetInspector.findElement("IconButton['settings']");
+      expect(el, isNotNull);
+      expect(el!.widget, isA<IconButton>());
+
+      final elDirect = PilotWidgetInspector.findElement("settings");
+      expect(elDirect, isNotNull);
+    });
   });
 }

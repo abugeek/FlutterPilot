@@ -28,6 +28,7 @@ import 'src/screens/debug_performance_screen.dart';
 import 'src/screens/accessibility_screen.dart';
 import 'src/screens/testing_screen.dart';
 import 'src/screens/connectivity_screen.dart';
+import 'src/screens/animation_lab_screen.dart';
 import 'src/state/bloc_state.dart';
 
 late final Dio dio;
@@ -126,6 +127,10 @@ class _MainAppState extends State<MainApp> {
         GoRoute(
           path: '/connectivity',
           builder: (_, __) => const ConnectivityScreen(),
+        ),
+        GoRoute(
+          path: '/animation_lab',
+          builder: (_, __) => const AnimationLabScreen(),
         ),
       ],
     );

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'hit_test_utils.dart';
+
 
 /// Provides high-performance, single-pass introspection and semantic element querying into the live Flutter widget tree.
 class PilotWidgetInspector {
@@ -20,6 +22,31 @@ class PilotWidgetInspector {
     _textCache = Expando<String>('textCache');
   }
 
+  /// Extracts the inner string from a key, stripping [<'...'>] wrappers.
+  static String? extractCleanKey(Key? key) => _extractCleanKey(key);
+  static String? _extractCleanKey(Key? key) {
+    if (key == null) return null;
+    if (key is ValueKey) {
+      return key.value.toString();
+    }
+    final raw = key.toString();
+    final match =
+        RegExp(r"\[<'(.*)'>\]|\[<(.*)>\]|\['(.*)'\]").firstMatch(raw);
+    if (match != null) {
+      return match.group(1) ?? match.group(2) ?? match.group(3) ?? raw;
+    }
+    return raw;
+  }
+
+  /// Extracts the Semantics identifier (Flutter 3.19+) if present.
+  static String? _extractIdentifier(Widget widget) {
+    if (widget is Semantics) {
+      final id = widget.properties.identifier;
+      if (id != null && id.isNotEmpty) return id;
+    }
+    return null;
+  }
+
   static void _buildKeyIndex(Element root) {
     if (_keyIndexValid) return;
     _keyIndex.clear();
@@ -30,6 +57,14 @@ class PilotWidgetInspector {
         if (key is ValueKey) {
           _keyIndex.putIfAbsent(key.value.toString(), () => element);
         }
+        final clean = _extractCleanKey(key);
+        if (clean != null) {
+          _keyIndex.putIfAbsent(clean, () => element);
+        }
+      }
+      final id = _extractIdentifier(element.widget);
+      if (id != null) {
+        _keyIndex.putIfAbsent(id, () => element);
       }
       element.visitChildren(visit);
     }
@@ -43,10 +78,15 @@ class PilotWidgetInspector {
       return null;
     }
     _buildKeyIndex(root);
-    return _keyIndex[query] ??
+    final el = _keyIndex[query] ??
         _keyIndex["['$query']"] ??
         _keyIndex["[<'$query'>]"];
+    if (el != null && el.mounted) {
+      return el;
+    }
+    return null;
   }
+
 
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
   /// If [rootQuery] (key or semantic selector) or [rootElement] is provided, scopes the capture
@@ -163,20 +203,33 @@ class PilotWidgetInspector {
       final typeName = widget.runtimeType.toString();
       final widgetKey = widget.key?.toString();
 
-      // Priority 100: Exact Key Match (O(K) early-exit)
-      if (widgetKey != null) {
-        if (widgetKey == queryToSearch ||
+      final cleanKey = _extractCleanKey(widget.key);
+      final id = _extractIdentifier(widget);
+      final isHittable = HitTestUtils.isElementHittable(element);
+      final hittableBoost = isHittable ? 5 : 0;
+
+      // Priority 100: Exact Key Match or Semantics Identifier Match
+      if (widgetKey != null || cleanKey != null || id != null) {
+        final keyMatches = widgetKey == queryToSearch ||
             widgetKey == "['$queryToSearch']" ||
-            widgetKey == "[<'$queryToSearch'>]") {
-          bestMatch = element;
-          bestPriority = 100;
-          matches.add(element);
-          if (targetIndex == null) {
-            foundExact = true;
-            return;
+            widgetKey == "[<'$queryToSearch'>]" ||
+            (cleanKey != null && cleanKey == queryToSearch);
+        final idMatches = id != null && id == queryToSearch;
+
+        if (keyMatches || idMatches) {
+          final priority = (keyMatches ? 100 : 98) + hittableBoost;
+          if (priority > bestPriority) {
+            bestMatch = element;
+            bestPriority = priority;
+            matches.add(element);
+            if (targetIndex == null && isHittable) {
+              foundExact = true;
+              return;
+            }
           }
         }
       }
+
 
       // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
       if (typeTarget != null && (targetIndex != null || bestPriority < 90)) {
@@ -451,6 +504,51 @@ class PilotWidgetInspector {
     return elementTypeName.endsWith(targetType);
   }
 
+  static const Map<int, String> _commonIconNames = {
+    0xe57f: 'settings',
+    0xe567: 'search',
+    0xf012d: 'search',
+    0xe3dc: 'menu',
+    0xe16a: 'close',
+    0xe047: 'add',
+    0xe156: 'check',
+    0xe1bb: 'delete',
+    0xe21a: 'edit',
+    0xe092: 'arrow_back',
+    0xe095: 'arrow_forward',
+    0xe514: 'refresh',
+    0xe3e3: 'more_vert',
+    0xe3e1: 'more_horiz',
+    0xe25b: 'favorite',
+    0xe25c: 'favorite_border',
+    0xe318: 'home',
+    0xe491: 'person',
+    0xe580: 'share',
+    0xe44f: 'notifications',
+    0xe59c: 'shopping_cart',
+    0xe6c5: 'visibility',
+    0xe6c6: 'visibility_off',
+    0xe52f: 'send',
+    0xe33c: 'info',
+    0xe306: 'help',
+    0xe5f9: 'star',
+    0xe2c7: 'filter_list',
+    0xe158: 'check_box',
+    0xe159: 'check_box_outline_blank',
+    0xe3ab: 'lock',
+    0xe3ac: 'lock_open',
+    0xe3a8: 'location_on',
+    0xe199: 'content_copy',
+    0xe204: 'done',
+    0xe205: 'done_all',
+  };
+
+  static String _resolveIconName(IconData icon) {
+    final known = _commonIconNames[icon.codePoint];
+    if (known != null) return known;
+    return 'Icon#${icon.codePoint.toRadixString(16)}';
+  }
+
   static String _extractDescendantText(Element element) {
     final cached = _textCache[element];
     if (cached != null) return cached;
@@ -470,6 +568,12 @@ class PilotWidgetInspector {
           w.tooltip != null &&
           w.tooltip!.isNotEmpty) {
         buffer.write('${w.tooltip} ');
+      } else if (w is Icon) {
+        if (w.semanticLabel != null && w.semanticLabel!.isNotEmpty) {
+          buffer.write('${w.semanticLabel} ');
+        } else if (w.icon != null) {
+          buffer.write('${_resolveIconName(w.icon!)} ');
+        }
       }
       e.visitChildren(extract);
     }
@@ -551,7 +655,7 @@ class PilotWidgetInspector {
     if (currentDepth >= maxDepth) {
       return {
         'type': typeName,
-        if (keyStr != null) 'key': keyStr,
+        'key': ?keyStr,
         'truncated': true,
       };
     }
@@ -606,10 +710,10 @@ class PilotWidgetInspector {
 
     final result = <String, dynamic>{
       'type': typeName,
-      if (keyStr != null) 'key': keyStr,
-      if (selector != null) 'selector': selector,
+      'key': ?keyStr,
+      'selector': ?selector,
       if (text.isNotEmpty) 'text': text,
-      if (layout != null) 'layout': layout,
+      'layout': ?layout,
       if (children.isNotEmpty) 'children': children,
     };
 
@@ -688,4 +792,119 @@ class PilotWidgetInspector {
     traverse(node, '0');
     return result;
   }
+
+  /// Returns a concise, high-signal list of all interactive or text elements
+  /// that are currently visible and hittable on screen.
+  static List<Map<String, dynamic>> getInteractiveElements() {
+    final elements = <Map<String, dynamic>>[];
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return elements;
+
+    void visit(Element element) {
+      final widget = element.widget;
+      final type = widget.runtimeType.toString();
+
+      // Skip private framework widgets unless explicitly keyed
+      final key = _extractCleanKey(widget.key);
+      final identifier = _extractIdentifier(widget);
+      if (type.startsWith('_') && key == null && identifier == null) {
+        element.visitChildren(visit);
+        return;
+      }
+
+      // Skip generic layout containers without custom key/identifier
+      if (key == null && identifier == null && _isTransparentLayoutWrapper(type)) {
+        element.visitChildren(visit);
+        return;
+      }
+
+      final isInteractive = _isInteractiveWidget(widget, type);
+      final isTextWidget = widget is Text || widget is RichText || widget is EditableText;
+      final text = _extractWidgetText(element);
+
+      if ((isInteractive || key != null || identifier != null || isTextWidget) &&
+          HitTestUtils.isElementHittable(element)) {
+        final ro = element.renderObject as RenderBox;
+        final pos = ro.localToGlobal(Offset.zero);
+        final center = ro.localToGlobal(ro.size.center(Offset.zero));
+
+        final data = <String, dynamic>{
+          'type': type,
+          'key': ?key,
+          'identifier': ?identifier,
+          if (text.isNotEmpty) 'text': text,
+          'bounds': {
+            'x': pos.dx.round(),
+            'y': pos.dy.round(),
+            'width': ro.size.width.round(),
+            'height': ro.size.height.round(),
+          },
+          'center': {
+            'x': center.dx.round(),
+            'y': center.dy.round(),
+          },
+        };
+        elements.add(data);
+      }
+
+      element.visitChildren(visit);
+    }
+
+    visit(root);
+    return elements;
+  }
+
+  static String _extractWidgetText(Element element) {
+    final widget = element.widget;
+    if (widget is Text && widget.data != null) {
+      return widget.data!;
+    }
+    if (widget is RichText) {
+      return widget.text.toPlainText();
+    }
+    if (widget is EditableText) {
+      return widget.controller.text;
+    }
+    if (widget is Tooltip && widget.message != null) {
+      return widget.message!;
+    }
+    if (widget is Semantics) {
+      final label = widget.properties.label;
+      final val = widget.properties.value;
+      if (label != null && label.isNotEmpty) {
+        return val != null && val.isNotEmpty ? '$label: $val' : label;
+      }
+      if (val != null && val.isNotEmpty) return val;
+    }
+    final type = widget.runtimeType.toString();
+    if (_isButtonOrClickable(type)) {
+      return _extractDescendantText(element);
+    }
+    if (widget is Icon) {
+      if (widget.semanticLabel != null && widget.semanticLabel!.isNotEmpty) {
+        return widget.semanticLabel!;
+      }
+      if (widget.icon != null) {
+        return _resolveIconName(widget.icon!);
+      }
+    }
+    return '';
+  }
+
+  static bool _isInteractiveWidget(Widget widget, String type) {
+    if (_isButtonOrClickable(type)) return true;
+    if (widget is EditableText ||
+        type.contains('TextField') ||
+        type.contains('TextFormField') ||
+        type == 'Checkbox' ||
+        type == 'Switch' ||
+        type == 'Radio' ||
+        type == 'Slider' ||
+        type == 'InkWell' ||
+        type == 'GestureDetector') {
+      return true;
+    }
+    return false;
+  }
 }
+

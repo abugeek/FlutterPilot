@@ -74,12 +74,33 @@ class GoRouterPilotInspector {
     if (_registered) return;
     _registered = true;
     _router = router;
+    NavigationTracker.customNavigateHandler = (route) async {
+      try {
+        router.go(route);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+    NavigationTracker.customPopHandler = () async {
+      try {
+        if (router.canPop()) {
+          router.pop();
+          return true;
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    };
     _listenRouteChanges();
     _registerExtensions();
   }
 
   /// Clears all tracked state. Call on hot-restart to prevent stale data.
   static void reset() {
+    NavigationTracker.customNavigateHandler = null;
+    NavigationTracker.customPopHandler = null;
     if (_routerListener != null && _router != null) {
       _router!.routerDelegate.removeListener(_routerListener!);
     }

@@ -471,9 +471,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'get_gc_stats',
       description:
-          'Returns garbage collection statistics for all Dart isolates: '
-          'number of GC rounds, total bytes collected, and current heap pressure. '
-          'High GC frequency (>5/sec) can cause jank.',
+          'Returns a heap snapshot per Dart isolate — heap used vs. capacity — '
+          'which reflects GC pressure. High capacity utilization (>80%) signals '
+          'frequent GC. Pair with get_allocation_profile to find which classes '
+          'are causing heap growth.',
       inputSchema: ToolInputSchema(
         properties: {'deviceId': _deviceIdProperty()},
       ),
@@ -486,7 +487,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         }
         try {
           final vm = await vmService.getVM();
-          final buf = StringBuffer('GC statistics:\n');
+          final buf = StringBuffer('Heap snapshot (GC pressure indicator):\n');
           for (final iso in vm.isolates ?? []) {
             if (iso.id == null) continue;
             try {
@@ -500,7 +501,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
                     .toStringAsFixed(2);
                 final cap = ((newSpace.heapCapacity ?? 0) / (1024 * 1024))
                     .toStringAsFixed(2);
-                buf.writeln('  ${iso.name ?? iso.id}: heap=$used/$cap MB');
+                final pressure = newSpace.heapCapacity != null &&
+                        newSpace.heapCapacity! > 0
+                    ? ((newSpace.heapUsage ?? 0) /
+                            newSpace.heapCapacity! *
+                            100)
+                        .toStringAsFixed(0)
+                    : '?';
+                buf.writeln(
+                  '  ${iso.name ?? iso.id}: heap=$used/$cap MB  pressure=$pressure%',
+                );
               }
             } catch (e) {
               _log.fine('Failed to query isolate: $e');
