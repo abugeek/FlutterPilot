@@ -80,6 +80,15 @@ class InteractionManager {
     return {'x': position.dx, 'y': position.dy};
   }
 
+  /// Timeout for settle calls made purely to read post-action state (route,
+  /// widget-tree diff) rather than to wait out a gesture's own animation.
+  /// [AiOverlayManager]'s decorative tap ripple keeps a real ticker running
+  /// for ~700ms, which would otherwise make every settle call pay close to
+  /// [pumpAndSettleAdaptive]'s full default timeout just waiting for cosmetic
+  /// UI — a functional rebuild from setState commits within 1-2 frames, so
+  /// this stays short on purpose.
+  static const Duration postMutationSettleTimeout = Duration(milliseconds: 150);
+
   /// Adaptively waits for any active Flutter frame animations or microtasks to settle.
   static Future<void> pumpAndSettleAdaptive({
     Duration timeout = const Duration(milliseconds: 80),
@@ -218,7 +227,6 @@ class InteractionManager {
     ]);
 
     await Future.delayed(duration);
-
     await _handlePointerEventRecords([
       [
         PointerUpEvent(
@@ -258,7 +266,6 @@ class InteractionManager {
         ),
       ]);
     }
-
     final records = [
       [
         PointerAddedEvent(position: start, device: _kTouchDeviceId),

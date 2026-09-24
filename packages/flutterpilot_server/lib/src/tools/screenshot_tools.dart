@@ -10,14 +10,18 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'capture_screenshot',
       description:
-          'Capture an image of the current screen for visual analysis with adaptive compression. '
-          'Supports scale (e.g. 0.5x) and quality (e.g. 75) to reduce token payload by up to 80%.',
+          'Capture an image of the current screen for visual analysis. Defaults to a scaled-down '
+          'PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full '
+          'resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or '
+          'format: "jpeg" with a quality if you specifically want lossy compression '
+          '(jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, '
+          'so it is opt-in, not the default).',
       inputSchema: ToolInputSchema(
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
           'scale': JsonSchema.number(
             description:
-                'Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision.',
+                'Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution.',
           ),
           'quality': JsonSchema.integer(
             description:
@@ -26,10 +30,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 1.0;
-        final format =
-            p['format']?.toString().toLowerCase() ??
-            (scale < 1.0 ? 'jpeg' : 'png');
+        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 0.5;
+        final format = p['format']?.toString().toLowerCase() ?? 'png';
         final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
 
         final res = await _callExtensionRaw(

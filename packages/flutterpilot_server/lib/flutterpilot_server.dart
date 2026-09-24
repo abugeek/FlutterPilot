@@ -19,6 +19,7 @@ import 'src/vm_discovery.dart';
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
 part 'src/tools/devtools_tools.dart';
+part 'src/tools/native_automation_tools.dart';
 part 'src/tools/navigation_tools.dart';
 part 'src/tools/screenshot_tools.dart';
 part 'src/tools/self_heal_tools.dart';
@@ -98,6 +99,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     with
         _AppInspectionToolsMixin,
         _UiAutomationToolsMixin,
+        _NativeAutomationToolsMixin,
         _NavigationToolsMixin,
         _ScreenshotToolsMixin,
         _SelfHealToolsMixin,
@@ -550,6 +552,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   void _registerTools() {
     _registerAppInspectionTools();
     _registerUiAutomationTools();
+    _registerNativeAutomationTools();
     _registerNavigationTools();
     _registerScreenshotTools();
     _registerSelfHealTools();

@@ -720,12 +720,23 @@ class PilotWidgetInspector {
     return result;
   }
 
+  /// Maximum sample entries kept per added/removed/modified list in
+  /// [diffWidgetTrees]. Counts are always exact; only the listed examples
+  /// are capped, so a bulk list rebuild (e.g. 500 rows) reports its size
+  /// instead of returning hundreds of unbounded strings.
+  static const int defaultDiffSampleLimit = 8;
+
   /// Compares two widget tree snapshots and returns a minimal delta list
   /// containing only added, removed, or updated nodes (95% token savings).
+  ///
+  /// [sampleLimit] bounds how many example entries are included per
+  /// category; `addedCount`/`removedCount`/`modifiedCount` always reflect
+  /// the true totals even when the sample lists are truncated.
   static Map<String, dynamic> diffWidgetTrees(
     Map<String, dynamic> oldTree,
-    Map<String, dynamic> newTree,
-  ) {
+    Map<String, dynamic> newTree, {
+    int sampleLimit = defaultDiffSampleLimit,
+  }) {
     final added = <String>[];
     final removed = <String>[];
     final modified = <String>[];
@@ -734,35 +745,48 @@ class PilotWidgetInspector {
     final newNodes = _flattenTree(newTree);
 
     for (final entry in newNodes.entries) {
-      if (!oldNodes.containsKey(entry.key)) {
-        added.add(entry.value);
-      } else if (oldNodes[entry.key] != entry.value) {
+      final oldNode = oldNodes[entry.key];
+      if (oldNode == null) {
+        added.add(entry.value.description);
+      } else if (oldNode.description != entry.value.description) {
         modified.add(
-          '${entry.key}: changed from "${oldNodes[entry.key]}" to "${entry.value}"',
+          '${entry.value.label}: changed from "${oldNode.description}" to "${entry.value.description}"',
         );
       }
     }
 
     for (final entry in oldNodes.entries) {
       if (!newNodes.containsKey(entry.key)) {
-        removed.add(entry.value);
+        removed.add(entry.value.description);
       }
     }
 
+    final totalChanges = added.length + removed.length + modified.length;
+    final truncated = added.length > sampleLimit ||
+        removed.length > sampleLimit ||
+        modified.length > sampleLimit;
+
     return {
-      'hasChanges':
-          added.isNotEmpty || removed.isNotEmpty || modified.isNotEmpty,
+      'hasChanges': totalChanges > 0,
       'addedCount': added.length,
       'removedCount': removed.length,
       'modifiedCount': modified.length,
-      'added': added,
-      'removed': removed,
-      'modified': modified,
+      'added': added.take(sampleLimit).toList(),
+      'removed': removed.take(sampleLimit).toList(),
+      'modified': modified.take(sampleLimit).toList(),
+      'truncated': truncated,
+      if (truncated)
+        'note':
+            '$totalChanges total node changes — likely a bulk rebuild (e.g. a list). '
+            'Showing up to $sampleLimit samples per category; call get_widget_tree '
+            'for full detail if the samples are not enough to confirm the change.',
     };
   }
 
-  static Map<String, String> _flattenTree(Map<String, dynamic> node) {
-    final result = <String, String>{};
+  static Map<String, ({String label, String description})> _flattenTree(
+    Map<String, dynamic> node,
+  ) {
+    final result = <String, ({String label, String description})>{};
     void traverse(Map<String, dynamic> current, String path) {
       final type = current['type']?.toString() ?? 'Widget';
       final key = current['key']?.toString();
@@ -771,12 +795,13 @@ class PilotWidgetInspector {
 
       // Keys and semantic selectors are not guaranteed to be unique. Keep the
       // structural path in the identity so repeated list rows do not overwrite
-      // one another in the diff map.
+      // one another in the diff map — but keep that path out of the
+      // human-readable label; it's meaningless to a caller.
       final semanticIdentity = key ?? selector ?? type;
       final nodeIdentifier = '$path:$semanticIdentity';
       final nodeDescription =
           '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
-      result[nodeIdentifier] = nodeDescription;
+      result[nodeIdentifier] = (label: semanticIdentity, description: nodeDescription);
 
       final children = current['children'] as List?;
       if (children != null) {
