@@ -35,6 +35,54 @@ class DashboardScreen extends ConsumerWidget {
               'Welcome to the FlutterPilot reference app! This app is designed to be fully introspectable by AI agents.',
             ),
             const SizedBox(height: 20),
+            Card(
+              key: const Key('pilot_control_center_card'),
+              elevation: 2,
+              color: Colors.indigo.shade50,
+              margin: const EdgeInsets.only(bottom: 20),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.flight_takeoff, color: Colors.indigo),
+                        const SizedBox(width: 8),
+                        Text(
+                          'FlutterPilot Mission Control',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo.shade900,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Autonomous agent is connected and controlling the emulator session in real-time.',
+                      key: Key('pilot_mission_status_text'),
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      key: const Key('run_health_sweep_button'),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('⚡ FlutterPilot Autonomous Health Sweep Executed! All systems operational.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.verified),
+                      label: const Text('Execute Autonomous Health Sweep'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             Wrap(
               spacing: 10,
               runSpacing: 10,
