@@ -11,45 +11,34 @@ import 'package:flutter/widgets.dart';
 
 import 'src/flutterpilot_binding.dart';
 
-import 'src/chaos_fuzzer.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
-import 'src/repro_test_generator.dart';
 import 'src/ring_buffer.dart';
-import 'src/state_snapshot_manager.dart';
 import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
 import 'src/issue_detector.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/scroll_simulator.dart';
 import 'src/stream_inspector.dart';
-import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
-export 'src/chaos_fuzzer.dart';
 export 'src/error_inspector.dart';
-export 'src/fixture_manager.dart';
 export 'src/flight_recorder.dart';
 export 'src/flutterpilot_binding.dart';
 export 'src/frame_budget_profiler.dart';
-export 'src/gif_encoder.dart';
 export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
 export 'src/issue_detector.dart';
 export 'src/keyboard_simulator.dart';
 export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
-export 'src/pr_report_generator.dart';
-export 'src/repro_test_generator.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
-export 'src/state_snapshot_manager.dart';
 export 'src/stream_inspector.dart';
-export 'src/test_synthesizer.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
 
@@ -191,16 +180,8 @@ class FlutterPilot {
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
-  static int _screenMutationCount = 0;
-
-  /// Current 64-bit frame mutation counter.
-  static int get screenMutationCount => _screenMutationCount;
-
-  /// Signals that the screen UI or state has mutated.
-  static void notifyMutation() {
-    _screenMutationCount++;
-    PilotWidgetInspector.invalidateCache();
-  }
+  /// Invalidates cached element lookups (called after a hot reload).
+  static void notifyMutation() => PilotWidgetInspector.invalidateCache();
 
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
@@ -316,7 +297,6 @@ class FlutterPilot {
         'performance': {
           'fps': _lastFps,
           'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
-          'mutationCount': _screenMutationCount,
           'frameCount': _frameCount,
           'jankPercentage': jankPct,
           'avgFrameDurationMs': avgDuration,
@@ -353,7 +333,6 @@ class FlutterPilot {
       return {
         'route': currentRoute,
         if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
-        'mutationCount': _screenMutationCount,
         'focusedElement': ?focusedKey,
         'interactiveElementsCount': interactive.length,
         'visibleInteractiveElements': elementsSummary,

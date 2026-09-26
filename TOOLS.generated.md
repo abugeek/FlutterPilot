@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 164
+Tool count: 148
 
 ## `get_operation`
 
@@ -65,8 +65,6 @@ Get a 360-degree overview of the app: current route, widget count, pending error
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -78,8 +76,6 @@ Retrieve the most recent unhandled exceptions and stack traces with duplicate ag
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -209,14 +205,6 @@ Alias for profile_frame_budget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `replay_flight_log`
-
-Live Autonomous Flight Replay Engine: Re-executes the recorded rolling 30s user actions, taps, and gestures live inside the running app in fast-forward mode (~150ms per action). Enables instant live reproduction of bugs.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `delayMs` | integer | no | Delay between replayed actions in milliseconds (default: 150ms). |
 
 ## `get_stream_logs`
 
@@ -563,8 +551,6 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -692,13 +678,6 @@ Delta Widget Tree Inspector: Compares current screen with the previously capture
 | `maxDepth` | integer | no | Maximum depth to inspect (default: 50). |
 | `compact` | boolean | no | Whether to prune intermediate layout wrappers (default: true). |
 
-## `get_screen_hash`
-
-Fast lightweight screen mutation checker (<10 tokens). Returns the 64-bit frame mutation counter and active route. Call this to check if a user action mutated the UI without fetching a full tree.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `get_widget_properties`
 
 Reads the semantic properties of a widget identified by its key. Returns: type, text (Text/TextField content), isEnabled (onPressed/onTap/onChanged non-null), isChecked (Checkbox/Switch), value/min/max (Slider), isFocused, and screen-space bounds. Use this instead of screenshots to verify widget state.
@@ -714,15 +693,6 @@ Returns the full accessibility semantics tree as seen by screen readers (VoiceOv
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values for faster results. |
-
-## `export_session_gif`
-
-Generates an animated GIF replay artifact of the interaction session or baseline screens. Saves directly to disk (e.g. "artifacts/session_replay.gif") for visual proof in pull requests or reviews.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `outputPath` | string | no | Target file path for the GIF (default: "artifacts/session_replay.gif"). |
-| `delayMs` | integer | no | Delay between frames in milliseconds (default: 500). |
 
 ## `get_self_heal_status`
 
@@ -745,29 +715,6 @@ Retrieves the chronological 30-60 second rolling flight recorder timeline (user 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `generate_repro_test`
-
-Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix. CRASH-REPRODUCTION ONLY — do not use this to verify a routine tap/form/navigation change on the already-running app; spinning up a cold `flutter test` process is far slower than the delta already returned by tap_widget/enter_text/execute_action_chain, or a direct assert_widget_visible / assert_text_visible / assert_widget_count check against the live app.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `testName` | string | no | Optional descriptive name for the test. |
-| `widgetName` | string | no | Root widget or screen name to mount (default: "MyApp()"). |
-| `writeToDisk` | boolean | no | Whether to automatically write the test to test/repro_test.dart (default: false). |
-| `filePath` | string | no | Custom file path to write to (default: "test/repro_test.dart"). |
-
-## `export_test_suite`
-
-Exports recorded user journeys and flight sessions as production-ready test suites for Patrol, standard Flutter Integration Tests, or Widget Tests. Can write the file directly to disk (e.g. integration_test/flow_test.dart or test/flow_test.dart).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `framework` | string | no | Target test framework: "patrol", "integration_test", or "widget_test" (default: "patrol"). |
-| `testName` | string | no | Descriptive test name. |
-| `appWidget` | string | no | Target app/screen widget name (e.g. "MyApp()", "CheckoutScreen()"). |
-| `writeToDisk` | boolean | no | Whether to write generated test to disk (default: false). |
-| `filePath` | string | no | File path to write (e.g. "integration_test/checkout_flow_test.dart"). |
 
 ## `clear_flight_log`
 
@@ -800,25 +747,12 @@ Recompile and hot restart the app (state is reset). CALL THIS for changes hot re
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `generate_pr_report`
-
-Auto-generates a ready-to-paste GitHub Pull Request Markdown report summarizing the verified changes, UI Health Audit (0 overflows), test results, and visual proof replay links.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `title` | string | yes | Pull Request title (e.g. "feat: implement responsive product checkout"). |
-| `description` | string | no | Summary of what was built, changed, or fixed. |
-| `generatedTestPath` | string | no | Path to synthesized test file if generated (e.g. "integration_test/flow_test.dart"). |
-| `gifPath` | string | no | Path to exported session GIF if created (e.g. "artifacts/demo.gif"). |
-
 ## `get_riverpod_state`
 
 Inspect current values of all active Riverpod providers. Returns provider name, current value (as string), value type, and timestamp. PREREQUISITES: App must use flutterpilot_riverpod plugin with RiverpodPilotObserver. Use get_capabilities first to check if the riverpod plugin is loaded. COMMON ERRORS: Empty result means no providers are active or plugin is not registered.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -848,8 +782,6 @@ Inspect the current states of all active Blocs and Cubits. CALL THIS to verify b
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -870,8 +802,6 @@ View the last 50 HTTP requests and responses. CALL THIS if an API call failed or
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -883,8 +813,6 @@ Dump the contents of all registered Hive boxes. CALL THIS to verify local persis
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -897,8 +825,6 @@ List all tables in the SQLite (Drift) database.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `dbName` | string | no | The Drift database name registered via FlutterPilot. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -919,8 +845,6 @@ List all sqflite databases registered with FlutterPilot. PREREQUISITES: App must
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -933,8 +857,6 @@ List all tables in a sqflite database. PREREQUISITES: App must use flutterpilot_
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `dbName` | string | no | The sqflite database name registered via FlutterPilot. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -965,8 +887,6 @@ Returns all SharedPreferences keys and their typed values (String, int, double, 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | string | no | Set to "true" to reveal values for sensitive-looking keys. Default: redacted. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1018,53 +938,6 @@ Removes a specific URL pattern mock, or all mocks if urlPattern is omitted. Alwa
 |---|---|---:|---|
 | `urlPattern` | string | no | Pattern to remove. Omit to clear ALL mocks. |
 
-## `save_state_snapshot`
-
-Captures a named point-in-time snapshot of the entire running app state (active route, Riverpod/Bloc providers, storage). Use restore_state_snapshot later to rewind to this exact state in <100ms.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Descriptive identifier for the snapshot (e.g. "checkout_with_items"). |
-
-## `restore_state_snapshot`
-
-Instantly rewinds the running app back to a previously captured state snapshot (<100ms) without restarting the app.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Name of the snapshot to restore. |
-
-## `list_state_snapshots`
-
-Lists all available point-in-time state snapshots currently stored in memory.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `delete_state_snapshot`
-
-Deletes a specific state snapshot by name.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Name of the snapshot to delete. |
-
-## `record_fixtures`
-
-Saves current or recent HTTP/Dio network traffic logs as an offline test fixture JSON file (e.g. "test/fixtures/checkout_flow.json"). Enables deterministic offline test execution.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Fixture name (e.g. "checkout_success"). |
-
-## `replay_fixtures`
-
-Loads a recorded network fixture JSON file and registers mock rules for all endpoints, enabling full offline application testing without hitting real backend servers.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Fixture name to load from test/fixtures/<name>.json. |
-
 ## `start_recording`
 
 Starts recording manual interactions. User should perform the flow in the app while this is active.
@@ -1087,8 +960,6 @@ Discover additional app-specific tools registered by the developer.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1153,15 +1024,6 @@ Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizatio
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `run_chaos_fuzzing`
-
-Runs autonomous monkey/chaos stress fuzzing against the running Flutter app for a specified duration. Randomly clicks interactive elements, inputs text, and navigates to detect crashes and unhandled exceptions.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `durationSeconds` | integer | no | Duration to run chaos fuzzing in seconds (default: 5). |
-| `eventRatePerSecond` | integer | no | Rate of chaos events per second (default: 5). |
-
 ## `get_memory_details`
 
 Returns a detailed memory breakdown of the running app: heap used, heap capacity, external (native) memory, and RSS for every Dart isolate. Use this to detect memory leaks or unexpected growth. Heap > 200 MB or external > 50 MB usually warrants investigation.
@@ -1191,22 +1053,6 @@ Returns all HTTP requests made by the app — URL, method, status code, duration
 ## `clear_http_profile`
 
 Clears the HTTP request history so you get a clean baseline before triggering a specific API call. Pair with get_http_profile.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_render_tree`
-
-Dumps the render object tree — the layout/paint layer beneath the widget tree. Use this to debug layout issues, overflow errors, or understand exactly how Flutter is sizing and positioning widgets. This is the DevTools Layout Explorer equivalent for AI agents.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_layer_tree`
-
-Dumps the compositing layer tree — the GPU-level representation of the scene. Use this to debug performance issues caused by unnecessary repaint layers, or to understand why widgets are not composited efficiently.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -1279,8 +1125,6 @@ Inspect current Supabase auth state: user profile, session, JWT expiry, and rece
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | string | no | Set to "true" to reveal email/phone/user_id. Default: redacted. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1292,8 +1136,6 @@ List all active Supabase Realtime channel subscriptions. Shows topic, join statu
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1308,8 +1150,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `table` | string | no | Supabase table name (required). |
 | `limit` | string | no | Max rows to return (1–200, default 20). |
 | `filter` | string | no | Optional equality filter in "column=value" format, e.g. "user_id=abc123". |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1322,8 +1162,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `scope` | string | no | Sign-out scope: "local" (this device), "global" (all devices), "others". |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1335,8 +1173,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1348,8 +1184,6 @@ Inspect the current GoRouter navigation state: location, path parameters, query 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1361,8 +1195,6 @@ List all registered GoRouter routes and their configuration (paths, names, child
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1374,8 +1206,6 @@ View the recent navigation history — timestamped list of route changes.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1389,8 +1219,6 @@ Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), "
 |---|---|---:|---|
 | `location` | string | no | The route path to navigate to (e.g. "/home", "/user/123"). |
 | `action` | string | no | Navigation action. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1402,8 +1230,6 @@ Check current network connectivity status: wifi, mobile, ethernet, vpn, none. Al
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1416,20 +1242,10 @@ View timestamped log of connectivity state transitions.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | string | no | Max number of entries to return (default: 100). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `simulate_offline`
-
-Toggle simulated offline mode. When enabled, ConnectivityPilotInspector.isSimulatedOffline returns true. App code can check this flag to simulate offline behavior for testing.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | string | yes | "true" to enable simulated offline, "false" to disable. |
 
 ## `get_firebase_status`
 
@@ -1437,8 +1253,6 @@ Check which Firebase services are registered and their status (Crashlytics, Anal
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1450,8 +1264,6 @@ Get the Firebase Cloud Messaging token (truncated for security).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1473,8 +1285,6 @@ View recent analytics events logged through FlutterPilot.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | string | no | Max number of events to return (default: 200). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1512,8 +1322,6 @@ List all keys in FlutterSecureStorage. Values are redacted by default. Pass show
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showValues` | string | no | "true" to reveal values (except always-redacted keys). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |

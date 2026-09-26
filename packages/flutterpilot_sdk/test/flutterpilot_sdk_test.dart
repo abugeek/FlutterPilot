@@ -89,7 +89,6 @@ void main() {
 
       expect(state, isA<Map<String, dynamic>>());
       expect(state.containsKey('route'), isTrue);
-      expect(state.containsKey('mutationCount'), isTrue);
       expect(state.containsKey('interactiveElementsCount'), isTrue);
       expect(state.containsKey('visibleInteractiveElements'), isTrue);
     });

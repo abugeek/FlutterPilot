@@ -635,18 +635,6 @@ Reset the HTTP request profile. Call before testing a specific API flow.
 { "cleared": true }
 ```
 
-#### `get_render_tree`
-Get the Flutter render object tree (layout constraints, sizes, positions). Equivalent to DevTools Render Tree tab.
-```json
-{ "renderTree": "RenderView\n  RenderPositionedBox\n    RenderPadding..." }
-```
-
-#### `get_layer_tree`
-Get the Flutter compositing layer tree (GPU layer structure). Useful for finding unnecessary compositing.
-```json
-{ "layerTree": "TransformLayer\n  PictureLayer\n  TextLayer..." }
-```
-
 #### `get_vm_info`
 Get Dart VM version, architecture, and list of all isolates.
 ```json

@@ -238,61 +238,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    // -- get_render_tree ------------------------------------------------------
-    server.registerTool(
-      'get_render_tree',
-      description:
-          'Dumps the render object tree — the layout/paint layer beneath the '
-          'widget tree. Use this to debug layout issues, overflow errors, or '
-          'understand exactly how Flutter is sizing and positioning widgets. '
-          'This is the DevTools Layout Explorer equivalent for AI agents.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (params, extra) async {
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugDumpRenderTree',
-          _withDeviceId(params),
-        );
-        if (res.isError) return res.toCallToolResult();
-        final tree =
-            res.data?['data']?.toString() ??
-            res.data?['result']?.toString() ??
-            jsonEncode(res.data);
-        final out = tree.length > _Constants.renderTreeMaxLen
-            ? '${tree.substring(0, _Constants.renderTreeMaxLen)}\n... (truncated, ${tree.length - _Constants.renderTreeMaxLen} chars omitted)'
-            : tree;
-        return CallToolResult(content: [TextContent(text: out)]);
-      },
-    );
-
-    // -- get_layer_tree -------------------------------------------------------
-    server.registerTool(
-      'get_layer_tree',
-      description:
-          'Dumps the compositing layer tree — the GPU-level representation of '
-          'the scene. Use this to debug performance issues caused by unnecessary '
-          'repaint layers, or to understand why widgets are not composited efficiently.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (params, extra) async {
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugDumpLayerTree',
-          _withDeviceId(params),
-        );
-        if (res.isError) return res.toCallToolResult();
-        final tree =
-            res.data?['data']?.toString() ??
-            res.data?['result']?.toString() ??
-            jsonEncode(res.data);
-        final out = tree.length > _Constants.layerTreeMaxLen
-            ? '${tree.substring(0, _Constants.layerTreeMaxLen)}\n... (truncated)'
-            : tree;
-        return CallToolResult(content: [TextContent(text: out)]);
-      },
-    );
-
     // -- get_vm_info ----------------------------------------------------------
     server.registerTool(
       'get_vm_info',
@@ -510,12 +455,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
                     .toStringAsFixed(2);
                 final cap = ((newSpace.heapCapacity ?? 0) / (1024 * 1024))
                     .toStringAsFixed(2);
-                final pressure = newSpace.heapCapacity != null &&
-                        newSpace.heapCapacity! > 0
-                    ? ((newSpace.heapUsage ?? 0) /
-                            newSpace.heapCapacity! *
-                            100)
-                        .toStringAsFixed(0)
+                final pressure =
+                    newSpace.heapCapacity != null && newSpace.heapCapacity! > 0
+                    ? ((newSpace.heapUsage ?? 0) / newSpace.heapCapacity! * 100)
+                          .toStringAsFixed(0)
                     : '?';
                 buf.writeln(
                   '  ${iso.name ?? iso.id}: heap=$used/$cap MB  pressure=$pressure%',

@@ -229,7 +229,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         if (baselineImg == null || currentImg == null) {
           return CallToolResult(
             content: [
-              TextContent(text: 'Failed to decode screenshot images for comparison'),
+              TextContent(
+                text: 'Failed to decode screenshot images for comparison',
+              ),
             ],
             isError: true,
           );
@@ -333,7 +335,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final params = <String, String>{
           'maxDepth': maxDepth.toString(),
           'compact': compact.toString(),
-          'projectRoot': _projectRoot.absolute.path,
+          'projectRoot': await _appProjectRoot(p),
         };
         if (rootKey != null && rootKey.isNotEmpty) {
           params['rootKey'] = rootKey;
@@ -378,11 +380,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
-          content: [
-            TextContent(
-              text: jsonEncode(res.data),
-            ),
-          ],
+          content: [TextContent(text: jsonEncode(res.data))],
         );
       },
     );
@@ -426,9 +424,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           '• Focused Element: ${focused != null ? "${focused['type']} (key: ${focused['key'] ?? 'none'}, text: \"${focused['text'] ?? ''}\")" : "None"}',
         );
         final perfStr = StringBuffer('• Performance: $effectiveFps FPS');
-        if (avgMs != null) perfStr.write(' | Frame: ${avgMs.toStringAsFixed(1)}ms');
-        if (jankPct > 0.0) perfStr.write(' | Jank: ${jankPct.toStringAsFixed(1)}%');
-        perfStr.write(' | Screen Mutations: ${perf['mutationCount']}');
+        if (avgMs != null) {
+          perfStr.write(' | Frame: ${avgMs.toStringAsFixed(1)}ms');
+        }
+        if (jankPct > 0.0) {
+          perfStr.write(' | Jank: ${jankPct.toStringAsFixed(1)}%');
+        }
         summary.writeln(perfStr.toString());
         if (jankPct >= 20.0 || (avgMs != null && avgMs > 20.0)) {
           summary.writeln(
@@ -461,8 +462,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           final bounds = el['bounds'] != null
               ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
               : '';
-          final keyInfo =
-              key.isNotEmpty && key != label ? ' [key: $key]' : '';
+          final keyInfo = key.isNotEmpty && key != label ? ' [key: $key]' : '';
           summary.writeln(
             '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo',
           );
@@ -523,24 +523,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'get_screen_hash',
-      description:
-          'Fast lightweight screen mutation checker (<10 tokens). Returns the 64-bit frame mutation counter '
-          'and active route. Call this to check if a user action mutated the UI without fetching a full tree.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getScreenHash',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [TextContent(text: jsonEncode(res.data))],
-        );
-      },
-    );
-
-    server.registerTool(
       'get_widget_properties',
       description:
           'Reads the semantic properties of a widget identified by its key. '
@@ -594,110 +576,27 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+  }
 
-    server.registerTool(
-      'export_session_gif',
-      description:
-          'Generates an animated GIF replay artifact of the interaction session or baseline screens. '
-          'Saves directly to disk (e.g. "artifacts/session_replay.gif") for visual proof in pull requests or reviews.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'outputPath': JsonSchema.string(
-            description:
-                'Target file path for the GIF (default: "artifacts/session_replay.gif").',
-          ),
-          'delayMs': JsonSchema.integer(
-            description: 'Delay between frames in milliseconds (default: 500).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final path =
-            p['outputPath']?.toString() ?? 'artifacts/session_replay.gif';
-        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 500;
-
-        // Capture current screen if baselines empty
-        final activePrefix = '${_fleetManager.activeDeviceId ?? 'default'}::';
-        if (!_screenshotBaselines.keys.any(
-          (key) => key.startsWith(activePrefix),
-        )) {
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.captureScreenshot',
-            {},
-          );
-          if (res.isError) return res.toCallToolResult();
-          final data = res.data?['data'] as String?;
-          if (data != null) {
-            final decoded = base64Decode(data);
-            if (decoded.length <= _Constants.maxScreenshotBaselineBytes) {
-              final baselineKey = _baselineKey('current');
-              final previous = _screenshotBaselines[baselineKey];
-              _screenshotBaselineBytes -= previous?.length ?? 0;
-              _screenshotBaselines[baselineKey] = decoded;
-              _screenshotBaselineBytes += decoded.length;
-            }
-          }
-        }
-
-        final frames = _screenshotBaselines.entries
-            .where((entry) => entry.key.startsWith(activePrefix))
-            .map((entry) => entry.value)
-            .toList();
-        if (frames.isEmpty) {
-          return CallToolResult(
-            content: [
-              TextContent(text: 'No captured frames available to build GIF.'),
-            ],
-            isError: true,
-          );
-        }
-
-        try {
-          final file = File(path);
-          if (!file.parent.existsSync()) {
-            file.parent.createSync(recursive: true);
-          }
-
-          // Decode all frames and assemble into an animated GIF.
-          final frameDurationHundredths = (delayMs / 10).round().clamp(1, 6000);
-          img.Image? animation;
-          for (final frameBytes in frames) {
-            final decoded = img.decodeImage(frameBytes);
-            if (decoded == null) continue;
-            decoded.frameDuration = frameDurationHundredths;
-            if (animation == null) {
-              animation = decoded;
-            } else {
-              animation.addFrame(decoded);
-            }
-          }
-
-          if (animation == null) {
-            return CallToolResult(
-              content: [
-                TextContent(text: 'Failed to decode frames for GIF generation.'),
-              ],
-              isError: true,
-            );
-          }
-
-          final gifBytes = img.encodeGif(animation);
-          file.writeAsBytesSync(gifBytes);
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    '🎬 Session GIF exported to `$path` (${animation.numFrames} frames, ${delayMs}ms delay).',
-              ),
-            ],
-          );
-        } catch (err) {
-          return CallToolResult(
-            content: [TextContent(text: 'Failed to write GIF: $err')],
-            isError: true,
-          );
-        }
-      },
-    );
+  /// The running app's project root, from its root library
+  /// (package:app/main.dart → file:///…/app/lib/main.dart). Independent of
+  /// where the server was started, unlike [_projectRoot].
+  Future<String> _appProjectRoot(Map<String, dynamic> p) async {
+    try {
+      final vm = await _vmServiceForParameters(p);
+      final isolateId = (await vm!.getVM()).isolates!.first.id!;
+      var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
+      if (uri != null && uri.startsWith('package:')) {
+        uri = (await vm.lookupResolvedPackageUris(isolateId, [
+          uri,
+        ])).uris?.first;
+      }
+      if (uri != null && uri.startsWith('file:')) {
+        final path = Uri.parse(uri).path;
+        final lib = path.lastIndexOf('/lib/');
+        if (lib > 0) return path.substring(0, lib);
+      }
+    } catch (_) {}
+    return _projectRoot.absolute.path;
   }
 }

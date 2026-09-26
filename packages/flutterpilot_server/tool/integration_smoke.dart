@@ -117,7 +117,6 @@ Future<void> main(List<String> args) async {
   try {
     await Future<void>.delayed(const Duration(seconds: 2));
     await assertTool('get_capabilities', const {});
-    await assertTool('get_screen_hash', const {});
     final operationId = await submitAsync('get_app_summary', const {});
     await waitForOperation(operationId);
     stdout.writeln('FlutterPilot integration smoke test passed.');

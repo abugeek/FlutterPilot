@@ -532,7 +532,6 @@ extension _WidgetExtensions on FlutterPilot {
       );
     });
 
-
     // -- ext.flutterpilot.doubleTapWidget -------------------------------------
     registerExtension('ext.flutterpilot.doubleTapWidget', (
       method,
@@ -1052,18 +1051,6 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       try {
-        final ifMutation = int.tryParse(parameters['ifMutation'] ?? parameters['ifVersion'] ?? '');
-        if (ifMutation != null &&
-            ifMutation == FlutterPilot.screenMutationCount &&
-            PilotWidgetInspector.lastCapturedTree != null) {
-          return ServiceExtensionResponse.result(
-            json.encode({
-              'changed': false,
-              'mutationCount': FlutterPilot.screenMutationCount,
-            }),
-          );
-        }
-
         final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
         final compact = parameters['compact'] != 'false';
         final rootQuery = parameters['rootKey'] ?? parameters['rootSelector'] ?? parameters['root'];
@@ -1075,11 +1062,7 @@ extension _WidgetExtensions on FlutterPilot {
         );
         PilotWidgetInspector.lastCapturedTree = tree;
         return ServiceExtensionResponse.result(
-          json.encode({
-            'changed': true,
-            'tree': tree,
-            'mutationCount': FlutterPilot.screenMutationCount,
-          }),
+          json.encode({'tree': tree}),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
@@ -1105,10 +1088,7 @@ extension _WidgetExtensions on FlutterPilot {
         final diff = PilotWidgetInspector.diffWidgetTrees(oldTree, currentTree);
         PilotWidgetInspector.lastCapturedTree = currentTree;
         return ServiceExtensionResponse.result(
-          json.encode({
-            'diff': diff,
-            'mutationCount': FlutterPilot.screenMutationCount,
-          }),
+          json.encode({'diff': diff}),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
@@ -1116,19 +1096,6 @@ extension _WidgetExtensions on FlutterPilot {
           'Error: $e',
         );
       }
-    });
-
-    // -- ext.flutterpilot.getScreenHash ---------------------------------------
-    registerExtension('ext.flutterpilot.getScreenHash', (
-      method,
-      parameters,
-    ) async {
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'mutationCount': FlutterPilot.screenMutationCount,
-          'currentRoute': NavigationTracker.currentRoute,
-        }),
-      );
     });
 
     // -- ext.flutterpilot.assertWidgetVisible ---------------------------------
@@ -1587,20 +1554,6 @@ extension _WidgetExtensions on FlutterPilot {
           'Action chain execution failed: $e',
         );
       }
-    });
-
-    // -- ext.flutterpilot.runChaosFuzzing -------------------------------------
-    registerExtension('ext.flutterpilot.runChaosFuzzing', (
-      method,
-      parameters,
-    ) async {
-      final duration = int.tryParse(parameters['durationSeconds'] ?? '5') ?? 5;
-      final rate = int.tryParse(parameters['eventRatePerSecond'] ?? '5') ?? 5;
-      final report = await ChaosFuzzer.run(
-        durationSeconds: duration,
-        eventRatePerSecond: rate,
-      );
-      return ServiceExtensionResponse.result(json.encode(report));
     });
 
     // -- ext.flutterpilot.auditMemoryHealth ----------------------------------

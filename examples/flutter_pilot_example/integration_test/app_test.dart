@@ -528,7 +528,7 @@ void main() {
   });
 
   // ── 10. Connectivity ─────────────────────────────────────────────────────
-  testWidgets('Connectivity: status display, offline toggle, history', (
+  testWidgets('Connectivity: status display, history', (
     tester,
   ) async {
     await launchApp(tester);
@@ -537,33 +537,6 @@ void main() {
 
     // Connectivity status should be visible
     expect(find.byKey(const Key('connectivity_status_label')), findsOneWidget);
-
-    // Toggle simulate offline switch on
-    await tester.ensureVisible(
-      find.byKey(const Key('simulate_offline_switch')),
-    );
-    await _tap(
-      tester,
-      'simulate_offline_switch',
-      settle: const Duration(milliseconds: 400),
-    );
-    expect(
-      find.text('Offline simulation ACTIVE'),
-      findsOneWidget,
-      reason: 'After toggle, simulation should be active',
-    );
-
-    // Toggle simulate offline switch off
-    await _tap(
-      tester,
-      'simulate_offline_switch',
-      settle: const Duration(milliseconds: 400),
-    );
-    expect(
-      find.text('Simulation off'),
-      findsOneWidget,
-      reason: 'After second toggle, simulation should be off',
-    );
 
     // Clear history
     await _tap(

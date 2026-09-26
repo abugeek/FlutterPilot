@@ -1,6 +1,6 @@
 # FlutterPilot CLI (`flutterpilot_cli`)
 
-Official Command-Line Interface for FlutterPilot — 1-command init, unified development runner, multi-framework test generation, time-travel state snapshots, and environment diagnostics for AI-driven Flutter development.
+Official Command-Line Interface for FlutterPilot — 1-command init, development runner, and environment diagnostics for AI-driven Flutter development.
 
 ## 📦 Installation
 
@@ -44,39 +44,7 @@ flutterpilot dev -d emulator-5554
 
 ---
 
-### 3. `flutterpilot snapshot` (Time-Travel State Snapshots)
-Captures and rewinds application state in <100ms without restarting:
-
-```bash
-# Save current state
-flutterpilot snapshot save checkout_step_3
-
-# List all stored snapshots
-flutterpilot snapshot list
-
-# Rewind app state back to snapshot
-flutterpilot snapshot restore checkout_step_3
-```
-
----
-
-### 4. `flutterpilot export-test`
-Exports recorded interactive user journeys directly to production-ready test suites for Patrol, standard Flutter Integration Test, or Widget Tests:
-
-```bash
-# Export Patrol test (default)
-flutterpilot export-test --framework=patrol --output=integration_test/checkout_test.dart
-
-# Export standard Flutter Integration Test
-flutterpilot export-test --framework=integration --output=integration_test/flow_test.dart
-
-# Export Flutter Widget Test
-flutterpilot export-test --framework=widget --output=test/flow_test.dart
-```
-
----
-
-### 5. `flutterpilot doctor`
+### 3. `flutterpilot doctor`
 Diagnoses your environment to ensure everything is set up for autonomous AI development:
 
 ```bash

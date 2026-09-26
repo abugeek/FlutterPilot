@@ -1075,37 +1075,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'replay_flight_log',
-      description:
-          'Live Autonomous Flight Replay Engine: Re-executes the recorded rolling 30s user actions, '
-          'taps, and gestures live inside the running app in fast-forward mode (~150ms per action). '
-          'Enables instant live reproduction of bugs.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'delayMs': JsonSchema.integer(
-            description:
-                'Delay between replayed actions in milliseconds (default: 150ms).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 150;
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.replayFlightLog',
-          {'delayMs': delayMs.toString()},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '⚡ Live Flight Replay finished: ${jsonEncode(res.data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
       'get_stream_logs',
       description:
           'Real-Time WebSocket & Stream Channel Inspector: Returns captured incoming and outgoing '

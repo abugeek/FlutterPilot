@@ -98,11 +98,10 @@ void main() => FlutterPilot.run(const MyApp());
 - `set_text_scale_factor(scale)` — Accessibility text scaling
 - `pump_frames(count)` — Wait for N animation frames
 
-#### 🌐 **Network Chaos & Mocking Engine** (5 tools)
+#### 🌐 **Network Mocking & Conditioning** (4 tools)
 - `mock_http_response` — Mock HTTP endpoints with custom status code, delay, and response payload
 - `clear_http_mocks` — Clear active synthetic mocks
-- `simulate_network_condition` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
-- `simulate_offline` — Toggle offline mode for connectivity testing
+- `simulate_network` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
 - `get_network_logs` — HTTP requests/responses (Dio)
 
 #### 📱 **Multi-Device / Fleet Manager & Connection** (4 tools)
@@ -155,8 +154,6 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 - `get_gc_stats` — GC heap pressure across isolates
 - `get_http_profile` — All HTTP requests with URL/method/status/timing
 - `clear_http_profile` — Reset network tracking baseline
-- `get_render_tree` — Render object tree dump (layout debugging)
-- `get_layer_tree` — GPU compositing layer tree
 - `get_vm_info` — Dart VM version, PID, all isolates
 - `toggle_repaint_rainbow` — Visual repaint layer highlighting
 - `toggle_debug_paint` — Layout bounds, padding, hit areas overlay

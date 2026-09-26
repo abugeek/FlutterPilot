@@ -9,7 +9,7 @@ import 'dart:io';
 /// Usage (from packages/flutterpilot_server):
 ///   dart run tool/e2e_test.dart [-d <device>]   # default device: macos
 ///
-/// Covers: init wiring, enter_text, tap_widget, Dio mock + network logs,
+/// Covers: init wiring, widget tree, enter_text, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot_restart.
 Future<void> main(List<String> args) async {
   final device = args.length == 2 && args[0] == '-d' ? args[1] : 'macos';
@@ -129,6 +129,10 @@ Future<void> main(List<String> args) async {
 
     const settle = Duration(seconds: 10);
     await check('app summary', 'get_app_summary', {}, [], false, settle);
+    await check('widget tree shows app widgets', 'get_widget_tree', {}, [
+      'Home',
+      'Send',
+    ]);
     await check('mock /ping', 'mock_http_response', {
       'urlPattern': '/ping',
       'statusCode': 200,

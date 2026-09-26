@@ -39,7 +39,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'currentRoute': NavigationTracker.currentRoute,
           'errorCount': ErrorInspector.errors.length,
           'isRecording': FlutterPilot._isRecording,
-          'contextVersion': FlutterPilot.screenMutationCount,
           'widgetCount': root != null
               ? PilotWidgetInspector.countElements(root)
               : 0,

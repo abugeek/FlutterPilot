@@ -117,25 +117,6 @@ void main() {
       },
     );
 
-    test(
-      'StateSnapshotManager clones states cleanly without string overhead',
-      () {
-        final initialData = {
-          'user': {'id': 1, 'name': 'Alice'},
-          'tags': ['flutter', 'ai'],
-        };
-
-        StateSnapshotManager.onCaptureStates = () => initialData;
-        final snapshot = StateSnapshotManager.saveSnapshot('test_snap');
-
-        expect(snapshot.states['user']['name'], equals('Alice'));
-
-        // Modifying original map does not mutate snapshot (deep clone isolation)
-        initialData['tags'] = ['mutated'];
-        expect(snapshot.states['tags'], equals(['flutter', 'ai']));
-      },
-    );
-
     testWidgets(
       'Scoped subtree capture extracts only targeted dialog/container',
       (tester) async {

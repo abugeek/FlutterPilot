@@ -18,8 +18,6 @@ import 'package:flutter/material.dart';
 /// | enable_widget_rebuild_tracking| toggle switch                     |
 /// | get_memory_details            | memory card hint                  |
 /// | get_gc_stats                  | gc card hint                      |
-/// | get_render_tree               | devtools card hint                |
-/// | get_layer_tree                | devtools card hint                |
 /// | get_vm_info                   | devtools card hint                |
 /// | get_allocation_profile        | devtools card hint                |
 /// | get_http_profile              | devtools card hint                |
@@ -94,7 +92,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
               '  toggle_debug_paint  toggle_slow_animations\n'
               '  enable_widget_rebuild_tracking\n'
               '  get_memory_details  get_gc_stats  get_vm_info\n'
-              '  get_allocation_profile  get_render_tree',
+              '  get_allocation_profile  profile_frame_budget',
             ),
             const SizedBox(height: 16),
 
@@ -334,7 +332,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- Deep DevTools -----------------------------------------------
             _sectionHeader(
               'Deep DevTools Inspection',
-              'get_render_tree · get_layer_tree · get_vm_info · get_http_profile',
+              'profile_frame_budget · get_vm_info · get_http_profile',
             ),
             Card(
               color: Colors.indigo.shade50,
@@ -349,16 +347,15 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     ),
                     const SizedBox(height: 8),
                     _codeBox(
-                      'get_render_tree         // RenderObject tree\n'
-                      'get_layer_tree          // compositing layer tree\n'
+                      'profile_frame_budget   // p50/p90/p99, build vs raster\n'
                       'get_vm_info            // Dart VM version + isolates\n'
                       'get_http_profile        // timeline of dart:io requests\n'
                       'clear_http_profile      // reset request timeline',
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Tip: Combine get_render_tree with get_widget_tree to '
-                      'correlate layout problems with specific widgets.',
+                      'Tip: get_http_profile works for any HTTP client, '
+                      'not only Dio.',
                       style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,

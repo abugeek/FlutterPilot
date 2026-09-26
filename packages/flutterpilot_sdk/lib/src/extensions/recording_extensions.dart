@@ -8,8 +8,6 @@ part of '../../flutterpilot_sdk.dart';
 /// - `listCustomTools` — List registered custom tools
 /// - `callCustomTool` — Invoke a custom tool by name
 /// - `getFlightLog` — Read full timeline from continuous FlightRecorder
-/// - `generateReproTest` — Synthesize executable repro_test.dart test code
-/// - `exportTestSuite` — Synthesize Patrol / Integration / Widget test suites
 /// - `clearFlightLog` — Reset the flight recorder buffer
 extension _RecordingExtensions on FlutterPilot {
   static void register() {
@@ -81,47 +79,6 @@ extension _RecordingExtensions on FlutterPilot {
       );
     });
 
-    // -- ext.flutterpilot.generateReproTest -----------------------------------
-    registerExtension('ext.flutterpilot.generateReproTest', (
-      method,
-      parameters,
-    ) async {
-      final testName = parameters['testName'];
-      final initialWidgetName = parameters['widgetName'];
-      final code = ReproTestGenerator.generate(
-        testName: testName,
-        initialWidgetName: initialWidgetName,
-      );
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', 'code': code}),
-      );
-    });
-
-    // -- ext.flutterpilot.exportTestSuite ------------------------------------
-    registerExtension('ext.flutterpilot.exportTestSuite', (
-      method,
-      parameters,
-    ) async {
-      final frameworkStr = parameters['framework'] ?? 'patrol';
-      final framework = TestFramework.fromString(frameworkStr);
-      final testName = parameters['testName'];
-      final appWidget = parameters['appWidget'];
-
-      final code = TestSynthesizer.generate(
-        framework: framework,
-        testName: testName,
-        appWidget: appWidget,
-      );
-
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'framework': framework.name,
-          'code': code,
-        }),
-      );
-    });
-
     // -- ext.flutterpilot.clearFlightLog --------------------------------------
     registerExtension('ext.flutterpilot.clearFlightLog', (
       method,
@@ -133,47 +90,5 @@ extension _RecordingExtensions on FlutterPilot {
       );
     });
 
-    // -- ext.flutterpilot.replayFlightLog ------------------------------------
-    registerExtension('ext.flutterpilot.replayFlightLog', (
-      method,
-      parameters,
-    ) async {
-      final speedMs = int.tryParse(parameters['delayMs'] ?? '150') ?? 150;
-      final events = FlightRecorder.getSnapshotEvents();
-      int replayedCount = 0;
-
-      for (final event in events) {
-        final data = event.data;
-        if (event.category == 'gesture' && event.action == 'tapAt') {
-          final x = (data['x'] as num?)?.toDouble();
-          final y = (data['y'] as num?)?.toDouble();
-          if (x != null && y != null) {
-            await InteractionManager.tapAt(Offset(x, y));
-            replayedCount++;
-            await Future.delayed(Duration(milliseconds: speedMs));
-          }
-        } else if (event.category == 'action' && event.action == 'tapWidget') {
-          final key = data['key']?.toString();
-          if (key != null) {
-            final el = PilotWidgetInspector.findElement(key);
-            if (el != null && el.renderObject is RenderBox) {
-              final ro = el.renderObject as RenderBox;
-              final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-              await InteractionManager.tapAt(pos, label: key);
-              replayedCount++;
-              await Future.delayed(Duration(milliseconds: speedMs));
-            }
-          }
-        }
-      }
-
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'replayed',
-          'replayedEventsCount': replayedCount,
-          'totalEventsInFlight': events.length,
-        }),
-      );
-    });
   }
 }
