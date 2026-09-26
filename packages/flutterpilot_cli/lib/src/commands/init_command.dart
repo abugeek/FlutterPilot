@@ -4,6 +4,63 @@ import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
+const _repoUrl = 'https://github.com/abugeek/FlutterPilot.git';
+
+/// App dependency -> (FlutterPilot plugin, wiring line the user must add).
+const _plugins = {
+  'flutter_riverpod': (
+    'flutterpilot_riverpod',
+    'ProviderScope(observers: [RiverpodPilotObserver()], child: ...)',
+  ),
+  'riverpod': (
+    'flutterpilot_riverpod',
+    'ProviderScope(observers: [RiverpodPilotObserver()], child: ...)',
+  ),
+  'flutter_bloc': ('flutterpilot_bloc', 'Bloc.observer = BlocPilotObserver();'),
+  'bloc': ('flutterpilot_bloc', 'Bloc.observer = BlocPilotObserver();'),
+  'dio': (
+    'flutterpilot_dio',
+    'dio.interceptors.add(DioPilotInterceptor());  // on every Dio you create',
+  ),
+  'drift': (
+    'flutterpilot_drift',
+    "DriftPilotInspector.registerDatabase('main', db);",
+  ),
+  'hive': ('flutterpilot_hive', "HivePilotInspector.registerBox('boxName');"),
+  'hive_flutter': (
+    'flutterpilot_hive',
+    "HivePilotInspector.registerBox('boxName');",
+  ),
+  'shared_preferences': (
+    'flutterpilot_shared_preferences',
+    'SharedPrefsPilotInspector.register(await SharedPreferences.getInstance());',
+  ),
+  'go_router': (
+    'flutterpilot_gorouter',
+    'GoRouterPilotInspector.register(router);',
+  ),
+  'supabase_flutter': (
+    'flutterpilot_supabase',
+    'SupabasePilotInspector.register(Supabase.instance.client);',
+  ),
+  'firebase_core': (
+    'flutterpilot_firebase',
+    'FirebasePilotInspector.register(crashlytics: ..., analytics: ...);',
+  ),
+  'flutter_secure_storage': (
+    'flutterpilot_secure_storage',
+    'SecureStoragePilotInspector.register(storage);',
+  ),
+  'connectivity_plus': (
+    'flutterpilot_connectivity',
+    'ConnectivityPilotInspector.register();',
+  ),
+  'sqflite': (
+    'flutterpilot_sqflite',
+    "SqflitePilotInspector.registerDatabase('main', db);",
+  ),
+};
+
 /// Command to initialize FlutterPilot in an existing Flutter project.
 class InitCommand extends Command<void> {
   @override
@@ -14,122 +71,152 @@ class InitCommand extends Command<void> {
       'Initializes FlutterPilot SDK and detected plugins in the current Flutter app.';
 
   InitCommand() {
-    argParser.addOption(
-      'project-root',
-      abbr: 'p',
-      help: 'Path to Flutter project root (where pubspec.yaml lives).',
-      defaultsTo: '.',
-    );
+    argParser
+      ..addOption(
+        'project-root',
+        abbr: 'p',
+        help: 'Path to Flutter project root (where pubspec.yaml lives).',
+        defaultsTo: '.',
+      )
+      ..addOption(
+        'local',
+        help:
+            'Path to a local FlutterPilot checkout. Uses path dependencies '
+            'instead of git (for testing unpushed changes).',
+      )
+      ..addOption(
+        'ref',
+        help: 'Git ref (branch, tag, or commit) to pin when using git.',
+        defaultsTo: 'main',
+      );
   }
 
   @override
   Future<void> run() async {
     final rootPath = argResults?['project-root'] as String? ?? '.';
-    final projectDir = Directory(rootPath);
+    final local = argResults?['local'] as String?;
+    final ref = argResults?['ref'] as String? ?? 'main';
 
-    if (!projectDir.existsSync()) {
-      stderr.writeln('❌ Error: Directory "$rootPath" does not exist.');
-      exit(1);
-    }
-
-    final pubspecFile = File(p.join(projectDir.path, 'pubspec.yaml'));
+    final pubspecFile = File(p.join(rootPath, 'pubspec.yaml'));
     if (!pubspecFile.existsSync()) {
-      stderr.writeln(
-        '❌ Error: No pubspec.yaml found in ${projectDir.path}. Are you in a Flutter project?',
+      throw UsageException(
+        'No pubspec.yaml found in ${p.absolute(rootPath)}. Are you in a Flutter project?',
+        usage,
       );
-      exit(1);
+    }
+    if (local != null &&
+        !File(
+          p.join(local, 'packages', 'flutterpilot_sdk', 'pubspec.yaml'),
+        ).existsSync()) {
+      throw UsageException(
+        '--local "$local" is not a FlutterPilot checkout.',
+        usage,
+      );
     }
 
-    stdout.writeln('🔍 Analyzing Flutter project dependencies...');
+    // Packages are not on pub.dev yet: point at git, or a local checkout.
+    Object source(String package) {
+      final subdir = package == 'flutterpilot_sdk'
+          ? 'packages/$package'
+          : 'packages/plugins/$package';
+      if (local != null) {
+        return {
+          'path': p.relative(
+            p.absolute(local, subdir),
+            from: p.absolute(rootPath),
+          ),
+        };
+      }
+      return {
+        'git': {'url': _repoUrl, 'path': subdir, 'ref': ref},
+      };
+    }
+
     final pubspecContent = await pubspecFile.readAsString();
-    final dynamic yaml = loadYaml(pubspecContent);
+    final yaml = loadYaml(pubspecContent) as YamlMap;
+    final dependencies = (yaml['dependencies'] as Map?) ?? const {};
 
-    final dependencies = yaml['dependencies'] as Map? ?? {};
-    final devDependencies = yaml['dev_dependencies'] as Map? ?? {};
-
-    final pluginsToAdd = <String>[];
-    final detected = <String>[];
-
-    // Helper map of app dependencies to matching FlutterPilot plugins
-    final pluginMap = {
-      'flutter_riverpod': 'flutterpilot_riverpod',
-      'riverpod': 'flutterpilot_riverpod',
-      'flutter_bloc': 'flutterpilot_bloc',
-      'bloc': 'flutterpilot_bloc',
-      'dio': 'flutterpilot_dio',
-      'drift': 'flutterpilot_drift',
-      'hive': 'flutterpilot_hive',
-      'hive_flutter': 'flutterpilot_hive',
-      'shared_preferences': 'flutterpilot_shared_preferences',
-      'go_router': 'flutterpilot_gorouter',
-      'supabase_flutter': 'flutterpilot_supabase',
-      'firebase_core': 'flutterpilot_firebase',
-      'flutter_secure_storage': 'flutterpilot_secure_storage',
-      'connectivity_plus': 'flutterpilot_connectivity',
-      'sqflite': 'flutterpilot_sqflite',
+    final detected = <String, (String, String)>{
+      for (final e in _plugins.entries)
+        if (dependencies.containsKey(e.key)) e.value.$1: e.value,
     };
 
-    for (final entry in pluginMap.entries) {
-      if (dependencies.containsKey(entry.key)) {
-        detected.add(entry.key);
-        if (!pluginsToAdd.contains(entry.value)) {
-          pluginsToAdd.add(entry.value);
-        }
-      }
-    }
+    stdout.writeln(
+      '📦 Detected: ${detected.isEmpty ? "no supported packages" : detected.keys.join(", ")}',
+    );
 
-    stdout.writeln('📦 Detected state & framework packages: ${detected.isEmpty ? "Standard Flutter" : detected.join(", ")}');
-    stdout.writeln('🚀 Adding flutterpilot_sdk and plugins: ${pluginsToAdd.join(", ")}');
-
-    // Update pubspec.yaml using YamlEditor
+    // Regular dependencies (not dev_dependencies): lib/main.dart imports them.
+    // FlutterPilot.initialize() is a no-op in release builds.
     final editor = YamlEditor(pubspecContent);
-    if (!devDependencies.containsKey('flutterpilot_sdk')) {
-      if (!yaml.containsKey('dev_dependencies') || yaml['dev_dependencies'] == null) {
-        editor.update(['dev_dependencies'], {'flutterpilot_sdk': '^0.1.0'});
+    for (final package in ['flutterpilot_sdk', ...detected.keys]) {
+      editor.update(['dependencies', package], source(package));
+    }
+    // Plugins depend on hosted flutterpilot_sdk; force them onto the same source.
+    if (detected.isNotEmpty) {
+      if (yaml['dependency_overrides'] == null) {
+        editor.update(
+          ['dependency_overrides'],
+          {'flutterpilot_sdk': source('flutterpilot_sdk')},
+        );
       } else {
-        editor.update(['dev_dependencies', 'flutterpilot_sdk'], '^0.1.0');
+        editor.update([
+          'dependency_overrides',
+          'flutterpilot_sdk',
+        ], source('flutterpilot_sdk'));
       }
     }
-
-    for (final plugin in pluginsToAdd) {
-      if (!devDependencies.containsKey(plugin)) {
-        editor.update(['dev_dependencies', plugin], '^0.1.0');
-      }
-    }
-
     await pubspecFile.writeAsString(editor.toString());
-    stdout.writeln('✅ Updated pubspec.yaml with FlutterPilot packages.');
+    stdout.writeln('✅ Updated pubspec.yaml.');
 
-    // Safely patch lib/main.dart
-    final mainFile = File(p.join(projectDir.path, 'lib', 'main.dart'));
+    final mainFile = File(p.join(rootPath, 'lib', 'main.dart'));
     if (mainFile.existsSync()) {
-      var mainContent = await mainFile.readAsString();
-      if (!mainContent.contains('FlutterPilot.initialize')) {
-        // Add import
-        if (!mainContent.contains("package:flutterpilot_sdk/flutterpilot_sdk.dart")) {
-          mainContent = "import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';\n$mainContent";
-        }
-
-        // Insert FlutterPilot.initialize() inside main()
-        final mainRegex = RegExp(r'(void\s+main\s*\([^)]*\)\s*(?:async)?\s*\{)');
-        if (mainRegex.hasMatch(mainContent)) {
-          mainContent = mainContent.replaceFirstMapped(mainRegex, (match) {
-            return '${match.group(1)}\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();';
-          });
-          await mainFile.writeAsString(mainContent);
-          stdout.writeln('✅ Injected FlutterPilot.initialize() into lib/main.dart.');
-        } else {
-          stdout.writeln('⚠️ Note: Could not auto-patch main() in lib/main.dart. Please add `FlutterPilot.initialize();` manually.');
-        }
+      final content = await mainFile.readAsString();
+      final patched = patchMain(content);
+      if (patched == content) {
+        stdout.writeln(
+          'ℹ️ lib/main.dart already calls FlutterPilot.initialize().',
+        );
+      } else if (patched == null) {
+        stdout.writeln(
+          '⚠️ Could not find main() in lib/main.dart. Add `FlutterPilot.initialize();` at its start manually.',
+        );
       } else {
-        stdout.writeln('ℹ️ FlutterPilot is already initialized in lib/main.dart.');
+        await mainFile.writeAsString(patched);
+        stdout.writeln('✅ Added FlutterPilot.initialize() to lib/main.dart.');
       }
     }
 
-    stdout.writeln('\n🎉 FlutterPilot initialized successfully!');
-    stdout.writeln('Next steps:');
-    stdout.writeln('  1. Run `flutter pub get`');
-    stdout.writeln('  2. Run `flutter run`');
-    stdout.writeln('  3. Start your AI Agent in Cursor / Claude Code — your app is now AI-native!\n');
+    stdout.writeln('\nNext steps:');
+    stdout.writeln('  1. flutter pub get');
+    stdout.writeln(
+      '  2. Add `navigatorObservers: [NavigationTracker()]` to your MaterialApp (skip if using go_router).',
+    );
+    if (detected.isNotEmpty) {
+      stdout.writeln(
+        '  3. Wire each plugin (import package:<plugin>/<plugin>.dart) — they do nothing until you do:',
+      );
+      for (final MapEntry(key: plugin, value: (_, line)) in detected.entries) {
+        stdout.writeln('       $plugin:  $line');
+      }
+    }
+    stdout.writeln(
+      '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
+    );
+  }
+
+  /// Returns [content] with the import and `FlutterPilot.initialize()` added,
+  /// the unchanged [content] if already initialized, or null if no main() found.
+  static String? patchMain(String content) {
+    if (content.contains('FlutterPilot.initialize')) return content;
+    final mainRegex = RegExp(
+      r'((?:Future<void>|void)\s+main\s*\([^)]*\)\s*(?:async\s*)?\{)',
+    );
+    if (!mainRegex.hasMatch(content)) return null;
+    return "import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';\n" +
+        content.replaceFirstMapped(
+          mainRegex,
+          (m) =>
+              '${m[1]}\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();',
+        );
   }
 }

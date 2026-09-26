@@ -201,6 +201,7 @@ class DioPilotInterceptor extends Interceptor {
           statusCode: mock['statusCode'] as int,
           data: decodedBody,
         ),
+        true, // run onResponse so mocked responses are logged too
       );
       return;
     }

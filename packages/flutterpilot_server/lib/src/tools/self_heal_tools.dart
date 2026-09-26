@@ -243,94 +243,31 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'hot_reload',
       description:
-          'Trigger a source code hot reload. CALL THIS after you have modified a .dart file to apply the fix to the running app.',
+          'Recompile edited .dart files and hot reload them into the running app, keeping state. '
+          'CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.',
       inputSchema: ToolInputSchema(
         properties: {'deviceId': _deviceIdProperty()},
       ),
-      callback: (p, e) async {
-        final vmService = await _vmServiceForParameters(p);
-        if (vmService == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'Not connected')],
-            isError: true,
-          );
-        }
-        final vm = await vmService.getVM();
-        final mainIsolateId = vm.isolates?.firstOrNull?.id;
-        if (mainIsolateId == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No main isolate found')],
-            isError: true,
-          );
-        }
-        try {
-          await vmService.reloadSources(mainIsolateId);
-          await vmService.callServiceExtension(
-            'ext.flutter.reassemble',
-            isolateId: mainIsolateId,
-          );
-          _selfHealManager.reset();
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Hot Reload successful! HINT: Now call get_self_heal_status to verify the fix.',
-              ),
-            ],
-          );
-        } catch (err) {
-          return CallToolResult(
-            content: [TextContent(text: 'Hot Reload failed: $err')],
-            isError: true,
-          );
-        }
-      },
+      callback: (p, e) => _callFlutterToolsService(
+        p,
+        'reloadSources',
+        'Hot reload applied. HINT: call get_self_heal_status to verify the fix.',
+      ),
     );
 
     server.registerTool(
       'hot_restart',
       description:
-          'Trigger a full app hot restart. CALL THIS for structural code changes (main(), providers) or to reset app state.',
+          'Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), '
+          'initState, global/static initializers, enums, generic type changes.',
       inputSchema: ToolInputSchema(
         properties: {'deviceId': _deviceIdProperty()},
       ),
-      callback: (p, e) async {
-        final vmService = await _vmServiceForParameters(p);
-        if (vmService == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'Not connected')],
-            isError: true,
-          );
-        }
-        final vm = await vmService.getVM();
-        final mainIsolateId = vm.isolates?.firstOrNull?.id;
-        if (mainIsolateId == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No main isolate found')],
-            isError: true,
-          );
-        }
-        try {
-          await vmService.callServiceExtension(
-            'ext.flutter.hotRestart',
-            isolateId: mainIsolateId,
-          );
-          _selfHealManager.reset();
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Hot Restart triggered! HINT: App state is reset. Use get_app_summary to re-orient.',
-              ),
-            ],
-          );
-        } catch (err) {
-          return CallToolResult(
-            content: [TextContent(text: 'Hot Restart failed: $err')],
-            isError: true,
-          );
-        }
-      },
+      callback: (p, e) => _callFlutterToolsService(
+        p,
+        'hotRestart',
+        'Hot restart complete. App state is reset; use get_app_summary to re-orient.',
+      ),
     );
 
     server.registerTool(
@@ -413,5 +350,67 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(content: [TextContent(text: buffer.toString())]);
       },
     );
+  }
+
+  /// Calls a service that flutter_tools registers on the VM service
+  /// (`reloadSources`, `hotRestart`). Only flutter_tools can recompile the
+  /// edited sources; the VM's own reloadSources would reload the old kernel.
+  Future<CallToolResult> _callFlutterToolsService(
+    Map<String, dynamic> p,
+    String service,
+    String successText,
+  ) async {
+    final context = await _deviceContextForParameters(p);
+    final vmService = context?.service;
+    if (context == null || vmService == null) {
+      return CallToolResult(
+        content: [TextContent(text: 'Not connected')],
+        isError: true,
+      );
+    }
+    // Registrations are replayed asynchronously right after connecting.
+    for (
+      var i = 0;
+      i < 20 && !context.registeredServices.containsKey(service);
+      i++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    final method = context.registeredServices[service];
+    if (method == null) {
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                'No "$service" service on this VM service. Hot reload/restart only work when the app was launched '
+                'by `flutter run` (or an IDE debug session) and FlutterPilot is connected to the URI it printed. '
+                'Otherwise ask the user to press r / R in their flutter run terminal.',
+          ),
+        ],
+        isError: true,
+      );
+    }
+    try {
+      final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
+      await vmService
+          .callMethod(method, isolateId: isolateId)
+          .timeout(const Duration(minutes: 2));
+      _selfHealManager.reset();
+      return CallToolResult(content: [TextContent(text: successText)]);
+    } catch (err) {
+      final details = err is RPCError
+          ? '${err.message} ${err.details ?? ''}'
+          : '$err';
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                '$service failed: $details\nHINT: usually a compile error — run `dart analyze` on the edited files, '
+                'fix, and retry. Some changes (main(), static initializers) need hot_restart.',
+          ),
+        ],
+        isError: true,
+      );
+    }
   }
 }

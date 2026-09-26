@@ -73,6 +73,12 @@ class GoRouterPilotInspector {
     }
     if (_registered) return;
     _registered = true;
+    NavigationTracker.stackProvider = () {
+      final matches = router.routerDelegate.currentConfiguration.matches;
+      if (matches.isEmpty) return const [];
+      return [for (final m in matches) m.matchedLocation]
+        ..last = router.state.uri.toString();
+    };
     _router = router;
     _listenRouteChanges();
     _registerExtensions();
@@ -84,6 +90,7 @@ class GoRouterPilotInspector {
       _router!.routerDelegate.removeListener(_routerListener!);
     }
     _routerListener = null;
+    NavigationTracker.stackProvider = null;
     _navigationHistory.clear();
     _router = null;
     _registered = false;
@@ -91,10 +98,10 @@ class GoRouterPilotInspector {
 
   static void _listenRouteChanges() {
     _routerListener = () {
-      final config = _router?.routerDelegate.currentConfiguration;
-      if (config != null) {
+      final router = _router;
+      if (router != null) {
         _navigationHistory.add({
-          'location': config.uri.toString(),
+          'location': router.state.uri.toString(),
           'timestamp': DateTime.now().toIso8601String(),
         });
         while (_navigationHistory.length > _maxHistory) {
@@ -120,7 +127,8 @@ class GoRouterPilotInspector {
       }
 
       final config = router.routerDelegate.currentConfiguration;
-      final location = config.uri.toString();
+      // config.uri ignores routes added with push(); state is the top-most.
+      final location = router.state.uri.toString();
 
       return ServiceExtensionResponse.result(
         json.encode({

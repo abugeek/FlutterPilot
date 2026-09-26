@@ -72,6 +72,10 @@ abstract class _FlutterPilotServerBase {
 
   Future<VmService?> _vmServiceForParameters(Map<String, dynamic> parameters);
 
+  Future<DeviceRuntimeContext?> _deviceContextForParameters(
+    Map<String, dynamic> parameters,
+  );
+
   bool _cancelOperation(String operationId);
   _BackgroundOperation? _getBackgroundOperation(String operationId);
 
@@ -224,7 +228,16 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     }
   }
 
-  Future<void> _connectToVmService() async {
+  Future<void>? _connecting;
+
+  /// Tool calls and the reconnect timer can both trigger a connect; share one
+  /// attempt so they never race into two live connections.
+  Future<void> _connectToVmService() =>
+      _connecting ??= _doConnectToVmService().whenComplete(
+        () => _connecting = null,
+      );
+
+  Future<void> _doConnectToVmService() async {
     if (_disposed) return;
     if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
       final discovered = await VmDiscoveryService.discover(
@@ -249,7 +262,23 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'Connecting to VM Service: ${_redactVmServiceUri(_vmServiceUri!)}',
     );
 
-    _vmService = await vmServiceConnectUri(_vmServiceUri!);
+    try {
+      _vmService = await vmServiceConnectUri(_vmServiceUri!);
+    } catch (_) {
+      // The app was most likely restarted on a new port: rediscover it
+      // instead of retrying a dead URI forever.
+      final discovered = await VmDiscoveryService.discover(
+        projectRoot: _projectRoot,
+      );
+      if (discovered == null ||
+          discovered == _vmServiceUri ||
+          !_isAllowedConnectionUri(discovered)) {
+        rethrow;
+      }
+      _log.info('App restarted; rediscovered VM Service.');
+      _vmServiceUri = discovered;
+      _vmService = await vmServiceConnectUri(discovered);
+    }
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
     );
@@ -269,27 +298,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.cachedMainIsolateId = null;
 
     _currentBackoff = _minBackoff;
+    _reconnectTimer?.cancel();
+    _isReconnecting = false;
 
     // ignore: unawaited_futures
     final connectedService = _vmService!;
     connectedService.onDone
         .then((_) {
-          if (identical(_vmService, connectedService)) {
-            _vmService = null;
-          }
-          if (!_disposed) {
-            _log.warning('VM Service connection lost');
-            _scheduleReconnect();
-          }
+          // A replaced connection closing is expected; only react to the live one.
+          if (_disposed || !identical(_vmService, connectedService)) return;
+          _log.warning('VM Service connection lost');
+          _scheduleReconnect();
         })
         .catchError((Object e) {
-          if (identical(_vmService, connectedService)) {
-            _vmService = null;
-          }
-          if (!_disposed) {
-            _log.warning('Error in VM Service done handler: $e');
-            _scheduleReconnect();
-          }
+          if (_disposed || !identical(_vmService, connectedService)) return;
+          _log.warning('Error in VM Service done handler: $e');
+          _scheduleReconnect();
         });
 
     await _setupEventStreaming(activeContext);
@@ -377,6 +401,28 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     context.loggingEvents = null;
     await context.stdoutEvents?.cancel();
     context.stdoutEvents = null;
+    await context.serviceEvents?.cancel();
+    context.serviceEvents = null;
+    context.registeredServices.clear();
+
+    // The VM service replays ServiceRegistered for already-registered services
+    // (flutter_tools' reloadSources/hotRestart) right after subscribing, so
+    // attach the listener before streamListen or those events are dropped.
+    try {
+      context.serviceEvents = service.onServiceEvent.listen((Event event) {
+        final name = event.service;
+        if (name == null) return;
+        if (event.kind == EventKind.kServiceRegistered &&
+            event.method != null) {
+          context.registeredServices[name] = event.method!;
+        } else if (event.kind == EventKind.kServiceUnregistered) {
+          context.registeredServices.remove(name);
+        }
+      });
+      await service.streamListen(EventStreams.kService);
+    } catch (e) {
+      _log.fine('Could not subscribe to Service stream: $e');
+    }
 
     try {
       await service.streamListen(EventStreams.kExtension);
@@ -418,6 +464,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           _log.warning('Extension event stream error', error);
         },
         onDone: () {
+          if (!identical(context.service, service)) return;
           _log.info('Extension event stream closed');
           context.service = null;
           context.connectionGeneration++;
@@ -463,7 +510,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         (Event event) {
           final bytes = event.bytes;
           if (bytes == null || bytes.isEmpty) return;
-          final raw = String.fromCharCodes(base64.decode(bytes)).trim();
+          final raw = utf8
+              .decode(base64.decode(bytes), allowMalformed: true)
+              .trim();
           if (raw.isEmpty) return;
           _appendDebugLog(
             message: raw,
@@ -856,6 +905,7 @@ Use this guide to understand what tools to call, when, and in what order.
     return _callExtensionScheduled(extension, parameters, operationId, context);
   }
 
+  @override
   Future<DeviceRuntimeContext?> _deviceContextForParameters(
     Map<String, dynamic> parameters,
   ) async {
@@ -1168,7 +1218,11 @@ Use this guide to understand what tools to call, when, and in what order.
         }
       }
       return _ExtensionResult.error(
-        'Extension "$extension" is not registered in the running Flutter app. If this is a plugin or deep state tool, run "flutterpilot init" to install matching packages.',
+        'Extension "$extension" is not registered in the running Flutter app. '
+        'Plugin extensions register only once the app runs the plugin\'s setup code '
+        '(e.g. the first `Dio()` with DioPilotInterceptor is created). If the package is lazily '
+        'created, trigger that code path first, or wire the plugin in main(). '
+        'If the plugin is not installed at all, run "flutterpilot init".',
         ErrorCategory.extensionError,
       );
     } on TimeoutException {
@@ -1226,12 +1280,6 @@ Use this guide to understand what tools to call, when, and in what order.
           'hint':
               'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
         });
-      } else if (extension == 'ext.flutterpilot.hotReload') {
-        await vmService.callServiceExtension(
-          'ext.flutter.reassemble',
-          isolateId: isolateId,
-        );
-        return _ExtensionResult.success({'status': 'hot_reload_applied'});
       } else if (extension == 'ext.flutterpilot.getWidgetTree') {
         final res = await vmService.callServiceExtension(
           'ext.flutter.inspector.getRootWidgetTree',

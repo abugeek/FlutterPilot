@@ -324,6 +324,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                 'count': 1,
                 'timestamp': item['timestamp'],
                 'stackTrace': item['stackTrace'],
+                'widget': item['widget'],
               };
             } else {
               deduped[key]!['count'] = (deduped[key]!['count'] as int) + 1;
@@ -335,7 +336,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return deduped.values
             .map(
               (e) =>
-                  '--- Error (x${e['count']}) ---\n${e['exception']}\nLatest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
+                  '--- Error (x${e['count']}) ---\n${e['exception']}\n'
+                  '${e['widget'] != null ? 'Widget: ${e['widget']}\n' : ''}'
+                  'Latest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
             )
             .join('\n\n');
       },
@@ -786,47 +789,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text: 'UI Screen Health Report:\n${jsonEncode(res.data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'hot_restart_and_restore',
-      description:
-          'Fast Hot Restart & State Re-hydration: Automatically snapshots current app state, '
-          'performs hot restart, and re-applies the saved state snapshot. '
-          'Keeps the app on the exact same screen and state after restart.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        // 1. Snapshot state
-        await _callExtensionRaw('ext.flutterpilot.saveSnapshot', {
-          'name': '_auto_hot_restart',
-        });
-
-        // 2. Hot restart
-        final restartRes = await _callExtensionRaw(
-          'ext.flutterpilot.hotRestart',
-          {},
-        );
-        if (restartRes.isError) return restartRes.toCallToolResult();
-
-        // 3. Wait for app rebuild
-        await Future.delayed(const Duration(milliseconds: 600));
-
-        // 4. Restore state
-        final restoreRes = await _callExtensionRaw(
-          'ext.flutterpilot.restoreSnapshot',
-          {'name': '_auto_hot_restart'},
-        );
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '⚡ Hot restart completed and state snapshot restored: '
-                  '${restoreRes.isError ? "State restoration pending" : "State fully restored"}.',
             ),
           ],
         );

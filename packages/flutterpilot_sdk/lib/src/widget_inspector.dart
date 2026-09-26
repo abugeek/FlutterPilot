@@ -56,7 +56,14 @@ class PilotWidgetInspector {
     bool compact = true,
     String? rootQuery,
     Element? rootElement,
+    String? projectRoot,
   }) {
+    if (projectRoot != null && projectRoot.isNotEmpty) {
+      // Lets debugIsWidgetLocalCreation tell app code from package code
+      // (same thing DevTools does). Idempotent; re-sent after hot restart.
+      // ignore: invalid_use_of_protected_member
+      WidgetInspectorService.instance.addPubRootDirectories([projectRoot]);
+    }
     Element? targetRoot = rootElement;
     if (targetRoot == null &&
         rootQuery != null &&
@@ -71,8 +78,76 @@ class PilotWidgetInspector {
     targetRoot ??= WidgetsBinding.instance.rootElement;
     if (targetRoot == null) return {'error': 'No root element found'};
     final depth = maxDepth ?? defaultMaxDepth;
-    return _elementToJson(targetRoot, 0, depth, compact: compact) ??
+    if (compact) {
+      final nodes = _summaryNodes(targetRoot, 0, depth);
+      return nodes.length == 1
+          ? nodes.first
+          : {'type': 'Root', 'children': nodes};
+    }
+    return _elementToJson(targetRoot, 0, depth, compact: false) ??
         {'type': 'Empty'};
+  }
+
+  /// Summary tree, like DevTools: keeps widgets created by the app's own code,
+  /// keyed widgets and Text; flattens framework/package internals into their
+  /// parent. Depth counts kept nodes only, so app widgets are always reached.
+  static List<Map<String, dynamic>> _summaryNodes(
+    Element element,
+    int depth,
+    int maxDepth,
+  ) {
+    final widget = element.widget;
+    final local = debugIsWidgetLocalCreation(widget);
+    final key = widget.key;
+    // Framework widgets carry internal keys (LayoutId slots, branch proxies);
+    // only surface keys the app wrote or plain String/num ValueKeys.
+    final userKey =
+        key != null &&
+        key is! GlobalKey &&
+        (local || (key is ValueKey && (key.value is String || key.value is num)));
+    final keyStr = userKey ? key.toString() : null;
+    final keep = keyStr != null || widget is Text || local;
+
+    final childDepth = keep ? depth + 1 : depth;
+    final children = <Map<String, dynamic>>[];
+    if (childDepth <= maxDepth) {
+      element.visitChildren(
+        (c) => children.addAll(_summaryNodes(c, childDepth, maxDepth)),
+      );
+    }
+    if (!keep) return children;
+
+    final typeName = widget.runtimeType.toString();
+    var text = '';
+    if (widget is Text) {
+      text = widget.data ?? widget.textSpan?.toPlainText() ?? '';
+    } else if (widget is EditableText) {
+      text = widget.controller.text;
+    } else if (_isButtonOrClickable(typeName) && children.isEmpty) {
+      text = _extractDescendantText(element);
+    }
+    final ro = element.renderObject;
+    final selector = _computeSemanticSelector(element);
+    return [
+      {
+        'type': typeName,
+        if (keyStr != null) 'key': keyStr,
+        if (selector != null) 'selector': selector,
+        if (text.isNotEmpty) 'text': text,
+        if (ro is RenderBox && ro.hasSize && widget is! Text)
+          'layout': () {
+            final pos = ro.localToGlobal(Offset.zero);
+            return {
+              'x': pos.dx.round(),
+              'y': pos.dy.round(),
+              'w': ro.size.width.round(),
+              'h': ro.size.height.round(),
+            };
+          }(),
+        if (children.isNotEmpty) 'children': children,
+        if (childDepth > maxDepth) 'truncated': true,
+      },
+    ];
   }
 
   /// High-performance Hierarchical & Positional Element Matcher (O(N)).

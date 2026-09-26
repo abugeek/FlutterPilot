@@ -34,7 +34,13 @@ class DevCommand extends Command<void> {
     final device = argResults?['device'] as String?;
     final target = argResults?['target'] as String? ?? 'lib/main.dart';
 
-    final flutterArgs = ['run', '-t', target];
+    // The MCP server auto-discovers the app through this file.
+    final flutterArgs = [
+      'run',
+      '-t',
+      target,
+      '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
+    ];
     if (device != null && device.isNotEmpty) {
       flutterArgs.addAll(['-d', device]);
     }

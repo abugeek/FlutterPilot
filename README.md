@@ -16,12 +16,16 @@
 # 1. Install CLI
 dart pub global activate --source path ./packages/flutterpilot_cli
 
-# 2. In your Flutter project root, auto-configure SDK & plugins:
-flutterpilot init
+# 2. In your Flutter project root, add the SDK + matching plugins (git deps)
+#    and FlutterPilot.initialize() to main.dart. It prints the one wiring line
+#    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
+flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPilot
 
-# 3. Launch app with automatic MCP binding:
-flutterpilot dev
+# 3. Run the app, then point your agent's MCP config at the server:
+flutter run
 ```
+
+> Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
 
 ### Option B: Zero-Code Mode (No App Changes Required)
 Connect FlutterPilot MCP Server to **any existing Flutter app** out of the box:
@@ -34,8 +38,13 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
 ```
 
 ### Option C: Manual SDK Integration
-```bash
-flutter pub add --dev flutterpilot_sdk
+```yaml
+# pubspec.yaml
+dependencies:
+  flutterpilot_sdk:
+    git:
+      url: https://github.com/abugeek/FlutterPilot.git
+      path: packages/flutterpilot_sdk
 ```
 In `main.dart`:
 ```dart
@@ -231,18 +240,10 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 #### Step 1: Add Dependencies
 ```bash
 cd your-flutter-project
-flutter pub add --dev flutterpilot_sdk
-# Optional plugins:
-flutter pub add --dev flutterpilot_riverpod    # if using Riverpod
-flutter pub add --dev flutterpilot_bloc        # if using Bloc
-flutter pub add --dev flutterpilot_dio         # if using Dio
-flutter pub add --dev flutterpilot_shared_preferences  # if using SharedPreferences
-flutter pub add --dev flutterpilot_supabase    # if using Supabase
-flutter pub add --dev flutterpilot_gorouter    # if using GoRouter
-flutter pub add --dev flutterpilot_connectivity # if using connectivity_plus
-flutter pub add --dev flutterpilot_firebase    # if using Firebase
-flutter pub add --dev flutterpilot_secure_storage  # if using flutter_secure_storage
+flutterpilot init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds matching plugins
+flutter pub get
 ```
+Plugins do nothing until wired up — `init` prints the exact line for each one.
 
 #### Step 2: Initialize SDK
 ```dart

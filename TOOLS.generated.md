@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 147
+Tool count: 151
 
 ## `get_operation`
 
@@ -153,13 +153,6 @@ Unified 1-Shot UI Screen Health Auditor: Inspects current screen for RenderFlex 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
-## `hot_restart_and_restore`
-
-Fast Hot Restart & State Re-hydration: Automatically snapshots current app state, performs hot restart, and re-applies the saved state snapshot. Keeps the app on the exact same screen and state after restart.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `profile_frame_budget`
 
 Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.
@@ -194,7 +187,7 @@ Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if 
 
 ## `tap_widget`
 
-Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton['Log In']", "Button['Submit']", or plain visible button text "Log In") and taps its center. Works reliably across all devices without needing hardcoded coordinates. PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. AFTER: Verify the tap worked with capture_screenshot or a state inspection tool.
+Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton['Log In']", "Button['Submit']", or plain visible button text "Log In") and taps its center. Works reliably across all devices without needing hardcoded coordinates. PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. The response already reports whether the route changed and a capped widget-tree diff — usually no follow-up call is needed to confirm the tap did something.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -386,6 +379,50 @@ Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxe
 | `fields` | object | yes | Map of field targets (keys/selectors) to values (string for TextFields, bool for Checkboxes/Switches). Example: {"TextField['Email']": "alice@test.com", "Checkbox['Terms']": true} |
 | `submitTarget` | string | no | Optional key or selector of the submit button to tap after filling all fields. |
 
+## `native_screenshot`
+
+Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — unlike capture_screenshot, this sees native dialogs, the system keyboard, and any OS chrome layered above the Flutter view. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_tap`
+
+Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, alerts, and other OS chrome that tap_widget/tap_at cannot see because they are not part of the Flutter widget tree. Use native_screenshot first to find coordinates. Requires idb (brew install idb-companion && pip3 install fb-idb). macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `x` | number | yes | X coordinate in the native screenshot's pixel space. |
+| `y` | number | yes | Y coordinate in the native screenshot's pixel space. |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_text`
+
+Types text into the currently-focused native field via `idb ui text` — for native alert text fields, Safari, or anything outside the Flutter engine. For text fields inside the Flutter app itself, use enter_text instead (it is faster and semantic). Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `text` | string | yes | Text to type. |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_button`
+
+Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or APPLE_PAY. Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `button` | string | yes |  |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_describe_screen`
+
+Returns the native accessibility tree (labels, frames, roles) for whatever is on screen right now via `idb ui describe-all` — including system dialogs and alerts that are invisible to get_widget_tree. Use this instead of guessing pixel coordinates from a screenshot before calling native_tap: it gives you the actual button labels and frames for "Allow"/"Don't Allow"-style native alerts. Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
 ## `navigate_to`
 
 Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.
@@ -479,12 +516,12 @@ Toggle Light/Dark mode. Use this to verify design consistency across themes.
 
 ## `capture_screenshot`
 
-Capture an image of the current screen for visual analysis with adaptive compression. Supports scale (e.g. 0.5x) and quality (e.g. 75) to reduce token payload by up to 80%.
+Capture an image of the current screen for visual analysis. Defaults to a scaled-down PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or format: "jpeg" with a quality if you specifically want lossy compression (jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, so it is opt-in, not the default).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `format` | string | no |  |
-| `scale` | number | no | Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision. |
+| `scale` | number | no | Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution. |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
 
 ## `save_screenshot_baseline`
@@ -579,7 +616,7 @@ Retrieves the chronological 30-60 second rolling flight recorder timeline (user 
 
 ## `generate_repro_test`
 
-Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix.
+Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix. CRASH-REPRODUCTION ONLY — do not use this to verify a routine tap/form/navigation change on the already-running app; spinning up a cold `flutter test` process is far slower than the delta already returned by tap_widget/enter_text/execute_action_chain, or a direct assert_widget_visible / assert_text_visible / assert_widget_count check against the live app.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -617,7 +654,7 @@ Clears the flight recorder event buffer.
 
 ## `hot_reload`
 
-Trigger a source code hot reload. CALL THIS after you have modified a .dart file to apply the fix to the running app.
+Recompile edited .dart files and hot reload them into the running app, keeping state. CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -625,7 +662,7 @@ Trigger a source code hot reload. CALL THIS after you have modified a .dart file
 
 ## `hot_restart`
 
-Trigger a full app hot restart. CALL THIS for structural code changes (main(), providers) or to reset app state.
+Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), initState, global/static initializers, enums, generic type changes.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

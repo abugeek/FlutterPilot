@@ -220,7 +220,8 @@ class FlutterPilot {
   /// }
   /// ```
   static void initialize() {
-    if (_initialized) return;
+    // No VM service in release builds; skip the debugPrint/frame hooks too.
+    if (kReleaseMode || _initialized) return;
     _initialized = true;
 
     _setupModules();

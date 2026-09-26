@@ -243,22 +243,37 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         } else {
           int diffPixels = 0;
           final total = baselineImg.width * baselineImg.height;
-          diffImg = img.Image.from(currentImg);
+          diffImg = currentImg.convert(
+            format: img.Format.uint8,
+            numChannels: 4,
+          );
 
-          final baseBytes = baselineImg.toUint8List();
-          final currBytes = currentImg.toUint8List();
-          final baseWords = baseBytes.buffer.asUint32List();
-          final currWords = currBytes.buffer.asUint32List();
-          final minLen = baseWords.length < currWords.length
-              ? baseWords.length
-              : currWords.length;
-
-          for (int i = 0; i < minLen; i++) {
-            if (baseWords[i] != currWords[i]) {
+          // PNGs may decode as RGB/RGBA and 8- or 16-bit; compare as 8-bit RGBA.
+          final baseBytes = baselineImg
+              .convert(format: img.Format.uint8, numChannels: 4)
+              .toUint8List();
+          final currBytes = currentImg
+              .convert(format: img.Format.uint8, numChannels: 4)
+              .toUint8List();
+          for (
+            var i = 0;
+            i + 3 < baseBytes.length && i + 3 < currBytes.length;
+            i += 4
+          ) {
+            if (baseBytes[i] != currBytes[i] ||
+                baseBytes[i + 1] != currBytes[i + 1] ||
+                baseBytes[i + 2] != currBytes[i + 2] ||
+                baseBytes[i + 3] != currBytes[i + 3]) {
               diffPixels++;
-              final x = i % currentImg.width;
-              final y = i ~/ currentImg.width;
-              diffImg.setPixelRgba(x, y, 255, 0, 128, 255);
+              final px = i ~/ 4;
+              diffImg.setPixelRgba(
+                px % currentImg.width,
+                px ~/ currentImg.width,
+                255,
+                0,
+                128,
+                255,
+              );
             }
           }
           diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
@@ -318,6 +333,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final params = <String, String>{
           'maxDepth': maxDepth.toString(),
           'compact': compact.toString(),
+          'projectRoot': _projectRoot.absolute.path,
         };
         if (rootKey != null && rootKey.isNotEmpty) {
           params['rootKey'] = rootKey;

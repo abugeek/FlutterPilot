@@ -162,6 +162,16 @@ extension _StateExtensions on FlutterPilot {
           'Missing locale',
         );
       }
+      // ignore: invalid_use_of_protected_member
+      if (!FlutterPilot.localeNotifier.hasListeners) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Locale override is not wired in this app, so it would have no effect. '
+          'Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
+          'FlutterPilot.localeNotifier, builder: (_, locale, _) => '
+          'MaterialApp(locale: locale, ...))',
+        );
+      }
       try {
         if (code == 'default') {
           FlutterPilot.localeNotifier.value = null;
@@ -199,6 +209,17 @@ extension _StateExtensions on FlutterPilot {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'scale must be a numeric value',
+        );
+      }
+      // ignore: invalid_use_of_protected_member
+      if (!FlutterPilot.textScaleNotifier.hasListeners) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Text scale override is not wired in this app, so it would have no '
+          'effect. Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
+          'FlutterPilot.textScaleNotifier, builder: (_, scale, _) => MaterialApp('
+          'builder: (c, child) => scale == null ? child! : MediaQuery.withClampedTextScaling('
+          'minScaleFactor: scale, maxScaleFactor: scale, child: child!), ...))',
         );
       }
       FlutterPilot.textScaleNotifier.value = scale <= 0 ? null : scale;

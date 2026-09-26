@@ -45,6 +45,9 @@ class VmDiscoveryService {
     if (root == null || !root.existsSync()) return null;
 
     final candidates = [
+      // Written by `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`
+      // (what `flutterpilot dev` passes). Plain-text URI.
+      p.join(root.path, '.dart_tool', 'flutterpilot_vm_uri'),
       p.join(root.path, '.dart_tool', 'flutterpilot_session.json'),
       p.join(root.path, '.flutterpilot', 'session.json'),
       p.join(root.path, '.dart_tool', 'service_info.json'),
@@ -56,7 +59,11 @@ class VmDiscoveryService {
       final file = File(candidate);
       if (file.existsSync()) {
         try {
-          final content = await file.readAsString();
+          final content = (await file.readAsString()).trim();
+          if (content.startsWith('http') || content.startsWith('ws')) {
+            if (await _verifyVmUri(content)) return content;
+            continue;
+          }
           final parsed = jsonDecode(content);
           if (parsed is Map) {
             final uri =
@@ -122,7 +129,14 @@ class VmDiscoveryService {
     final client = HttpClient();
     client.connectionTimeout = const Duration(milliseconds: 300);
     try {
-      final uri = Uri.parse(rawUri);
+      var uri = Uri.parse(rawUri);
+      // flutter run writes the ws:// endpoint; probe its http:// root instead.
+      if (uri.scheme.startsWith('ws')) {
+        uri = uri.replace(
+          scheme: uri.scheme == 'wss' ? 'https' : 'http',
+          path: uri.path.replaceFirst(RegExp(r'ws/?$'), ''),
+        );
+      }
       final req = await client.getUrl(uri);
       final resp = await req.close().timeout(const Duration(milliseconds: 400));
       if (resp.statusCode == HttpStatus.ok ||

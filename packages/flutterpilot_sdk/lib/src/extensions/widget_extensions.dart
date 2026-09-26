@@ -740,6 +740,7 @@ extension _WidgetExtensions on FlutterPilot {
           maxDepth: maxDepth,
           compact: compact,
           rootQuery: rootQuery,
+          projectRoot: parameters['projectRoot'],
         );
         PilotWidgetInspector.lastCapturedTree = tree;
         return ServiceExtensionResponse.result(

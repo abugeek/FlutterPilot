@@ -51,13 +51,20 @@ class NavigationTracker extends NavigatorObserver {
   ///
   /// The list is ordered from bottom to top — the last element is the
   /// currently visible route.
-  static List<String?> get stack => List.unmodifiable(_stack);
+  static List<String?> get stack =>
+      List.unmodifiable(stackProvider?.call() ?? _stack);
+
+  /// Set by router plugins (e.g. flutterpilot_gorouter) whose navigation is
+  /// not visible to a [NavigatorObserver]. Returns the stack, bottom to top.
+  static List<String> Function()? stackProvider;
 
   /// The name of the currently active (top-most) route.
   ///
   /// Returns `'Unknown'` if the stack is empty or the route has no name.
-  static String get currentRoute =>
-      _stack.isNotEmpty ? (_stack.last ?? 'Unknown') : 'Unknown';
+  static String get currentRoute {
+    final s = stack;
+    return s.isNotEmpty ? (s.last ?? 'Unknown') : 'Unknown';
+  }
 
   /// Clears the navigation stack and removes the [onStateChange] callback.
   ///
@@ -65,6 +72,7 @@ class NavigationTracker extends NavigatorObserver {
   static void reset() {
     _stack.clear();
     onStateChange = null;
+    stackProvider = null;
   }
 
   @override

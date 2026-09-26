@@ -13,6 +13,9 @@ part of '../../flutterpilot_sdk.dart';
 /// - `getDebugLogs` — In-memory console capture buffer
 /// - `clearDebugLogs` — Clear the console capture buffer
 /// - `pumpFrames` — Wait for N animation frames
+/// Kept alive once get_semantics_tree is first used.
+SemanticsHandle? _semanticsHandle;
+
 extension _DiagnosticsExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.getSummary ------------------------------------------
@@ -125,13 +128,19 @@ extension _DiagnosticsExtensions on FlutterPilot {
         };
       }
 
+      // Flutter only builds semantics while an accessibility client asks for
+      // them (none on desktop / without a screen reader). Turn them on once.
+      if (_semanticsHandle == null) {
+        _semanticsHandle = SemanticsBinding.instance.ensureSemantics();
+        WidgetsBinding.instance.scheduleFrame();
+        await WidgetsBinding.instance.endOfFrame;
+      }
       SemanticsNode? root;
       try {
-        root = RendererBinding
-            .instance
-            .rootPipelineOwner
-            .semanticsOwner
-            ?.rootSemanticsNode;
+        // Semantics live on each view's PipelineOwner, not the root one.
+        for (final view in RendererBinding.instance.renderViews) {
+          root ??= view.owner?.semanticsOwner?.rootSemanticsNode;
+        }
       } catch (_) {
         // rootPipelineOwner is an internal Flutter API — may not be available
         // in all Flutter versions. Fall back gracefully.
