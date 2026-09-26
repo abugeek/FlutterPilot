@@ -169,6 +169,7 @@ class InitCommand extends Command<void> {
     stdout.writeln('✅ Updated pubspec.yaml.');
 
     final mainFile = File(p.join(rootPath, 'lib', 'main.dart'));
+    var trackerAdded = false;
     if (mainFile.existsSync()) {
       final content = await mainFile.readAsString();
       final patched = patchMain(content);
@@ -186,10 +187,24 @@ class InitCommand extends Command<void> {
       }
     }
 
+    if (mainFile.existsSync()) {
+      final content = await mainFile.readAsString();
+      final withTracker = addNavigationTracker(content);
+      if (withTracker != content) {
+        await mainFile.writeAsString(withTracker);
+        trackerAdded = true;
+        stdout.writeln(
+          '✅ Added NavigationTracker() to MaterialApp navigatorObservers.',
+        );
+      }
+    }
+
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
-      '  2. Add `navigatorObservers: [NavigationTracker()]` to your MaterialApp (skip if using go_router).',
+      trackerAdded
+          ? '  2. (route tracking already wired)'
+          : '  2. Add `navigatorObservers: [NavigationTracker()]` to your MaterialApp (skip if using go_router).',
     );
     if (detected.isNotEmpty) {
       stdout.writeln(
@@ -201,6 +216,30 @@ class InitCommand extends Command<void> {
     }
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
+    );
+  }
+
+  /// Adds `NavigationTracker()` to a plain `MaterialApp(` (not `.router`),
+  /// dropping a leading `const`, which the non-const observer would break.
+  static String addNavigationTracker(String content) {
+    if (content.contains('NavigationTracker')) return content;
+    final app = RegExp(r'(?:const\s+)?MaterialApp\s*\(');
+    final match = app.firstMatch(content);
+    if (match == null) return content;
+    final observers = RegExp(r'navigatorObservers:\s*\[');
+    final obs = observers.firstMatch(content.substring(match.end));
+    if (obs != null) {
+      final at = match.end + obs.end;
+      return content.replaceRange(
+        match.start,
+        at,
+        '${content.substring(match.start, at).replaceFirst(RegExp(r'^const\s+'), '')}NavigationTracker(), ',
+      );
+    }
+    return content.replaceRange(
+      match.start,
+      match.end,
+      'MaterialApp(\n      navigatorObservers: [NavigationTracker()],',
     );
   }
 

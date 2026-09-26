@@ -11,7 +11,8 @@ class TestCommand extends Command<void> {
   final String name = 'test';
 
   @override
-  final String description = 'Run test suites with high-speed parallel worker execution.';
+  final String description =
+      'Run test suites with high-speed parallel worker execution.';
 
   TestCommand() {
     argParser
@@ -24,7 +25,8 @@ class TestCommand extends Command<void> {
       ..addOption(
         'concurrency',
         abbr: 'j',
-        help: 'Maximum number of concurrent test workers (defaults to CPU core count).',
+        help:
+            'Maximum number of concurrent test workers (defaults to CPU core count).',
       )
       ..addFlag(
         'fail-fast',
@@ -38,16 +40,23 @@ class TestCommand extends Command<void> {
     final stopwatch = Stopwatch()..start();
     final isParallel = argResults?['parallel'] as bool? ?? true;
     final failFast = argResults?['fail-fast'] as bool? ?? false;
-    final userConcurrency = int.tryParse(argResults?['concurrency']?.toString() ?? '');
-    final concurrency = userConcurrency ?? Platform.numberOfProcessors.clamp(1, 16);
+    final userConcurrency = int.tryParse(
+      argResults?['concurrency']?.toString() ?? '',
+    );
+    final concurrency =
+        userConcurrency ?? Platform.numberOfProcessors.clamp(1, 16);
 
     stdout.writeln('🚀 FlutterPilot Fast Test Runner');
-    stdout.writeln('Concurrency: $concurrency worker(s) | Mode: ${isParallel ? 'Parallel' : 'Sequential'}\n');
+    stdout.writeln(
+      'Concurrency: $concurrency worker(s) | Mode: ${isParallel ? 'Parallel' : 'Sequential'}\n',
+    );
 
     // Discover test packages/directories
     final testTargets = _discoverTestTargets(Directory.current);
     if (testTargets.isEmpty) {
-      stdout.writeln('⚠️  No test directories found in ${Directory.current.path}');
+      stdout.writeln(
+        '⚠️  No test directories found in ${Directory.current.path}',
+      );
       return;
     }
 
@@ -99,13 +108,17 @@ class TestCommand extends Command<void> {
 
     stopwatch.stop();
     stdout.writeln('\n========================================');
-    stdout.writeln('🏁 Test Execution Summary (${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)}s)');
+    stdout.writeln(
+      '🏁 Test Execution Summary (${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(2)}s)',
+    );
     stdout.writeln('========================================');
     results.forEach((path, success) {
       final icon = success ? '✅ PASS' : '❌ FAIL';
       stdout.writeln('$icon  $path');
     });
-    stdout.writeln('Total: ${testTargets.length} | Passed: $passed | Failed: $failed');
+    stdout.writeln(
+      'Total: ${testTargets.length} | Passed: $passed | Failed: $failed',
+    );
 
     if (failed > 0) {
       exitCode = 1;
@@ -124,7 +137,8 @@ class TestCommand extends Command<void> {
             !entity.path.contains('/node_modules/')) {
           final parent = entity.parent;
           final pubspec = File('${parent.path}/pubspec.yaml');
-          if (pubspec.existsSync() && !targets.any((t) => t.path == parent.path)) {
+          if (pubspec.existsSync() &&
+              !targets.any((t) => t.path == parent.path)) {
             targets.add(parent);
           }
         }
@@ -144,7 +158,8 @@ class TestCommand extends Command<void> {
     if (!pubspec.existsSync()) return true;
 
     final content = pubspec.readAsStringSync();
-    final isFlutter = content.contains('sdk: flutter') || content.contains('flutter:');
+    final isFlutter =
+        content.contains('sdk: flutter') || content.contains('flutter:');
     final executable = isFlutter ? 'flutter' : 'dart';
 
     final process = await Process.start(

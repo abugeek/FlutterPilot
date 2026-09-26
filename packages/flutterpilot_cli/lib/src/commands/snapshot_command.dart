@@ -23,7 +23,8 @@ class _SnapshotSaveCommand extends Command<void> {
   final String name = 'save';
 
   @override
-  final String description = 'Capture current runtime state as a named snapshot.';
+  final String description =
+      'Capture current runtime state as a named snapshot.';
 
   _SnapshotSaveCommand() {
     argParser.addOption(
@@ -38,7 +39,9 @@ class _SnapshotSaveCommand extends Command<void> {
   Future<void> run() async {
     final snapshotName = argResults?.rest.firstOrNull;
     if (snapshotName == null || snapshotName.isEmpty) {
-      stderr.writeln('❌ Please provide a snapshot name: flutterpilot snapshot save <name>');
+      stderr.writeln(
+        '❌ Please provide a snapshot name: flutterpilot snapshot save <name>',
+      );
       return;
     }
 
@@ -85,7 +88,9 @@ class _SnapshotRestoreCommand extends Command<void> {
   Future<void> run() async {
     final snapshotName = argResults?.rest.firstOrNull;
     if (snapshotName == null || snapshotName.isEmpty) {
-      stderr.writeln('❌ Please provide a snapshot name: flutterpilot snapshot restore <name>');
+      stderr.writeln(
+        '❌ Please provide a snapshot name: flutterpilot snapshot restore <name>',
+      );
       return;
     }
 
@@ -105,7 +110,9 @@ class _SnapshotRestoreCommand extends Command<void> {
         args: {'name': snapshotName},
       );
 
-      stdout.writeln('⚡ App state successfully rewound to "$snapshotName" (<100ms)!');
+      stdout.writeln(
+        '⚡ App state successfully rewound to "$snapshotName" (<100ms)!',
+      );
     } catch (e) {
       stderr.writeln('⚠️ Error restoring snapshot: $e');
     }
@@ -153,7 +160,9 @@ class _SnapshotListCommand extends Command<void> {
 
       stdout.writeln('Saved Snapshots (${list.length}):');
       for (final s in list) {
-        stdout.writeln('  - ${s['name']} (${s['timestamp']}) -> Route: ${s['currentRoute']}');
+        stdout.writeln(
+          '  - ${s['name']} (${s['timestamp']}) -> Route: ${s['currentRoute']}',
+        );
       }
     } catch (e) {
       stderr.writeln('⚠️ Error listing snapshots: $e');

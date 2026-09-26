@@ -99,26 +99,21 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
-      'supabase_sign_out',
+    _registerAppTool(
+      name: 'supabase_sign_out',
       description:
           '⚠ MAKES REAL NETWORK CALL — signs out the current Supabase user '
           'via the Supabase Auth API. This affects the real session. '
           'Scope: "local" (default, this device only), "global" (all devices), '
           '"others" (other sessions only). Only use in dev/test environments.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'scope': JsonSchema.string(
-            description:
-                'Sign-out scope: "local" (this device), "global" (all devices), "others".',
-            enumValues: ['local', 'global', 'others'],
-          ),
-        },
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.supabaseSignOut',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      extension: 'ext.flutterpilot.supabaseSignOut',
+      properties: {
+        'scope': JsonSchema.string(
+          description:
+              'Sign-out scope: "local" (this device), "global" (all devices), "others".',
+          enumValues: ['local', 'global', 'others'],
+        ),
+      },
     );
 
     _registerAppTool(
@@ -173,27 +168,22 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       extension: 'ext.flutterpilot.getGoRouterHistory',
     );
 
-    server.registerTool(
-      'gorouter_navigate',
+    _registerAppTool(
+      name: 'gorouter_navigate',
       description:
           'Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), '
           '"replace" (replace current), "pop" (go back). Requires location for go/push/replace.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'location': JsonSchema.string(
-            description:
-                'The route path to navigate to (e.g. "/home", "/user/123").',
-          ),
-          'action': JsonSchema.string(
-            description: 'Navigation action.',
-            enumValues: ['go', 'push', 'replace', 'pop'],
-          ),
-        },
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.goRouterNavigate',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      extension: 'ext.flutterpilot.goRouterNavigate',
+      properties: {
+        'location': JsonSchema.string(
+          description:
+              'The route path to navigate to (e.g. "/home", "/user/123").',
+        ),
+        'action': JsonSchema.string(
+          description: 'Navigation action.',
+          enumValues: ['go', 'push', 'replace', 'pop'],
+        ),
+      },
     );
 
     // =========================================================================

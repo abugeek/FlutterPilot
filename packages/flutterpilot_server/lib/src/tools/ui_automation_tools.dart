@@ -54,6 +54,56 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
 
 /// Tools for tapping, typing, scrolling, swiping, and other UI interactions.
 mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
+  static String _formatActionFeedback(
+    String actionName,
+    Map<String, dynamic> params,
+    _ExtensionResult res,
+  ) {
+    final target = res.data?['target'] ??
+        res.data?['key'] ??
+        params['key'] ??
+        params['identifier'] ??
+        params['text'] ??
+        '';
+    final postState = res.data?['postActionState'] as Map<String, dynamic>?;
+    final buffer = StringBuffer();
+    final targetStr = target.toString();
+    buffer.writeln(
+      '⚡ $actionName${targetStr.isNotEmpty ? ' on "$targetStr"' : ''} executed successfully.',
+    );
+    if (postState != null) {
+      buffer.writeln('\nInstant Post-Action State:');
+      final route = postState['route'];
+      final routeChanged = postState['routeChanged'] == true;
+      final focused = postState['focusedElement'];
+      final elements = postState['visibleInteractiveElements'] as List?;
+      final count = postState['interactiveElementsCount'];
+      final errors = postState['errorCount'];
+
+      if (route != null) {
+        buffer.writeln('• Route: $route${routeChanged ? ' (CHANGED!)' : ''}');
+      }
+      if (focused != null) {
+        buffer.writeln('• Focused Element: "$focused"');
+      }
+      if (elements != null && elements.isNotEmpty) {
+        buffer.writeln(
+          '• Hittable Elements ($count total): [${elements.join(", ")}]',
+        );
+      }
+      if (errors != null && (errors is int ? errors > 0 : errors != 0)) {
+        buffer.writeln(
+          '• ⚠️ Uncaught Errors: $errors (call get_errors to inspect)',
+        );
+      }
+      final issueAlert = postState['issueAlert'] ?? postState['perfAlert'];
+      if (issueAlert != null && issueAlert.toString().isNotEmpty) {
+        buffer.writeln(issueAlert.toString());
+      }
+    }
+    return buffer.toString().trim();
+  }
+
   void _registerUiAutomationTools() {
     server.registerTool(
       'tap_at',
@@ -89,26 +139,95 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'tap_widget',
       description:
-          'Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']", "Button[\'Submit\']", or plain visible button text "Log In") and taps its center. '
-          'Works reliably across all devices without needing hardcoded coordinates. '
-          'PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. '
-          'The response already reports whether the route changed and a capped widget-tree diff — '
-          'usually no follow-up call is needed to confirm the tap did something.',
+          'Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']"), semantics identifier, visible text, or coordinates, and taps it. '
+          'Works reliably across all screen sizes and device types without needing hardcoded coordinates. '
+          'PREREQUISITES: Call get_interactive_elements or get_widget_tree to discover available widgets. '
+          'The response reports whether the route changed, post-action state, and widget-tree diff.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The ValueKey string, semantic selector (e.g. "ElevatedButton[\'Sign In\']"), or visible button text to tap.',
+                'ValueKey string, semantic selector (e.g. "ElevatedButton[\'Sign In\']"), visible button text, or icon name (e.g. "IconButton[\'settings\']").',
+          ),
+          'identifier': JsonSchema.string(
+            description:
+                'Semantics identifier property (Flutter 3.19+) for robust AI targeting.',
+          ),
+          'semanticsId': JsonSchema.integer(
+            description:
+                'Numeric SemanticsNode ID from get_semantics_tree for accessibility-first interaction.',
+          ),
+          'text': JsonSchema.string(
+            description: 'Visible text content within the widget to tap.',
+          ),
+          'type': JsonSchema.string(
+            description: 'Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton".',
+          ),
+          'maxAttempts': JsonSchema.integer(
+            description: 'Max scroll attempts if widget is off-screen (default: 8).',
+          ),
+          'x': JsonSchema.number(
+            description: 'Optional direct X screen coordinate.',
+          ),
+          'y': JsonSchema.number(
+            description: 'Optional direct Y screen coordinate.',
           ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.tapWidget', p);
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionDelta(res.data, verb: 'Widget tapped')),
+            TextContent(
+              text: _formatActionFeedback('Widget tapped', p, res),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Convenience alias matching standard MCP patterns
+    server.registerTool(
+      'tap',
+      description:
+          'Convenience alias for tap_widget. Finds a widget by Key, identifier, semanticsId, visible text, or coordinates and taps it.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description: 'ValueKey string, semantic selector, or target.',
+          ),
+          'identifier': JsonSchema.string(
+            description: 'Semantics identifier property.',
+          ),
+          'semanticsId': JsonSchema.integer(
+            description: 'Numeric SemanticsNode ID from get_semantics_tree.',
+          ),
+          'text': JsonSchema.string(
+            description: 'Visible text within the widget to tap.',
+          ),
+          'type': JsonSchema.string(
+            description: 'Widget runtime type.',
+          ),
+          'maxAttempts': JsonSchema.integer(
+            description: 'Max scroll attempts if widget is off-screen (default: 8).',
+          ),
+          'x': JsonSchema.number(
+            description: 'Optional direct X coordinate.',
+          ),
+          'y': JsonSchema.number(
+            description: 'Optional direct Y coordinate.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.tapWidget', p);
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: _formatActionFeedback('Tap', p, res),
+            ),
           ],
         );
       },
@@ -117,20 +236,32 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'enter_text',
       description:
-          'Types text into a TextField or TextFormField identified by Key or Semantic Selector (e.g. "TextField[\'Email\']", placeholder, or label). '
+          'Types text into a TextField, TextFormField, or editable widget. '
+          'Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. '
           'Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. '
-          'AFTER: The text field now contains the new text. You may need to tap a submit button.',
+          'AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description:
-                'The ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the text field to type into.',
-          ),
           'text': JsonSchema.string(
             description: 'The text to enter into the text field.',
           ),
+          'key': JsonSchema.string(
+            description:
+                'Optional ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the text field to type into.',
+          ),
+          'identifier': JsonSchema.string(
+            description: 'Optional semantics identifier of the text field.',
+          ),
+          'focused_element': JsonSchema.boolean(
+            description:
+                'If true, enters text into the currently focused text field without requiring a key.',
+          ),
+          'clear_first': JsonSchema.boolean(
+            description:
+                'Whether to clear existing text before typing (default: true).',
+          ),
         },
-        required: ['key', 'text'],
+        required: ['text'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.enterText', p);
@@ -138,8 +269,133 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  '${_formatActionDelta(res.data, verb: 'Text entered')} You may need to tap a "Submit" or "Save" button now.',
+              text: _formatActionFeedback('Text entered', p, res),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'press_key',
+      description:
+          'Dispatches physical hardware key events (e.g. "enter", "tab", "escape", "backspace", "arrowDown", "space") '
+          'directly to Flutter\'s HardwareKeyboard and focused widget. '
+          'Supports Enter form submission and modifier keys (shift, ctrl, alt, meta).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description:
+                'Key name to press, e.g. "enter", "tab", "escape", "backspace", "arrowDown", "arrowUp", "space", or single characters.',
+          ),
+          'modifiers': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Optional modifier keys: "shift", "ctrl", "alt", "meta".',
+          ),
+        },
+        required: ['key'],
+      ),
+      callback: (p, e) async {
+        final callParams = <String, dynamic>{'key': p['key']};
+        if (p['modifiers'] != null) {
+          final mods = p['modifiers'];
+          callParams['modifiers'] =
+              mods is List ? mods.join(',') : mods.toString();
+        }
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.pressKey',
+          callParams,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: _formatActionFeedback('Key pressed', p, res),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'secondary_tap',
+      description:
+          'Performs a secondary tap (right-click / context tap) on a widget or coordinates. '
+          'Useful for triggering desktop/web context menus.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description: 'The ValueKey or selector of the widget.',
+          ),
+          'identifier': JsonSchema.string(
+            description: 'Semantics identifier of the widget.',
+          ),
+          'text': JsonSchema.string(
+            description: 'Visible text of the widget.',
+          ),
+          'type': JsonSchema.string(
+            description: 'Widget runtime type.',
+          ),
+          'x': JsonSchema.number(
+            description: 'Optional direct X coordinate.',
+          ),
+          'y': JsonSchema.number(
+            description: 'Optional direct Y coordinate.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.secondaryTapWidget',
+          p,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: _formatActionFeedback('Secondary tap', p, res),
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'pinch_zoom',
+      description:
+          'Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. '
+          'Scale > 1 zooms in, scale < 1 zooms out.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'scale': JsonSchema.number(
+            description:
+                'Zoom scale factor (e.g. 1.5 to zoom in, 0.75 to zoom out).',
+          ),
+          'key': JsonSchema.string(
+            description: 'The ValueKey or selector of the target widget.',
+          ),
+          'identifier': JsonSchema.string(
+            description: 'Semantics identifier of the target widget.',
+          ),
+          'x': JsonSchema.number(
+            description: 'Optional center X coordinate for pinch gesture.',
+          ),
+          'y': JsonSchema.number(
+            description: 'Optional center Y coordinate for pinch gesture.',
+          ),
+        },
+        required: ['scale'],
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.pinchZoomWidget',
+          p,
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: _formatActionFeedback('Pinch zoom', p, res),
             ),
           ],
         );
@@ -155,6 +411,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description:
                 'The ValueKey string, semantic selector, or label of the widget to scroll into view.',
+          ),
+          'maxAttempts': JsonSchema.integer(
+            description: 'Max scroll attempts to locate the widget in lazy lists (default: 8).',
           ),
         },
         required: ['key'],
@@ -489,6 +748,24 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    Future<CallToolResult> backCallback(
+      Map<String, dynamic> p,
+      dynamic e,
+    ) async {
+      final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+      if (res.isError) return res.toCallToolResult();
+      final popped = res.data?['popped'] as bool? ?? false;
+      return CallToolResult(
+        content: [
+          TextContent(
+            text: popped
+                ? 'Back pressed — route popped.'
+                : 'Back pressed — already at root (nothing to pop).',
+          ),
+        ],
+      );
+    }
+
     server.registerTool(
       'press_back',
       description:
@@ -496,20 +773,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'current route from the Navigator. Reports whether a route was '
           'actually popped (false if already at root).',
       inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
-        if (res.isError) return res.toCallToolResult();
-        final popped = res.data?['popped'] as bool? ?? false;
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: popped
-                  ? 'Back pressed — route popped.'
-                  : 'Back pressed — already at root (nothing to pop).',
-            ),
-          ],
-        );
-      },
+      callback: backCallback,
+    );
+
+    server.registerTool(
+      'go_back',
+      description:
+          'Alias for press_back. Pops the current route or screen.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: backCallback,
     );
 
     server.registerTool(
@@ -703,12 +975,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final expectKey = p['expect'].toString();
         final timeoutMs = (p['timeout'] as num?)?.toInt() ?? 5000;
 
-        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {'target': target});
+        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {'key': target});
         if (tapRes.isError) return tapRes.toCallToolResult();
 
         final waitRes = await _callExtensionRaw('ext.flutterpilot.waitForWidget', {
           'key': expectKey,
-          'timeout': timeoutMs.toString(),
+          'timeoutMs': timeoutMs.toString(),
         });
         if (waitRes.isError) return waitRes.toCallToolResult();
 

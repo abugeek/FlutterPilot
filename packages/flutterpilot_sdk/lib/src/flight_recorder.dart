@@ -79,7 +79,7 @@ class FlightRecorder {
     _crashTime = DateTime.now();
     record('error', 'unhandled_exception', {
       'exception': exception,
-      if (stackTrace != null) 'stackTrace': stackTrace,
+      'stackTrace': ?stackTrace,
     });
     // Freeze the snapshot for reproduction
     _frozenCrashSnapshot = List.unmodifiable(_events.toList());

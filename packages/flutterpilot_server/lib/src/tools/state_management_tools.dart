@@ -666,7 +666,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         // Fetch recent network logs
         final logsRes = await _callExtensionRaw('ext.flutterpilot.getNetworkLogs', {});
         final logs = logsRes.data?['logs'] as List? ?? [];
-        final file = File('test/fixtures/$name.json');
+        final filePath = path.join(_projectRoot.path, 'test', 'fixtures', '$name.json');
+        final file = File(filePath);
         if (!file.parent.existsSync()) {
           file.parent.createSync(recursive: true);
         }
@@ -697,7 +698,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         final name = p['name'].toString();
-        final file = File('test/fixtures/$name.json');
+        final filePath = path.join(_projectRoot.path, 'test', 'fixtures', '$name.json');
+        final file = File(filePath);
         if (!file.existsSync()) {
           return CallToolResult(
             content: [TextContent(text: 'Fixture file not found: ${file.path}')],

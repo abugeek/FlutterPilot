@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 151
+Tool count: 164
 
 ## `get_operation`
 
@@ -85,9 +85,32 @@ Retrieve the most recent unhandled exceptions and stack traces with duplicate ag
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
+## `get_app_issues`
+
+Fetches structured defect and health diagnostics automatically detected by FlutterPilot. Covers database & offline sync (Supabase RLS, SQLite, network dropouts), UI layout (RenderFlex overflow stripes, touch-target sizing), performance (animation jank, frame budget overruns), runtime exceptions, and memory. Filter by severity: "critical", "warning", "info", or "all".
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `severity` | string | no | Minimum severity level to return: "critical", "warning", "info", or "all" (default: "warning"). |
+| `unseenOnly` | boolean | no | If true, only returns issues that have not yet been presented to the agent. |
+
+## `clear_app_issues`
+
+Clears active detected issues from FlutterPilot issue buffer.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
+## `audit_ui_design`
+
+Comprehensive UI/UX Layout & Visual Design Quality Auditor: Evaluates the active screen against professional Flutter design standards. Detects layout overflows, touch target sizing (<48dp), asymmetric horizontal dead space/margins, micro-typography legibility (<11sp), and component role mismatches (e.g. action buttons containing multi-line card text). Returns a Design Quality Score (0-100), letter grade (A+ to F), and prioritized, actionable refactoring recommendations.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
 ## `get_recent_events`
 
-Retrieves the last 50 proactive events (errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.
+Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -117,13 +140,26 @@ Lists all .dart files in the Flutter project under the given directory (defaults
 
 ## `get_debug_logs`
 
-Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. This replaces the need to manually copy-paste from VS Code debug console. Use level filter ("debug", "info", "warning", "error") and limit to narrow results. Call this any time you need to see what the app is printing.
+Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `level` | string | no | Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels. |
-| `limit` | integer | no | Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only. |
-| `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name. |
+| `query` | string | no | Search string to filter log messages. |
+| `since_seconds` | integer | no | Only return logs captured within the last N seconds. |
+| `limit` | integer | no | Maximum number of log entries to return (default: 100). |
+| `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print". |
+
+## `get_logs`
+
+Convenience alias for get_debug_logs. Returns application console logs with optional search, level, and recency filters.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `query` | string | no | Search string to filter log messages. |
+| `level` | string | no | Filter by log level: "debug", "info", "warning", "error". |
+| `since_seconds` | integer | no | Only return logs captured in the last N seconds. |
+| `limit` | integer | no | Maximum number of logs to return (default: 100). |
 
 ## `clear_debug_logs`
 
@@ -132,9 +168,16 @@ Clears the captured console log buffer on the server side. Use this before a spe
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
+## `clear_all_logs`
+
+Clears both server-side and in-app SDK debug log buffers. Call before a test run to get a clean log window. Pair with get_debug_logs(level:"error") after testing.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
 ## `set_log_filter`
 
-Clears the in-app SDK debug log buffer. Call before a test run to get a clean log window. Tip: pair with get_debug_logs(level:"error") after the action.
+Alias for clear_all_logs. Clears both server-side and in-app SDK debug log buffers.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -156,6 +199,13 @@ Unified 1-Shot UI Screen Health Auditor: Inspects current screen for RenderFlex 
 ## `profile_frame_budget`
 
 Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
+## `get_frame_budget_profile`
+
+Alias for profile_frame_budget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -187,20 +237,79 @@ Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if 
 
 ## `tap_widget`
 
-Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton['Log In']", "Button['Submit']", or plain visible button text "Log In") and taps its center. Works reliably across all devices without needing hardcoded coordinates. PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. The response already reports whether the route changed and a capped widget-tree diff — usually no follow-up call is needed to confirm the tap did something.
+Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton['Log In']"), semantics identifier, visible text, or coordinates, and taps it. Works reliably across all screen sizes and device types without needing hardcoded coordinates. PREREQUISITES: Call get_interactive_elements or get_widget_tree to discover available widgets. The response reports whether the route changed, post-action state, and widget-tree diff.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string, semantic selector (e.g. "ElevatedButton['Sign In']"), or visible button text to tap. |
+| `key` | string | no | ValueKey string, semantic selector (e.g. "ElevatedButton['Sign In']"), visible button text, or icon name (e.g. "IconButton['settings']"). |
+| `identifier` | string | no | Semantics identifier property (Flutter 3.19+) for robust AI targeting. |
+| `semanticsId` | integer | no | Numeric SemanticsNode ID from get_semantics_tree for accessibility-first interaction. |
+| `text` | string | no | Visible text content within the widget to tap. |
+| `type` | string | no | Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton". |
+| `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
+| `x` | number | no | Optional direct X screen coordinate. |
+| `y` | number | no | Optional direct Y screen coordinate. |
+
+## `tap`
+
+Convenience alias for tap_widget. Finds a widget by Key, identifier, semanticsId, visible text, or coordinates and taps it.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | ValueKey string, semantic selector, or target. |
+| `identifier` | string | no | Semantics identifier property. |
+| `semanticsId` | integer | no | Numeric SemanticsNode ID from get_semantics_tree. |
+| `text` | string | no | Visible text within the widget to tap. |
+| `type` | string | no | Widget runtime type. |
+| `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
+| `x` | number | no | Optional direct X coordinate. |
+| `y` | number | no | Optional direct Y coordinate. |
 
 ## `enter_text`
 
-Types text into a TextField or TextFormField identified by Key or Semantic Selector (e.g. "TextField['Email']", placeholder, or label). Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button.
+Types text into a TextField, TextFormField, or editable widget. Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string, selector (e.g. "TextField['Email']"), or label of the text field to type into. |
 | `text` | string | yes | The text to enter into the text field. |
+| `key` | string | no | Optional ValueKey string, selector (e.g. "TextField['Email']"), or label of the text field to type into. |
+| `identifier` | string | no | Optional semantics identifier of the text field. |
+| `focused_element` | boolean | no | If true, enters text into the currently focused text field without requiring a key. |
+| `clear_first` | boolean | no | Whether to clear existing text before typing (default: true). |
+
+## `press_key`
+
+Dispatches physical hardware key events (e.g. "enter", "tab", "escape", "backspace", "arrowDown", "space") directly to Flutter's HardwareKeyboard and focused widget. Supports Enter form submission and modifier keys (shift, ctrl, alt, meta).
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | yes | Key name to press, e.g. "enter", "tab", "escape", "backspace", "arrowDown", "arrowUp", "space", or single characters. |
+| `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
+
+## `secondary_tap`
+
+Performs a secondary tap (right-click / context tap) on a widget or coordinates. Useful for triggering desktop/web context menus.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | The ValueKey or selector of the widget. |
+| `identifier` | string | no | Semantics identifier of the widget. |
+| `text` | string | no | Visible text of the widget. |
+| `type` | string | no | Widget runtime type. |
+| `x` | number | no | Optional direct X coordinate. |
+| `y` | number | no | Optional direct Y coordinate. |
+
+## `pinch_zoom`
+
+Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. Scale > 1 zooms in, scale < 1 zooms out.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `scale` | number | yes | Zoom scale factor (e.g. 1.5 to zoom in, 0.75 to zoom out). |
+| `key` | string | no | The ValueKey or selector of the target widget. |
+| `identifier` | string | no | Semantics identifier of the target widget. |
+| `x` | number | no | Optional center X coordinate for pinch gesture. |
+| `y` | number | no | Optional center Y coordinate for pinch gesture. |
 
 ## `scroll_into_view`
 
@@ -209,6 +318,7 @@ Ensures a widget is visible by scrolling its parent list. Works with Keys, seman
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | yes | The ValueKey string, semantic selector, or label of the widget to scroll into view. |
+| `maxAttempts` | integer | no | Max scroll attempts to locate the widget in lazy lists (default: 8). |
 
 ## `double_tap_widget`
 
@@ -313,6 +423,13 @@ Simulates opening a deep link URL, triggering the same routing path as an OS-lev
 ## `press_back`
 
 Simulates pressing the hardware/system back button. Pops the current route from the Navigator. Reports whether a route was actually popped (false if already at root).
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
+## `go_back`
+
+Alias for press_back. Pops the current route or screen.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -477,7 +594,7 @@ Waits until all animations and frame callbacks have settled. Call this before ta
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `timeoutMs` | integer | no | Maximum milliseconds to wait for all animations to settle (default: 5000ms. |
+| `timeoutMs` | integer | no | Maximum milliseconds to wait for all animations to settle (default: 5000ms). |
 
 ## `wait_for_state`
 
@@ -550,6 +667,21 @@ Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and 
 | `rootKey` | string | no | Optional widget key or semantic selector (e.g. "checkout_form", "Button['Save']") to scope the tree capture to only that subtree. |
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs. |
 | `compact` | boolean | no | Whether to prune intermediate unkeyed layout containers (default: true). Reduces tokens by 80%. |
+
+## `get_interactive_elements`
+
+Discovers all actionable, interactive widgets currently visible and hittable on screen (buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). Filters out offstage, occluded, or covered widgets using Flutter hit testing. Returns a clean, compact list with bounds, keys, identifiers, and visible labels.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `types` | array | no | Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]). |
+
+## `get_app_snapshot`
+
+Instant 360-Degree Runtime Snapshot (<5ms): Returns complete consolidated application state in ONE call — current route, all visible & hittable interactive elements (with keys, labels & bounds), currently focused widget, recent uncaught errors, recent logs, FPS, screen mutation counter, and viewport dimensions. Use this as your PRIMARY exploration and verification tool to eliminate 5+ redundant roundtrip tool calls.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
 
 ## `get_widget_tree_diff`
 
@@ -647,7 +779,7 @@ Clears the flight recorder event buffer.
 
 ## `diagnose_last_error`
 
-[DEPRECATED] Use `get_latest_crash_report` or `get_flight_log` instead.
+Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -1126,7 +1258,7 @@ Enables or disables per-widget rebuild counting (equivalent to DevTools "Track W
 
 ## `get_gc_stats`
 
-Returns garbage collection statistics for all Dart isolates: number of GC rounds, total bytes collected, and current heap pressure. High GC frequency (>5/sec) can cause jank.
+Returns a heap snapshot per Dart isolate — heap used vs. capacity — which reflects GC pressure. High capacity utilization (>80%) signals frequent GC. Pair with get_allocation_profile to find which classes are causing heap growth.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -1190,6 +1322,12 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `scope` | string | no | Sign-out scope: "local" (this device), "global" (all devices), "others". |
+| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
+| `ifVersion` | integer | no | Alias for ifMutation. |
+| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
+| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
+| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `supabase_refresh_session`
 
@@ -1251,6 +1389,12 @@ Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), "
 |---|---|---:|---|
 | `location` | string | no | The route path to navigate to (e.g. "/home", "/user/123"). |
 | `action` | string | no | Navigation action. |
+| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
+| `ifVersion` | integer | no | Alias for ifMutation. |
+| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
+| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
+| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_connectivity`
 

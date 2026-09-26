@@ -51,5 +51,9 @@ dev_dependencies:
   drift_dev: ^2.23.0
   build_runner: ^2.4.15
 
+dependency_overrides:
+  flutterpilot_sdk:
+    path: ../../packages/flutterpilot_sdk
+
 flutter:
   uses-material-design: true

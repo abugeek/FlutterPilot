@@ -68,5 +68,30 @@ void main() {
       expect(message, isNot(contains('test-secret-token-123')));
       expect(message, contains('<redacted>'));
     });
+
+    test('getAppSnapshot returns complete unified telemetry bundle', () {
+      FlutterPilot.initialize();
+      final snapshot = FlutterPilot.getAppSnapshot();
+
+      expect(snapshot, isA<Map<String, dynamic>>());
+      expect(snapshot.containsKey('timestamp'), isTrue);
+      expect(snapshot.containsKey('route'), isTrue);
+      expect(snapshot.containsKey('viewport'), isTrue);
+      expect(snapshot.containsKey('interactiveElements'), isTrue);
+      expect(snapshot.containsKey('performance'), isTrue);
+      expect(snapshot.containsKey('recentErrors'), isTrue);
+      expect(snapshot.containsKey('recentLogs'), isTrue);
+    });
+
+    test('getPostActionState returns concise post-action summary', () {
+      FlutterPilot.initialize();
+      final state = FlutterPilot.getPostActionState(previousRoute: '/login');
+
+      expect(state, isA<Map<String, dynamic>>());
+      expect(state.containsKey('route'), isTrue);
+      expect(state.containsKey('mutationCount'), isTrue);
+      expect(state.containsKey('interactiveElementsCount'), isTrue);
+      expect(state.containsKey('visibleInteractiveElements'), isTrue);
+    });
   });
 }

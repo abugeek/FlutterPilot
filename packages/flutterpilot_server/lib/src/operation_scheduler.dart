@@ -8,6 +8,11 @@ import 'dart:async';
 class OperationScheduler {
   Future<void> _mutationTail = Future<void>.value();
 
+  /// Resets the mutation barrier chain (e.g. on context reconnect/dispose).
+  void reset() {
+    _mutationTail = Future<void>.value();
+  }
+
   Future<T> schedule<T>({
     required bool mutating,
     required Future<T> Function() operation,

@@ -347,9 +347,186 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
+      'get_app_issues',
+      description:
+          'Fetches structured defect and health diagnostics automatically detected by FlutterPilot. '
+          'Covers database & offline sync (Supabase RLS, SQLite, network dropouts), '
+          'UI layout (RenderFlex overflow stripes, touch-target sizing), '
+          'performance (animation jank, frame budget overruns), runtime exceptions, and memory. '
+          'Filter by severity: "critical", "warning", "info", or "all".',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'severity': JsonSchema.string(
+            description:
+                'Minimum severity level to return: "critical", "warning", "info", or "all" (default: "warning").',
+            enumValues: ['critical', 'warning', 'info', 'all'],
+          ),
+          'unseenOnly': JsonSchema.boolean(
+            description:
+                'If true, only returns issues that have not yet been presented to the agent.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.getAppIssues', p);
+        if (res.isError) return res.toCallToolResult();
+        final data = res.data ?? {};
+        final isHealthy = data['isHealthy'] == true;
+        final criticalCount = data['criticalCount'] ?? 0;
+        final warningCount = data['warningCount'] ?? 0;
+        final infoCount = data['infoCount'] ?? 0;
+        final issues = (data['issues'] as List?) ?? [];
+
+        final buffer = StringBuffer();
+        if (isHealthy) {
+          buffer.writeln(
+            '🟢 App Health: 100% Clean! No active critical defects or warnings detected.',
+          );
+          return CallToolResult(
+            content: [TextContent(text: buffer.toString().trim())],
+          );
+        }
+
+        buffer.writeln('🛡️ Centralized App Health Audit:');
+        buffer.writeln('• Critical Breakages: $criticalCount');
+        buffer.writeln('• Warnings / Degradations: $warningCount');
+        if (infoCount > 0) buffer.writeln('• Info Observations: $infoCount');
+        buffer.writeln('');
+
+        for (final issue in issues) {
+          final isCrit = issue['severity'] == 'critical';
+          final icon = isCrit
+              ? '🚨 CRITICAL'
+              : (issue['severity'] == 'warning' ? '⚠️ WARNING' : 'ℹ️ INFO');
+          final cat = issue['category'] ?? 'unknown';
+          final title = issue['title'] ?? 'Unknown Issue';
+          final count = (issue['occurrenceCount'] as num?)?.toInt() ?? 1;
+          final details = issue['details']?.toString() ?? '';
+          final countStr = count > 1 ? ' (occurred $count times)' : '';
+
+          buffer.writeln('$icon [$cat]: $title$countStr');
+          if (details.isNotEmpty) {
+            final preview = details.length > 300
+                ? '${details.substring(0, 300)}...'
+                : details;
+            buffer.writeln('  Details: $preview');
+          }
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${buffer.toString().trim()}\n\nFull JSON Data:\n${jsonEncode(data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'clear_app_issues',
+      description:
+          'Clears active detected issues from FlutterPilot issue buffer.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.clearAppIssues', {});
+        return res.toCallToolResult();
+      },
+    );
+
+    server.registerTool(
+      'audit_ui_design',
+      description:
+          'Comprehensive UI/UX Layout & Visual Design Quality Auditor: '
+          'Evaluates the active screen against professional Flutter design standards. '
+          'Detects layout overflows, touch target sizing (<48dp), asymmetric horizontal dead space/margins, '
+          'micro-typography legibility (<11sp), and component role mismatches (e.g. action buttons containing multi-line card text). '
+          'Returns a Design Quality Score (0-100), letter grade (A+ to F), and prioritized, actionable refactoring recommendations.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.auditUiDesign', {});
+        if (res.isError) return res.toCallToolResult();
+        final data = res.data ?? {};
+        final isHealthy = data['isHealthy'] == true;
+        final score = data['designScore'] ?? 100;
+        final grade = data['designGrade'] ?? 'A+';
+        final overflows = (data['overflows'] as List?) ?? [];
+        final accessibility = (data['accessibilityIssues'] as List?) ?? [];
+        final designIssues = (data['designIssues'] as List?) ?? [];
+
+        final buffer = StringBuffer();
+        buffer.writeln('🎨 FlutterPilot UI/UX Design Quality Audit');
+        buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        buffer.writeln('• Overall Design Score: $score/100 [$grade]');
+        buffer.writeln('• Layout Overflows: ${overflows.length}');
+        buffer.writeln('• Touch Target Violations: ${accessibility.length}');
+        buffer.writeln('• Visual Design Flaws: ${designIssues.length}');
+        buffer.writeln('');
+
+        if (isHealthy) {
+          buffer.writeln(
+            '🌟 Outstanding! The current screen meets all design, layout, and accessibility best practices.',
+          );
+          return CallToolResult(
+            content: [TextContent(text: buffer.toString().trim())],
+          );
+        }
+
+        if (overflows.isNotEmpty) {
+          buffer.writeln('🚨 RenderFlex Overflows:');
+          for (final o in overflows) {
+            buffer.writeln('  - [${o['type']}] ${o['details']}');
+          }
+          buffer.writeln('');
+        }
+
+        if (accessibility.isNotEmpty) {
+          buffer.writeln(
+            '⚠️ Accessibility Touch Target Violations (<48x48 dp):',
+          );
+          for (final a in accessibility) {
+            buffer.writeln('  - [${a['type']}] ${a['target']}: ${a['issue']}');
+          }
+          buffer.writeln('');
+        }
+
+        if (designIssues.isNotEmpty) {
+          buffer.writeln('⚠️ Visual Layout & UX Design Defects:');
+          for (final d in designIssues) {
+            final cat = d['category'] ?? 'design';
+            final target = d['target'] ?? '';
+            final type = d['type'] ?? '';
+            final msg = d['message'] ?? '';
+            final rec = d['recommendation'] ?? '';
+            buffer.writeln('  - [$cat] $type $target:');
+            buffer.writeln('    Issue: $msg');
+            buffer.writeln('    Fix: $rec');
+          }
+          buffer.writeln('');
+        }
+
+        buffer.writeln(
+          'Actionable Next Steps: Refactor the highlighted components to achieve a 100/100 A+ score.',
+        );
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${buffer.toString().trim()}\n\nFull Diagnostic JSON:\n${jsonEncode(data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
       'get_recent_events',
       description:
-          'Retrieves the last 50 proactive events (errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.',
+          'Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final activeEvents = _activeEvents;
@@ -540,112 +717,163 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    // -- get_debug_logs -------------------------------------------------------
+    // -- get_logs / get_debug_logs --------------------------------------------
+    Future<CallToolResult> executeGetLogs(Map<String, dynamic> params) async {
+      final levelFilter = params['level'] as String?;
+      final loggerFilter = params['logger'] as String?;
+      final query = (params['query'] ?? params['search'])?.toString().toLowerCase();
+      final sinceSeconds = (params['since_seconds'] as num?)?.toInt();
+      final rawLimit = (params['limit'] as int?) ?? 100;
+      final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
+
+      var entries = _activeDebugLogs;
+      if (levelFilter != null && levelFilter.isNotEmpty) {
+        entries = entries.where((e) => e['level'] == levelFilter).toList();
+      }
+      if (loggerFilter != null && loggerFilter.isNotEmpty) {
+        entries = entries
+            .where(
+              (e) =>
+                  (e['logger'] as String?)?.contains(loggerFilter) ?? false,
+            )
+            .toList();
+      }
+      if (query != null && query.isNotEmpty) {
+        entries = entries
+            .where(
+              (e) =>
+                  (e['message']?.toString().toLowerCase().contains(query) ??
+                      false) ||
+                  (e['logger']?.toString().toLowerCase().contains(query) ??
+                      false),
+            )
+            .toList();
+      }
+      if (sinceSeconds != null && sinceSeconds > 0) {
+        final cutoff = DateTime.now().subtract(Duration(seconds: sinceSeconds));
+        entries = entries.where((e) {
+          final t = DateTime.tryParse(e['timestamp']?.toString() ?? '');
+          return t != null && t.isAfter(cutoff);
+        }).toList();
+      }
+      if (entries.length > limit) {
+        entries = entries.sublist(entries.length - limit);
+      }
+      if (entries.isEmpty) {
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'No console logs matching the filter were found. '
+                  'Ensure FlutterPilot.run(MyApp()) or FlutterPilot.initialize() is called.',
+            ),
+          ],
+        );
+      }
+      final compacted = <String>[];
+      String? prevMessage;
+      String? prevLevel;
+      String? prevLogger;
+      String? prevTime;
+      int repeatCount = 0;
+
+      void flushPrevious() {
+        if (prevMessage != null) {
+          final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty)
+              ? '($prevLogger) '
+              : '';
+          final repeatSuffix = repeatCount > 1
+              ? ' [x$repeatCount occurrences]'
+              : '';
+          compacted.add(
+            '[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix',
+          );
+        }
+      }
+
+      for (final e in entries) {
+        final msg = e['message']?.toString() ?? '';
+        final lvl = e['level']?.toString() ?? '';
+        final log = e['logger']?.toString() ?? '';
+        final time = e['timestamp']?.toString() ?? '';
+
+        if (msg == prevMessage && lvl == prevLevel && log == prevLogger) {
+          repeatCount++;
+        } else {
+          flushPrevious();
+          prevMessage = msg;
+          prevLevel = lvl;
+          prevLogger = log;
+          prevTime = time;
+          repeatCount = 1;
+        }
+      }
+      flushPrevious();
+
+      final lines = compacted.join('\n');
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                '${entries.length} log entries (${compacted.length} compacted, '
+                'buffer total: ${_activeDebugLogs.length}):\n$lines',
+          ),
+        ],
+      );
+    }
+
     server.registerTool(
       'get_debug_logs',
       description:
           'Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. '
-          'This replaces the need to manually copy-paste from VS Code debug console. '
-          'Use level filter ("debug", "info", "warning", "error") and limit to narrow results. '
-          'Call this any time you need to see what the app is printing.',
+          'Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.',
       inputSchema: ToolInputSchema(
         properties: {
           'level': JsonSchema.string(
             description:
                 'Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels.',
           ),
+          'query': JsonSchema.string(
+            description: 'Search string to filter log messages.',
+          ),
+          'since_seconds': JsonSchema.integer(
+            description: 'Only return logs captured within the last N seconds.',
+          ),
           'limit': JsonSchema.integer(
             description:
-                'Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only.',
+                'Maximum number of log entries to return (default: 100).',
           ),
           'logger': JsonSchema.string(
             description:
-                'Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name.',
+                'Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print".',
           ),
         },
       ),
-      callback: (params, extra) async {
-        final levelFilter = params['level'] as String?;
-        final loggerFilter = params['logger'] as String?;
-        final rawLimit = (params['limit'] as int?) ?? 100;
-        final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
-        var entries = _activeDebugLogs;
-        if (levelFilter != null && levelFilter.isNotEmpty) {
-          entries = entries.where((e) => e['level'] == levelFilter).toList();
-        }
-        if (loggerFilter != null && loggerFilter.isNotEmpty) {
-          entries = entries
-              .where(
-                (e) =>
-                    (e['logger'] as String?)?.contains(loggerFilter) ?? false,
-              )
-              .toList();
-        }
-        if (entries.length > limit) {
-          entries = entries.sublist(entries.length - limit);
-        }
-        if (entries.isEmpty) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'No console logs captured yet. '
-                    'Ensure FlutterPilot.initialize() is called before runApp().',
-              ),
-            ],
-          );
-        }
-        final compacted = <String>[];
-        String? prevMessage;
-        String? prevLevel;
-        String? prevLogger;
-        String? prevTime;
-        int repeatCount = 0;
+      callback: (params, extra) => executeGetLogs(params),
+    );
 
-        void flushPrevious() {
-          if (prevMessage != null) {
-            final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty)
-                ? '($prevLogger) '
-                : '';
-            final repeatSuffix = repeatCount > 1
-                ? ' [x$repeatCount occurrences]'
-                : '';
-            compacted.add(
-              '[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix',
-            );
-          }
-        }
-
-        for (final e in entries) {
-          final msg = e['message']?.toString() ?? '';
-          final lvl = e['level']?.toString() ?? '';
-          final log = e['logger']?.toString() ?? '';
-          final time = e['timestamp']?.toString() ?? '';
-
-          if (msg == prevMessage && lvl == prevLevel && log == prevLogger) {
-            repeatCount++;
-          } else {
-            flushPrevious();
-            prevMessage = msg;
-            prevLevel = lvl;
-            prevLogger = log;
-            prevTime = time;
-            repeatCount = 1;
-          }
-        }
-        flushPrevious();
-
-        final lines = compacted.join('\n');
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${entries.length} log entries (${compacted.length} compacted, '
-                  'buffer total: ${_activeDebugLogs.length}):\n$lines',
-            ),
-          ],
-        );
-      },
+    // Marionette standard alias
+    server.registerTool(
+      'get_logs',
+      description:
+          'Convenience alias for get_debug_logs. Returns application console logs with optional search, level, and recency filters.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'query': JsonSchema.string(
+            description: 'Search string to filter log messages.',
+          ),
+          'level': JsonSchema.string(
+            description: 'Filter by log level: "debug", "info", "warning", "error".',
+          ),
+          'since_seconds': JsonSchema.integer(
+            description: 'Only return logs captured in the last N seconds.',
+          ),
+          'limit': JsonSchema.integer(
+            description: 'Maximum number of logs to return (default: 100).',
+          ),
+        },
+      ),
+      callback: (params, extra) => executeGetLogs(params),
     );
 
     // -- clear_debug_logs -----------------------------------------------------
@@ -664,41 +892,50 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    // -- set_log_filter -------------------------------------------------------
-    server.registerTool(
-      'set_log_filter',
-      description:
-          'Clears the in-app SDK debug log buffer. Call before a test run '
-          'to get a clean log window. '
-          'Tip: pair with get_debug_logs(level:"error") after the action.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) async {
-        final serverCleared = _debugLogBuffer.length;
-        _clearDebugLogBuffer();
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.clearDebugLogs',
-          {},
-        );
-        if (res.isError) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Server buffer cleared ($serverCleared entries). '
-                    'In-app buffer: ${res.errorMessage}',
-              ),
-            ],
-          );
-        }
+    // -- clear_all_logs / set_log_filter -------------------------------------
+    Future<CallToolResult> executeClearAllLogs(Map<String, dynamic> params) async {
+      final serverCleared = _debugLogBuffer.length;
+      _clearDebugLogBuffer();
+      final res = await _callExtensionRaw(
+        'ext.flutterpilot.clearDebugLogs',
+        {},
+      );
+      if (res.isError) {
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  'Log buffers cleared (server: $serverCleared entries, app: cleared).',
+                  'Server buffer cleared ($serverCleared entries). '
+                  'In-app buffer: ${res.errorMessage}',
             ),
           ],
         );
-      },
+      }
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                'Log buffers cleared (server: $serverCleared entries, app: cleared).',
+          ),
+        ],
+      );
+    }
+
+    server.registerTool(
+      'clear_all_logs',
+      description:
+          'Clears both server-side and in-app SDK debug log buffers. Call before a test run '
+          'to get a clean log window. Pair with get_debug_logs(level:"error") after testing.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (params, extra) => executeClearAllLogs(params),
+    );
+
+    server.registerTool(
+      'set_log_filter',
+      description:
+          'Alias for clear_all_logs. Clears both server-side and in-app SDK debug log buffers.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (params, extra) => executeClearAllLogs(params),
     );
 
     // -- get_capabilities -----------------------------------------------------
@@ -800,6 +1037,26 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       description:
           'Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) '
           'and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getFrameBudgetProfile',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
+            ),
+          ],
+        );
+      },
+    );
+
+    server.registerTool(
+      'get_frame_budget_profile',
+      description: 'Alias for profile_frame_budget.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(

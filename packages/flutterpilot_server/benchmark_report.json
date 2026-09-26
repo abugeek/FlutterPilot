@@ -1,0 +1,306 @@
+{
+  "timestamp": "2026-09-21T05:01:58.137950",
+  "device": "emulator-5554 (Android 17, Impeller)",
+  "results": [
+    {
+      "scenario": "Discovery",
+      "tool": "get_app_snapshot",
+      "min_ms": 14.324,
+      "avg_ms": 28.21,
+      "max_ms": 69.797,
+      "median_ms": 19.519,
+      "latencies_ms": [
+        69.797,
+        21.954,
+        19.519,
+        15.456,
+        14.324
+      ],
+      "notes": "Single-call consolidated snapshot",
+      "sample_output_preview": "📱 Flutter App Runtime Snapshot:\n• Route: /state (Depth: 2)\n• Viewport: 411x923 (dpr: 2.625)\n• Focused Element: _FocusScopeWithExternalFocusNode (key: none, text: \"\")\n• Performance: 0.21123785382340515 FPS | Screen Mutations: 0\n• Uncaught Errors (0):..."
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_interactive_elements",
+      "min_ms": 11.212,
+      "avg_ms": 12.549600000000002,
+      "max_ms": 15.089,
+      "median_ms": 12.304,
+      "latencies_ms": [
+        15.089,
+        12.828,
+        12.304,
+        11.315,
+        11.212
+      ],
+      "notes": "Filtered visible hittable elements",
+      "sample_output_preview": "{\"status\":\"success\",\"count\":54,\"elements\":[{\"type\":\"WidgetsApp\",\"key\":\"[GlobalObjectKey _MaterialAppState#07fb9]\",\"bounds\":{\"x\":0,\"y\":0,\"width\":411,\"height\":923},\"center\":{\"x\":206,\"y\":462}},{\"type\":\"_LocalizationsScope\",\"key\":\"[GlobalKey#160d1]\",\"bou..."
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_widget_tree",
+      "min_ms": 4.356,
+      "avg_ms": 5.1606000000000005,
+      "max_ms": 6.029,
+      "median_ms": 5.073,
+      "latencies_ms": [
+        5.897,
+        6.029,
+        4.448,
+        4.356,
+        5.073
+      ],
+      "notes": "Full AST-like tree walk (depth 6)",
+      "sample_output_preview": "{\"changed\":true,\"tree\":{\"type\":\"RootWidget\",\"children\":[{\"type\":\"View\",\"children\":[{\"type\":\"RawView\",\"children\":[{\"type\":\"_RawViewInternal\",\"key\":\"[_DeprecatedRawViewKey FlutterView#0c823]\",\"children\":[{\"type\":\"_ViewScope\",\"layout\":{\"x\":0,\"y\":0,\"w\":4..."
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_semantics_tree",
+      "min_ms": 12.385,
+      "avg_ms": 19.147799999999997,
+      "max_ms": 23.454,
+      "median_ms": 21.016,
+      "latencies_ms": [
+        21.016,
+        23.454,
+        12.385,
+        17.224,
+        21.66
+      ],
+      "notes": "Flutter semantics accessibility tree",
+      "sample_output_preview": "[extensionError] Semantics tree not yet available — try again after one more frame\n[operationId: op-21]"
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_navigation_stack",
+      "min_ms": 3.358,
+      "avg_ms": 4.5744,
+      "max_ms": 7.326,
+      "median_ms": 4.225,
+      "latencies_ms": [
+        7.326,
+        4.225,
+        4.465,
+        3.358,
+        3.498
+      ],
+      "notes": "Current route and stack depth",
+      "sample_output_preview": "Navigation Stack: / -> /state\n[operationId: op-26]"
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_perf_metrics",
+      "min_ms": 28.34,
+      "avg_ms": 31.428199999999997,
+      "max_ms": 33.917,
+      "median_ms": 32.137,
+      "latencies_ms": [
+        33.917,
+        33.099,
+        32.137,
+        29.648,
+        28.34
+      ],
+      "notes": "FPS, memory & raster stats",
+      "sample_output_preview": "FPS: 0.4\nHeap: 86.63 MB\n\nHINT: If FPS is below 60, use show_performance_overlay to find heavy build cycles."
+    },
+    {
+      "scenario": "Discovery",
+      "tool": "get_logs",
+      "min_ms": 0.573,
+      "avg_ms": 1.0330000000000001,
+      "max_ms": 1.825,
+      "median_ms": 0.886,
+      "latencies_ms": [
+        1.825,
+        1.123,
+        0.886,
+        0.758,
+        0.573
+      ],
+      "notes": "Recent console logs",
+      "sample_output_preview": "No console logs matching the filter were found. Ensure FlutterPilot.run(MyApp()) or FlutterPilot.initialize() is called."
+    },
+    {
+      "scenario": "Interaction",
+      "tool": "tap_widget",
+      "min_ms": 140.04,
+      "avg_ms": 140.04,
+      "max_ms": 140.04,
+      "median_ms": 140.04,
+      "latencies_ms": [
+        140.04
+      ],
+      "notes": "Tap Nav Button -> navigate to /state",
+      "sample_output_preview": "⚡ Widget tapped on \"nav_state_button\" executed successfully.\n\nInstant Post-Action State:\n• Route: /state\n• Hittable Elements (54 total): [[GlobalObjectKey _MaterialAppState#07fb9], [GlobalKey#160d1], [GlobalObjectKey int#13ded], [LabeledGlobalKey<Nav..."
+    },
+    {
+      "scenario": "Interaction",
+      "tool": "get_app_snapshot",
+      "min_ms": 12.283,
+      "avg_ms": 13.78433333333333,
+      "max_ms": 15.905,
+      "median_ms": 13.165,
+      "latencies_ms": [
+        15.905,
+        12.283,
+        13.165
+      ],
+      "notes": "Snapshot on /state screen",
+      "sample_output_preview": "📱 Flutter App Runtime Snapshot:\n• Route: /state (Depth: 2)\n• Viewport: 411x923 (dpr: 2.625)\n• Focused Element: _FocusScopeWithExternalFocusNode (key: none, text: \"\")\n• Performance: 4.549590536851683 FPS | Screen Mutations: 0\n• Uncaught Errors (0): N..."
+    },
+    {
+      "scenario": "Interaction",
+      "tool": "tap_widget",
+      "min_ms": 70.438,
+      "avg_ms": 74.087,
+      "max_ms": 77.527,
+      "median_ms": 74.296,
+      "latencies_ms": [
+        74.296,
+        70.438,
+        77.527
+      ],
+      "notes": "Tap Riverpod increment button",
+      "sample_output_preview": "⚡ Widget tapped on \"riverpod_increment_button\" executed successfully.\n\nInstant Post-Action State:\n• Route: /state\n• Hittable Elements (54 total): [[GlobalObjectKey _MaterialAppState#07fb9], [GlobalKey#160d1], [GlobalObjectKey int#13ded], [LabeledGlob..."
+    },
+    {
+      "scenario": "Interaction",
+      "tool": "tap_widget",
+      "min_ms": 68.416,
+      "avg_ms": 71.49933333333333,
+      "max_ms": 77.396,
+      "median_ms": 68.686,
+      "latencies_ms": [
+        68.686,
+        77.396,
+        68.416
+      ],
+      "notes": "Tap Bloc increment button",
+      "sample_output_preview": "⚡ Widget tapped on \"bloc_increment_button\" executed successfully.\n\nInstant Post-Action State:\n• Route: /state\n• Hittable Elements (54 total): [[GlobalObjectKey _MaterialAppState#07fb9], [GlobalKey#160d1], [GlobalObjectKey int#13ded], [LabeledGlobalKe..."
+    },
+    {
+      "scenario": "Resilience",
+      "tool": "tap_widget",
+      "min_ms": 136.756,
+      "avg_ms": 136.756,
+      "max_ms": 136.756,
+      "median_ms": 136.756,
+      "latencies_ms": [
+        136.756
+      ],
+      "notes": "Fast rejection of non-existent widget",
+      "sample_output_preview": "[extensionError] Widget not found matching: \"non_existent_button_xyz\".\nHINT: Visible actionable targets on current screen:\n • \"[GlobalObjectKey int#13ded]\"\n • \"_ScaffoldSlot.body\"\n • \"auth_status_text\"\n • \"_NavButton[' State Injection Bloc, R...']\"\n..."
+    },
+    {
+      "scenario": "Navigation",
+      "tool": "navigate_to",
+      "min_ms": 10.402,
+      "avg_ms": 10.402,
+      "max_ms": 10.402,
+      "median_ms": 10.402,
+      "latencies_ms": [
+        10.402
+      ],
+      "notes": "Direct route navigation to /network",
+      "sample_output_preview": "[extensionError] Navigation failed: Navigator.onGenerateRoute was null, but the route named \"/network\" was referenced.\nTo use the Navigator API with named routes (pushNamed, pushReplacementNamed, or pushNamedAndRemoveUntil), the Navigator must be pro..."
+    },
+    {
+      "scenario": "Navigation",
+      "tool": "navigate_to",
+      "min_ms": 10.095,
+      "avg_ms": 10.095,
+      "max_ms": 10.095,
+      "median_ms": 10.095,
+      "latencies_ms": [
+        10.095
+      ],
+      "notes": "Direct route navigation to /storage",
+      "sample_output_preview": "[extensionError] Navigation failed: Navigator.onGenerateRoute was null, but the route named \"/storage\" was referenced.\nTo use the Navigator API with named routes (pushNamed, pushReplacementNamed, or pushNamedAndRemoveUntil), the Navigator must be pro..."
+    },
+    {
+      "scenario": "Navigation",
+      "tool": "navigate_to",
+      "min_ms": 6.117,
+      "avg_ms": 6.117,
+      "max_ms": 6.117,
+      "median_ms": 6.117,
+      "latencies_ms": [
+        6.117
+      ],
+      "notes": "Direct route navigation to /chaos",
+      "sample_output_preview": "[extensionError] Navigation failed: Navigator.onGenerateRoute was null, but the route named \"/chaos\" was referenced.\nTo use the Navigator API with named routes (pushNamed, pushReplacementNamed, or pushNamedAndRemoveUntil), the Navigator must be provi..."
+    },
+    {
+      "scenario": "Navigation",
+      "tool": "navigate_to",
+      "min_ms": 5.156,
+      "avg_ms": 5.156,
+      "max_ms": 5.156,
+      "median_ms": 5.156,
+      "latencies_ms": [
+        5.156
+      ],
+      "notes": "Direct route navigation to /testing",
+      "sample_output_preview": "[extensionError] Navigation failed: Navigator.onGenerateRoute was null, but the route named \"/testing\" was referenced.\nTo use the Navigator API with named routes (pushNamed, pushReplacementNamed, or pushNamedAndRemoveUntil), the Navigator must be pro..."
+    },
+    {
+      "scenario": "Navigation",
+      "tool": "navigate_to",
+      "min_ms": 6.307,
+      "avg_ms": 6.307,
+      "max_ms": 6.307,
+      "median_ms": 6.307,
+      "latencies_ms": [
+        6.307
+      ],
+      "notes": "Direct route navigation to /",
+      "sample_output_preview": "[extensionError] Navigation failed: Navigator.onGenerateRoute was null, but the route named \"/\" was referenced.\nTo use the Navigator API with named routes (pushNamed, pushReplacementNamed, or pushNamedAndRemoveUntil), the Navigator must be provided w..."
+    },
+    {
+      "scenario": "Visual",
+      "tool": "capture_screenshot",
+      "min_ms": 20.957,
+      "avg_ms": 25.967,
+      "max_ms": 31.653,
+      "median_ms": 25.291,
+      "latencies_ms": [
+        31.653,
+        20.957,
+        25.291
+      ],
+      "notes": "Full frame Impeller render & base64 transfer",
+      "sample_output_preview": "[extensionError] No RenderView\n[operationId: op-50]"
+    },
+    {
+      "scenario": "State",
+      "tool": "get_riverpod_state",
+      "min_ms": 3.883,
+      "avg_ms": 5.71,
+      "max_ms": 8.327,
+      "median_ms": 4.92,
+      "latencies_ms": [
+        8.327,
+        4.92,
+        3.883
+      ],
+      "notes": "Read Riverpod provider tree",
+      "sample_output_preview": "NotifierProvider<AuthNotifier, bool>: false (bool)\nNotifierProvider<UserNotifier, User?>: null (Null)\nNotifierProvider<CounterNotifier, int>: 9 (int)\n[operationId: op-53]"
+    },
+    {
+      "scenario": "State",
+      "tool": "get_bloc_state",
+      "min_ms": 4.31,
+      "avg_ms": 5.356999999999999,
+      "max_ms": 6.869,
+      "median_ms": 4.892,
+      "latencies_ms": [
+        6.869,
+        4.892,
+        4.31
+      ],
+      "notes": "Read Bloc cubit state",
+      "sample_output_preview": "ThemeCubit#485542641: false (bool)\nThemeCubit: false (bool)\nCounterCubit#93073808: 8 (int)\nCounterCubit: 8 (int)\n[operationId: op-56]"
+    }
+  ]
+}

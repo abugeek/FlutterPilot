@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_pilot_example/src/screens/dashboard_screen.dart';
 import 'package:flutter_pilot_example/src/screens/state_injection_screen.dart';
 import 'package:flutter_pilot_example/src/screens/chaos_screen.dart';
+import 'package:flutter_pilot_example/src/screens/animation_lab_screen.dart';
 import 'package:flutter_pilot_example/src/state/bloc_state.dart';
 
 /// Widget tests for the example app screens.
@@ -33,6 +34,10 @@ Widget _wrapWithProviders(Widget child) {
         builder: (_, __) => const Scaffold(body: Text('storage')),
       ),
       GoRoute(path: '/chaos', builder: (_, __) => const ChaosScreen()),
+      GoRoute(
+        path: '/animation_lab',
+        builder: (_, __) => const AnimationLabScreen(),
+      ),
     ],
   );
 
@@ -61,6 +66,7 @@ void main() {
       expect(find.byKey(const Key('nav_network_button')), findsOneWidget);
       expect(find.byKey(const Key('nav_storage_button')), findsOneWidget);
       expect(find.byKey(const Key('nav_chaos_button')), findsOneWidget);
+      expect(find.byKey(const Key('nav_animation_lab_button')), findsOneWidget);
     });
 
     testWidgets('navigates to state injection screen', (tester) async {
@@ -70,6 +76,36 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('State Injection Testing'), findsOneWidget);
+    });
+  });
+
+  group('AnimationLabScreen', () {
+    testWidgets('renders animation canvas and controls', (tester) async {
+      await tester.pumpWidget(_wrapWithProviders(const AnimationLabScreen()));
+
+      expect(find.text('Animation Lab'), findsOneWidget);
+      expect(find.byKey(const Key('animation_canvas')), findsOneWidget);
+      expect(find.byKey(const Key('start_animation_button')), findsOneWidget);
+      expect(find.text('Pause'), findsOneWidget);
+    });
+
+    testWidgets('toggles animation when button is tapped', (tester) async {
+      await tester.pumpWidget(_wrapWithProviders(const AnimationLabScreen()));
+
+      // Initially running -> shows "Pause"
+      expect(find.text('Pause'), findsOneWidget);
+
+      // Tap to pause
+      await tester.tap(find.byKey(const Key('start_animation_button')));
+      await tester.pump();
+
+      expect(find.text('Start'), findsOneWidget);
+
+      // Tap to resume
+      await tester.tap(find.byKey(const Key('start_animation_button')));
+      await tester.pump();
+
+      expect(find.text('Pause'), findsOneWidget);
     });
   });
 

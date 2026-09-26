@@ -12,6 +12,30 @@ part of '../../flutterpilot_sdk.dart';
 /// - `simulateDeepLink` — Simulate a deep link URL open
 /// - `setOrientation` — Switch device orientation
 extension _NavigationExtensions on FlutterPilot {
+  static NavigatorState? _resolveNavigatorState() {
+    final nav = NavigationTracker.navigatorState;
+    if (nav != null && nav.mounted) return nav;
+
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return null;
+
+    NavigatorState? found;
+    void visit(Element element) {
+      if (found != null) return;
+      if (element is StatefulElement && element.state is NavigatorState) {
+        final state = element.state as NavigatorState;
+        if (state.mounted) {
+          found = state;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
   static void register() {
     // -- ext.flutterpilot.navigateTo ------------------------------------------
     registerExtension('ext.flutterpilot.navigateTo', (
@@ -45,9 +69,12 @@ extension _NavigationExtensions on FlutterPilot {
     registerExtension('ext.flutterpilot.pressBack', (method, parameters) async {
       try {
         bool popped = false;
-        final nav = NavigationTracker.navigatorState;
-        if (nav != null && nav.mounted) {
-          popped = await nav.maybePop();
+        if (NavigationTracker.customPopHandler != null) {
+          popped = await NavigationTracker.customPopHandler!();
+        }
+        if (!popped) {
+          final nav = _resolveNavigatorState();
+          if (nav != null && nav.mounted) popped = await nav.maybePop();
         }
         if (!popped &&
             NavigationTracker.stack.length <= 1 &&
@@ -309,10 +336,14 @@ extension _NavigationExtensions on FlutterPilot {
   }
 }
 
-/// Navigates to [route]. Apps using [NavigationTracker] get a pushNamed;
+/// Navigates to [route]: a router plugin's handler first, then pushNamed for
+/// apps using [NavigationTracker];
 /// Router-based apps (go_router, auto_route) and deep links go through
 /// [WidgetsBinding.handlePushRoute] — the same entry point the OS uses.
 Future<void> _pushRoute(String route, {bool deepLink = false}) async {
+  if (!deepLink && NavigationTracker.customNavigateHandler != null) {
+    if (await NavigationTracker.customNavigateHandler!(route)) return;
+  }
   final nav = NavigationTracker.navigatorState;
   if (!deepLink && nav != null && nav.mounted) {
     nav.pushNamed(route);

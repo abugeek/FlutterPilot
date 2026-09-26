@@ -43,5 +43,6 @@ class DeviceRuntimeContext {
     await service?.dispose();
     service = null;
     cachedMainIsolateId = null;
+    scheduler.reset();
   }
 }

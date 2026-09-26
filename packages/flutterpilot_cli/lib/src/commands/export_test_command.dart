@@ -35,12 +35,14 @@ class ExportTestCommand extends Command<void> {
       ..addOption(
         'output',
         abbr: 'o',
-        help: 'Path to write the synthesized test file (e.g. integration_test/flow_test.dart).',
+        help:
+            'Path to write the synthesized test file (e.g. integration_test/flow_test.dart).',
       )
       ..addOption(
         'vm-uri',
         abbr: 'u',
-        help: 'VM Service URI of the running Flutter application (e.g. ws://127.0.0.1:8181/ws).',
+        help:
+            'VM Service URI of the running Flutter application (e.g. ws://127.0.0.1:8181/ws).',
       );
   }
 
@@ -68,7 +70,9 @@ class ExportTestCommand extends Command<void> {
         return;
       }
 
-      stdout.writeln('Synthesizing $framework test suite from flight recorder...');
+      stdout.writeln(
+        'Synthesizing $framework test suite from flight recorder...',
+      );
       final response = await service.callServiceExtension(
         'ext.flutterpilot.exportTestSuite',
         isolateId: isolateId,
@@ -105,7 +109,9 @@ class ExportTestCommand extends Command<void> {
       }
     } catch (e) {
       stderr.writeln('⚠️ Connection error: $e');
-      stderr.writeln('Make sure your Flutter application is running with FlutterPilot initialized.');
+      stderr.writeln(
+        'Make sure your Flutter application is running with FlutterPilot initialized.',
+      );
     }
   }
 }

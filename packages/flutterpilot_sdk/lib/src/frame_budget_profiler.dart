@@ -12,8 +12,13 @@ class FrameBudgetProfiler {
   static bool _installed = false;
 
   static double get _frameBudgetMs {
-    final refreshRate = WidgetsBinding.instance.platformDispatcher.implicitView?.display.refreshRate ?? 60.0;
-    return 1000.0 / refreshRate.clamp(1.0, 240.0);
+    try {
+      final refreshRate =
+          WidgetsBinding.instance.platformDispatcher.implicitView?.display.refreshRate ?? 60.0;
+      return 1000.0 / refreshRate.clamp(1.0, 240.0);
+    } catch (_) {
+      return 1000.0 / 60.0;
+    }
   }
 
   /// Installs the frame timing listener. Safe to call multiple times.
@@ -97,7 +102,7 @@ class FrameBudgetProfiler {
       'p99FrameMs': double.parse(p99.toStringAsFixed(2)),
       'worstFrameMs': double.parse(worst.toStringAsFixed(2)),
       'effectiveFps': double.parse((1000.0 / (avgTotal > 0 ? avgTotal : 16.6)).clamp(1.0, 120.0).toStringAsFixed(1)),
-      if (diagnosis != null) 'diagnosis': diagnosis,
+      'diagnosis': ?diagnosis,
     };
   }
 

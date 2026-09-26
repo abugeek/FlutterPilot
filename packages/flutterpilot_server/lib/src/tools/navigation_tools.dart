@@ -131,7 +131,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         properties: {
           'timeoutMs': JsonSchema.integer(
             description:
-                'Maximum milliseconds to wait for all animations to settle (default: 5000ms.',
+                'Maximum milliseconds to wait for all animations to settle (default: 5000ms).',
           ),
         },
       ),

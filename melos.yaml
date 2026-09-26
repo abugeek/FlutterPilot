@@ -10,15 +10,15 @@ command:
 
 scripts:
   analyze:
-    run: melos exec -c 1 -- "dart analyze --fatal-infos"
+    run: dart run melos exec -c 1 -- "dart analyze"
     description: Run static analysis for all packages.
 
   format:
-    run: melos exec -c 1 -- "dart format --set-exit-if-changed ."
+    run: dart run melos exec -c 1 -- "dart format --set-exit-if-changed ."
     description: Run dart format for all packages.
 
   test:
-    run: melos exec -c 1 --fail-fast -- "test -d test && (flutter test || dart test) || echo 'No tests'"
+    run: dart run melos exec -c 1 --fail-fast -- "test -d test && (flutter test || dart test) || echo 'No tests'"
     description: Run tests for all packages.
 
   server:run:

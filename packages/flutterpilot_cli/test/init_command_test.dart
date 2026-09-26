@@ -109,5 +109,49 @@ Future<void> main() async {
       expect(InitCommand.patchMain(once), once);
       expect(InitCommand.patchMain('// no entrypoint'), isNull);
     });
+
+    test(
+      'patches main.dart with FlutterPilot.initialize and NavigationTracker',
+      () async {
+        final pubspec = File(p.join(tempDir.path, 'pubspec.yaml'));
+        pubspec.writeAsStringSync('''
+name: my_sample_app
+dependencies:
+  flutter:
+    sdk: flutter
+''');
+
+        final libDir = Directory(p.join(tempDir.path, 'lib'))..createSync();
+        final mainFile = File(p.join(libDir.path, 'main.dart'));
+        mainFile.writeAsStringSync('''
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MaterialApp(home: Scaffold()));
+}
+''');
+
+        final runner = CommandRunner<void>('flutterpilot', 'CLI')
+          ..addCommand(InitCommand());
+        await runner.run(['init', '-p', tempDir.path]);
+
+        final mainContent = mainFile.readAsStringSync();
+        expect(mainContent.contains('FlutterPilot.initialize();'), isTrue);
+        expect(mainContent.contains('NavigationTracker()'), isTrue);
+        // A non-const observer inside `const MaterialApp(` would not compile.
+        expect(mainContent, isNot(contains('const MaterialApp')));
+      },
+    );
+
+    test('addNavigationTracker extends existing observers, skips .router', () {
+      expect(
+        InitCommand.addNavigationTracker(
+          'MaterialApp(navigatorObservers: [MyObs()], home: X())',
+        ),
+        'MaterialApp(navigatorObservers: [NavigationTracker(), MyObs()], home: X())',
+      );
+      const router = 'MaterialApp.router(routerConfig: r)';
+      expect(InitCommand.addNavigationTracker(router), router);
+    });
   });
 }
