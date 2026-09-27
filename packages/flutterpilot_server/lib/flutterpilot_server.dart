@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:path/path.dart' as path;
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
+
 import 'src/fleet_manager.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
@@ -53,7 +55,6 @@ Map<String, dynamic> _withDeviceId(
 abstract class _FlutterPilotServerBase {
   McpServer get server;
   String get vmServiceUri;
-  String get _rawVmServiceUri;
   bool get allowDestructive;
   bool get allowRemoteConnections;
   String? get remoteAccessToken;
@@ -118,7 +119,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   String get vmServiceUri => _redactVmServiceUri(_vmServiceUri ?? '');
   @override
-  String get _rawVmServiceUri => _vmServiceUri ?? '';
   @override
   final bool allowDestructive;
   @override
@@ -282,9 +282,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
     );
     _connectionGeneration++;
-    if (_fleetManager.activeDeviceId == null) {
-      _fleetManager.registerDevice('default', _vmServiceUri!);
-    }
+    // Also refreshes the entry after the app restarted on a new port, so
+    // list_connected_devices / switch_device never hold a dead URI.
+    _fleetManager.registerDevice(
+      _fleetManager.activeDeviceId ?? 'default',
+      _vmServiceUri!,
+    );
     final activeDevice = _fleetManager.activeDeviceId ?? 'default';
     final activeContext =
         _deviceContexts[activeDevice] ??

@@ -11,11 +11,12 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-27 (PR #1 merged)
 
-- 136 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
+- 131 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
-  drives it through the MCP server over stdio. 25/25 checks pass on macOS.
+  drives it through the MCP server over stdio. 29/29 checks pass on macOS
+  (also runs in CI on `macos-latest`).
 - Field-test app: `../hn_reader` (sibling of this repo, its own git history):
   Hacker News reader with Riverpod 3, go_router 18, Dio (+ Algolia search),
   sqflite bookmarks, shared_preferences theme, connectivity banner, right-click
@@ -102,13 +103,20 @@ supported; import guaranteed), `wait_for_widget` removed, navigation waits for
 route transitions before the next tap, plugin version ranges bounded to the
 current major. §1 is done.
 
-**New from the review:**
-- Plugin dependency constraints: `flutterpilot_bloc` pinned `flutter_bloc
-  ^8` so apps on the current 9.x couldn't install it (fixed: `>=8.1.5 <10`).
-  Other plugins use open-ended `>=` constraints (connectivity, firebase,
-  go_router, secure_storage) that will accept future breaking majors — give
-  them upper bounds and add a CI job that resolves every plugin against the
-  latest versions of its host package.
+**Loose ends closed (2026-09-27, branch `chore/ci-and-section1-loose-ends`):**
+- CI had failed at the format step on *every* run since it was added, so
+  analyze and tests never ran there. One format-only commit; CI now runs
+  format, analyze, tests, the plugin-range check and the macOS e2e.
+- `tool/check_plugin_ranges.dart` (repo root) fails when a plugin's
+  constraint rejects the latest release of its host package; CI runs it on
+  every push and weekly (cron), so a new go_router/flutter_bloc major shows
+  up without anyone pushing.
+- Fleet: after the app restarted on a new port, the active device kept its
+  dead URI; the connect path now refreshes it.
+- README tool list rewritten without counts (it named four tools that no
+  longer exist); `TOOLS.generated.md` is the reference.
+- **Still manual:** make `analyze-and-test` and `e2e-macos` required status
+  checks on `main` (GitHub → Settings → Branches).
 
 1. **Weak perf tools — fix or delete:**
    - `get_perf_metrics`: "FPS" on an idle app is meaningless → delete; point to
@@ -187,9 +195,10 @@ current major. §1 is done.
 3. **Zero-code mode** (no SDK installed) is advertised but untested.
 4. **Multi-device fleet** (`register_device`/`switch_device`) untested.
 5. **VS Code extension** (`packages/flutterpilot_vscode`) untested — test or remove.
-6. **CI:** there is none (PR #1 had zero checks). Add GitHub Actions: analyze +
-   unit tests for every package on Linux; `e2e_test.dart` on a macOS runner.
-   Required status check on `main`.
+6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
+   plugin-range check on Linux, `e2e_test.dart` on macOS, weekly cron.
+   Left: mark both jobs as required checks on `main`; add iOS/Android/web
+   e2e jobs once §2.2 proves those platforms.
 
 ## 3. Setup that "just works"
 

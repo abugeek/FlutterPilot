@@ -11,7 +11,6 @@ void main() {
   });
 
   group('ConnectivityPilotInspector', () {
-
     test('register can be called without crashing', () {
       // registerExtension throws UnsupportedError in test environment
       // (no VM service). We verify the guard path and public API work.

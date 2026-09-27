@@ -29,13 +29,19 @@ void main() {
       final timeline = FlightRecorder.getTimeline();
       expect(timeline.length, equals(FlightRecorder.maxEvents));
       expect(timeline.first['action'], equals('step_10'));
-      expect(timeline.last['action'], equals('step_${FlightRecorder.maxEvents + 9}'));
+      expect(
+        timeline.last['action'],
+        equals('step_${FlightRecorder.maxEvents + 9}'),
+      );
     });
 
     test('freezes crash snapshot on recordError', () {
       FlightRecorder.recordRoute('push', {'name': '/checkout'});
       FlightRecorder.recordGesture('tapWidget', {'key': 'pay_btn'});
-      FlightRecorder.recordError('NullPointerException: user is null', 'StackTrace...');
+      FlightRecorder.recordError(
+        'NullPointerException: user is null',
+        'StackTrace...',
+      );
 
       // Add another action after crash
       FlightRecorder.recordGesture('tapWidget', {'key': 'retry_btn'});
@@ -48,6 +54,5 @@ void main() {
       expect(frozenTimeline.length, equals(3));
       expect(frozenTimeline.last['action'], equals('unhandled_exception'));
     });
-
   });
 }

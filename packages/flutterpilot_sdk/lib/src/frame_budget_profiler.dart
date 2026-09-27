@@ -8,7 +8,9 @@ import 'ring_buffer.dart';
 /// window using Flutter's native [WidgetsBinding.addTimingsCallback].
 class FrameBudgetProfiler {
   static const int bufferSize = 120;
-  static final RingBuffer<Map<String, dynamic>> _frameTimings = RingBuffer(bufferSize);
+  static final RingBuffer<Map<String, dynamic>> _frameTimings = RingBuffer(
+    bufferSize,
+  );
   static bool _installed = false;
 
   static bool get _appVisible {
@@ -19,7 +21,13 @@ class FrameBudgetProfiler {
   static double get _frameBudgetMs {
     try {
       final refreshRate =
-          WidgetsBinding.instance.platformDispatcher.implicitView?.display.refreshRate ?? 60.0;
+          WidgetsBinding
+              .instance
+              .platformDispatcher
+              .implicitView
+              ?.display
+              .refreshRate ??
+          60.0;
       return 1000.0 / refreshRate.clamp(1.0, 240.0);
     } catch (_) {
       return 1000.0 / 60.0;
@@ -64,7 +72,8 @@ class FrameBudgetProfiler {
         'status': 'no_frames_recorded',
         'sampleCount': 0,
         if (!_appVisible)
-          'note': 'App window is not visible, so frames are not profiled. '
+          'note':
+              'App window is not visible, so frames are not profiled. '
               'Bring the app to the foreground to measure real frame times.',
         'fps': 60.0,
         'frameBudgetMs': double.parse(_frameBudgetMs.toStringAsFixed(2)),
@@ -90,13 +99,16 @@ class FrameBudgetProfiler {
     String? diagnosis;
     if (jankyCount > 0) {
       if (avgBuild > _frameBudgetMs * 0.9) {
-        diagnosis = 'UI Thread Bottleneck: Build/Layout phase is taking ${avgBuild.toStringAsFixed(1)}ms on average. '
+        diagnosis =
+            'UI Thread Bottleneck: Build/Layout phase is taking ${avgBuild.toStringAsFixed(1)}ms on average. '
             'Check for expensive operations inside build() or non-lazy list rendering.';
       } else if (avgRaster > _frameBudgetMs * 0.9) {
-        diagnosis = 'GPU Thread Bottleneck: Rasterization phase is taking ${avgRaster.toStringAsFixed(1)}ms on average. '
+        diagnosis =
+            'GPU Thread Bottleneck: Rasterization phase is taking ${avgRaster.toStringAsFixed(1)}ms on average. '
             'Check for excessive saveLayer calls, uncompressed image decodes, or complex clipping masks.';
       } else {
-        diagnosis = 'Occasional frame spikes detected ($jankyCount of $count frames exceeded the ${_frameBudgetMs.toStringAsFixed(2)}ms budget).';
+        diagnosis =
+            'Occasional frame spikes detected ($jankyCount of $count frames exceeded the ${_frameBudgetMs.toStringAsFixed(2)}ms budget).';
       }
     }
 
@@ -112,10 +124,15 @@ class FrameBudgetProfiler {
       'p90FrameMs': double.parse(p90.toStringAsFixed(2)),
       'p99FrameMs': double.parse(p99.toStringAsFixed(2)),
       'worstFrameMs': double.parse(worst.toStringAsFixed(2)),
-      'effectiveFps': double.parse((1000.0 / (avgTotal > 0 ? avgTotal : 16.6)).clamp(1.0, 120.0).toStringAsFixed(1)),
+      'effectiveFps': double.parse(
+        (1000.0 / (avgTotal > 0 ? avgTotal : 16.6))
+            .clamp(1.0, 120.0)
+            .toStringAsFixed(1),
+      ),
       'diagnosis': ?diagnosis,
       if (!_appVisible)
-        'note': 'App window is not visible, so new frames are not profiled. '
+        'note':
+            'App window is not visible, so new frames are not profiled. '
             'Bring the app to the foreground to measure real frame times.',
     };
   }

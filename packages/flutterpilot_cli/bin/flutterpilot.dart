@@ -3,15 +3,16 @@ import 'package:args/command_runner.dart';
 import 'package:flutterpilot_cli/flutterpilot_cli.dart';
 
 void main(List<String> args) async {
-  final runner = CommandRunner<void>(
-    'flutterpilot',
-    'Official CLI for FlutterPilot — AI-native runtime introspection & dev tooling for Flutter.',
-  )
-    ..addCommand(InitCommand())
-    ..addCommand(DevCommand())
-    ..addCommand(DoctorCommand())
-    ..addCommand(TestCommand())
-    ..addCommand(AuditCommand());
+  final runner =
+      CommandRunner<void>(
+          'flutterpilot',
+          'Official CLI for FlutterPilot — AI-native runtime introspection & dev tooling for Flutter.',
+        )
+        ..addCommand(InitCommand())
+        ..addCommand(DevCommand())
+        ..addCommand(DoctorCommand())
+        ..addCommand(TestCommand())
+        ..addCommand(AuditCommand());
 
   try {
     await runner.run(args);

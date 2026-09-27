@@ -31,7 +31,8 @@ class HitTestUtils {
     }
 
     final view = element.findAncestorWidgetOfExactType<View>();
-    final viewId = view?.view.viewId ??
+    final viewId =
+        view?.view.viewId ??
         WidgetsBinding.instance.platformDispatcher.implicitView?.viewId;
     if (viewId == null) {
       return false;

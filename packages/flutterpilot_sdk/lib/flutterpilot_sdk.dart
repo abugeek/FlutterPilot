@@ -395,7 +395,6 @@ class FlutterPilot {
     return settled;
   }
 
-
   /// Initializes the FlutterPilot SDK.
   ///
   /// This is the main entry point and **must be called before `runApp`**.
@@ -450,7 +449,8 @@ class FlutterPilot {
         'exception': exception,
         // Layout overflows are bugs to fix, not crashes: don't mark the app
         // unstable for them (the server's self-heal honours this).
-        'severity': exception.contains('RenderFlex overflowed') ||
+        'severity':
+            exception.contains('RenderFlex overflowed') ||
                 details.library == 'rendering library'
             ? 'warning'
             : 'error',

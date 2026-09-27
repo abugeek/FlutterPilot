@@ -72,7 +72,8 @@ class ScrollSimulator {
     // 4. Try dragging candidate scrollables down (and up if needed)
     for (final scrollable in scrollables) {
       ScrollPosition? position;
-      if (scrollable is StatefulElement && scrollable.state is ScrollableState) {
+      if (scrollable is StatefulElement &&
+          scrollable.state is ScrollableState) {
         try {
           position = (scrollable.state as ScrollableState).position;
         } catch (_) {}
@@ -90,8 +91,7 @@ class ScrollSimulator {
       final widget = scrollable.widget as Scrollable;
       final axis = widget.axisDirection;
 
-      final isVertical =
-          axis == AxisDirection.down || axis == AxisDirection.up;
+      final isVertical = axis == AxisDirection.down || axis == AxisDirection.up;
       final dragDistance = isVertical
           ? (ro.size.height * scrollRatio).clamp(_minStepDelta, 500.0)
           : (ro.size.width * scrollRatio).clamp(_minStepDelta, 500.0);
@@ -101,7 +101,9 @@ class ScrollSimulator {
           : Offset(-dragDistance, 0);
 
       // Drag forward up to max attempts with edge-detection
-      double lastPixels = position?.hasContentDimensions == true ? position!.pixels : double.negativeInfinity;
+      double lastPixels = position?.hasContentDimensions == true
+          ? position!.pixels
+          : double.negativeInfinity;
       for (int i = 0; i < maxAttempts; i++) {
         await InteractionManager.swipeFromTo(
           center,
@@ -129,7 +131,9 @@ class ScrollSimulator {
 
       // Drag reverse in case target was above/behind with edge-detection
       final reverseDelta = -dragDelta;
-      lastPixels = position?.hasContentDimensions == true ? position!.pixels : double.negativeInfinity;
+      lastPixels = position?.hasContentDimensions == true
+          ? position!.pixels
+          : double.negativeInfinity;
       for (int i = 0; i < maxAttempts; i++) {
         await InteractionManager.swipeFromTo(
           center,

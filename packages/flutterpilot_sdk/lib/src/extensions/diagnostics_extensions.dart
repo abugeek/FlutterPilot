@@ -264,6 +264,5 @@ extension _DiagnosticsExtensions on FlutterPilot {
       StreamInspector.clear();
       return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
-
   }
 }

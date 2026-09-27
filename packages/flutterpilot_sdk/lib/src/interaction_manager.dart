@@ -113,8 +113,9 @@ class InteractionManager {
   static Future<void> _handlePointerEventRecords(
     List<List<PointerEvent>> records,
   ) async {
-    final isTest =
-        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains(
+      'Test',
+    );
     for (final record in records) {
       for (final event in record) {
         GestureBinding.instance.handlePointerEvent(event);
@@ -125,7 +126,6 @@ class InteractionManager {
       }
     }
   }
-
 
   /// Simulates a physical tap at the given screen [position] with full pointer lifecycle.
   static Future<void> tapAt(Offset position, {String? label}) async {
@@ -254,7 +254,9 @@ class InteractionManager {
     for (int i = 1; i <= steps; i++) {
       final t = i / steps;
       final pos = Offset.lerp(start, end, t)!;
-      final prevPos = i == 1 ? start : Offset.lerp(start, end, (i - 1) / steps)!;
+      final prevPos = i == 1
+          ? start
+          : Offset.lerp(start, end, (i - 1) / steps)!;
       final stepDelta = pos - prevPos;
 
       moveRecords.add([
@@ -303,8 +305,7 @@ class InteractionManager {
     Offset to, {
     Duration duration = const Duration(milliseconds: 400),
     int steps = 30,
-  }) =>
-      swipeFromTo(from, to, duration: duration, steps: steps);
+  }) => swipeFromTo(from, to, duration: duration, steps: steps);
 
   /// Simulates a multi-touch pinch / zoom gesture around [center].
   ///

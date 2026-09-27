@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Weekly: catches a new major of a host package (go_router, flutter_bloc,
+  # ...) that a plugin's version range would reject, even without pushes.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 jobs:
   analyze-and-test:
@@ -30,3 +35,28 @@ jobs:
 
       - name: Test All Packages
         run: melos run test
+
+      - name: Plugin ranges accept the latest host packages
+        run: dart run tool/check_plugin_ranges.dart
+
+  # The real gate: fresh app -> `flutterpilot init --local` -> flutter run ->
+  # MCP server over stdio. See packages/flutterpilot_server/tool/e2e_test.dart.
+  e2e-macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      - name: End-to-end test
+        working-directory: packages/flutterpilot_server
+        run: dart run tool/e2e_test.dart -d macos

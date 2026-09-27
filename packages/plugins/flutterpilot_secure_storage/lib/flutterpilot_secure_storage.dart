@@ -127,14 +127,12 @@ class SecureStoragePilotInspector {
         final showValues = parameters['showValues'] == 'true';
         final keysOnly = parameters['keysOnly'] == 'true';
         final exactKey = parameters['key'];
-        final truncateLength = int.tryParse(parameters['truncateLength'] ?? '150') ?? 150;
+        final truncateLength =
+            int.tryParse(parameters['truncateLength'] ?? '150') ?? 150;
 
         if (keysOnly) {
           return ServiceExtensionResponse.result(
-            json.encode({
-              'keys': all.keys.toList(),
-              'count': all.length,
-            }),
+            json.encode({'keys': all.keys.toList(), 'count': all.length}),
           );
         }
 
@@ -154,7 +152,9 @@ class SecureStoragePilotInspector {
             final val = entry.value;
             final isTruncated = exactKey == null && val.length > truncateLength;
             entries[entry.key] = {
-              'value': isTruncated ? '${val.substring(0, truncateLength)}... [truncated]' : val,
+              'value': isTruncated
+                  ? '${val.substring(0, truncateLength)}... [truncated]'
+                  : val,
               'length': val.length,
               'redacted': false,
               if (isTruncated) 'truncated': true,

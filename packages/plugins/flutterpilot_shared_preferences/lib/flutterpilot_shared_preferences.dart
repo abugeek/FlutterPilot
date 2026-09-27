@@ -141,7 +141,8 @@ class SharedPrefsPilotInspector {
       final showSensitive = parameters['showSensitive'] == 'true';
       final keysOnly = parameters['keysOnly'] == 'true';
       final exactKey = parameters['key'];
-      final truncateLength = int.tryParse(parameters['truncateLength'] ?? '200') ?? 200;
+      final truncateLength =
+          int.tryParse(parameters['truncateLength'] ?? '200') ?? 200;
 
       final keys = p.getKeys();
       if (keysOnly) {
@@ -151,7 +152,9 @@ class SharedPrefsPilotInspector {
       }
 
       final data = <String, dynamic>{};
-      final targetKeys = exactKey != null && exactKey.isNotEmpty ? [exactKey] : keys;
+      final targetKeys = exactKey != null && exactKey.isNotEmpty
+          ? [exactKey]
+          : keys;
 
       for (final key in targetKeys) {
         if (!p.containsKey(key)) continue;
@@ -159,8 +162,11 @@ class SharedPrefsPilotInspector {
           data[key] = '[redacted — pass showSensitive=true to reveal]';
         } else {
           final val = p.get(key);
-          if (exactKey == null && val is String && val.length > truncateLength) {
-            data[key] = '${val.substring(0, truncateLength)}... [truncated ${val.length} chars, pass key="$key" for full value]';
+          if (exactKey == null &&
+              val is String &&
+              val.length > truncateLength) {
+            data[key] =
+                '${val.substring(0, truncateLength)}... [truncated ${val.length} chars, pass key="$key" for full value]';
           } else {
             data[key] = val;
           }

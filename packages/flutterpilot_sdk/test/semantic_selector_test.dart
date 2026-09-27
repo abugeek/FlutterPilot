@@ -33,44 +33,49 @@ void main() {
       expect(el2!.widget, isA<Text>());
     });
 
-    testWidgets('finds button by semantic selector and button text without keys', (
-      WidgetTester tester,
-    ) async {
-      int tapCount = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                ElevatedButton(
-                  onPressed: () => tapCount++,
-                  child: const Text('Log In'),
-                ),
-                TextButton(
-                  onPressed: () => tapCount += 2,
-                  child: const Text('Forgot Password?'),
-                ),
-              ],
+    testWidgets(
+      'finds button by semantic selector and button text without keys',
+      (WidgetTester tester) async {
+        int tapCount = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  ElevatedButton(
+                    onPressed: () => tapCount++,
+                    child: const Text('Log In'),
+                  ),
+                  TextButton(
+                    onPressed: () => tapCount += 2,
+                    child: const Text('Forgot Password?'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      // 1. Structured selector
-      final el1 = PilotWidgetInspector.findElement("ElevatedButton['Log In']");
-      expect(el1, isNotNull);
-      expect(el1!.widget, isA<ElevatedButton>());
+        // 1. Structured selector
+        final el1 = PilotWidgetInspector.findElement(
+          "ElevatedButton['Log In']",
+        );
+        expect(el1, isNotNull);
+        expect(el1!.widget, isA<ElevatedButton>());
 
-      // 2. Generic button selector
-      final el2 = PilotWidgetInspector.findElement("Button['Forgot Password?']");
-      expect(el2, isNotNull);
-      expect(el2!.widget, isA<TextButton>());
+        // 2. Generic button selector
+        final el2 = PilotWidgetInspector.findElement(
+          "Button['Forgot Password?']",
+        );
+        expect(el2, isNotNull);
+        expect(el2!.widget, isA<TextButton>());
 
-      // 3. Plain text query matching enclosing button
-      final el3 = PilotWidgetInspector.findElement('Log In');
-      expect(el3, isNotNull);
-      expect(el3!.widget, isA<ElevatedButton>());
-    });
+        // 3. Plain text query matching enclosing button
+        final el3 = PilotWidgetInspector.findElement('Log In');
+        expect(el3, isNotNull);
+        expect(el3!.widget, isA<ElevatedButton>());
+      },
+    );
 
     testWidgets('finds TextField by placeholder or type selector', (
       WidgetTester tester,
@@ -81,9 +86,7 @@ void main() {
             body: Column(
               children: const [
                 TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Enter your email',
-                  ),
+                  decoration: InputDecoration(hintText: 'Enter your email'),
                 ),
               ],
             ),
@@ -91,13 +94,13 @@ void main() {
         ),
       );
 
-      final el = PilotWidgetInspector.findElement("TextField['Enter your email']");
+      final el = PilotWidgetInspector.findElement(
+        "TextField['Enter your email']",
+      );
       expect(el, isNotNull);
     });
 
-    testWidgets('finds widget by Tooltip message', (
-      WidgetTester tester,
-    ) async {
+    testWidgets('finds widget by Tooltip message', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -122,10 +125,7 @@ void main() {
           home: Scaffold(
             body: Column(
               children: const [
-                ElevatedButton(
-                  onPressed: null,
-                  child: Text('Create Account'),
-                ),
+                ElevatedButton(onPressed: null, child: Text('Create Account')),
               ],
             ),
           ),
@@ -153,31 +153,32 @@ void main() {
       expect(foundSelector, isTrue);
     });
 
-    testWidgets('finds IconButton by icon name without explicit key or tooltip', (
-      WidgetTester tester,
-    ) async {
-      int tapCount = 0;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            appBar: AppBar(
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: () => tapCount++,
-                ),
-              ],
+    testWidgets(
+      'finds IconButton by icon name without explicit key or tooltip',
+      (WidgetTester tester) async {
+        int tapCount = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              appBar: AppBar(
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    onPressed: () => tapCount++,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      final el = PilotWidgetInspector.findElement("IconButton['settings']");
-      expect(el, isNotNull);
-      expect(el!.widget, isA<IconButton>());
+        final el = PilotWidgetInspector.findElement("IconButton['settings']");
+        expect(el, isNotNull);
+        expect(el!.widget, isA<IconButton>());
 
-      final elDirect = PilotWidgetInspector.findElement("settings");
-      expect(elDirect, isNotNull);
-    });
+        final elDirect = PilotWidgetInspector.findElement("settings");
+        expect(elDirect, isNotNull);
+      },
+    );
   });
 }

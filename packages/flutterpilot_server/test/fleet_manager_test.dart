@@ -44,5 +44,13 @@ void main() {
       expect(devices[0]['isActive'], isTrue);
       expect(devices[1]['isActive'], isFalse);
     });
+
+    test('re-registering the active device replaces its URI (app restart)', () {
+      fleet.registerDevice('default', 'ws://127.0.0.1:8001/old=/ws');
+      fleet.registerDevice('default', 'ws://127.0.0.1:9002/new=/ws');
+      expect(fleet.activeDeviceId, equals('default'));
+      expect(fleet.activeUri, equals('ws://127.0.0.1:9002/new=/ws'));
+      expect(fleet.listDevices()['total'], equals(1));
+    });
   });
 }

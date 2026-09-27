@@ -4,7 +4,9 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
 void main() {
   group('Agent Superpowers Tests', () {
-    testWidgets('UiHealthAuditor detects small touch targets (<48x48)', (tester) async {
+    testWidgets('UiHealthAuditor detects small touch targets (<48x48)', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -29,10 +31,15 @@ void main() {
       expect(audit['accessibilityIssueCount'], greaterThanOrEqualTo(1));
       expect(audit['isHealthy'], isFalse);
       final issues = audit['accessibilityIssues'] as List;
-      expect(issues.any((i) => i['target'].toString().contains('tiny_button')), isTrue);
+      expect(
+        issues.any((i) => i['target'].toString().contains('tiny_button')),
+        isTrue,
+      );
     });
 
-    testWidgets('UiHealthAuditor reports healthy on standard Material layout', (tester) async {
+    testWidgets('UiHealthAuditor reports healthy on standard Material layout', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -50,6 +57,5 @@ void main() {
       final audit = UiHealthAuditor.audit();
       expect(audit['overflowCount'], equals(0));
     });
-
   });
 }

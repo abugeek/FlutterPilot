@@ -89,6 +89,5 @@ extension _RecordingExtensions on FlutterPilot {
         json.encode({'status': 'cleared'}),
       );
     });
-
   }
 }

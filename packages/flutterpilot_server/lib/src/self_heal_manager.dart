@@ -80,8 +80,6 @@ class CrashReport {
     }
   }
 
-
-
   dynamic _truncateTree(dynamic tree) {
     if (tree == null) return null;
     final str = tree.toString();

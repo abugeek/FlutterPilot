@@ -32,11 +32,7 @@ class AiOverlayManager {
           return Positioned(
             left: position.dx - 40,
             top: position.dy - 40,
-            child: IgnorePointer(
-              child: _AiRippleWidget(
-                label: label,
-              ),
-            ),
+            child: IgnorePointer(child: _AiRippleWidget(label: label)),
           );
         },
       );
@@ -74,13 +70,15 @@ class _AiRippleWidgetState extends State<_AiRippleWidget>
       duration: const Duration(milliseconds: 600),
     )..forward();
 
-    _scaleAnimation = Tween<double>(begin: 0.4, end: 1.6).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.4,
+      end: 1.6,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    _opacityAnimation = Tween<double>(begin: 0.9, end: 0.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInCubic),
-    );
+    _opacityAnimation = Tween<double>(
+      begin: 0.9,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInCubic));
   }
 
   @override

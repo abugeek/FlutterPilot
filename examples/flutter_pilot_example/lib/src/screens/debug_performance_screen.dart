@@ -97,10 +97,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             const SizedBox(height: 16),
 
             // -- Debug Logs --------------------------------------------------
-            _sectionHeader(
-              'Debug Logs',
-              'get_debug_logs · clear_debug_logs',
-            ),
+            _sectionHeader('Debug Logs', 'get_debug_logs · clear_debug_logs'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
