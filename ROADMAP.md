@@ -109,6 +109,27 @@ of PR #1.
    and drifts — delete it or generate it. README still advertises old
    category counts.
 
+10. **Self-heal is alarmist and heavy:** a 38px layout overflow is logged as
+    "🚨 CRITICAL APP CRASH", marks the app UNSTABLE, and every captured error
+    fires 6 extension calls (including a full widget tree) from the server
+    (`SelfHealManager.handleCrash`). Classify by severity (layout vs uncaught
+    exception), debounce repeated errors, and fetch diagnostics lazily when
+    `get_latest_crash_report` is actually called.
+11. **Keyboard simulator** (`keyboard_simulator.dart`) dispatches each key
+    twice — `HardwareKeyboard.handleKeyEvent` *and* the deprecated
+    `keyMessageHandler`. Use one correct path (the platform key-data path
+    `KeyEventManager.handleKeyData` like flutter_test's `KeyEventSimulator`),
+    and decide what "type characters" means per platform (desktop text editing
+    goes through the OS text-input client, so Backspace/characters don't edit
+    fields today — `enter_text` is the supported way).
+12. **Text scale / locale overrides** need the app to wrap MaterialApp in a
+    `ValueListenableBuilder` (tools now say so). Let `flutterpilot init` inject
+    that wiring, like it injects `NavigationTracker`.
+13. **Settle timing:** post-action state is read ~150 ms after an action, so
+    during page/menu transitions (~300 ms) it can list the previous screen's
+    elements. Wait for route animations (`ModalRoute.animation` status) and
+    popup menus before snapshotting.
+
 ## 2. Coverage the product claims but hasn't proven
 
 1. **Second real app for untested plugins:** e.g. a notes app with Bloc +
@@ -217,6 +238,63 @@ Deleted because nothing captured/restored state. A real version:
 - **Docs site + short demo** of the real loop (bug → mock → fix → verify).
 
 ---
+
+## 9. Code not yet reviewed in a real app (suspect until proven)
+
+These exist and compile, but nobody has checked them against real behaviour.
+Review each the same way as PR #1 — keep, fix, or delete:
+
+- **`ai_overlay_manager.dart`** — the "🤖 AI Tap" ripple. Verify it is *not*
+  captured in `capture_screenshot` / `compare_screenshot` (would make visual
+  diffs flaky) and not listed in widget trees or tappable elements.
+- **`operation_scheduler.dart` + `get_operation` / `cancel_operation` /
+  `async:true` / `operationDeadlineMs`** — a lot of machinery added to every
+  tool's schema (5 extra params each). Calls take milliseconds; measure whether
+  any agent ever needs async/cancel, otherwise delete and shrink every schema.
+- **`fleet_manager.dart` / device contexts** — multi-device routing; untested.
+- **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
+  test on long lists, nested scrollables, horizontal lists, lazy lists where
+  the target isn't built yet.
+- **`stream_inspector.dart`** (`get_stream_logs`) — WebSocket/stream capture;
+  what wires it? Probably nothing in a normal app.
+- **`flight_recorder.dart`**, `get_flight_log`, `start_recording` /
+  `stop_and_generate_test` — useful only if §6 is built on top.
+- **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS
+  simulator only) — test on a simulator or hide on other platforms.
+- **Plugin write tools** that make real network calls (`supabase_sign_out`,
+  `log_analytics_event`, `record_crashlytics_error`, ...) — keep behind
+  `--allow-destructive` and verify they're labeled as such.
+- **Example app** (`examples/flutter_pilot_example`) — 12 demo screens incl.
+  `chaos_screen.dart` and `animation_lab_screen.dart` referencing removed or
+  untested features. It's a showcase, not a test; trim it to what the tools
+  still do, or replace it with the e2e fixture.
+
+## 10. Performance targets
+
+Measured in debug mode on macOS (see `docs/field-test-findings.md`). Keep
+these as budgets, add assertions to e2e:
+
+| Operation | Now | Target |
+|---|---|---|
+| Trivial read (nav stack, errors) | 15–30 ms | < 20 ms |
+| `get_widget_tree` (HN feed) | 40–120 ms, ~14 KB | < 60 ms, < 8 KB |
+| `get_app_summary` | 100–180 ms, ~1–2 KB | < 80 ms |
+| `tap_widget` incl. post-action state | 300–450 ms | < 200 ms |
+| `findElement` | ~10 ms | < 10 ms |
+
+Known costs: post-action state captures the tree twice and lists interactive
+elements (hit-testing each); the forced-frame pump runs at 60 Hz for 30 s after
+the last call while the window is hidden (CPU cost; consider 20–30 Hz).
+
+## Where things are
+
+- `docs/field-test-findings.md` — every tool observation (88 rows), latency.
+- `../hn_reader` — field-test app. It **intentionally** keeps a layout bug:
+  the story subtitle `Row` in `lib/ui/story_tile.dart` overflows at 1.6× text
+  scale (used to test overflow detection) — don't "fix" it without adding
+  another known defect.
+- `packages/flutterpilot_server/tool/e2e_test.dart` — the gate.
+- `packages/flutterpilot_server/tool/fp_bridge.dart` — shell driver.
 
 ## Definition of done for any roadmap item
 
