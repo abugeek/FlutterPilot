@@ -8,7 +8,9 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
   final added = widgetDiff['addedCount'] ?? 0;
   final removed = widgetDiff['removedCount'] ?? 0;
   final modified = widgetDiff['modifiedCount'] ?? 0;
-  final buffer = StringBuffer(' Widget tree: +$added / -$removed / ~$modified.');
+  final buffer = StringBuffer(
+    ' Widget tree: +$added / -$removed / ~$modified.',
+  );
   final samples = <String>[
     ...(widgetDiff['added'] as List? ?? const []).map((s) => '+ $s'),
     ...(widgetDiff['modified'] as List? ?? const []).map((s) => '~ $s'),
@@ -33,13 +35,19 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
   final delta = data?['delta'] as Map<String, dynamic>?;
   if (delta == null) return '$verb.';
   final navigated = delta['navigated'] == true;
-  final diffText = _widgetDiffSummary(delta['widgetDiff'] as Map<String, dynamic>?);
+  final diffText = _widgetDiffSummary(
+    delta['widgetDiff'] as Map<String, dynamic>?,
+  );
 
   final buffer = StringBuffer(verb);
   if (navigated) {
-    buffer.write('. Route changed: ${delta['fromRoute']} → ${delta['toRoute']}.');
+    buffer.write(
+      '. Route changed: ${delta['fromRoute']} → ${delta['toRoute']}.',
+    );
   } else {
-    buffer.write('. Route unchanged (${delta['toRoute'] ?? delta['fromRoute'] ?? 'unknown'}).');
+    buffer.write(
+      '. Route unchanged (${delta['toRoute'] ?? delta['fromRoute'] ?? 'unknown'}).',
+    );
   }
   buffer.write(diffText);
   if (!navigated && diffText.isEmpty) {
@@ -59,47 +67,42 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     Map<String, dynamic> params,
     _ExtensionResult res,
   ) {
-    final target = res.data?['target'] ??
+    final target =
+        res.data?['target'] ??
         res.data?['key'] ??
         params['key'] ??
         params['identifier'] ??
         params['text'] ??
         '';
     final postState = res.data?['postActionState'] as Map<String, dynamic>?;
+    final delta = res.data?['delta'] as Map<String, dynamic>?;
     final buffer = StringBuffer();
     final targetStr = target.toString();
-    buffer.writeln(
-      '⚡ $actionName${targetStr.isNotEmpty ? ' on "$targetStr"' : ''} executed successfully.',
+    buffer.write('$actionName${targetStr.isNotEmpty ? ' "$targetStr"' : ''}.');
+    final route = postState?['route'] ?? delta?['toRoute'];
+    final changed =
+        postState?['routeChanged'] == true || delta?['navigated'] == true;
+    if (route != null) {
+      buffer.write(
+        changed
+            ? ' Route changed: ${delta?['fromRoute'] ?? postState?['previousRoute'] ?? '?'} → $route.'
+            : ' Route unchanged ($route).',
+      );
+    }
+    // What appeared/disappeared, so the agent rarely needs a follow-up read.
+    buffer.write(
+      _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
     );
-    if (postState != null) {
-      buffer.writeln('\nInstant Post-Action State:');
-      final route = postState['route'];
-      final routeChanged = postState['routeChanged'] == true;
-      final focused = postState['focusedElement'];
-      final elements = postState['visibleInteractiveElements'] as List?;
-      final count = postState['interactiveElementsCount'];
-      final errors = postState['errorCount'];
-
-      if (route != null) {
-        buffer.writeln('• Route: $route${routeChanged ? ' (CHANGED!)' : ''}');
-      }
-      if (focused != null) {
-        buffer.writeln('• Focused Element: "$focused"');
-      }
-      if (elements != null && elements.isNotEmpty) {
-        buffer.writeln(
-          '• Hittable Elements ($count total): [${elements.join(", ")}]',
-        );
-      }
-      if (errors != null && (errors is int ? errors > 0 : errors != 0)) {
-        buffer.writeln(
-          '• ⚠️ Uncaught Errors: $errors (call get_errors to inspect)',
-        );
-      }
-      final issueAlert = postState['issueAlert'] ?? postState['perfAlert'];
-      if (issueAlert != null && issueAlert.toString().isNotEmpty) {
-        buffer.writeln(issueAlert.toString());
-      }
+    final elements = postState?['visibleInteractiveElements'] as List?;
+    if (elements != null && elements.isNotEmpty) {
+      buffer.write(
+        '\nTappable now (${postState!['interactiveElementsCount']}): '
+        '${elements.map((e) => '"$e"').join(', ')}',
+      );
+    }
+    final newErrors = postState?['newErrorCount'];
+    if (newErrors is int && newErrors > 0) {
+      buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
     }
     return buffer.toString().trim();
   }
@@ -161,10 +164,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Visible text content within the widget to tap.',
           ),
           'type': JsonSchema.string(
-            description: 'Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton".',
+            description:
+                'Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton".',
           ),
           'maxAttempts': JsonSchema.integer(
-            description: 'Max scroll attempts if widget is off-screen (default: 8).',
+            description:
+                'Max scroll attempts if widget is off-screen (default: 8).',
           ),
           'x': JsonSchema.number(
             description: 'Optional direct X screen coordinate.',
@@ -179,59 +184,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: _formatActionFeedback('Widget tapped', p, res),
-            ),
+            TextContent(text: _formatActionFeedback('Widget tapped', p, res)),
           ],
         );
       },
     );
 
     // Convenience alias matching standard MCP patterns
-    server.registerTool(
-      'tap',
-      description:
-          'Convenience alias for tap_widget. Finds a widget by Key, identifier, semanticsId, visible text, or coordinates and taps it.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'ValueKey string, semantic selector, or target.',
-          ),
-          'identifier': JsonSchema.string(
-            description: 'Semantics identifier property.',
-          ),
-          'semanticsId': JsonSchema.integer(
-            description: 'Numeric SemanticsNode ID from get_semantics_tree.',
-          ),
-          'text': JsonSchema.string(
-            description: 'Visible text within the widget to tap.',
-          ),
-          'type': JsonSchema.string(
-            description: 'Widget runtime type.',
-          ),
-          'maxAttempts': JsonSchema.integer(
-            description: 'Max scroll attempts if widget is off-screen (default: 8).',
-          ),
-          'x': JsonSchema.number(
-            description: 'Optional direct X coordinate.',
-          ),
-          'y': JsonSchema.number(
-            description: 'Optional direct Y coordinate.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.tapWidget', p);
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionFeedback('Tap', p, res),
-            ),
-          ],
-        );
-      },
-    );
 
     server.registerTool(
       'enter_text',
@@ -268,9 +227,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: _formatActionFeedback('Text entered', p, res),
-            ),
+            TextContent(text: _formatActionFeedback('Text entered', p, res)),
           ],
         );
       },
@@ -279,9 +236,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'press_key',
       description:
-          'Dispatches physical hardware key events (e.g. "enter", "tab", "escape", "backspace", "arrowDown", "space") '
-          'directly to Flutter\'s HardwareKeyboard and focused widget. '
-          'Supports Enter form submission and modifier keys (shift, ctrl, alt, meta).',
+          'Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" '
+          '(closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). '
+          'The response says which widget received it. To change text use enter_text / '
+          'clear_text_field — editing keys like backspace are handled by the OS on desktop.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -290,7 +248,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'modifiers': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Optional modifier keys: "shift", "ctrl", "alt", "meta".',
+            description:
+                'Optional modifier keys: "shift", "ctrl", "alt", "meta".',
           ),
         },
         required: ['key'],
@@ -299,8 +258,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final callParams = <String, dynamic>{'key': p['key']};
         if (p['modifiers'] != null) {
           final mods = p['modifiers'];
-          callParams['modifiers'] =
-              mods is List ? mods.join(',') : mods.toString();
+          callParams['modifiers'] = mods is List
+              ? mods.join(',')
+              : mods.toString();
         }
         final res = await _callExtensionRaw(
           'ext.flutterpilot.pressKey',
@@ -309,9 +269,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: _formatActionFeedback('Key pressed', p, res),
-            ),
+            TextContent(text: _formatActionFeedback('Key pressed', p, res)),
           ],
         );
       },
@@ -330,18 +288,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'identifier': JsonSchema.string(
             description: 'Semantics identifier of the widget.',
           ),
-          'text': JsonSchema.string(
-            description: 'Visible text of the widget.',
-          ),
-          'type': JsonSchema.string(
-            description: 'Widget runtime type.',
-          ),
-          'x': JsonSchema.number(
-            description: 'Optional direct X coordinate.',
-          ),
-          'y': JsonSchema.number(
-            description: 'Optional direct Y coordinate.',
-          ),
+          'text': JsonSchema.string(description: 'Visible text of the widget.'),
+          'type': JsonSchema.string(description: 'Widget runtime type.'),
+          'x': JsonSchema.number(description: 'Optional direct X coordinate.'),
+          'y': JsonSchema.number(description: 'Optional direct Y coordinate.'),
         },
       ),
       callback: (p, e) async {
@@ -352,9 +302,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: _formatActionFeedback('Secondary tap', p, res),
-            ),
+            TextContent(text: _formatActionFeedback('Secondary tap', p, res)),
           ],
         );
       },
@@ -394,9 +342,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(
-              text: _formatActionFeedback('Pinch zoom', p, res),
-            ),
+            TextContent(text: _formatActionFeedback('Pinch zoom', p, res)),
           ],
         );
       },
@@ -413,7 +359,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'The ValueKey string, semantic selector, or label of the widget to scroll into view.',
           ),
           'maxAttempts': JsonSchema.integer(
-            description: 'Max scroll attempts to locate the widget in lazy lists (default: 8).',
+            description:
+                'Max scroll attempts to locate the widget in lazy lists (default: 8).',
           ),
         },
         required: ['key'],
@@ -445,7 +392,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionDelta(res.data, verb: 'Double-tapped')),
+            TextContent(
+              text: _formatActionDelta(res.data, verb: 'Double-tapped'),
+            ),
           ],
         );
       },
@@ -479,7 +428,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionDelta(res.data, verb: 'Long press complete')),
+            TextContent(
+              text: _formatActionDelta(res.data, verb: 'Long press complete'),
+            ),
           ],
         );
       },
@@ -517,7 +468,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionDelta(res.data, verb: 'Swipe complete')),
+            TextContent(
+              text: _formatActionDelta(res.data, verb: 'Swipe complete'),
+            ),
           ],
         );
       },
@@ -545,7 +498,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionDelta(res.data, verb: 'Drag complete')),
+            TextContent(
+              text: _formatActionDelta(res.data, verb: 'Drag complete'),
+            ),
           ],
         );
       },
@@ -694,7 +649,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return res.isError
             ? res.toCallToolResult()
             : CallToolResult(
-                content: [TextContent(text: _formatActionDelta(res.data, verb: 'Toggled'))],
+                content: [
+                  TextContent(
+                    text: _formatActionDelta(res.data, verb: 'Toggled'),
+                  ),
+                ],
               );
       },
     );
@@ -777,14 +736,6 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'go_back',
-      description:
-          'Alias for press_back. Pops the current route or screen.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: backCallback,
-    );
-
-    server.registerTool(
       'fill_form',
       description:
           'Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, '
@@ -816,13 +767,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final routeNote = navigated
             ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
             : submitted
-                ? ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).'
-                : '';
-        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
+            ? ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).'
+            : '';
+        final diffNote = _widgetDiffSummary(
+          delta?['widgetDiff'] as Map<String, dynamic>?,
+        );
         return CallToolResult(
           content: [
             TextContent(
-              text: '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}$routeNote$diffNote',
+              text:
+                  '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}$routeNote$diffNote',
             ),
           ],
         );
@@ -837,25 +791,31 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'selector': JsonSchema.string(
-            description: 'Semantic selector or key to wait for (e.g. "Text[\'Dashboard\']" or "order_confirmed_icon").',
+            description:
+                'Semantic selector or key to wait for (e.g. "Text[\'Dashboard\']" or "order_confirmed_icon").',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Maximum milliseconds to wait before failing (default: 3000).',
+            description:
+                'Maximum milliseconds to wait before failing (default: 3000).',
           ),
         },
         required: ['selector'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
-          'selector': p['selector'].toString(),
-          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.waitForCondition',
+          {
+            'selector': p['selector'].toString(),
+            if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
+          },
+        );
         if (res.isError) return res.toCallToolResult();
         final elapsed = res.data?['elapsedMs'] ?? 0;
         return CallToolResult(
           content: [
             TextContent(
-              text: '🎯 Condition satisfied: "${p['selector']}" is now visible on screen (${elapsed}ms).',
+              text:
+                  '🎯 Condition satisfied: "${p['selector']}" is now visible on screen (${elapsed}ms).',
             ),
           ],
         );
@@ -866,10 +826,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       'audit_screen_health',
       description:
           'Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex '
-          'overflow errors (e.g. "overflowed by 14px") and flags touch targets smaller than the standard 48x48 dp accessibility guideline.',
+          'overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.auditScreenHealth',
+          {},
+        );
         if (res.isError) return res.toCallToolResult();
         final isHealthy = res.data?['isHealthy'] == true;
         final overflowCount = res.data?['overflowCount'] ?? 0;
@@ -881,7 +844,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text: '🎉 **Screen Health Audit Passed!**\n- 0 Layout Overflows\n- 0 Accessibility Violations',
+                text:
+                    '🎉 **Screen Health Audit Passed!**\n- 0 Layout Overflows\n- 0 Accessibility Violations',
               ),
             ],
           );
@@ -895,7 +859,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           }
         }
         if (a11yCount > 0) {
-          buffer.writeln('\n### ♿ Accessibility / Tap Target Issues ($a11yCount):');
+          buffer.writeln(
+            '\n### ♿ Accessibility / Tap Target Issues ($a11yCount):',
+          );
           for (final a in a11y) {
             buffer.writeln('- `${a['target']}` (${a['type']}): ${a['issue']}');
           }
@@ -921,28 +887,37 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['actions'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.executeActionChain', {
-          'actions': json.encode(p['actions']),
-        });
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.executeActionChain',
+          {'actions': json.encode(p['actions'])},
+        );
         if (res.isError) return res.toCallToolResult();
         final executed = res.data?['executedCount'] ?? 0;
         final total = res.data?['totalActions'] ?? 0;
         final steps = res.data?['steps'] as List? ?? const [];
-        final failed = steps.where((s) => s is Map && s['status'] != 'ok').toList();
+        final failed = steps
+            .where((s) => s is Map && s['status'] != 'ok')
+            .toList();
         final delta = res.data?['delta'] as Map<String, dynamic>?;
         final navigated = delta?['navigated'] == true;
         final buffer = StringBuffer(
           '⚡ Action Chain: $executed/$total actions completed natively.',
         );
         if (navigated) {
-          buffer.write(' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.');
+          buffer.write(
+            ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.',
+          );
         }
-        buffer.write(_widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?));
+        buffer.write(
+          _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
+        );
         if (failed.isNotEmpty) {
           buffer.write('\n⚠️ ${failed.length} step(s) did not execute:');
           for (final s in failed) {
             final m = s as Map;
-            buffer.write('\n  - step ${m['index']}: ${m['action']}("${m['target']}") → ${m['status']}');
+            buffer.write(
+              '\n  - step ${m['index']}: ${m['action']}("${m['target']}") → ${m['status']}',
+            );
           }
         }
         return CallToolResult(content: [TextContent(text: buffer.toString())]);
@@ -965,7 +940,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Key, semantic selector, or text of the widget expected to appear (e.g. "home_dashboard", "Text[\'Welcome\']").',
           ),
           'timeout': JsonSchema.integer(
-            description: 'Timeout in milliseconds to wait for the expected widget (default: 5000ms).',
+            description:
+                'Timeout in milliseconds to wait for the expected widget (default: 5000ms).',
           ),
         },
         required: ['target', 'expect'],
@@ -975,24 +951,29 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final expectKey = p['expect'].toString();
         final timeoutMs = (p['timeout'] as num?)?.toInt() ?? 5000;
 
-        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {'key': target});
+        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+          'key': target,
+        });
         if (tapRes.isError) return tapRes.toCallToolResult();
 
-        final waitRes = await _callExtensionRaw('ext.flutterpilot.waitForWidget', {
-          'key': expectKey,
-          'timeoutMs': timeoutMs.toString(),
-        });
+        final waitRes = await _callExtensionRaw(
+          'ext.flutterpilot.waitForWidget',
+          {'key': expectKey, 'timeoutMs': timeoutMs.toString()},
+        );
         if (waitRes.isError) return waitRes.toCallToolResult();
 
         final delta = tapRes.data?['delta'] as Map<String, dynamic>?;
         final routeNote = delta?['navigated'] == true
             ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
             : '';
-        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
+        final diffNote = _widgetDiffSummary(
+          delta?['widgetDiff'] as Map<String, dynamic>?,
+        );
         return CallToolResult(
           content: [
             TextContent(
-              text: '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.$routeNote$diffNote',
+              text:
+                  '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.$routeNote$diffNote',
             ),
           ],
         );
@@ -1040,11 +1021,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final routeNote = delta?['navigated'] == true
             ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
             : ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).';
-        final diffNote = _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?);
+        final diffNote = _widgetDiffSummary(
+          delta?['widgetDiff'] as Map<String, dynamic>?,
+        );
         return CallToolResult(
           content: [
             TextContent(
-              text: '⚡ Entered text into "$target" and tapped "$submitTarget".$routeNote$diffNote',
+              text:
+                  '⚡ Entered text into "$target" and tapped "$submitTarget".$routeNote$diffNote',
             ),
           ],
         );

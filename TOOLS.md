@@ -1989,16 +1989,6 @@ Clears the server-side log capture buffer.
 
 ---
 
-### `set_log_filter`
-
-Clears both the server-side and in-app SDK log buffers at once.
-
-**Parameters:** None
-
-**Use Cases:** Full reset before starting a new debug session.
-
----
-
 ## DevTools Deep Inspection
 
 *These tools use the same VM Service Protocol as Flutter DevTools. No browser needed — AI agents can read memory, network, render trees directly.*

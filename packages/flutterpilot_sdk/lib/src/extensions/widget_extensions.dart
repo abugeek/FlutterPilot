@@ -25,7 +25,26 @@ part of '../../flutterpilot_sdk.dart';
 extension _WidgetExtensions on FlutterPilot {
   static final KeyboardSimulator _keyboardSimulator = KeyboardSimulator();
 
+  /// Tapping a widget that isn't hittable (behind a dialog barrier, menu or
+  /// overlay, or clipped) would hit whatever is on top and still "succeed".
+  static ServiceExtensionResponse? _refuseIfCovered(
+    Element element,
+    String target,
+  ) {
+    if (HitTestUtils.isElementHittable(element)) return null;
+    return ServiceExtensionResponse.error(
+      ServiceExtensionResponse.extensionError,
+      '"$target" is on screen but not tappable: a dialog, menu or overlay '
+      'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
+      'press_back) or interact with what is on top.',
+    );
+  }
+
   static String _makeWidgetNotFoundMessage(String target) {
+    final ambiguity = PilotWidgetInspector.lastAmbiguity;
+    if (ambiguity != null && ambiguity.contains('"${target.trim()}"')) {
+      return ambiguity;
+    }
     final suggestions = PilotWidgetInspector.getAvailableActionableTargets();
     if (suggestions.isNotEmpty) {
       return 'Widget not found matching: "$target".\n'
@@ -202,6 +221,8 @@ extension _WidgetExtensions on FlutterPilot {
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('tapWidget', {'key': target});
         }
+        final covered = _refuseIfCovered(element, target);
+        if (covered != null) return covered;
         await InteractionManager.tapAt(pos, label: target);
         final routeAfter = NavigationTracker.currentRoute;
         final postActionState =
@@ -270,6 +291,8 @@ extension _WidgetExtensions on FlutterPilot {
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize && ro.attached) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+        final covered = _refuseIfCovered(element, target);
+        if (covered != null) return covered;
         await InteractionManager.secondaryTapAt(pos, label: 'Right Click: $target');
         final postActionState = FlutterPilot.getPostActionState();
         return ServiceExtensionResponse.result(
@@ -345,13 +368,16 @@ extension _WidgetExtensions on FlutterPilot {
             editableTextState = e.state as EditableTextState;
             return;
           }
-          e.visitChildren(findText);
+          e.debugVisitOnstageChildren(findText);
         }
 
         findText(element);
       }
 
       if (editableTextState != null) {
+        // Focus like a user would, so a following press_key (Enter, Tab)
+        // reaches this field.
+        editableTextState!.widget.focusNode.requestFocus();
         editableTextState!.updateEditingValue(
           TextEditingValue(
             text: text,
@@ -407,20 +433,43 @@ extension _WidgetExtensions on FlutterPilot {
           .where((m) => m.isNotEmpty)
           .toSet();
 
+      // Name the widget the key goes to by the app's own widget (e.g. the
+      // TextField), not the Focus wrapper that actually holds focus.
+      Widget? focused;
+      final focusContext = FocusManager.instance.primaryFocus?.context;
+      if (focusContext is Element) {
+        focused = focusContext.widget;
+        focusContext.visitAncestorElements((a) {
+          if (!debugIsWidgetLocalCreation(a.widget)) return true;
+          focused = a.widget;
+          return false;
+        });
+      }
+      final routeBefore = NavigationTracker.currentRoute;
       try {
         await _keyboardSimulator.pressKey(key, modifiers: modifiers);
+        await InteractionManager.pumpAndSettleAdaptive(
+          timeout: InteractionManager.postMutationSettleTimeout,
+        );
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('pressKey', {
             'key': key,
             'modifiers': modifiers.toList(),
           });
         }
-        final postActionState = FlutterPilot.getPostActionState();
+        final postActionState = FlutterPilot.getPostActionState(
+          previousRoute: routeBefore,
+        );
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
             'key': key,
             'modifiers': modifiers.toList(),
+            // Tells the agent where the key went (or that nothing had focus).
+            'target': focused == null
+                ? 'no focused widget'
+                : (PilotWidgetInspector.extractCleanKey(focused!.key) ??
+                      focused.runtimeType.toString()),
             'postActionState': postActionState,
           }),
         );
@@ -559,6 +608,8 @@ extension _WidgetExtensions on FlutterPilot {
         }
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
+        final covered = _refuseIfCovered(element, target);
+        if (covered != null) return covered;
         await InteractionManager.doubleTapAt(pos, label: target);
         final routeAfter = NavigationTracker.currentRoute;
         return ServiceExtensionResponse.result(
@@ -610,6 +661,8 @@ extension _WidgetExtensions on FlutterPilot {
         }
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
+        final covered = _refuseIfCovered(element, target);
+        if (covered != null) return covered;
         await InteractionManager.longPressAt(
           pos,
           duration: Duration(milliseconds: ms),
@@ -807,7 +860,7 @@ extension _WidgetExtensions on FlutterPilot {
           }
           return;
         }
-        e.visitChildren(clearText);
+        e.debugVisitOnstageChildren(clearText);
       }
 
       clearText(element);
@@ -849,6 +902,8 @@ extension _WidgetExtensions on FlutterPilot {
       final center =
           offset +
           Offset(renderObject.size.width / 2, renderObject.size.height / 2);
+      final covered = _refuseIfCovered(element, target);
+      if (covered != null) return covered;
       await InteractionManager.tapAt(center, label: target);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success'}),
@@ -882,7 +937,7 @@ extension _WidgetExtensions on FlutterPilot {
           renderBox = e.renderObject as RenderBox?;
           return;
         }
-        e.visitChildren(findToggleable);
+        e.debugVisitOnstageChildren(findToggleable);
       }
 
       if (element.widget is Checkbox ||
@@ -904,6 +959,8 @@ extension _WidgetExtensions on FlutterPilot {
       final center = offset + Offset(box.size.width / 2, box.size.height / 2);
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
+      final covered = _refuseIfCovered(element, target);
+      if (covered != null) return covered;
       await InteractionManager.tapAt(center, label: target);
       final routeAfter = NavigationTracker.currentRoute;
       if (FlutterPilot._isRecording) {
@@ -958,7 +1015,7 @@ extension _WidgetExtensions on FlutterPilot {
           sliderElement = e;
           return;
         }
-        e.visitChildren(findSlider);
+        e.debugVisitOnstageChildren(findSlider);
       }
 
       if (element.widget is Slider) {
@@ -1058,7 +1115,6 @@ extension _WidgetExtensions on FlutterPilot {
           maxDepth: maxDepth,
           compact: compact,
           rootQuery: rootQuery,
-          projectRoot: parameters['projectRoot'],
         );
         PilotWidgetInspector.lastCapturedTree = tree;
         return ServiceExtensionResponse.result(
@@ -1152,7 +1208,7 @@ extension _WidgetExtensions on FlutterPilot {
           final plain = (e.widget as RichText).text.toPlainText();
           found = exact ? plain == text : plain.contains(text);
         }
-        if (!found) e.visitChildren(findText);
+        if (!found) e.debugVisitOnstageChildren(findText);
       }
 
       final root = WidgetsBinding.instance.rootElement;
@@ -1191,7 +1247,7 @@ extension _WidgetExtensions on FlutterPilot {
       int actual = 0;
       void countWidgets(Element e) {
         if (e.widget.runtimeType.toString() == type) actual++;
-        e.visitChildren(countWidgets);
+        e.debugVisitOnstageChildren(countWidgets);
       }
 
       final root = WidgetsBinding.instance.rootElement;
@@ -1369,7 +1425,7 @@ extension _WidgetExtensions on FlutterPilot {
                   }
                   return;
                 }
-                e.visitChildren(findText);
+                e.debugVisitOnstageChildren(findText);
               }
               findText(element);
               if (entered) filledCount++;
@@ -1479,7 +1535,9 @@ extension _WidgetExtensions on FlutterPilot {
               status = 'notFound';
             } else {
               final ro = element.renderObject;
-              if (ro is RenderBox && ro.hasSize) {
+              if (!HitTestUtils.isElementHittable(element)) {
+                status = 'covered';
+              } else if (ro is RenderBox && ro.hasSize) {
                 final pos = ro.localToGlobal(ro.size.center(Offset.zero));
                 await InteractionManager.tapAt(pos, label: target);
                 executedCount++;
@@ -1504,7 +1562,7 @@ extension _WidgetExtensions on FlutterPilot {
                   } catch (_) {}
                   return;
                 }
-                e.visitChildren(findText);
+                e.debugVisitOnstageChildren(findText);
               }
               findText(element);
               if (entered) {

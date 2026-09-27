@@ -3,24 +3,15 @@ import 'hit_test_utils.dart';
 
 
 /// Provides high-performance, single-pass introspection and semantic element querying into the live Flutter widget tree.
+/// All screen queries traverse with [Element.debugVisitOnstageChildren] (what
+/// flutter_test's finders do by default): routes covered by an opaque route
+/// and hidden IndexedStack tabs are skipped, so finders, assertions and trees
+/// only ever see what is actually on screen. Available in all build modes.
 class PilotWidgetInspector {
   /// Default maximum depth for widget tree traversal.
   static const int defaultMaxDepth = 250;
 
-  // Frame-scoped key cache for O(1) lookups
-  static final Map<String, Element> _keyCache = {};
-  static final Map<String, Element> _keyIndex = {};
-  static bool _keyIndexValid = false;
-  static Expando<String> _textCache = Expando<String>('textCache');
   static Map<String, dynamic>? lastCapturedTree;
-
-  /// Invalidates the internal frame-scoped element cache.
-  static void invalidateCache() {
-    _keyCache.clear();
-    _keyIndex.clear();
-    _keyIndexValid = false;
-    _textCache = Expando<String>('textCache');
-  }
 
   /// Extracts the inner string from a key, stripping [<'...'>] wrappers.
   static String? extractCleanKey(Key? key) => _extractCleanKey(key);
@@ -47,47 +38,6 @@ class PilotWidgetInspector {
     return null;
   }
 
-  static void _buildKeyIndex(Element root) {
-    if (_keyIndexValid) return;
-    _keyIndex.clear();
-    void visit(Element element) {
-      final key = element.widget.key;
-      if (key != null) {
-        _keyIndex.putIfAbsent(key.toString(), () => element);
-        if (key is ValueKey) {
-          _keyIndex.putIfAbsent(key.value.toString(), () => element);
-        }
-        final clean = _extractCleanKey(key);
-        if (clean != null) {
-          _keyIndex.putIfAbsent(clean, () => element);
-        }
-      }
-      final id = _extractIdentifier(element.widget);
-      if (id != null) {
-        _keyIndex.putIfAbsent(id, () => element);
-      }
-      element.visitChildren(visit);
-    }
-
-    visit(root);
-    _keyIndexValid = true;
-  }
-
-  static Element? _findIndexedKey(Element root, String query) {
-    if (query.contains('->') || query.contains('[') || query.contains(':')) {
-      return null;
-    }
-    _buildKeyIndex(root);
-    final el = _keyIndex[query] ??
-        _keyIndex["['$query']"] ??
-        _keyIndex["[<'$query'>]"];
-    if (el != null && el.mounted) {
-      return el;
-    }
-    return null;
-  }
-
-
   /// Captures the widget tree as a nested JSON-compatible map with optional semantic compaction.
   /// If [rootQuery] (key or semantic selector) or [rootElement] is provided, scopes the capture
   /// to that specific subtree, saving up to 90% of token consumption.
@@ -96,14 +46,7 @@ class PilotWidgetInspector {
     bool compact = true,
     String? rootQuery,
     Element? rootElement,
-    String? projectRoot,
   }) {
-    if (projectRoot != null && projectRoot.isNotEmpty) {
-      // Lets debugIsWidgetLocalCreation tell app code from package code
-      // (same thing DevTools does). Idempotent; re-sent after hot restart.
-      // ignore: invalid_use_of_protected_member
-      WidgetInspectorService.instance.addPubRootDirectories([projectRoot]);
-    }
     Element? targetRoot = rootElement;
     if (targetRoot == null &&
         rootQuery != null &&
@@ -151,7 +94,7 @@ class PilotWidgetInspector {
     final childDepth = keep ? depth + 1 : depth;
     final children = <Map<String, dynamic>>[];
     if (childDepth <= maxDepth) {
-      element.visitChildren(
+      element.debugVisitOnstageChildren(
         (c) => children.addAll(_summaryNodes(c, childDepth, maxDepth)),
       );
     }
@@ -197,21 +140,15 @@ class PilotWidgetInspector {
   /// - Semantic selectors: `"Button['Submit']"`
   /// - Chained selectors: `"Card['order_1'] -> Button['Cancel']"`
   /// - Positional selectors: `"ListTile:nth-child(2)"` or `"Button[index=1]"`
+  /// Set when the last [findElement] refused an ambiguous query.
+  static String? lastAmbiguity;
+
   static Element? findElement(String query) {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
 
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return null;
-
-    // 1. O(1) Key Cache Lookup
-    final cached = _keyCache[cleanQuery];
-    if (cached != null && cached.mounted) return cached;
-    final indexed = _findIndexedKey(root, cleanQuery);
-    if (indexed != null && indexed.mounted) {
-      _keyCache[cleanQuery] = indexed;
-      return indexed;
-    }
 
     // 2. Chained Hierarchy Evaluation ("Parent -> Child")
     if (cleanQuery.contains('->')) {
@@ -224,9 +161,6 @@ class PilotWidgetInspector {
       for (final part in parts) {
         if (currentScope == null) return null;
         currentScope = _findSingleElementUnder(currentScope, part);
-      }
-      if (currentScope != null) {
-        _keyCache[cleanQuery] = currentScope;
       }
       return currentScope;
     }
@@ -266,9 +200,9 @@ class PilotWidgetInspector {
     }
 
     final matches = <Element>[];
+    final bestElements = <Element>[];
     Element? bestMatch;
     int bestPriority = -1; // Higher is better
-    double bestSimilarity = 0.0;
     bool foundExact = false;
 
     void evaluateElement(Element element) {
@@ -280,8 +214,25 @@ class PilotWidgetInspector {
 
       final cleanKey = _extractCleanKey(widget.key);
       final id = _extractIdentifier(widget);
-      final isHittable = HitTestUtils.isElementHittable(element);
-      final hittableBoost = isHittable ? 5 : 0;
+      // Hit-testing is the expensive part: only do it for elements that match.
+      bool? hittable;
+      bool isHittable() => hittable ??= HitTestUtils.isElementHittable(element);
+
+      // Visible (hittable) elements win ties, so a widget on the route or
+      // dialog underneath never beats the one the user actually sees.
+      void consider(int priority) {
+        final effective = priority + (isHittable() ? 5 : 0);
+        if (effective > bestPriority) {
+          bestMatch = element;
+          bestPriority = effective;
+          bestElements
+            ..clear()
+            ..add(element);
+        } else if (effective == bestPriority) {
+          bestElements.add(element);
+        }
+        matches.add(element);
+      }
 
       // Priority 100: Exact Key Match or Semantics Identifier Match
       if (widgetKey != null || cleanKey != null || id != null) {
@@ -292,12 +243,12 @@ class PilotWidgetInspector {
         final idMatches = id != null && id == queryToSearch;
 
         if (keyMatches || idMatches) {
-          final priority = (keyMatches ? 100 : 98) + hittableBoost;
+          final priority = (keyMatches ? 100 : 98) + (isHittable() ? 5 : 0);
           if (priority > bestPriority) {
             bestMatch = element;
             bestPriority = priority;
             matches.add(element);
-            if (targetIndex == null && isHittable) {
+            if (targetIndex == null && isHittable()) {
               foundExact = true;
               return;
             }
@@ -307,18 +258,14 @@ class PilotWidgetInspector {
 
 
       // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
-      if (typeTarget != null && (targetIndex != null || bestPriority < 90)) {
+      if (typeTarget != null && (targetIndex != null || bestPriority < 90 + 5)) {
         if (_isMatchingType(typeName, typeTarget)) {
           if (valueTarget == null || valueTarget.isEmpty) {
-            bestMatch = element;
-            bestPriority = 90;
-            matches.add(element);
+            consider(90);
           } else {
             final text = _extractDescendantText(element);
             if (text.toLowerCase().contains(valueTarget.toLowerCase())) {
-              bestMatch = element;
-              bestPriority = 90;
-              matches.add(element);
+              consider(90);
             }
           }
         }
@@ -326,102 +273,63 @@ class PilotWidgetInspector {
 
       // Priority 80: Clickable Button Text Match
       if (_isButtonOrClickable(typeName) &&
-          (targetIndex != null || bestPriority < 80)) {
+          (targetIndex != null || bestPriority < 80 + 5)) {
         final text = _extractDescendantText(element);
         if (text.toLowerCase() == queryToSearch.toLowerCase()) {
-          bestMatch = element;
-          bestPriority = 80;
-          matches.add(element);
+          consider(80);
         } else if (text.toLowerCase().contains(queryToSearch.toLowerCase())) {
-          bestMatch = element;
-          bestPriority = 70;
-          matches.add(element);
+          consider(69);
         }
       }
 
       // Priority 70 / 60: Text / RichText / EditableText Direct Match
-      if (targetIndex != null || bestPriority < 70) {
+      if (targetIndex != null || bestPriority < 70 + 5) {
         if (widget is Text && widget.data != null) {
           if (widget.data!.toLowerCase() == queryToSearch.toLowerCase()) {
-            bestMatch = element;
-            bestPriority = 70;
-            matches.add(element);
-          } else if ((targetIndex != null || bestPriority < 60) &&
+            consider(70);
+          } else if ((targetIndex != null || bestPriority < 60 + 5) &&
               widget.data!.toLowerCase().contains(
                 queryToSearch.toLowerCase(),
               )) {
-            bestMatch = element;
-            bestPriority = 60;
-            matches.add(element);
+            consider(60);
           }
         } else if (widget is RichText) {
           final plain = widget.text.toPlainText();
           if (plain.toLowerCase() == queryToSearch.toLowerCase()) {
-            bestMatch = element;
-            bestPriority = 70;
-            matches.add(element);
-          } else if ((targetIndex != null || bestPriority < 60) &&
+            consider(70);
+          } else if ((targetIndex != null || bestPriority < 60 + 5) &&
               plain.toLowerCase().contains(queryToSearch.toLowerCase())) {
-            bestMatch = element;
-            bestPriority = 60;
-            matches.add(element);
+            consider(60);
           }
         } else if (widget is EditableText &&
-            (targetIndex != null || bestPriority < 60)) {
+            (targetIndex != null || bestPriority < 60 + 5)) {
           if (widget.controller.text.toLowerCase().contains(
             queryToSearch.toLowerCase(),
           )) {
-            bestMatch = element;
-            bestPriority = 60;
-            matches.add(element);
+            consider(60);
           }
         }
       }
 
       // Priority 50: Tooltip / Semantics
-      if ((targetIndex != null || bestPriority < 50) && widget is Tooltip) {
+      if ((targetIndex != null || bestPriority < 50 + 5) && widget is Tooltip) {
         if (widget.message?.toLowerCase().contains(
               queryToSearch.toLowerCase(),
             ) ??
             false) {
-          bestMatch = element;
-          bestPriority = 50;
-          matches.add(element);
+          consider(50);
         }
       }
 
       // Priority 40: Type Exact Match
-      if ((targetIndex != null || bestPriority < 40) &&
+      if ((targetIndex != null || bestPriority < 40 + 5) &&
           typeName.toLowerCase() == queryToSearch.toLowerCase()) {
-        bestMatch = element;
-        bestPriority = 40;
-        matches.add(element);
-      }
-
-      // Priority 10-39: Fuzzy / Similarity Match
-      if (bestPriority < 40 && targetIndex == null) {
-        String? candidateText;
-        if (widget is Text) {
-          candidateText = widget.data;
-        } else if (widget is RichText) {
-          candidateText = widget.text.toPlainText();
-        } else if (widget is Tooltip) {
-          candidateText = widget.message;
-        }
-
-        if (candidateText != null && candidateText.isNotEmpty) {
-          final sim = calculateSimilarity(queryToSearch, candidateText);
-          if (sim >= 0.65 && sim > bestSimilarity) {
-            bestSimilarity = sim;
-            bestMatch = element;
-            bestPriority = (sim * 39).round();
-          }
-        }
+        consider(40);
       }
 
       // Continue single-pass traversal if not already resolved by exact key
       if (!foundExact) {
-        element.visitChildren(evaluateElement);
+        element.debugVisitOnstageChildren(evaluateElement);
       }
     }
 
@@ -434,8 +342,22 @@ class PilotWidgetInspector {
       return null;
     }
 
-    if (bestMatch != null) {
-      _keyCache[cleanQuery] = bestMatch!;
+    // Substring-only tiers (69 button text, 60 text, 50 tooltip, ±5 boost):
+    // several different texts contain the query, so any pick is a guess.
+    final raw = bestPriority >= 5 && bestMatch != null &&
+            HitTestUtils.isElementHittable(bestMatch!)
+        ? bestPriority - 5
+        : bestPriority;
+    lastAmbiguity = null;
+    final bestTexts = (raw == 69 || raw == 60 || raw == 50)
+        ? {for (final e in bestElements) _extractDescendantText(e)}
+        : const <String>{};
+    if (bestTexts.length > 1) {
+      lastAmbiguity =
+          '"$cleanQuery" matches several widgets: '
+          '${bestTexts.take(5).map((t) => '"$t"').join(', ')}. '
+          'Use the exact text, a key, or a Type[\'text\'] selector.';
+      return null;
     }
     return bestMatch;
   }
@@ -510,7 +432,7 @@ class PilotWidgetInspector {
         final selector = _computeSemanticSelector(element);
         if (selector != null) suggestions.add(selector);
       }
-      element.visitChildren(collect);
+      element.debugVisitOnstageChildren(collect);
     }
 
     collect(root);
@@ -519,17 +441,8 @@ class PilotWidgetInspector {
 
   /// Finds an [Element] by Key string.
   static Element? findElementByKey(String keyString) {
-    final cached = _keyCache[keyString];
-    if (cached != null && cached.mounted) return cached;
     final root = WidgetsBinding.instance.rootElement;
-    if (root != null) {
-      final indexed = _findIndexedKey(root, keyString);
-      if (indexed != null && indexed.mounted) {
-        _keyCache[keyString] = indexed;
-        return indexed;
-      }
-    }
-
+    if (root == null) return null;
     Element? found;
     void search(Element element) {
       if (found != null) return;
@@ -538,20 +451,19 @@ class PilotWidgetInspector {
           widgetKey == "['$keyString']" ||
           widgetKey == "[<'$keyString'>]") {
         found = element;
-        _keyCache[keyString] = element;
         return;
       }
-      element.visitChildren(search);
+      element.debugVisitOnstageChildren(search);
     }
 
-    if (root != null) search(root);
+    search(root);
     return found;
   }
 
   /// Recursively counts all elements.
   static int countElements(Element element) {
     int count = 1;
-    element.visitChildren((child) {
+    element.debugVisitOnstageChildren((child) {
       count += countElements(child);
     });
     return count;
@@ -625,39 +537,40 @@ class PilotWidgetInspector {
   }
 
   static String _extractDescendantText(Element element) {
-    final cached = _textCache[element];
-    if (cached != null) return cached;
+    // Ordered and de-duplicated: widgets like NavigationDestination render
+    // their label twice (text + tooltip).
+    final parts = <String>{};
+    void add(String? t) {
+      final v = t?.trim();
+      if (v != null && v.isNotEmpty) parts.add(v);
+    }
 
-    final buffer = StringBuffer();
     void extract(Element e) {
       final w = e.widget;
-      if (w is Text && w.data != null && w.data!.isNotEmpty) {
-        buffer.write('${w.data} ');
+      if (w is Text) {
+        add(w.data ?? w.textSpan?.toPlainText());
         return;
       } else if (w is RichText) {
-        buffer.write('${w.text.toPlainText()} ');
+        add(w.text.toPlainText());
         return;
-      } else if (w is Tooltip && w.message != null && w.message!.isNotEmpty) {
-        buffer.write('${w.message} ');
-      } else if (w is IconButton &&
-          w.tooltip != null &&
-          w.tooltip!.isNotEmpty) {
-        buffer.write('${w.tooltip} ');
+      } else if (w is Tooltip) {
+        add(w.message);
+      } else if (w is IconButton) {
+        add(w.tooltip);
       } else if (w is Icon) {
-        if (w.semanticLabel != null && w.semanticLabel!.isNotEmpty) {
-          buffer.write('${w.semanticLabel} ');
-        } else if (w.icon != null) {
-          buffer.write('${_resolveIconName(w.icon!)} ');
-        }
+        // Only meaningful names; unknown glyphs would just add "Icon#e5d2" noise.
+        final name = w.semanticLabel ??
+            (w.icon == null ? null : _resolveIconName(w.icon!));
+        if (name != null && !name.startsWith('Icon#')) add(name);
+        return; // its child RichText is just the private-use glyph character
       }
-      e.visitChildren(extract);
+      e.debugVisitOnstageChildren(extract);
     }
 
     extract(element);
-    final result = buffer.toString().trim();
-    _textCache[element] = result;
-    return result;
+    return parts.join(' ');
   }
+
 
   static String? _computeSemanticSelector(Element element) {
     final type = element.widget.runtimeType.toString();
@@ -736,7 +649,7 @@ class PilotWidgetInspector {
     }
 
     final List<Map<String, dynamic>> children = [];
-    element.visitChildren((child) {
+    element.debugVisitOnstageChildren((child) {
       final childJson = _elementToJson(
         child,
         currentDepth + 1,
@@ -899,112 +812,60 @@ class PilotWidgetInspector {
     final elements = <Map<String, dynamic>>[];
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return elements;
+    final byRect = <String, int>{};
 
-    void visit(Element element) {
+    // Find real gesture handlers, then report each under the nearest widget
+    // from the app's own code (ListTile, ChoiceChip, NavigationDestination...)
+    // so labels and keys are the ones the developer wrote.
+    void visit(Element element, Element? owner) {
       final widget = element.widget;
-      final type = widget.runtimeType.toString();
-
-      // Skip private framework widgets unless explicitly keyed
-      final key = _extractCleanKey(widget.key);
-      final identifier = _extractIdentifier(widget);
-      if (type.startsWith('_') && key == null && identifier == null) {
-        element.visitChildren(visit);
-        return;
-      }
-
-      // Skip generic layout containers without custom key/identifier
-      if (key == null && identifier == null && _isTransparentLayoutWrapper(type)) {
-        element.visitChildren(visit);
-        return;
-      }
-
-      final isInteractive = _isInteractiveWidget(widget, type);
-      final isTextWidget = widget is Text || widget is RichText || widget is EditableText;
-      final text = _extractWidgetText(element);
-
-      if ((isInteractive || key != null || identifier != null || isTextWidget) &&
+      final ownerHere = debugIsWidgetLocalCreation(widget) ? element : owner;
+      if (_isGesturePrimitive(widget) &&
           HitTestUtils.isElementHittable(element)) {
-        final ro = element.renderObject as RenderBox;
-        final pos = ro.localToGlobal(Offset.zero);
-        final center = ro.localToGlobal(ro.size.center(Offset.zero));
-
-        final data = <String, dynamic>{
-          'type': type,
-          'key': ?key,
-          'identifier': ?identifier,
-          if (text.isNotEmpty) 'text': text,
-          'bounds': {
-            'x': pos.dx.round(),
-            'y': pos.dy.round(),
-            'width': ro.size.width.round(),
-            'height': ro.size.height.round(),
-          },
-          'center': {
-            'x': center.dx.round(),
-            'y': center.dy.round(),
-          },
-        };
-        elements.add(data);
+        final target = ownerHere ?? element;
+        final ro = target.renderObject;
+        if (ro is RenderBox && ro.hasSize) {
+          final pos = ro.localToGlobal(Offset.zero);
+          final rect =
+              '${pos.dx.round()},${pos.dy.round()},${ro.size.width.round()},${ro.size.height.round()}';
+          final key = _extractCleanKey(target.widget.key);
+          final entry = <String, dynamic>{
+            'type': target.widget.runtimeType.toString(),
+            'key': ?key,
+            'text': _extractDescendantText(target),
+            'bounds': {
+              'x': pos.dx.round(),
+              'y': pos.dy.round(),
+              'width': ro.size.width.round(),
+              'height': ro.size.height.round(),
+            },
+          };
+          if ((entry['text'] as String).isEmpty) entry.remove('text');
+          final existing = byRect[rect];
+          if (existing == null) {
+            byRect[rect] = elements.length;
+            elements.add(entry);
+          } else if (key != null && elements[existing]['key'] == null) {
+            elements[existing] = entry; // prefer the keyed widget
+          }
+        }
       }
-
-      element.visitChildren(visit);
+      element.debugVisitOnstageChildren((c) => visit(c, ownerHere));
     }
 
-    visit(root);
+    visit(root, null);
     return elements;
   }
 
-  static String _extractWidgetText(Element element) {
-    final widget = element.widget;
-    if (widget is Text && widget.data != null) {
-      return widget.data!;
-    }
-    if (widget is RichText) {
-      return widget.text.toPlainText();
-    }
-    if (widget is EditableText) {
-      return widget.controller.text;
-    }
-    if (widget is Tooltip && widget.message != null) {
-      return widget.message!;
-    }
-    if (widget is Semantics) {
-      final label = widget.properties.label;
-      final val = widget.properties.value;
-      if (label != null && label.isNotEmpty) {
-        return val != null && val.isNotEmpty ? '$label: $val' : label;
-      }
-      if (val != null && val.isNotEmpty) return val;
-    }
-    final type = widget.runtimeType.toString();
-    if (_isButtonOrClickable(type)) {
-      return _extractDescendantText(element);
-    }
-    if (widget is Icon) {
-      if (widget.semanticLabel != null && widget.semanticLabel!.isNotEmpty) {
-        return widget.semanticLabel!;
-      }
-      if (widget.icon != null) {
-        return _resolveIconName(widget.icon!);
-      }
-    }
-    return '';
-  }
+  /// Widgets that actually receive taps/text/drags.
+  static bool _isGesturePrimitive(Widget w) =>
+      w is InkResponse ||
+      w is GestureDetector ||
+      w is EditableText ||
+      w.runtimeType.toString() == 'Checkbox' ||
+      w.runtimeType.toString() == 'Switch' ||
+      w.runtimeType.toString() == 'Radio' ||
+      w.runtimeType.toString() == 'Slider';
 
-  static bool _isInteractiveWidget(Widget widget, String type) {
-    if (_isButtonOrClickable(type)) return true;
-    if (widget is EditableText ||
-        type.contains('TextField') ||
-        type.contains('TextFormField') ||
-        type == 'Checkbox' ||
-        type == 'Switch' ||
-        type == 'Radio' ||
-        type == 'Slider' ||
-        type == 'InkWell' ||
-        type == 'GestureDetector') {
-      return true;
-    }
-    return false;
-  }
 }
 

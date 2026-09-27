@@ -9,7 +9,6 @@ void main() {
 
   group('Real-World Autonomous AI Agent Workflows', () {
     setUp(() {
-      PilotWidgetInspector.invalidateCache();
     });
 
     testWidgets('Flow 1: Autonomous Form Driving via Fuzzy Selectors & Scoped Capture', (tester) async {

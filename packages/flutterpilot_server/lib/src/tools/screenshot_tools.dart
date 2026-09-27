@@ -335,7 +335,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final params = <String, String>{
           'maxDepth': maxDepth.toString(),
           'compact': compact.toString(),
-          'projectRoot': await _appProjectRoot(p),
         };
         if (rootKey != null && rootKey.isNotEmpty) {
           params['rootKey'] = rootKey;
@@ -386,19 +385,25 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'get_app_snapshot',
+      'get_app_summary',
       description:
-          'Instant 360-Degree Runtime Snapshot (<5ms): Returns complete consolidated application state in ONE call — '
-          'current route, all visible & hittable interactive elements (with keys, labels & bounds), '
-          'currently focused widget, recent uncaught errors, recent logs, FPS, screen mutation counter, and viewport dimensions. '
-          'Use this as your PRIMARY exploration and verification tool to eliminate 5+ redundant roundtrip tool calls.',
+          'CALL THIS FIRST. One-call overview of the running app: current route, '
+          'the tappable elements on screen (labels + keys), focused widget, recent '
+          'errors and logs, frame timing, viewport. Use get_widget_tree for layout '
+          'structure and capture_screenshot for visuals.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getAppSnapshot',
           {},
         );
-        if (res.isError) return res.toCallToolResult();
+        if (res.isError) {
+          // No SDK in the app (zero-code mode): basic summary from the VM.
+          return (await _callExtensionRaw(
+            'ext.flutterpilot.getSummary',
+            {},
+          )).toCallToolResult();
+        }
         final data = res.data ?? {};
         final route = data['route']?['current'] ?? '/';
         final depth = data['route']?['stackDepth'] ?? 1;
@@ -406,8 +411,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final errors = (data['recentErrors'] as List?) ?? [];
         final logs = (data['recentLogs'] as List?) ?? [];
         final perf = data['performance'] ?? {};
-        final fps = perf['fps'] ?? 0;
-        final effectiveFps = perf['effectiveFps'] ?? fps;
         final jankPct = (perf['jankPercentage'] as num?)?.toDouble() ?? 0.0;
         final avgMs = (perf['avgFrameDurationMs'] as num?)?.toDouble();
         final diagnosis = perf['diagnosis']?.toString();
@@ -415,48 +418,37 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final vp = data['viewport'] ?? {};
 
         final summary = StringBuffer();
-        summary.writeln('📱 Flutter App Runtime Snapshot:');
         summary.writeln('• Route: $route (Depth: $depth)');
         summary.writeln(
           '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
         );
-        summary.writeln(
-          '• Focused Element: ${focused != null ? "${focused['type']} (key: ${focused['key'] ?? 'none'}, text: \"${focused['text'] ?? ''}\")" : "None"}',
-        );
-        final perfStr = StringBuffer('• Performance: $effectiveFps FPS');
-        if (avgMs != null) {
-          perfStr.write(' | Frame: ${avgMs.toStringAsFixed(1)}ms');
-        }
-        if (jankPct > 0.0) {
-          perfStr.write(' | Jank: ${jankPct.toStringAsFixed(1)}%');
-        }
-        summary.writeln(perfStr.toString());
-        if (jankPct >= 20.0 || (avgMs != null && avgMs > 20.0)) {
+        final lifecycle = data['lifecycle'];
+        if (lifecycle != null && lifecycle != 'resumed') {
           summary.writeln(
-            '  ⚠️ PERF WARNING: Dropping frames ($jankPct% jank). ${diagnosis ?? ""}',
+            '• App window: $lifecycle (not visible). FlutterPilot keeps it '
+            'rendering for inspection; frame timings are not profiled.',
           );
         }
-        final issues = data['issues'] as Map<String, dynamic>?;
-        if (issues != null) {
-          final isHealthy = issues['isHealthy'] == true;
-          final crit = issues['criticalCount'] ?? 0;
-          final warn = issues['warningCount'] ?? 0;
-          if (isHealthy) {
-            summary.writeln('• App Health: 🟢 Clean (0 Defects)');
-          } else {
-            summary.writeln(
-              '• App Health: 🚨 $crit Critical, ⚠️ $warn Warnings (call get_app_issues for details)',
-            );
-          }
+        final focusedType = focused?['type']?.toString() ?? '';
+        if (focused != null && !focusedType.startsWith('_')) {
+          summary.writeln(
+            '• Focused: $focusedType${focused['key'] != null ? ' [${focused['key']}]' : ''}',
+          );
+        }
+        // FPS is meaningless for an idle Flutter app; only report real jank.
+        if (jankPct >= 5.0) {
+          summary.writeln(
+            '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
+            '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '
+            '${diagnosis ?? ''} Call profile_frame_budget for details.',
+          );
         }
         summary.writeln(
           '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
         );
-        summary.writeln(
-          '• Hittable Interactive Elements (${elements.length}):',
-        );
+        summary.writeln('• Tappable Elements (${elements.length}):');
         for (final el in elements.take(15)) {
-          final label = el['label']?.toString() ?? '';
+          final label = el['text']?.toString() ?? '';
           final key = (el['key'] ?? el['identifier'] ?? '').toString();
           final type = el['type']?.toString() ?? 'Widget';
           final bounds = el['bounds'] != null
@@ -478,12 +470,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         }
 
         return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${summary.toString().trim()}\n\nFull JSON Data:\n${jsonEncode(data)}',
-            ),
-          ],
+          content: [TextContent(text: summary.toString().trim())],
         );
       },
     );
@@ -576,27 +563,5 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
-  }
-
-  /// The running app's project root, from its root library
-  /// (package:app/main.dart → file:///…/app/lib/main.dart). Independent of
-  /// where the server was started, unlike [_projectRoot].
-  Future<String> _appProjectRoot(Map<String, dynamic> p) async {
-    try {
-      final vm = await _vmServiceForParameters(p);
-      final isolateId = (await vm!.getVM()).isolates!.first.id!;
-      var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
-      if (uri != null && uri.startsWith('package:')) {
-        uri = (await vm.lookupResolvedPackageUris(isolateId, [
-          uri,
-        ])).uris?.first;
-      }
-      if (uri != null && uri.startsWith('file:')) {
-        final path = Uri.parse(uri).path;
-        final lib = path.lastIndexOf('/lib/');
-        if (lib > 0) return path.substring(0, lib);
-      }
-    } catch (_) {}
-    return _projectRoot.absolute.path;
   }
 }

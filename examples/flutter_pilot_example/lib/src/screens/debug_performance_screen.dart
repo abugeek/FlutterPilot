@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 /// | Tool                          | Demonstrated By                   |
 /// |-------------------------------|-----------------------------------|
 /// | get_debug_logs                | emit-logs button                  |
-/// | set_log_filter                | hint code box                     |
+/// | clear_debug_logs              | hint code box                     |
 /// | clear_debug_logs              | hint code box                     |
 /// | get_errors                    | report-error button               |
 /// | diagnose_last_error           | hint code box                     |
@@ -86,7 +86,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
           children: [
             _aiHint(
               'Tools on this screen:\n'
-              '  get_debug_logs  clear_debug_logs  set_log_filter\n'
+              '  get_debug_logs  clear_debug_logs\n'
               '  get_errors  diagnose_last_error  get_perf_metrics\n'
               '  show_performance_overlay  toggle_repaint_rainbow\n'
               '  toggle_debug_paint  toggle_slow_animations\n'
@@ -99,7 +99,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- Debug Logs --------------------------------------------------
             _sectionHeader(
               'Debug Logs',
-              'get_debug_logs · clear_debug_logs · set_log_filter',
+              'get_debug_logs · clear_debug_logs',
             ),
             Card(
               child: Padding(
@@ -122,7 +122,6 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     const SizedBox(height: 8),
                     _codeBox(
                       'get_debug_logs(lines: 20)\n'
-                      'set_log_filter("ERROR")\n'
                       'clear_debug_logs',
                     ),
                   ],

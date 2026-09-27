@@ -558,12 +558,6 @@ Clear the debug log buffer on both the server and the app.
 { "cleared": true }
 ```
 
-#### `set_log_filter`
-Clear both the server and app debug log buffers (same as clear_debug_logs).
-```json
-{ "cleared": true }
-```
-
 ---
 
 ### 🔬 DevTools Deep Inspection (12 tools)

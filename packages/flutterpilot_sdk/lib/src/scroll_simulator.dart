@@ -49,7 +49,7 @@ class ScrollSimulator {
           HitTestUtils.isElementHittable(element)) {
         scrollables.add(element);
       }
-      element.visitChildren(findScrollables);
+      element.debugVisitOnstageChildren(findScrollables);
     }
 
     findScrollables(root);
@@ -61,7 +61,7 @@ class ScrollSimulator {
             (element.renderObject as RenderBox).hasSize) {
           scrollables.add(element);
         }
-        element.visitChildren(findAllScrollables);
+        element.debugVisitOnstageChildren(findAllScrollables);
       }
 
       findAllScrollables(root);
@@ -112,7 +112,6 @@ class ScrollSimulator {
         await InteractionManager.pumpAndSettleAdaptive(
           timeout: const Duration(milliseconds: 200),
         );
-        PilotWidgetInspector.invalidateCache();
 
         final candidate = PilotWidgetInspector.findElement(target);
         if (candidate != null && HitTestUtils.isElementHittable(candidate)) {
@@ -141,7 +140,6 @@ class ScrollSimulator {
         await InteractionManager.pumpAndSettleAdaptive(
           timeout: const Duration(milliseconds: 200),
         );
-        PilotWidgetInspector.invalidateCache();
 
         final candidate = PilotWidgetInspector.findElement(target);
         if (candidate != null && HitTestUtils.isElementHittable(candidate)) {

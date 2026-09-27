@@ -48,7 +48,6 @@ class VmDiscoveryService {
       // Written by `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`
       // (what `flutterpilot dev` passes). Plain-text URI.
       p.join(root.path, '.dart_tool', 'flutterpilot_vm_uri'),
-      p.join(root.path, '.dart_tool', 'flutterpilot_session.json'),
       p.join(root.path, '.flutterpilot', 'session.json'),
       p.join(root.path, '.dart_tool', 'service_info.json'),
       p.join(root.path, '.dart_tool', 'daemon.json'),

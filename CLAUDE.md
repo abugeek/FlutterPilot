@@ -14,19 +14,22 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 When interacting with a Flutter app using FlutterPilot:
 
 ### 1. Orientation & Diagnostics
-- **First Step**: Call `get_app_summary` to discover the current route, widget count, active plugins, and runtime errors.
+- **First Step**: Call `get_app_summary` — route, the tappable elements on screen (labels + keys), errors, logs, and whether the app window is visible. `get_interactive_elements` gives the full tappable list.
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
-- **Hierarchy Inspection**: Use `get_widget_tree` to map out semantic widget selectors and hierarchy. PII and passwords are automatically redacted.
+- **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. PII and passwords are automatically redacted.
+- **On-screen only**: finders, assertions and trees ignore routes covered by another page and hidden tabs, so `assert_text_visible` never passes on something the user can't see.
+- **Background window is fine**: when the OS reports the app hidden (window covered/minimized), FlutterPilot keeps it rendering while you drive it; the summary says so, and frame timings from that period are not profiled.
 
 ### 2. UI Interaction & Virtual Semantic Keys
 - **No Manual Keys Needed**: You can interact with widgets using:
   - **Explicit Keys**: `tap_widget(key: "login_button")`
   - **Semantic Selectors**: `tap_widget(key: "ElevatedButton['Log In']")` or `enter_text(key: "TextField['Email']", text: "user@test.com")`
-  - **Visible Text**: `tap_widget(key: "Log In")`
+  - **Visible Text**: `tap_widget(key: "Log In")` — exact text wins; if several different widgets merely *contain* the text, the call is refused with the candidates instead of guessing
   - **Tooltips**: `tap_widget(key: "Tooltip['Settings']")`
 - **AI Visual Overlay**: When AI interacts, a visual ripple and `🤖 AI Tap` badge pulse on screen for live human observation.
+- **Keyboard**: `enter_text` focuses the field, so `press_key(key: "enter")` right after submits it. Use `press_key` for Enter/Tab/Escape/arrows/shortcuts; change text with `enter_text`/`clear_text_field`.
 - **Scroll Before Tapping**: Use `scroll_into_view(key: "...")` if a widget is below the fold.
-- **Trust the response — don't reflexively re-verify**: `tap_widget`, `enter_text`, `toggle_checkbox`, `swipe_widget`, `drag_widget`, `fill_form`, and `execute_action_chain` all report their own postcondition in the same response: whether the route changed, plus a capped widget-tree diff (counts + a few sample nodes) of what actually changed on screen. Read that response before reaching for `get_widget_tree` or `capture_screenshot` — most of the time it already answers "did this work." Only fall back to a screenshot when the response says nothing changed but you expected a purely visual effect (color, animation frame) with no structural diff.
+- **Trust the response — don't reflexively re-verify**: `tap_widget`, `enter_text`, `press_key`, `secondary_tap`, `toggle_checkbox`, `swipe_widget`, `drag_widget`, `fill_form`, and `execute_action_chain` all report their own postcondition in the same response: whether the route changed, a capped widget-tree diff of what appeared/disappeared, the elements tappable now, and any new errors. Read that response before reaching for `get_widget_tree` or `capture_screenshot` — most of the time it already answers "did this work." Only fall back to a screenshot when the response says nothing changed but you expected a purely visual effect (color, animation frame) with no structural diff.
 - **Prefer one batched call over a tap→check→tap loop**: when the sequence of steps is already known, use `execute_action_chain`, `fill_form_batch`, `tap_and_wait`, or `enter_text_and_submit` instead of separate `tap_widget`/`enter_text` calls. Each one executes natively inside the Flutter engine and returns a single combined result — this is the single biggest latency lever available: it turns N agent turns into 1.
 
 ### 3. Fast Verification — assert_* over flutter test

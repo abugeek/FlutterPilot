@@ -37,7 +37,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         '-j',
       ]);
       if (result.exitCode != 0) return null;
-      final decoded = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(result.stdout as String) as Map<String, dynamic>;
       final devices = decoded['devices'] as Map<String, dynamic>? ?? {};
       final booted = <Map<String, dynamic>>[];
       for (final list in devices.values) {
@@ -93,7 +94,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         '-j',
       ]);
       if (result.exitCode != 0) return const [];
-      final decoded = jsonDecode(result.stdout as String) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(result.stdout as String) as Map<String, dynamic>;
       final devices = decoded['devices'] as Map<String, dynamic>? ?? {};
       final booted = <Map<String, dynamic>>[];
       for (final list in devices.values) {
@@ -153,7 +155,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
               isError: true,
               content: [
                 TextContent(
-                  text: 'simctl screenshot failed: ${result.stderr}\n$_unavailableReason',
+                  text:
+                      'simctl screenshot failed: ${result.stderr}\n$_unavailableReason',
                 ),
               ],
             );
@@ -180,8 +183,14 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           'Requires idb (brew install idb-companion && pip3 install fb-idb). macOS + iOS Simulator only.',
       inputSchema: ToolInputSchema(
         properties: {
-          'x': JsonSchema.number(description: 'X coordinate in the native screenshot\'s pixel space.'),
-          'y': JsonSchema.number(description: 'Y coordinate in the native screenshot\'s pixel space.'),
+          'x': JsonSchema.number(
+            description:
+                'X coordinate in the native screenshot\'s pixel space.',
+          ),
+          'y': JsonSchema.number(
+            description:
+                'Y coordinate in the native screenshot\'s pixel space.',
+          ),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -191,7 +200,10 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         if (!Platform.isMacOS) {
-          return CallToolResult(isError: true, content: [TextContent(text: _unavailableReason)]);
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: _unavailableReason)],
+          );
         }
         final udid = await _resolveSimulatorUdid(p);
         if (udid == null) {
@@ -201,14 +213,28 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         // are frequently fractional (e.g. 275.0), so round rather than pass through.
         final x = (p['x'] as num).round().toString();
         final y = (p['y'] as num).round().toString();
-        final result = await Process.run('idb', ['ui', 'tap', x, y, '--udid', udid]);
+        final result = await Process.run('idb', [
+          'ui',
+          'tap',
+          x,
+          y,
+          '--udid',
+          udid,
+        ]);
         if (result.exitCode != 0) {
           return CallToolResult(
             isError: true,
-            content: [TextContent(text: 'idb ui tap failed: ${result.stderr}\n$_unavailableReason')],
+            content: [
+              TextContent(
+                text:
+                    'idb ui tap failed: ${result.stderr}\n$_unavailableReason',
+              ),
+            ],
           );
         }
-        return CallToolResult(content: [TextContent(text: 'Native tap at ($x, $y) on $udid.')]);
+        return CallToolResult(
+          content: [TextContent(text: 'Native tap at ($x, $y) on $udid.')],
+        );
       },
     );
 
@@ -231,21 +257,37 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         if (!Platform.isMacOS) {
-          return CallToolResult(isError: true, content: [TextContent(text: _unavailableReason)]);
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: _unavailableReason)],
+          );
         }
         final udid = await _resolveSimulatorUdid(p);
         if (udid == null) {
           return _noSimulatorError(await _listBootedSimulators());
         }
         final text = p['text'].toString();
-        final result = await Process.run('idb', ['ui', 'text', text, '--udid', udid]);
+        final result = await Process.run('idb', [
+          'ui',
+          'text',
+          text,
+          '--udid',
+          udid,
+        ]);
         if (result.exitCode != 0) {
           return CallToolResult(
             isError: true,
-            content: [TextContent(text: 'idb ui text failed: ${result.stderr}\n$_unavailableReason')],
+            content: [
+              TextContent(
+                text:
+                    'idb ui text failed: ${result.stderr}\n$_unavailableReason',
+              ),
+            ],
           );
         }
-        return CallToolResult(content: [TextContent(text: 'Native text entered on $udid.')]);
+        return CallToolResult(
+          content: [TextContent(text: 'Native text entered on $udid.')],
+        );
       },
     );
 
@@ -268,21 +310,37 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         if (!Platform.isMacOS) {
-          return CallToolResult(isError: true, content: [TextContent(text: _unavailableReason)]);
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: _unavailableReason)],
+          );
         }
         final udid = await _resolveSimulatorUdid(p);
         if (udid == null) {
           return _noSimulatorError(await _listBootedSimulators());
         }
         final button = p['button'].toString();
-        final result = await Process.run('idb', ['ui', 'button', button, '--udid', udid]);
+        final result = await Process.run('idb', [
+          'ui',
+          'button',
+          button,
+          '--udid',
+          udid,
+        ]);
         if (result.exitCode != 0) {
           return CallToolResult(
             isError: true,
-            content: [TextContent(text: 'idb ui button failed: ${result.stderr}\n$_unavailableReason')],
+            content: [
+              TextContent(
+                text:
+                    'idb ui button failed: ${result.stderr}\n$_unavailableReason',
+              ),
+            ],
           );
         }
-        return CallToolResult(content: [TextContent(text: 'Pressed $button on $udid.')]);
+        return CallToolResult(
+          content: [TextContent(text: 'Pressed $button on $udid.')],
+        );
       },
     );
 
@@ -305,22 +363,36 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         if (!Platform.isMacOS) {
-          return CallToolResult(isError: true, content: [TextContent(text: _unavailableReason)]);
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: _unavailableReason)],
+          );
         }
         final udid = await _resolveSimulatorUdid(p);
         if (udid == null) {
           return _noSimulatorError(await _listBootedSimulators());
         }
-        final result = await Process.run('idb', ['ui', 'describe-all', '--udid', udid, '--json']);
+        final result = await Process.run('idb', [
+          'ui',
+          'describe-all',
+          '--udid',
+          udid,
+          '--json',
+        ]);
         if (result.exitCode != 0) {
           return CallToolResult(
             isError: true,
             content: [
-              TextContent(text: 'idb ui describe-all failed: ${result.stderr}\n$_unavailableReason'),
+              TextContent(
+                text:
+                    'idb ui describe-all failed: ${result.stderr}\n$_unavailableReason',
+              ),
             ],
           );
         }
-        return CallToolResult(content: [TextContent(text: result.stdout as String)]);
+        return CallToolResult(
+          content: [TextContent(text: result.stdout as String)],
+        );
       },
     );
   }

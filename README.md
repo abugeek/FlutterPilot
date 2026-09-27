@@ -50,14 +50,11 @@ In `main.dart`:
 ```dart
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-// Option 1: 1-line zero-config launcher (captures print logs, errors, and sets up custom binding)
-void main() => FlutterPilot.run(const MyApp());
-
-// Option 2: Explicit initialization
-// void main() {
-//   FlutterPilotBinding.ensureInitialized();
-//   runApp(const MyApp());
-// }
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterPilot.initialize();
+  runApp(const MyApp());
+}
 ```
 
 ---
@@ -67,9 +64,11 @@ void main() => FlutterPilot.run(const MyApp());
 ### MCP Tools Across 10 Categories
 
 #### ⚡ **Instant State & 360° Telemetry** (All-in-One <5ms)
-- `get_app_snapshot` — Complete instant consolidated state in ONE call: active route & stack, all visible hittable buttons/inputs, focused element, unhandled errors, recent logs, FPS, screen mutation count, and viewport size. Eliminates 5+ redundant roundtrip calls!
-- `get_logs` / `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, log level ("debug", "info", "warning", "error"), and `since_seconds` recency filtering.
-- **⚡ Live Post-Action Feedback**: Every interaction (`tap`, `enter_text`, `press_key`, `secondary_tap`) automatically returns instant post-action status (route changes, focused element, newly visible actions, error count) in the same turn!
+- `get_app_summary` — Call first: route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, and whether the app window is visible.
+- `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, level, and recency filters.
+- **⚡ Post-Action Feedback**: every interaction (`tap_widget`, `enter_text`, `press_key`, `secondary_tap`, ...) returns the route change, what appeared/disappeared, the tappable elements now on screen, and any new errors, in the same response.
+- **On-screen only**: finders, assertions and trees skip routes covered by another page and hidden tabs; ambiguous text matches are refused instead of guessed, and covered widgets are never tapped.
+- **Works with the window in the background**: FlutterPilot keeps the app rendering while an agent drives it, even when macOS/iOS/Android report it hidden.
 
 #### 🎬 **Screenshots, Elements & Visual Inspection** (6 tools)
 - `get_interactive_elements` — Auto-discovers all actionable, visible, and hittable widgets (buttons, inputs, switches)
@@ -144,8 +143,7 @@ void main() => FlutterPilot.run(const MyApp());
 #### 🖥️ **Debug Console** (3 tools) ✨ *New*
 AI agents can read your app's console output automatically — no copy-pasting from VS Code.
 - `get_debug_logs` — Captured `print()`, `debugPrint()`, `developer.log()` with level/logger filters
-- `clear_debug_logs` — Reset the log buffer before a test scenario
-- `set_log_filter` — Clear both server + in-app log buffers
+- `clear_debug_logs` — Reset the server and in-app log buffers before a test scenario
 
 #### 🔬 **DevTools Deep Inspection** (12 tools) ✨ *New*
 Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.

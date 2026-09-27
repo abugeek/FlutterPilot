@@ -91,8 +91,12 @@ extension _NavigationExtensions on FlutterPilot {
           );
         }
         if (!popped) {
-          // Same path as the OS back button, so Router-based apps
-          // (go_router, auto_route) handle it too.
+          // Router-based apps without a plugin (auto_route, custom delegates):
+          // ask the root Router directly. Unlike WidgetsBinding.handlePopRoute,
+          // this never falls through to SystemNavigator.pop (quitting the app).
+          popped = await _rootRouterDelegate()?.popRoute() ?? false;
+        }
+        if (!popped && parameters['allowExit'] == 'true') {
           // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
           popped = await WidgetsBinding.instance.handlePopRoute();
         }
@@ -351,4 +355,21 @@ Future<void> _pushRoute(String route, {bool deepLink = false}) async {
   }
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
   await WidgetsBinding.instance.handlePushRoute(route);
+}
+
+RouterDelegate<Object?>? _rootRouterDelegate() {
+  RouterDelegate<Object?>? found;
+  void visit(Element e) {
+    if (found != null) return;
+    final w = e.widget;
+    if (w is Router) {
+      found = w.routerDelegate;
+      return;
+    }
+    e.visitChildren(visit);
+  }
+
+  final root = WidgetsBinding.instance.rootElement;
+  if (root != null) visit(root);
+  return found;
 }

@@ -232,10 +232,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   /// Tool calls and the reconnect timer can both trigger a connect; share one
   /// attempt so they never race into two live connections.
-  Future<void> _connectToVmService() =>
-      _connecting ??= _doConnectToVmService().whenComplete(
-        () => _connecting = null,
-      );
+  Future<void> _connectToVmService() => _connecting ??= _doConnectToVmService()
+      .whenComplete(() => _connecting = null);
 
   Future<void> _doConnectToVmService() async {
     if (_disposed) return;
@@ -350,7 +348,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _isReconnecting = true;
     _vmService = null;
     _cachedMainIsolateId = null;
-    final activeContext = _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
+    final activeContext =
+        _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
     if (activeContext != null) {
       activeContext.cachedMainIsolateId = null;
       activeContext.service = null;
@@ -636,12 +635,13 @@ You are connected to a live Flutter app via FlutterPilot.
 Use this guide to understand what tools to call, when, and in what order.
 
 ## First Steps (always start here)
-1. `get_app_summary` — Understand current state: route, errors, widget count
+1. `get_app_summary` — Route, tappable elements (labels + keys), errors, logs, window visibility
 2. `capture_screenshot` — See what the user sees right now
 3. `get_widget_tree` — Discover widget keys and structure for interactions
 
 ## Interaction Tools
-- `tap_widget(key)` — Tap by ValueKey string (find keys via get_widget_tree)
+- `tap_widget(key)` — Tap by key, `Type['text']` selector, or exact visible text. Ambiguous text is refused; covered widgets are never tapped
+- `get_interactive_elements` — Everything tappable on screen right now
 - `tap_at(x, y)` — Tap at pixel coordinates (use screenshot to determine coords)
 - `enter_text(key, text)` — Type into a text field
 - `swipe_widget(key, direction, durationMs)` — Swipe gesture
@@ -649,7 +649,10 @@ Use this guide to understand what tools to call, when, and in what order.
 - `double_tap_widget(key)` — Double tap
 - `set_slider_value(key, value)` — Move a slider
 - `toggle_checkbox(key)` — Toggle checkbox/switch/radio
-- `press_back` — Hardware back button
+- `press_back` — Back navigation (never quits the app unless allowExit=true)
+- `press_key(key, modifiers)` — Enter/Tab/Escape/arrows/shortcuts on the focused widget
+- `secondary_tap(key)` — Right-click / context menu
+- `pinch_zoom(key, scale)` — Two-finger zoom
 
 ## Navigation
 - `navigate_to(route)` — Go to a named route (e.g. "/home")
@@ -673,8 +676,7 @@ Use this guide to understand what tools to call, when, and in what order.
 
 ## Debug Console (replaces manual VS Code copy-paste)
 - `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
-- `clear_debug_logs` — Clear buffer before a test
-- `clear_all_logs` — Clear both server + in-app log buffers
+- `clear_debug_logs` — Clear server + in-app log buffers before a test
 - `get_gc_stats` — Heap pressure snapshot (used vs. capacity)
 - `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
 - `clear_http_profile` — Reset before testing a specific API call
@@ -1060,6 +1062,39 @@ Use this guide to understand what tools to call, when, and in what order.
     }
   }
 
+  final Map<String, String> _appRootByIsolate = {};
+
+  /// Tells the SDK where the app's own code lives, so it can tell app widgets
+  /// from framework/package widgets (the DevTools "summary tree" rule). Taken
+  /// from the isolate's root library, not from where this server was started.
+  Future<Map<String, String>> _withAppRoot(
+    VmService vm,
+    String isolateId,
+    String extension,
+    Map<String, String> args,
+  ) async {
+    if (!extension.startsWith('ext.flutterpilot.')) return args;
+    var root = _appRootByIsolate[isolateId];
+    if (root == null) {
+      var resolved = _projectRoot.absolute.path;
+      try {
+        var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
+        if (uri != null && uri.startsWith('package:')) {
+          uri = (await vm.lookupResolvedPackageUris(isolateId, [
+            uri,
+          ])).uris?.first;
+        }
+        if (uri != null && uri.startsWith('file:')) {
+          final path = Uri.parse(uri).path;
+          final lib = path.lastIndexOf('/lib/');
+          if (lib > 0) resolved = path.substring(0, lib);
+        }
+      } catch (_) {}
+      root = _appRootByIsolate[isolateId] = resolved;
+    }
+    return {...args, 'projectRoot': root};
+  }
+
   Future<_ExtensionResult> _callExtensionImmediate(
     String extension,
     Map<String, dynamic> parameters, {
@@ -1104,7 +1139,12 @@ Use this guide to understand what tools to call, when, and in what order.
             .callServiceExtension(
               extension,
               isolateId: cachedIsolateId!,
-              args: stringArgs,
+              args: await _withAppRoot(
+                vmService,
+                cachedIsolateId!,
+                extension,
+                stringArgs,
+              ),
             )
             .timeout(_Constants.extensionCallTimeout);
         if (response.json != null) {
@@ -1136,7 +1176,9 @@ Use this guide to understand what tools to call, when, and in what order.
       } on TimeoutException {
         // Fall back to full isolate refresh
       } catch (e) {
-        _log.fine('Unexpected error calling extension on cached isolate, clearing cache: $e');
+        _log.fine(
+          'Unexpected error calling extension on cached isolate, clearing cache: $e',
+        );
         cacheIsolate(null);
       }
     }
@@ -1150,7 +1192,12 @@ Use this guide to understand what tools to call, when, and in what order.
               .callServiceExtension(
                 extension,
                 isolateId: isolateRef.id!,
-                args: stringArgs,
+                args: await _withAppRoot(
+                  vmService,
+                  isolateRef.id!,
+                  extension,
+                  stringArgs,
+                ),
               )
               .timeout(_Constants.extensionCallTimeout);
           if (response.json != null) {

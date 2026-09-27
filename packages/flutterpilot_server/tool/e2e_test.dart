@@ -9,7 +9,8 @@ import 'dart:io';
 /// Usage (from packages/flutterpilot_server):
 ///   dart run tool/e2e_test.dart [-d <device>]   # default device: macos
 ///
-/// Covers: init wiring, widget tree, enter_text, tap_widget, Dio mock + network logs,
+/// Covers: init wiring, widget tree, enter_text, press_key, secondary_tap,
+/// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot_restart.
 Future<void> main(List<String> args) async {
   final device = args.length == 2 && args[0] == '-d' ? args[1] : 'macos';
@@ -156,6 +157,51 @@ Future<void> main(List<String> args) async {
       '200',
     ]);
 
+    // Keyboard, context menu, pinch, discovery, and on-screen-only assertions.
+    // enter_text focuses the field (the tap on Send above moved focus away).
+    await check('focus field again', 'enter_text', {
+      'key': "TextField['Name']",
+      'text': 'Pilot',
+    });
+    await check('press_key enter submits field', 'press_key', {'key': 'enter'});
+    await check('submit handled', 'assert_text_visible', {
+      'text': 'Submitted: Pilot',
+    });
+    await check('secondary_tap', 'secondary_tap', {'key': 'card'});
+    await check('context handler ran', 'assert_text_visible', {
+      'text': 'Context menu opened',
+    });
+    await check('pinch_zoom', 'pinch_zoom', {'key': 'zoomable', 'scale': 2.0});
+    await check(
+      'zoom applied',
+      'assert_text_visible',
+      {'text': 'zoom 1.0'},
+      [],
+      true,
+    );
+    await check('interactive elements', 'get_interactive_elements', {}, [
+      'Send',
+      'card',
+    ]);
+    await check('open details', 'tap_widget', {'key': 'Details'});
+    await check(
+      'covered route is not "visible"',
+      'assert_text_visible',
+      {'text': 'Version A'},
+      [],
+      true,
+      const Duration(seconds: 3), // after the page transition ends
+    );
+    await check('back', 'press_back');
+    await check(
+      'home visible again',
+      'assert_text_visible',
+      {'text': 'Version A'},
+      [],
+      false,
+      const Duration(seconds: 3),
+    );
+
     final main = File('$app/lib/main.dart');
     main.writeAsStringSync(
       main.readAsStringSync().replaceFirst('Version A', 'Version B'),
@@ -281,7 +327,11 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   final _name = TextEditingController();
+  final _zoom = TransformationController();
   String _greeting = '';
+  String _submitted = '';
+  String _menu = '';
+  String _zoomed = 'zoom 1.0';
 
   Future<void> _send() async {
     final res = await dio.get('https://example.com/ping');
@@ -292,9 +342,38 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) => Scaffold(
     body: Column(children: [
       const Text('Version A'),
-      TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name')),
+      TextField(
+        controller: _name,
+        decoration: const InputDecoration(labelText: 'Name'),
+        onSubmitted: (v) => setState(() => _submitted = 'Submitted: $v'),
+      ),
       ElevatedButton(onPressed: _send, child: const Text('Send')),
       Text(_greeting),
+      Text(_submitted),
+      GestureDetector(
+        key: const ValueKey('card'),
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTap: () => setState(() => _menu = 'Context menu opened'),
+        child: const Padding(padding: EdgeInsets.all(12), child: Text('Right-click me')),
+      ),
+      Text(_menu),
+      InteractiveViewer(
+        key: const ValueKey('zoomable'),
+        transformationController: _zoom,
+        onInteractionEnd: (_) => setState(
+          () => _zoomed = 'zoom ${_zoom.value.getMaxScaleOnAxis().toStringAsFixed(1)}',
+        ),
+        child: const SizedBox(width: 200, height: 100, child: ColoredBox(color: Colors.blue)),
+      ),
+      Text(_zoomed),
+      ElevatedButton(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => Scaffold(appBar: AppBar(title: const Text('Details page'))),
+          ),
+        ),
+        child: const Text('Details'),
+      ),
     ]),
   );
 }

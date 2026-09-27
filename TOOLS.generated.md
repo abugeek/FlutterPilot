@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 148
+Tool count: 136
 
 ## `get_operation`
 
@@ -52,24 +52,6 @@ Switches the active device to target for all subsequent inspection and UI automa
 |---|---|---:|---|
 | `id` | string | yes | The ID or name of the registered device to switch to. |
 
-## `get_app_context`
-
-High-speed batch context fetcher: Concurrently gathers 360° app overview, active errors, and state snapshots (Riverpod/Bloc) in a single ~100ms round-trip. Saves 2-3 tool call latencies at the start of an agent session or after navigation.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_app_summary`
-
-Get a 360-degree overview of the app: current route, widget count, pending errors, loaded plugins, and FPS stats. CALL THIS FIRST upon connecting to orient yourself. AFTER: Use get_widget_tree to find interactable elements, or capture_screenshot to see the visual state.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
 ## `get_errors`
 
 Retrieve the most recent unhandled exceptions and stack traces with duplicate aggregation. CALL THIS whenever you suspect a crash or logic failure.
@@ -80,29 +62,6 @@ Retrieve the most recent unhandled exceptions and stack traces with duplicate ag
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_app_issues`
-
-Fetches structured defect and health diagnostics automatically detected by FlutterPilot. Covers database & offline sync (Supabase RLS, SQLite, network dropouts), UI layout (RenderFlex overflow stripes, touch-target sizing), performance (animation jank, frame budget overruns), runtime exceptions, and memory. Filter by severity: "critical", "warning", "info", or "all".
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `severity` | string | no | Minimum severity level to return: "critical", "warning", "info", or "all" (default: "warning"). |
-| `unseenOnly` | boolean | no | If true, only returns issues that have not yet been presented to the agent. |
-
-## `clear_app_issues`
-
-Clears active detected issues from FlutterPilot issue buffer.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `audit_ui_design`
-
-Comprehensive UI/UX Layout & Visual Design Quality Auditor: Evaluates the active screen against professional Flutter design standards. Detects layout overflows, touch target sizing (<48dp), asymmetric horizontal dead space/margins, micro-typography legibility (<11sp), and component role mismatches (e.g. action buttons containing multi-line card text). Returns a Design Quality Score (0-100), letter grade (A+ to F), and prioritized, actionable refactoring recommendations.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
 
 ## `get_recent_events`
 
@@ -146,34 +105,9 @@ Returns captured console output from the running app — including print(), debu
 | `limit` | integer | no | Maximum number of log entries to return (default: 100). |
 | `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print". |
 
-## `get_logs`
-
-Convenience alias for get_debug_logs. Returns application console logs with optional search, level, and recency filters.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `query` | string | no | Search string to filter log messages. |
-| `level` | string | no | Filter by log level: "debug", "info", "warning", "error". |
-| `since_seconds` | integer | no | Only return logs captured in the last N seconds. |
-| `limit` | integer | no | Maximum number of logs to return (default: 100). |
-
 ## `clear_debug_logs`
 
-Clears the captured console log buffer on the server side. Use this before a specific test scenario so you get a clean baseline.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `clear_all_logs`
-
-Clears both server-side and in-app SDK debug log buffers. Call before a test run to get a clean log window. Pair with get_debug_logs(level:"error") after testing.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `set_log_filter`
-
-Alias for clear_all_logs. Clears both server-side and in-app SDK debug log buffers.
+Clears captured console logs (server and in-app buffers). Use this before a specific test scenario so you get a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -185,23 +119,9 @@ Returns the server capabilities: connection status, loaded plugins, available st
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
-## `assert_ui_health_batch`
-
-Unified 1-Shot UI Screen Health Auditor: Inspects current screen for RenderFlex overflows, touch targets smaller than 48x48 dp, and unlabelled interactive controls in <2ms. Returns a single structured health verdict.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `profile_frame_budget`
 
 Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_frame_budget_profile`
-
-Alias for profile_frame_budget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -238,21 +158,6 @@ Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton['Log In']
 | `x` | number | no | Optional direct X screen coordinate. |
 | `y` | number | no | Optional direct Y screen coordinate. |
 
-## `tap`
-
-Convenience alias for tap_widget. Finds a widget by Key, identifier, semanticsId, visible text, or coordinates and taps it.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | ValueKey string, semantic selector, or target. |
-| `identifier` | string | no | Semantics identifier property. |
-| `semanticsId` | integer | no | Numeric SemanticsNode ID from get_semantics_tree. |
-| `text` | string | no | Visible text within the widget to tap. |
-| `type` | string | no | Widget runtime type. |
-| `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
-| `x` | number | no | Optional direct X coordinate. |
-| `y` | number | no | Optional direct Y coordinate. |
-
 ## `enter_text`
 
 Types text into a TextField, TextFormField, or editable widget. Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").
@@ -267,7 +172,7 @@ Types text into a TextField, TextFormField, or editable widget. Can target by Ke
 
 ## `press_key`
 
-Dispatches physical hardware key events (e.g. "enter", "tab", "escape", "backspace", "arrowDown", "space") directly to Flutter's HardwareKeyboard and focused widget. Supports Enter form submission and modifier keys (shift, ctrl, alt, meta).
+Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). The response says which widget received it. To change text use enter_text / clear_text_field — editing keys like backspace are handled by the OS on desktop.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -415,13 +320,6 @@ Simulates pressing the hardware/system back button. Pops the current route from 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
-## `go_back`
-
-Alias for press_back. Pops the current route or screen.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `fill_form`
 
 Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, with optional one-shot form submission. Eliminates multiple turn delays when testing forms.
@@ -442,7 +340,7 @@ Reliably polls until a target element or semantic selector is visible on screen,
 
 ## `audit_screen_health`
 
-Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex overflow errors (e.g. "overflowed by 14px") and flags touch targets smaller than the standard 48x48 dp accessibility guideline.
+Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -662,9 +560,9 @@ Discovers all actionable, interactive widgets currently visible and hittable on 
 |---|---|---:|---|
 | `types` | array | no | Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]). |
 
-## `get_app_snapshot`
+## `get_app_summary`
 
-Instant 360-Degree Runtime Snapshot (<5ms): Returns complete consolidated application state in ONE call — current route, all visible & hittable interactive elements (with keys, labels & bounds), currently focused widget, recent uncaught errors, recent logs, FPS, screen mutation counter, and viewport dimensions. Use this as your PRIMARY exploration and verification tool to eliminate 5+ redundant roundtrip tool calls.
+CALL THIS FIRST. One-call overview of the running app: current route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, frame timing, viewport. Use get_widget_tree for layout structure and capture_screenshot for visuals.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

@@ -244,24 +244,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode(profile));
     });
 
-    // -- ext.flutterpilot.auditUiHealth ---------------------------------------
-    registerExtension('ext.flutterpilot.auditUiHealth', (
-      method,
-      parameters,
-    ) async {
-      final health = UiHealthAuditor.audit();
-      return ServiceExtensionResponse.result(json.encode(health));
-    });
-
-    // -- ext.flutterpilot.auditUiDesign ---------------------------------------
-    registerExtension('ext.flutterpilot.auditUiDesign', (
-      method,
-      parameters,
-    ) async {
-      final health = UiHealthAuditor.audit();
-      return ServiceExtensionResponse.result(json.encode(health));
-    });
-
     // -- ext.flutterpilot.getStreamLogs ---------------------------------------
     registerExtension('ext.flutterpilot.getStreamLogs', (
       method,
@@ -283,34 +265,5 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
 
-    // -- ext.flutterpilot.getAppIssues ---------------------------------------
-    registerExtension('ext.flutterpilot.getAppIssues', (
-      method,
-      parameters,
-    ) async {
-      final sevStr = parameters['severity']?.toLowerCase() ?? 'warning';
-      final unseenOnly = parameters['unseenOnly'] == 'true';
-      IssueSeverity minSev = IssueSeverity.warning;
-      if (sevStr == 'critical') {
-        minSev = IssueSeverity.critical;
-      } else if (sevStr == 'info' || sevStr == 'all') {
-        minSev = IssueSeverity.info;
-      }
-
-      final summary = IssueDetector.getSummaryJson(
-        minSeverity: minSev,
-        unseenOnly: unseenOnly,
-      );
-      return ServiceExtensionResponse.result(json.encode(summary));
-    });
-
-    // -- ext.flutterpilot.clearAppIssues -------------------------------------
-    registerExtension('ext.flutterpilot.clearAppIssues', (
-      method,
-      parameters,
-    ) async {
-      IssueDetector.clear();
-      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
-    });
   }
 }
