@@ -108,7 +108,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) => _callFlutterToolsService(
         p,
         'reloadSources',
-        'Hot reload applied. HINT: call get_self_heal_status to verify the fix.',
+        'Hot reload applied. HINT: call get_errors to confirm the error is gone.',
       ),
     );
 

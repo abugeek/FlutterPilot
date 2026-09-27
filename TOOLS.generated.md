@@ -97,7 +97,7 @@ Lists all .dart files in the Flutter project under the given directory (defaults
 
 ## `get_debug_logs`
 
-Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.
+Returns console output the running app printed since FlutterPilot connected — print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

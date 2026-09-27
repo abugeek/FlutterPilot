@@ -200,7 +200,14 @@ current major. §1 is done.
    (`tools/list_changed`). Left: `native_tap/text/button/describe_screen`
    are untested (idb not installed here); field-test a real app on a phone
    (IME, permissions dialogs, lifecycle/backgrounding).
-3. **Zero-code mode** (no SDK installed) is advertised but untested.
+3. **Zero-code mode:** done — plain app on macOS + Chrome (`e2e_test.dart
+   --zero-code`, in CI for macOS and web). Without the SDK only the 29 tools
+   that work are listed (`zeroCodeTools` in `src/zero_code.dart`): tree,
+   screenshot and errors come from Flutter's inspector, plus hot reload,
+   debug toggles, memory/HTTP profiles and logs. Findings: round 6 of
+   `docs/field-test-findings.md`. Left: driving the app (taps, text) would
+   need expression evaluation — not attempted; iOS/Android zero-code
+   untested.
 4. **Multi-device fleet** (`register_device`/`switch_device`) untested.
 5. **VS Code extension** (`packages/flutterpilot_vscode`) untested — test or remove.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +

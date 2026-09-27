@@ -9,7 +9,7 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 - **1-Command Setup**: Run `flutterpilot init` in any Flutter project root to auto-detect Riverpod/Bloc/Dio/Drift and configure packages.
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
-- **Zero-Code Mode**: Works out of the box even without `flutterpilot_sdk` by gracefully falling back to native Flutter VM inspector, debug paint, animation controls, GC profiler, and hot reload.
+- **Zero-Code Mode**: Without `flutterpilot_sdk` the app can be inspected but not driven: only the tools that work are listed (summary, widget tree, screenshots, errors, logs, hot reload/restart, theme and debug-paint toggles, memory/HTTP profiles). `get_app_summary` says so; `flutterpilot init` adds taps, text entry, navigation and assertions.
 
 ## Core Principles & Recommended Workflows
 

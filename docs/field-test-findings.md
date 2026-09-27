@@ -152,7 +152,29 @@ exactly as a new user would, driven only through fp_bridge.
 | 121 | first calls on web | ❌→fixed | extensions register after `app.started`; first calls said "not registered" / "Zero-Code mode". Server now waits once per connection (≤5 s) for the SDK's extensions |
 | 122 | `native_*` on other platforms | ⚠️→gated | listed only for iOS apps with `idb`/`xcrun` present (tools/list_changed). `native_tap/text/button/describe_screen` still untested (no idb here) |
 
+## Round 6 — zero-code mode (§2.3)
+
+A plain `flutter create` app (no flutterpilot_sdk) on macOS, driven through
+the MCP server; then Chrome via `e2e_test.dart --zero-code`.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 123 | tools/list | ❌→fixed | all 124 tools listed; ~95 answered "not registered … run flutterpilot init" (the plugin message, not the cause). Now only the 29 that work are listed (one `tools/list_changed`); they come back when the SDK's extensions register |
+| 124 | `get_app_summary` | ⚠️→fixed | raw JSON (VM version, heap) and a hint promising "deterministic key tapping" that doesn't exist. Now says what works and what doesn't, errors, and the text/keys on screen |
+| 125 | `get_widget_tree` | ❌→fixed | the fallback called `getRootWidgetTree` without `groupName`: failed, and printed a "Null check operator" exception into the user's `flutter run` console on every call. Now the SDK's tree shape from the inspector, with `file:line` for app widgets |
+| 126 | covered routes / hidden tabs in tree | ❌→fixed | the inspector's summary tree includes the page under the current one. Now built from the full tree, skipping what `_Theater` (`skipCount`) and IndexedStack (render object `index`) don't paint |
+| 127 | `capture_screenshot` | ❌→fixed | refused ("requires the SDK"). Now `ext.flutter.inspector.screenshot`, cropped to the window: its bounds include overflow and a covered route parked at -⅓ width by the Cupertino transition (first version showed the page offset by 266 px) |
+| 128 | `get_errors` | ❌→fixed | refused. Now from `Flutter.Error` events (structured errors, on by default in debug except web), summary + culprit `file:line`; reset on hot restart. Errors from before the connection aren't known; hot reload re-reports layout errors |
+| 129 | `get_debug_logs` | ✅ | stdout captured; empty result told the user to call `FlutterPilot.initialize()`. Both modes only have output since the server connected — now said so |
+| 130 | hot reload / restart, set_theme, debug paint, slow animations, repaint rainbow, memory, allocation profile, HTTP profile, VM info, baselines/compare | ✅ | no SDK needed |
+| 131 | `get_self_heal_status` / `get_latest_crash_report` | ⚠️→hidden | always "STABLE" / "none" without the SDK's error events |
+| 132 | e2e harness | ⚠️→fixed | a failed `flutter run` build waited 20 min for a VM URI; now fails when flutter exits |
+
+Not possible without the SDK (or expression evaluation): taps, text entry,
+navigation, route info, assertions, text scale / locale, plugin state.
+
 ## Latency observed (debug mode, macOS, HN reader)
+- zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)
 - hot_reload ~300 ms; hot_restart ~350–500 ms

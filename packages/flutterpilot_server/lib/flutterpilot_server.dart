@@ -18,6 +18,7 @@ import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
+import 'src/zero_code.dart';
 
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
@@ -53,6 +54,9 @@ Map<String, dynamic> _withDeviceId(
 
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
+  /// Every registered tool by name, for showing only the usable ones.
+  final Map<String, RegisteredTool> _allTools = {};
+
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
   /// "Tool execution failed." and log the reason where the agent can't see it.
@@ -61,7 +65,7 @@ abstract class _FlutterPilotServerBase {
     String? description,
     ToolInputSchema? inputSchema,
     required ToolFunction callback,
-  }) => server.registerTool(
+  }) => _allTools[name] = server.registerTool(
     name,
     description: description,
     inputSchema: inputSchema,
@@ -270,7 +274,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// registered FlutterPilot's extensions yet. Wait for them once per
   /// connection, at most 5 s, instead of misreporting "Zero-Code mode" or
   /// "not registered" for the first calls. Apps without the SDK pay once.
-  static Future<void> _waitForSdkExtensions(VmService vm) async {
+  /// Returns whether the SDK is installed, or null when the check failed.
+  static Future<bool?> _waitForSdkExtensions(VmService vm) async {
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(deadline)) {
       try {
@@ -278,14 +283,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         for (final ref in isolates) {
           final rpcs = (await vm.getIsolate(ref.id!)).extensionRPCs;
           if (rpcs?.any((e) => e.startsWith('ext.flutterpilot.')) ?? false) {
-            return;
+            return true;
           }
         }
       } catch (_) {
-        return; // Connection trouble is reported by the call itself.
+        return null; // Connection trouble is reported by the call itself.
       }
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
+    return false;
   }
 
   /// Tool calls and the reconnect timer can both trigger a connect; share one
@@ -358,7 +364,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.service = _vmService;
     activeContext.connectionGeneration = _connectionGeneration;
     activeContext.cachedMainIsolateId = null;
-    _sdkExtensionsReady = _waitForSdkExtensions(_vmService!);
+    activeContext.hasSdk = null;
+    activeContext.zeroCodeErrors.clear();
+    final checkedService = _vmService!;
+    _sdkExtensionsReady = _waitForSdkExtensions(checkedService).then((found) {
+      if (!identical(activeContext.service, checkedService)) return;
+      activeContext.hasSdk = found;
+      if (found != null) updateSdkToolVisibility(hasSdk: found);
+    });
     try {
       await _updateNativeToolVisibility(
         (await _vmService!.getVM()).operatingSystem,
@@ -480,6 +493,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     context.stdoutEvents = null;
     await context.serviceEvents?.cancel();
     context.serviceEvents = null;
+    await context.isolateEvents?.cancel();
+    context.isolateEvents = null;
     context.registeredServices.clear();
 
     // The VM service replays ServiceRegistered for already-registered services
@@ -499,6 +514,29 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       await service.streamListen(EventStreams.kService);
     } catch (e) {
       _log.fine('Could not subscribe to Service stream: $e');
+    }
+
+    // The SDK's extensions can register after the connect-time check (slow
+    // web startup, or a restart after "flutterpilot init"): list its tools then.
+    try {
+      context.isolateEvents = service.onIsolateEvent.listen((Event event) {
+        // Hot restart starts a new isolate; the SDK's error buffer resets
+        // with it, so the zero-code one does too.
+        if (event.kind == EventKind.kIsolateStart) {
+          context.zeroCodeErrors.clear();
+        }
+        if (event.kind == EventKind.kServiceExtensionAdded &&
+            context.hasSdk != true &&
+            (event.extensionRPC?.startsWith('ext.flutterpilot.') ?? false)) {
+          context.hasSdk = true;
+          if (context.deviceId == (_fleetManager.activeDeviceId ?? 'default')) {
+            updateSdkToolVisibility(hasSdk: true);
+          }
+        }
+      });
+      await service.streamListen(EventStreams.kIsolate);
+    } catch (e) {
+      _log.fine('Could not subscribe to Isolate stream: $e');
     }
 
     try {
@@ -523,6 +561,24 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 severity: severity,
                 deviceId: context.deviceId,
               );
+            } else if (event.extensionKind == 'Flutter.Error' &&
+                context.hasSdk != true) {
+              // Without the SDK, Flutter's structured errors are the only
+              // error source (on by default in debug builds, except web).
+              final data = event.extensionData?.data;
+              if (data == null) return;
+              final error = errorFromFlutterErrorEvent(data, DateTime.now());
+              context.zeroCodeErrors.add(error);
+              if (context.zeroCodeErrors.length > 50) {
+                context.zeroCodeErrors.removeAt(0);
+              }
+              if (context.hasSdk == false) {
+                _appendEvent({
+                  'type': 'error',
+                  'timestamp': timestamp,
+                  'data': error,
+                }, deviceId: context.deviceId);
+              }
             } else if (event.extensionKind == 'ext.flutterpilot.action') {
               _appendEvent({
                 'type': 'action',
@@ -684,6 +740,32 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerTestingTools();
     _registerDevtoolsTools();
     _registerPluginIntegrationTools();
+  }
+
+  /// Names of the tools currently listed to MCP clients.
+  Iterable<String> get listedToolNames =>
+      _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
+
+  /// Lists only the tools that can work: without flutterpilot_sdk in the app
+  /// (zero-code mode) that is [zeroCodeTools]. Native tools keep their own
+  /// rule. Sends one tools/list_changed instead of one per tool. Called after
+  /// each connection.
+  void updateSdkToolVisibility({required bool hasSdk}) {
+    if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
+    var changed = false;
+    for (final MapEntry(key: name, value: tool) in _allTools.entries) {
+      if (_nativeTools.containsKey(name)) continue;
+      final usable = hasSdk || zeroCodeTools.contains(name);
+      if (tool.enabled == usable) continue;
+      changed = true;
+      try {
+        // Set the flag without mcp_dart's per-tool list_changed notification.
+        (tool as dynamic).enabled = usable;
+      } catch (_) {
+        usable ? tool.enable() : tool.disable();
+      }
+    }
+    if (changed) server.sendToolListChanged();
   }
 
   // ---------------------------------------------------------------------------
@@ -1386,64 +1468,202 @@ Use this guide to understand what tools to call, when, and in what order.
     }
   }
 
+  /// The app has no handler for [extension]. Without flutterpilot_sdk
+  /// (zero-code mode) answer what Flutter's own inspector can, and say
+  /// plainly that the rest needs the SDK. Returns null when the SDK is
+  /// installed: then the missing extension belongs to a plugin.
   Future<_ExtensionResult?> _handleZeroCodeFallback(
     String extension,
     Map<String, dynamic> parameters,
     String isolateId, {
     DeviceRuntimeContext? context,
   }) async {
+    context ??= _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
     final vmService = context?.service ?? _vmService;
-    if (vmService == null) return null;
+    if (vmService == null || !extension.startsWith('ext.flutterpilot.')) {
+      return null;
+    }
+    var hasSdk = context?.hasSdk;
+    if (hasSdk == null) {
+      final rpcs = (await vmService.getIsolate(isolateId)).extensionRPCs;
+      hasSdk = rpcs?.any((e) => e.startsWith('ext.flutterpilot.')) ?? false;
+    }
+    if (hasSdk) return null;
+
+    var usedInspector = false;
+    Future<Map<String, dynamic>?> inspectorRoot() async {
+      usedInspector = true;
+      final res = await vmService.callServiceExtension(
+        'ext.flutter.inspector.getRootWidgetTree',
+        isolateId: isolateId,
+        args: {
+          'groupName': _inspectorGroup,
+          'isSummaryTree': 'false',
+          'withPreviews': 'true',
+        },
+      );
+      return (res.json?['result'] as Map?)?.cast<String, dynamic>();
+    }
+
+    Future<List<Map>> properties(String id) async {
+      final res = await vmService.callServiceExtension(
+        'ext.flutter.inspector.getProperties',
+        isolateId: isolateId,
+        args: {'objectGroup': _inspectorGroup, 'arg': id},
+      );
+      return (res.json?['result'] as List? ?? const [])
+          .whereType<Map>()
+          .toList();
+    }
+
+    Map? property(List<Map> props, String name) =>
+        props.where((p) => p['name'] == name).firstOrNull;
+
+    /// What keeps children off screen: skipped overlay entries (covered
+    /// routes) per `_Theater`, the painted child per IndexedStack.
+    Future<({Map<String, int> skip, Map<String, int> index})> offstage(
+      Map<String, dynamic> root,
+    ) async {
+      final hosts = offstageHosts(root);
+      final skip = await Future.wait(
+        hosts.theaters.map((id) async {
+          final count = property(await properties(id), 'skipCount');
+          return MapEntry(id, int.tryParse('${count?['description']}') ?? 0);
+        }),
+      );
+      final index = await Future.wait(
+        hosts.indexedStacks.map((id) async {
+          final ro = property(await properties(id), 'renderObject');
+          final roId = ro?['valueId']?.toString();
+          if (roId == null) return null;
+          final i = property(await properties(roId), 'index');
+          final value = int.tryParse('${i?['description']}');
+          return value == null ? null : MapEntry(id, value);
+        }),
+      );
+      return (
+        skip: Map.fromEntries(skip),
+        index: Map.fromEntries(index.nonNulls),
+      );
+    }
+
     try {
-      if (extension == 'ext.flutterpilot.getSummary') {
-        final vm = await vmService.getVM();
-        final memory = await vmService.getMemoryUsage(isolateId);
-        return _ExtensionResult.success({
-          'sdkMode': 'zero-code (core Flutter VM)',
-          'status': 'connected',
-          'flutterVersion': vm.version ?? 'Unknown',
-          'isolateCount': vm.isolates?.length ?? 1,
-          'memory': {
-            'heapUsageMb': ((memory.heapUsage ?? 0) / (1024 * 1024))
-                .toStringAsFixed(1),
-            'heapCapacityMb': ((memory.heapCapacity ?? 0) / (1024 * 1024))
-                .toStringAsFixed(1),
-          },
-          'hint':
-              'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
-        });
-      } else if (extension == 'ext.flutterpilot.getWidgetTree') {
-        final res = await vmService.callServiceExtension(
-          'ext.flutter.inspector.getRootWidgetTree',
-          isolateId: isolateId,
-          args: {'isSummaryTree': 'true'},
-        );
-        if (res.json != null) {
-          return _ExtensionResult.success(res.json!);
-        }
-      } else if (extension.startsWith('ext.flutterpilot.tap') ||
-          extension.startsWith('ext.flutterpilot.enter') ||
-          extension.startsWith('ext.flutterpilot.navigate') ||
-          extension.startsWith('ext.flutterpilot.pressBack') ||
-          extension.startsWith('ext.flutterpilot.scroll') ||
-          extension.startsWith('ext.flutterpilot.swipe') ||
-          extension.startsWith('ext.flutterpilot.drag') ||
-          extension.startsWith('ext.flutterpilot.doubleTap') ||
-          extension.startsWith('ext.flutterpilot.longPress') ||
-          extension.startsWith('ext.flutterpilot.pinchZoom') ||
-          extension == 'ext.flutterpilot.captureScreenshot') {
-        return _ExtensionResult.error(
-          'Zero-Code mode is active. Interactive automation tools ($extension) require '
-          'flutterpilot_sdk in your Flutter app. Run "flutterpilot init" in your project directory '
-          'to install and initialize the SDK, then restart your app with "flutter run".',
-          ErrorCategory.toolNotFound,
-        );
+      switch (extension) {
+        case 'ext.flutterpilot.getWidgetTree':
+        case 'ext.flutterpilot.getSummary':
+          final root = await inspectorRoot();
+          if (root == null) {
+            return _ExtensionResult.error(
+              'The Flutter inspector returned no widget tree (the first frame '
+              'may not be built yet). Retry in a moment.',
+              ErrorCategory.extensionError,
+            );
+          }
+          final maxDepth = int.tryParse('${parameters['maxDepth']}') ?? 50;
+          final hidden = await offstage(root);
+          final tree = summaryTreeFromInspector(
+            root,
+            maxDepth: maxDepth,
+            skipCounts: hidden.skip,
+            stackIndexes: hidden.index,
+          );
+          if (extension == 'ext.flutterpilot.getWidgetTree') {
+            return _ExtensionResult.success({
+              'sdkMode': 'zero-code',
+              'tree': tree,
+            });
+          }
+          final vm = await vmService.getVM();
+          final memory = await vmService.getMemoryUsage(isolateId);
+          final content = screenContent(tree);
+          return _ExtensionResult.success({
+            'sdkMode': 'zero-code',
+            'flutterVersion': vm.version ?? 'unknown',
+            'heapUsageMb': ((memory.heapUsage ?? 0) / (1024 * 1024)).round(),
+            'texts': content.texts,
+            'keys': content.keys,
+            'errors': context?.zeroCodeErrors ?? const [],
+          });
+        case 'ext.flutterpilot.captureScreenshot':
+          usedInspector = true;
+          final rootWidget = await vmService.callServiceExtension(
+            'ext.flutter.inspector.getRootWidget',
+            isolateId: isolateId,
+            args: {'objectGroup': _inspectorGroup},
+          );
+          final id = (rootWidget.json?['result'] as Map?)?['valueId'];
+          if (id == null) {
+            return _ExtensionResult.error(
+              'The Flutter inspector returned no widget tree (the first frame '
+              'may not be built yet). Retry in a moment.',
+              ErrorCategory.extensionError,
+            );
+          }
+          final layout = await vmService.callServiceExtension(
+            'ext.flutter.inspector.getLayoutExplorerNode',
+            isolateId: isolateId,
+            args: {'groupName': _inspectorGroup, 'id': id, 'subtreeDepth': '0'},
+          );
+          final size = (layout.json?['result'] as Map?)?['size'] as Map?;
+          // Like the SDK: logical pixels x scale.
+          final pixelRatio = double.tryParse('${parameters['scale']}') ?? 1.0;
+          final res = await vmService.callServiceExtension(
+            'ext.flutter.inspector.screenshot',
+            isolateId: isolateId,
+            args: {
+              'id': id,
+              'width': '100000',
+              'height': '100000',
+              'maxPixelRatio': '$pixelRatio',
+            },
+          );
+          final data = res.json?['result'];
+          if (data is! String) {
+            return _ExtensionResult.error(
+              'The Flutter inspector returned no screenshot (the first frame '
+              'may not be built yet). Retry in a moment.',
+              ErrorCategory.extensionError,
+            );
+          }
+          final width = double.tryParse('${size?['width']}');
+          final height = double.tryParse('${size?['height']}');
+          return _ExtensionResult.success({
+            'data': width == null || height == null
+                ? data
+                : cropToScreen(data, width, height, pixelRatio),
+          });
+        case 'ext.flutterpilot.getErrors':
+          return _ExtensionResult.success({
+            'sdkMode': 'zero-code',
+            'errors': context?.zeroCodeErrors ?? const [],
+          });
       }
     } catch (e) {
-      _log.fine('Zero-code fallback failed for $extension: $e');
+      return _ExtensionResult.error(
+        'Zero-code mode (no flutterpilot_sdk): the Flutter inspector call '
+        'failed: $e',
+        ErrorCategory.extensionError,
+      );
+    } finally {
+      if (usedInspector) {
+        unawaited(
+          vmService
+              .callServiceExtension(
+                'ext.flutter.inspector.disposeGroup',
+                isolateId: isolateId,
+                args: {'objectGroup': _inspectorGroup},
+              )
+              .then<void>((_) {}, onError: (_) {}),
+        );
+      }
     }
-    return null;
+    return _ExtensionResult.error(
+      zeroCodeUnavailable('This tool'),
+      ErrorCategory.toolNotFound,
+    );
   }
+
+  static const _inspectorGroup = 'flutterpilot-zero-code';
 
   // ---------------------------------------------------------------------------
   // Lifecycle

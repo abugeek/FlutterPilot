@@ -28,7 +28,11 @@ flutter run
 > Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
 
 ### Option B: Zero-Code Mode (No App Changes Required)
-Connect FlutterPilot MCP Server to **any existing Flutter app** out of the box:
+Connect FlutterPilot MCP Server to **any existing Flutter app** to inspect it:
+widget tree, screenshots, errors with source lines, logs, hot reload/restart,
+theme and debug-paint toggles, memory and HTTP profiles. Driving the app
+(taps, text entry, navigation, assertions) needs the SDK (Option A); without
+it those tools are not listed.
 ```bash
 # Run any vanilla Flutter app:
 flutter run
