@@ -11,10 +11,12 @@ import 'dart:io';
 /// root. It intentionally comes from the registered runtime tools, not a
 /// duplicated hand-maintained count.
 Future<void> main() async {
-  final process = await Process.start('dart', [
-    'run',
-    'packages/flutterpilot_server/bin/flutterpilot_server.dart',
-  ]);
+  final process = await Process.start(
+    'dart',
+    ['run', 'packages/flutterpilot_server/bin/flutterpilot_server.dart'],
+    // Include tools that are only listed where they can work (native_*).
+    environment: {'FLUTTERPILOT_LIST_ALL_TOOLS': '1'},
+  );
   final responses = <int, Completer<Map<String, dynamic>>>{};
   var nextId = 0;
   process.stderr.transform(utf8.decoder).listen(stderr.write);
@@ -73,6 +75,12 @@ Future<void> main() async {
       )
       ..writeln()
       ..writeln('Tool count: ${tools.length}')
+      ..writeln()
+      ..writeln(
+        '`native_*` tools are listed to agents only when the connected app '
+        'runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is '
+        'installed.',
+      )
       ..writeln();
     for (final rawTool in tools) {
       if (rawTool is! Map) continue;

@@ -16,6 +16,30 @@ part of '../../flutterpilot_server.dart';
 /// reach for these only when a native dialog or the system keyboard is
 /// blocking the screen.
 mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
+  final Map<String, RegisteredTool> _nativeTools = {};
+
+  /// Shows the native tools only where they can work: an iOS app, with
+  /// `xcrun` (screenshot) and `idb` (everything else) on this machine.
+  /// Called after every VM connection; hidden until then.
+  Future<void> _updateNativeToolVisibility(String? operatingSystem) async {
+    final ios = operatingSystem == 'ios' && Platform.isMacOS;
+    final idb = ios && await _onPath('idb');
+    final xcrun = ios && await _onPath('xcrun');
+    for (final MapEntry(key: name, value: tool) in _nativeTools.entries) {
+      final usable = name == 'native_screenshot' ? xcrun : idb;
+      if (tool.enabled != usable) usable ? tool.enable() : tool.disable();
+    }
+  }
+
+  static Future<bool> _onPath(String exe) async {
+    try {
+      final r = await Process.run('which', [exe]);
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static const String _unavailableReason =
       'Native automation tools require macOS with `idb` (for tap/text/button) '
       'and/or Xcode command-line tools (for screenshot) installed, targeting a '
@@ -114,7 +138,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   }
 
   void _registerNativeAutomationTools() {
-    server.registerTool(
+    _nativeTools['native_screenshot'] = server.registerTool(
       'native_screenshot',
       description:
           'Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — '
@@ -174,7 +198,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _nativeTools['native_tap'] = server.registerTool(
       'native_tap',
       description:
           'Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, '
@@ -238,7 +262,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _nativeTools['native_text'] = server.registerTool(
       'native_text',
       description:
           'Types text into the currently-focused native field via `idb ui text` — for native '
@@ -291,7 +315,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _nativeTools['native_button'] = server.registerTool(
       'native_button',
       description:
           'Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or '
@@ -344,7 +368,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _nativeTools['native_describe_screen'] = server.registerTool(
       'native_describe_screen',
       description:
           'Returns the native accessibility tree (labels, frames, roles) for whatever is on '

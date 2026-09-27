@@ -4,6 +4,8 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 129
 
+`native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
+
 ## `get_operation`
 
 Polls an asynchronous operation submitted with async:true. Returns pending, completed, or failed status.

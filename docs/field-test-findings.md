@@ -143,6 +143,15 @@ exactly as a new user would, driven only through fp_bridge.
 | 117 | summary jank / lifecycle | ⚠️→fixed | "40% jank" from 5 startup frames; `inactive` (visible, unfocused) reported as "not visible" |
 | 118 | fp_bridge | ⚠️→fixed | empty POST crashed it |
 
+## Round 5 — e2e on iOS simulator, Android emulator, web (§2.2)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 119 | core tools on iOS / Android / Chrome | ✅ | same e2e as macOS: tap, text, keys, secondary tap, pinch, chains, password masking, hot reload + restart (web via DWDS) |
+| 120 | `set_device_rotation` on mobile | ✅ | rotates for real (viewport checked both ways); e2e assumed desktop |
+| 121 | first calls on web | ❌→fixed | extensions register after `app.started`; first calls said "not registered" / "Zero-Code mode". Server now waits once per connection (≤5 s) for the SDK's extensions |
+| 122 | `native_*` on other platforms | ⚠️→gated | listed only for iOS apps with `idb`/`xcrun` present (tools/list_changed). `native_tap/text/button/describe_screen` still untested (no idb here) |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)

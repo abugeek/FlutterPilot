@@ -14,6 +14,9 @@ import 'dart:io';
 /// hot_reload applying an edited source file with state kept, hot_restart.
 Future<void> main(List<String> args) async {
   final device = args.length == 2 && args[0] == '-d' ? args[1] : 'macos';
+  final isDesktop = const {'macos', 'linux', 'windows'}.contains(device);
+  final isWeb = device == 'chrome' || device == 'web-server';
+  final isMobile = !isDesktop && !isWeb;
   final repo = Directory.fromUri(Platform.script.resolve('../../..')).path;
   final serverDir = '${repo}packages/flutterpilot_server';
   final work = Directory.systemTemp.createTempSync('fp_e2e_');
@@ -33,7 +36,7 @@ Future<void> main(List<String> args) async {
     await sh('flutter', [
       'create',
       '-e',
-      '--platforms=macos,ios',
+      '--platforms=macos,ios,android,web',
       'fixture',
     ], cwd: work.path);
     await sh('flutter', ['pub', 'add', 'dio'], cwd: app);
@@ -160,20 +163,71 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    /// Polls get_app_summary until its "Viewport: WxH" has the orientation.
+    Future<void> expectViewport(String label, {required bool landscape}) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      var seen = '';
+      var ok = false;
+      while (!ok && DateTime.now().isBefore(deadline)) {
+        final res = await mcp.request('tools/call', {
+          'name': 'get_app_summary',
+          'arguments': {},
+        });
+        final text = ((res['result']?['content'] as List?) ?? [])
+            .map((c) => c['text'] ?? '')
+            .join();
+        final m = RegExp(r'Viewport: (\d+)x(\d+)').firstMatch(text);
+        if (m != null) {
+          seen = m.group(0)!;
+          final w = int.parse(m.group(1)!), h = int.parse(m.group(2)!);
+          ok = landscape ? w > h : h > w;
+        }
+        if (!ok) await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      if (!ok) failed++;
+      print('${ok ? '✅' : '❌'} $label ($seen)');
+    }
+
     const settle = Duration(seconds: 10);
     await check('app summary', 'get_app_summary', {}, [], false, settle, 4096);
+
+    // Platform-specific tools are listed only where they can work.
+    final listed =
+        ((await mcp.request('tools/list', {}))['result']['tools'] as List)
+            .map((t) => t['name'] as String)
+            .toSet();
+    final isIos = isMobile && !device.startsWith('emulator');
+    final nativeOk = isIos
+        ? listed.contains('native_screenshot')
+        : !listed.any((n) => n.startsWith('native_'));
+    if (!nativeOk) failed++;
+    print(
+      '${nativeOk ? '✅' : '❌'} native tools '
+      '${isIos ? 'listed on iOS' : 'hidden off iOS'} (${listed.length} tools)',
+    );
     await check(
       'list_connected_devices shows auto-discovered default',
       'list_connected_devices',
       {},
       ['default'],
     );
-    await check(
-      'set_device_rotation honest on desktop',
-      'set_device_rotation',
-      {'orientation': 'landscape'},
-      ['Not applicable on desktop', 'skipped'],
-    );
+    if (isDesktop) {
+      await check(
+        'set_device_rotation honest on desktop',
+        'set_device_rotation',
+        {'orientation': 'landscape'},
+        ['Not applicable on desktop', 'skipped'],
+      );
+    } else if (isMobile) {
+      await check('rotate to landscape', 'set_device_rotation', {
+        'orientation': 'landscape',
+      });
+      await expectViewport('viewport is landscape', landscape: true);
+      await check('rotate back to portrait', 'set_device_rotation', {
+        'orientation': 'portrait',
+      });
+      await expectViewport('viewport is portrait again', landscape: false);
+    }
     await check(
       'TextField isEnabled is true',
       'get_widget_properties',
