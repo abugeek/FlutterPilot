@@ -61,10 +61,46 @@ tools that always work beat many tools that sometimes work.
 
 ---
 
+## Rules for agents working on this repo
+
+Learned from reviewing agent-made changes:
+
+1. **Work on a branch and commit.** Uncommitted work in the main checkout is
+   invisible to reviewers and easy to lose.
+2. **Run `tool/e2e_test.dart` before saying "done".** In one review, the e2e
+   test would have shown 5 action tools returning errors (a missing `await`
+   on a function made async) — the unit tests were all green.
+3. **Add a test for every behaviour you change.** ~800 changed lines with zero
+   new tests means nothing proves the changes work.
+4. **Change both ends.** A server feature that reads a field the SDK never
+   sends (e.g. error `severity`) silently does nothing. Verify in the real app.
+5. **Schema first.** A parameter alias only helps if the tool's JSON schema
+   accepts the new name — MCP validates arguments before your code runs.
+
 ## 1. Finish the cleanup (small, do first)
 
 Each item was observed in the field test; file:line pointers are in git history
 of PR #1.
+
+**Status (2026-09-27, second agent + review):** items 1–13 are addressed:
+perf tools deleted, `key`/`target` accepted by every widget tool (schema and
+callbacks), Riverpod state accepts plain values and short names without
+`--allow-destructive`, `exec_sql_query` auto-detects, Dio logs bodies,
+plugins have explicit `register()`, crash report 41 KB → ~4.5 KB with the
+failing line, overflows no longer mark the app unstable, keyboard dispatch
+uses one path, post-action state waits for route transitions. **Still open
+from §1:** `init` only prints the text-scale/locale wiring tip instead of
+injecting it (item 12); `wait_for_widget` is kept as a deprecated alias
+instead of removed; one unexplained `tap_widget(target:"Stories")` miss right
+after `jump_to_screen` (not reproducible in 3 retries).
+
+**New from the review:**
+- Plugin dependency constraints: `flutterpilot_bloc` pinned `flutter_bloc
+  ^8` so apps on the current 9.x couldn't install it (fixed: `>=8.1.5 <10`).
+  Other plugins use open-ended `>=` constraints (connectivity, firebase,
+  go_router, secure_storage) that will accept future breaking majors — give
+  them upper bounds and add a CI job that resolves every plugin against the
+  latest versions of its host package.
 
 1. **Weak perf tools — fix or delete:**
    - `get_perf_metrics`: "FPS" on an idle app is meaningless → delete; point to

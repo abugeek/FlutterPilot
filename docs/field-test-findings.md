@@ -100,6 +100,18 @@ in PR #1. Items still open are tracked in `ROADMAP.md`.
 | 87 | aliases (tap, go_back, get_logs, ...) | dropped | duplicates increase tool-selection cost |
 | 88 | tool/ scripts, benchmark_report.json | dropped | hardcoded dead VM URIs; results from one emulator |
 
+## Round 3 — review of the second agent's §1 work (uncommitted in main checkout)
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 89 | getPostActionState made async | ❌→fixed | 4 callers didn't await → enter_text, press_key, secondary_tap, pinch_zoom returned errors *after* performing the action (agents would retry = double actions) |
+| 90 | route-settle wait | ❌→rewritten | dynamic `.animation` probe on every widget every 16 ms (exceptions), waited on app spinners, no-op for go_router. Now checks only on-screen ModalRoute transitions |
+| 91 | key/target consistency | ⚠️→finished | aliasing ran after schema validation; 16 tools still required `key`. Now every widget tool accepts both |
+| 92 | self-heal severity | ❌→fixed | server honoured `severity`, SDK never sent it → overflows still "CRITICAL" |
+| 93 | crash report size | ⚠️→fixed | 6.9 KB with all raw stacks → ~4.5 KB with only the crashing stack |
+| 94 | flutterpilot_bloc constraint | ❌→fixed | `flutter_bloc ^8` blocked install on current 9.x |
+| 95 | Escape via keyData path | ✅ | closes a popup menu on macOS |
+| 96 | riverpod plain values/short names, SQL auto-detect, Dio bodies | ✅ | verified in HN reader |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)

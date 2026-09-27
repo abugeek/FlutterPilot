@@ -27,12 +27,32 @@ class CrashReport {
   });
 
   /// Formats the report as a compact Markdown string (<4KB budget) for AI agents.
+  /// Only the crashing error's compacted stack — the full error list and
+  /// raw stacks made reports ~40 KB. Other errors are one get_errors away.
+  String? _crashStack(dynamic data) {
+    final errors = data is Map ? data['errors'] : null;
+    if (errors is! List || errors.isEmpty) return null;
+    Object? match = errors.last;
+    for (final e in errors.reversed) {
+      if (e is Map && e['exception']?.toString() == exception) {
+        match = e;
+        break;
+      }
+    }
+    if (match is! Map) return null;
+    final lines = (match['stackTrace'] ?? '').toString().split('\n');
+    return [
+      if (match['widget'] != null) 'Widget: ${match['widget']}',
+      ...lines.take(12),
+    ].join('\n');
+  }
+
   String toMarkdown() {
     final buffer = StringBuffer()..writeln('# 🚨 Critical App Crash Report');
     buffer.writeln('\n**Timestamp:** $timestamp');
     buffer.writeln('\n## Exception\n$exception');
 
-    _addSection(buffer, 'Recent Errors', errorData);
+    _addSection(buffer, 'Recent Errors', _crashStack(errorData) ?? errorData);
     _addSection(buffer, 'Riverpod State', riverpodData);
     _addSection(buffer, 'Bloc State', blocData);
     _addSection(buffer, 'Network Logs', networkData);
@@ -59,6 +79,8 @@ class CrashReport {
       buffer.writeln('```json\n$clipped\n```');
     }
   }
+
+
 
   dynamic _truncateTree(dynamic tree) {
     if (tree == null) return null;

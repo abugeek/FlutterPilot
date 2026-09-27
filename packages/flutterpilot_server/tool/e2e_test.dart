@@ -213,7 +213,16 @@ Future<void> main(List<String> args) async {
       'Send',
       'card',
     ]);
-    await check('open details', 'tap_widget', {'key': 'Details'});
+    // `target` works wherever `key` does.
+    await check('target alias', 'assert_widget_visible', {'target': 'Send'});
+    // Post-action state waits for the page transition: it lists the new
+    // page's back button, not the previous screen.
+    await check(
+      'open details',
+      'tap_widget',
+      {'key': 'Details'},
+      ['Route changed', 'Back'],
+    );
     await check(
       'covered route is not "visible"',
       'assert_text_visible',

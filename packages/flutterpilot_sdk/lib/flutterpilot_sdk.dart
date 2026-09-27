@@ -356,67 +356,45 @@ class FlutterPilot {
     };
   }
 
-  /// Waits until the navigator route stack has settled: no routes mid-animation,
-  /// no popups/dialogs mid-transition, and the top-most route's animation has
-  /// completed or been dismissed. Capped at [timeout] so an infinite animation
-  /// never blocks action responses.
+  /// Waits (up to [timeout]) until no on-screen route — page, dialog, popup
+  /// menu, in any navigator incl. go_router's — is mid-transition, so the
+  /// post-action state describes the screen the action led to.
   static Future<void> _waitForRouteSettled({
-    Duration timeout = const Duration(milliseconds: 300),
+    Duration timeout = const Duration(milliseconds: 500),
   }) async {
     final deadline = DateTime.now().add(timeout);
-    const tick = Duration(milliseconds: 16);
-    while (DateTime.now().isBefore(deadline)) {
-      final nav = NavigationTracker.navigatorState;
-      final ok = await _navigatorSettled(nav);
-      if (ok) return;
-      await Future.delayed(tick);
+    while (!_routesSettled() && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
   }
 
-  static Future<bool> _navigatorSettled(NavigatorState? nav) async {
-    try {
-      if (nav == null || !nav.mounted) return true;
-      bool settled = true;
-      void checkElement(Element e) {
-        try {
-          final w = e.widget;
-          final dyn = w as dynamic;
-          try {
-            final anim = dyn.animation;
-            if (anim is Animation && !anim.isCompleted && !anim.isDismissed) {
-              settled = false;
-            }
-          } catch (_) {}
-          try {
-            final routeAnim = dyn.secondaryAnimation;
-            if (routeAnim is Animation &&
-                !routeAnim.isCompleted &&
-                !routeAnim.isDismissed) {
-              settled = false;
-            }
-          } catch (_) {}
-          try {
-            final barrierDismiss = dyn.barrierDismissible;
-            final dismissAnim = dyn.animation;
-            if (barrierDismiss != null &&
-                dismissAnim is Animation &&
-                !dismissAnim.isCompleted &&
-                !dismissAnim.isDismissed) {
-              settled = false;
-            }
-          } catch (_) {}
-        } catch (_) {}
-        if (settled) {
-          e.visitChildren(checkElement);
+  static bool _routesSettled() {
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return true;
+    bool moving(Animation<double>? a) =>
+        a != null &&
+        (a.status == AnimationStatus.forward ||
+            a.status == AnimationStatus.reverse);
+    var settled = true;
+    void visit(Element e) {
+      if (!settled) return;
+      // Every route builds a private _ModalScope whose public `route` field
+      // is the ModalRoute; only route transitions matter, not app animations.
+      if (e.widget.runtimeType.toString().startsWith('_ModalScope<')) {
+        final route = (e.widget as dynamic).route;
+        if (route is ModalRoute &&
+            (moving(route.animation) || moving(route.secondaryAnimation))) {
+          settled = false;
+          return;
         }
       }
-
-      (nav.context as Element).visitChildren(checkElement);
-      return settled;
-    } catch (_) {
-      return true;
+      e.debugVisitOnstageChildren(visit);
     }
+
+    visit(root);
+    return settled;
   }
+
 
   /// Initializes the FlutterPilot SDK.
   ///
@@ -467,8 +445,15 @@ class FlutterPilot {
       if (_isRecording) {
         _recordAction('error', {'exception': details.exceptionAsString()});
       }
+      final exception = details.exceptionAsString();
       postEvent('ext.flutterpilot.error', {
-        'exception': details.exceptionAsString(),
+        'exception': exception,
+        // Layout overflows are bugs to fix, not crashes: don't mark the app
+        // unstable for them (the server's self-heal honours this).
+        'severity': exception.contains('RenderFlex overflowed') ||
+                details.library == 'rendering library'
+            ? 'warning'
+            : 'error',
       });
     };
 

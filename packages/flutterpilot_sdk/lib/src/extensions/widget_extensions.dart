@@ -327,7 +327,7 @@ extension _WidgetExtensions on FlutterPilot {
           pos,
           label: 'Right Click: $target',
         );
-        final postActionState = FlutterPilot.getPostActionState();
+        final postActionState = await FlutterPilot.getPostActionState();
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -430,7 +430,7 @@ extension _WidgetExtensions on FlutterPilot {
         }
 
         final routeAfter = NavigationTracker.currentRoute;
-        final postActionState = FlutterPilot.getPostActionState();
+        final postActionState = await FlutterPilot.getPostActionState();
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -492,7 +492,7 @@ extension _WidgetExtensions on FlutterPilot {
             'modifiers': modifiers.toList(),
           });
         }
-        final postActionState = FlutterPilot.getPostActionState(
+        final postActionState = await FlutterPilot.getPostActionState(
           previousRoute: routeBefore,
         );
         return ServiceExtensionResponse.result(
@@ -577,7 +577,7 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       await InteractionManager.pinchZoomAt(center, scale: scale);
-      final postActionState = FlutterPilot.getPostActionState();
+      final postActionState = await FlutterPilot.getPostActionState();
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',

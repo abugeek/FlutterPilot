@@ -82,8 +82,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is visible.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.assertWidgetVisible',
@@ -159,13 +161,15 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is enabled.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetEnabled',
-          _withDeviceId(p, {'key': p['key'].toString()}),
+          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
         );
         return res.toCallToolResult();
       },
@@ -183,13 +187,15 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is disabled.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetDisabled',
-          _withDeviceId(p, {'key': p['key'].toString()}),
+          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
         );
         return res.toCallToolResult();
       },

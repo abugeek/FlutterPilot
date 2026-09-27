@@ -358,12 +358,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string, semantic selector, or label of the widget to scroll into view.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
           'maxAttempts': JsonSchema.integer(
             description:
                 'Max scroll attempts to locate the widget in lazy lists (default: 8).',
           ),
         },
-        required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.scrollIntoView',
@@ -381,8 +383,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -409,16 +413,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the widget to long-press.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
           'durationMs': JsonSchema.integer(
             description:
                 'Duration of the long press in milliseconds (default: 600ms).',
           ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final args = {
-          'key': p['key'] as String,
+          'key': (p['key'] ?? p['target']).toString(),
           if (p['durationMs'] != null) 'durationMs': p['durationMs'].toString(),
         };
         final res = await _callExtensionRaw(
@@ -445,6 +451,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the widget to swipe.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
           ),
@@ -453,11 +462,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Scroll distance in logical pixels. Positive = down/right, negative = up/left.',
           ),
         },
-        required: ['key', 'direction'],
+        required: ['direction'],
       ),
       callback: (p, e) async {
         final args = {
-          'key': p['key'] as String,
+          'key': (p['key'] ?? p['target']).toString(),
           'direction': p['direction'] as String,
           if (p['distance'] != null) 'distance': p['distance'].toString(),
         };
@@ -517,12 +526,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the text field to clear.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.clearTextField', {
-          'key': p['key'].toString(),
+          'key': (p['key'] ?? p['target']).toString(),
         });
         return res.isError
             ? res.toCallToolResult()
@@ -543,12 +554,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the widget to focus.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.focusWidget', {
-          'key': p['key'].toString(),
+          'key': (p['key'] ?? p['target']).toString(),
         });
         return res.isError
             ? res.toCallToolResult()
@@ -611,16 +624,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the Slider widget.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
           'value': JsonSchema.number(
             description:
                 'The new slider value. Must be within the slider min/max range.',
           ),
         },
-        required: ['key', 'value'],
+        required: ['value'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.setSliderValue', {
-          'key': p['key'].toString(),
+          'key': (p['key'] ?? p['target']).toString(),
           'value': p['value'].toString(),
         });
         return res.toCallToolResult();
@@ -639,12 +655,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the Checkbox, Switch, or Radio widget to toggle.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw('ext.flutterpilot.toggleCheckbox', {
-          'key': p['key'].toString(),
+          'key': (p['key'] ?? p['target']).toString(),
         });
         return res.isError
             ? res.toCallToolResult()
@@ -790,6 +808,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Prevents flaky test timing during async loading spinners or page transitions.',
       inputSchema: ToolInputSchema(
         properties: {
+          'key': JsonSchema.string(description: 'Same as selector.'),
+          'target': JsonSchema.string(description: 'Same as selector.'),
+
           'selector': JsonSchema.string(
             description:
                 'Semantic selector or key to wait for (e.g. "Text[\'Dashboard\']" or "order_confirmed_icon").',
@@ -799,13 +820,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Maximum milliseconds to wait before failing (default: 3000).',
           ),
         },
-        required: ['selector'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.waitForCondition',
           {
-            'selector': p['selector'].toString(),
+            'selector': (p['selector'] ?? p['key'] ?? p['target']).toString(),
             if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
           },
         );
@@ -931,6 +951,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'to appear. Replaces 2 separate round-trip tool calls with 1 fast step.',
       inputSchema: ToolInputSchema(
         properties: {
+          'key': JsonSchema.string(description: 'Same as target.'),
+
           'target': JsonSchema.string(
             description:
                 'Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button[\'Submit\']").',
@@ -944,10 +966,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Timeout in milliseconds to wait for the expected widget (default: 5000ms).',
           ),
         },
-        required: ['target', 'expect'],
+        required: ['expect'],
       ),
       callback: (p, e) async {
-        final target = p['target'].toString();
+        final target = (p['target'] ?? p['key']).toString();
         final expectKey = p['expect'].toString();
         final timeoutMs = (p['timeout'] as num?)?.toInt() ?? 5000;
 
@@ -987,6 +1009,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Executes both steps in a single tool call.',
       inputSchema: ToolInputSchema(
         properties: {
+          'key': JsonSchema.string(description: 'Same as target.'),
+
           'target': JsonSchema.string(
             description:
                 'Key or semantic selector of the text field (e.g. "email_input", "TextField[\'Email\']").',
@@ -999,10 +1023,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Key or semantic selector of the submit button to tap after entering text (e.g. "submit_btn", "Button[\'Continue\']").',
           ),
         },
-        required: ['target', 'text', 'submitTarget'],
+        required: ['text', 'submitTarget'],
       ),
       callback: (p, e) async {
-        final target = p['target'].toString();
+        final target = (p['target'] ?? p['key']).toString();
         final text = p['text'].toString();
         final submitTarget = p['submitTarget'].toString();
 
