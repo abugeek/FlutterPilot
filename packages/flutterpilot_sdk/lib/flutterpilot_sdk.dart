@@ -372,7 +372,9 @@ class FlutterPilot {
   /// menu, in any navigator incl. go_router's — is mid-transition, so the
   /// post-action state describes the screen the action led to.
   static Future<void> _waitForRouteSettled({
-    Duration timeout = const Duration(milliseconds: 500),
+    // Returns as soon as transitions end (~300 ms normally); the cap only
+    // matters on slow machines, where 500 ms left pops mid-animation.
+    Duration timeout = const Duration(seconds: 2),
   }) async {
     final deadline = DateTime.now().add(timeout);
     while (!_routesSettled() && DateTime.now().isBefore(deadline)) {
