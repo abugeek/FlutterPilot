@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, including ones stacked on another PR's branch.
   pull_request:
-    branches: [main]
   # Weekly: catches a new major of a host package (go_router, flutter_bloc,
   # ...) that a plugin's version range would reject, even without pushes.
   schedule:
