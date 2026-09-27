@@ -266,7 +266,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       extension: 'ext.flutterpilot.getFcmToken',
     );
 
-    server.registerTool(
+    _tool(
       'log_analytics_event',
       description:
           '⚠ MAKES REAL NETWORK CALL — logs a custom Firebase Analytics event '
@@ -306,7 +306,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'start_performance_trace',
       description:
           'Start a named Firebase Performance trace. Use stop_performance_trace to end it.',
@@ -324,7 +324,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'stop_performance_trace',
       description: 'Stop a previously started Firebase Performance trace.',
       inputSchema: ToolInputSchema(
@@ -342,7 +342,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'record_crashlytics_error',
       description:
           '⚠ MAKES REAL NETWORK CALL — records a test error in Firebase '
@@ -401,7 +401,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'read_secure_storage_key',
       description:
           'Read a specific key from FlutterSecureStorage. '
@@ -416,7 +416,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'set_secure_storage_key',
       description:
           'Write a key-value pair to FlutterSecureStorage. Use for test data injection.',
@@ -438,7 +438,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'delete_secure_storage_key',
       description:
           '⚠ DESTRUCTIVE — Delete a specific key from FlutterSecureStorage. '

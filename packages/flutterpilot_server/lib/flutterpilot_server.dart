@@ -53,6 +53,36 @@ Map<String, dynamic> _withDeviceId(
 
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
+  /// Registers a tool. An unexpected exception becomes an error that names
+  /// the tool and the cause — mcp_dart would replace it with a bare
+  /// "Tool execution failed." and log the reason where the agent can't see it.
+  RegisteredTool _tool(
+    String name, {
+    String? description,
+    ToolInputSchema? inputSchema,
+    required ToolFunction callback,
+  }) => server.registerTool(
+    name,
+    description: description,
+    inputSchema: inputSchema,
+    callback: (args, extra) async {
+      try {
+        return await callback(args, extra);
+      } catch (e) {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  '$name failed: $e. If the app was busy or reloading, retry; '
+                  'call get_app_summary to check its state.',
+            ),
+          ],
+        );
+      }
+    },
+  );
+
   McpServer get server;
   String get vmServiceUri;
   bool get allowDestructive;
@@ -836,7 +866,7 @@ Use this guide to understand what tools to call, when, and in what order.
             'when omitted, the active device is used.',
       ),
     };
-    server.registerTool(
+    _tool(
       name,
       description: description,
       inputSchema: ToolInputSchema(properties: toolProperties),

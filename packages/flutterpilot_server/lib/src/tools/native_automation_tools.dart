@@ -138,7 +138,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   }
 
   void _registerNativeAutomationTools() {
-    _nativeTools['native_screenshot'] = server.registerTool(
+    _nativeTools['native_screenshot'] = _tool(
       'native_screenshot',
       description:
           'Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — '
@@ -198,7 +198,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _nativeTools['native_tap'] = server.registerTool(
+    _nativeTools['native_tap'] = _tool(
       'native_tap',
       description:
           'Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, '
@@ -262,7 +262,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _nativeTools['native_text'] = server.registerTool(
+    _nativeTools['native_text'] = _tool(
       'native_text',
       description:
           'Types text into the currently-focused native field via `idb ui text` — for native '
@@ -315,7 +315,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _nativeTools['native_button'] = server.registerTool(
+    _nativeTools['native_button'] = _tool(
       'native_button',
       description:
           'Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or '
@@ -368,7 +368,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _nativeTools['native_describe_screen'] = server.registerTool(
+    _nativeTools['native_describe_screen'] = _tool(
       'native_describe_screen',
       description:
           'Returns the native accessibility tree (labels, frames, roles) for whatever is on '

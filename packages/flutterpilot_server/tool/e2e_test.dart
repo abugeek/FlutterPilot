@@ -77,7 +77,8 @@ Future<void> main(List<String> args) async {
           }
         });
     flutter.stderr.transform(utf8.decoder).listen(stderr.write);
-    final uri = await wsUri.future.timeout(const Duration(minutes: 10));
+    // First Gradle/Xcode builds on CI runners can take well over 10 minutes.
+    final uri = await wsUri.future.timeout(const Duration(minutes: 20));
     await started.future.timeout(const Duration(minutes: 2));
     print('▶ app running at $uri');
 
@@ -165,7 +166,8 @@ Future<void> main(List<String> args) async {
 
     /// Polls get_app_summary until its "Viewport: WxH" has the orientation.
     Future<void> expectViewport(String label, {required bool landscape}) async {
-      final deadline = DateTime.now().add(const Duration(seconds: 8));
+      // Simulators on CI can take many seconds to rotate.
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
       var seen = '';
       var ok = false;
       while (!ok && DateTime.now().isBefore(deadline)) {
@@ -274,13 +276,25 @@ Future<void> main(List<String> args) async {
       'text': 'Pilot',
     });
     await check('press_key enter submits field', 'press_key', {'key': 'enter'});
-    await check('submit handled', 'assert_text_visible', {
-      'text': 'Submitted: Pilot',
-    });
+    // CI emulators can render the resulting frame a moment after the action.
+    const react = Duration(seconds: 5);
+    await check(
+      'submit handled',
+      'assert_text_visible',
+      {'text': 'Submitted: Pilot'},
+      [],
+      false,
+      react,
+    );
     await check('secondary_tap', 'secondary_tap', {'key': 'card'});
-    await check('context handler ran', 'assert_text_visible', {
-      'text': 'Context menu opened',
-    });
+    await check(
+      'context handler ran',
+      'assert_text_visible',
+      {'text': 'Context menu opened'},
+      [],
+      false,
+      react,
+    );
     await check('pinch_zoom', 'pinch_zoom', {'key': 'zoomable', 'scale': 2.0});
     await check(
       'zoom applied',

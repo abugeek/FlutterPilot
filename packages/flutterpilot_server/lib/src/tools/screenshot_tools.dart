@@ -7,7 +7,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
   void _registerScreenshotTools() {
-    server.registerTool(
+    _tool(
       'capture_screenshot',
       description:
           'Capture an image of the current screen for visual analysis. Defaults to a scaled-down '
@@ -75,7 +75,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'save_screenshot_baseline',
       description:
           'Captures the current screen and stores it as a named baseline image for future '
@@ -159,7 +159,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'compare_screenshot',
       description:
           'Captures the current screen and compares it pixel-by-pixel with a previously saved '
@@ -306,7 +306,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_widget_tree',
       description:
           'Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and '
@@ -356,7 +356,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_interactive_elements',
       description:
           'Discovers all actionable, interactive widgets currently visible and hittable on screen '
@@ -384,7 +384,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_app_summary',
       description:
           'CALL THIS FIRST. One-call overview of the running app: current route, '
@@ -480,7 +480,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_widget_tree_diff',
       description:
           'Delta Widget Tree Inspector: Compares current screen with the previously captured tree '
@@ -514,7 +514,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_widget_properties',
       description:
           'Reads the semantic properties of a widget identified by its key. '
@@ -541,7 +541,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_semantics_tree',
       description:
           'Returns the full accessibility semantics tree as seen by screen '

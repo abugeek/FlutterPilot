@@ -108,7 +108,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
   }
 
   void _registerUiAutomationTools() {
-    server.registerTool(
+    _tool(
       'tap_at',
       description:
           'Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if you have a Key.',
@@ -139,7 +139,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'tap_widget',
       description:
           'Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']"), semantics identifier, visible text, or coordinates, and taps it. '
@@ -192,7 +192,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
     // Convenience alias matching standard MCP patterns
 
-    server.registerTool(
+    _tool(
       'enter_text',
       description:
           'Types text into a TextField, TextFormField, or editable widget. '
@@ -240,7 +240,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'press_key',
       description:
           'Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" '
@@ -288,7 +288,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'secondary_tap',
       description:
           'Performs a secondary tap (right-click / context tap) on a widget or coordinates. '
@@ -321,7 +321,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'pinch_zoom',
       description:
           'Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. '
@@ -361,7 +361,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'scroll_into_view',
       description:
           'Ensures a widget is visible by scrolling its parent list. Works with Keys, semantic selectors, or text labels.',
@@ -386,7 +386,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'double_tap_widget',
       description:
           'Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.',
@@ -417,7 +417,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'long_press_widget',
       description:
           'Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).',
@@ -455,7 +455,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'swipe_widget',
       description:
           'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
@@ -498,7 +498,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'drag_widget',
       description:
           'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
@@ -528,7 +528,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'clear_text_field',
       description:
           'Clears the text of a TextField / TextFormField identified by its '
@@ -556,7 +556,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'focus_widget',
       description:
           'Taps the centre of the widget identified by key to request focus '
@@ -582,7 +582,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'unfocus_all',
       description:
           'Removes focus from all widgets and dismisses the software keyboard. '
@@ -599,7 +599,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_text_scale_factor',
       description:
           'Overrides the app-wide text scale factor for accessibility testing. '
@@ -625,7 +625,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_slider_value',
       description:
           'Sets the value of a Slider widget identified by key. Computes '
@@ -656,7 +656,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'toggle_checkbox',
       description:
           'Taps the centre of the first Checkbox, Switch, or Radio widget '
@@ -689,7 +689,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'pump_frames',
       description:
           'Waits for a specified number of vsync animation frames to complete. '
@@ -713,7 +713,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'simulate_deep_link',
       description:
           'Simulates opening a deep link URL, triggering the same routing '
@@ -756,7 +756,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       );
     }
 
-    server.registerTool(
+    _tool(
       'press_back',
       description:
           'Simulates pressing the hardware/system back button. Pops the '
@@ -766,7 +766,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       callback: backCallback,
     );
 
-    server.registerTool(
+    _tool(
       'fill_form',
       description:
           'Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, '
@@ -814,7 +814,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'wait_for_condition',
       description:
           'Reliably polls until a target element or semantic selector is visible on screen, or until timeout. '
@@ -856,7 +856,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'audit_screen_health',
       description:
           'Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex '
@@ -905,7 +905,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'execute_action_chain',
       description:
           'Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed. '
@@ -946,7 +946,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'tap_and_wait',
       description:
           'Macro composite tool: Taps a target widget and immediately waits for an expected widget '
@@ -1004,7 +1004,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'enter_text_and_submit',
       description:
           'Macro composite tool: Enters text into an input field and immediately taps a submit button. '
@@ -1057,7 +1057,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'fill_form_batch',
       description:
           'Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxes/switches '
