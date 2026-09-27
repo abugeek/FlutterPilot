@@ -86,7 +86,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'type': JsonSchema.string(
-            description: 'State management type: "riverpod" or "bloc" (default: "riverpod").',
+            description:
+                'State management type: "riverpod" or "bloc" (default: "riverpod").',
           ),
           'states': JsonSchema.object(
             description:
@@ -108,7 +109,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '⚡ Batch state update complete: $count state(s) updated for type "$type".',
+              text:
+                  '⚡ Batch state update complete: $count state(s) updated for type "$type".',
             ),
           ],
         );
@@ -349,7 +351,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'sql': JsonSchema.string(description: 'SQL statement to execute.'),
-          'database': JsonSchema.string(description: 'Optional database name if multiple databases exist.'),
+          'database': JsonSchema.string(
+            description: 'Optional database name if multiple databases exist.',
+          ),
         },
         required: ['sql'],
       ),
@@ -361,22 +365,24 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         }
 
         // 1. Try sqflite
-        final sqfRes = await _callExtensionRaw('ext.flutterpilot.querySqflite', {
-          'sql': sql,
-          'database': ?db,
-        });
+        final sqfRes = await _callExtensionRaw(
+          'ext.flutterpilot.querySqflite',
+          {'sql': sql, 'database': ?db},
+        );
         if (!sqfRes.isError) return sqfRes.toCallToolResult();
 
         // 2. Try drift
-        final driftRes = await _callExtensionRaw('ext.flutterpilot.queryDrift', {
-          'sql': sql,
-        });
+        final driftRes = await _callExtensionRaw(
+          'ext.flutterpilot.queryDrift',
+          {'sql': sql},
+        );
         if (!driftRes.isError) return driftRes.toCallToolResult();
 
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage}',
+              text:
+                  'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage}',
             ),
           ],
           isError: true,
@@ -547,197 +553,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- Time-Travel State Snapshots -----------------------------------------
-    server.registerTool(
-      'save_state_snapshot',
-      description:
-          'Captures a named point-in-time snapshot of the entire running app state (active route, Riverpod/Bloc providers, storage). '
-          'Use restore_state_snapshot later to rewind to this exact state in <100ms.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Descriptive identifier for the snapshot (e.g. "checkout_with_items").',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.saveStateSnapshot', {
-          'name': p['name'].toString(),
-        });
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '✅ State snapshot "${p['name']}" saved. Use `restore_state_snapshot` to rewind anytime.',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'restore_state_snapshot',
-      description:
-          'Instantly rewinds the running app back to a previously captured state snapshot (<100ms) without restarting the app.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Name of the snapshot to restore.',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
-        final res = await _callExtensionRaw('ext.flutterpilot.restoreStateSnapshot', {
-          'name': p['name'].toString(),
-        });
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '⚡ App state successfully rewound to "${p['name']}"! UI reassembled.',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'list_state_snapshots',
-      description: 'Lists all available point-in-time state snapshots currently stored in memory.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.listStateSnapshots', {});
-        if (res.isError) return res.toCallToolResult();
-        final snapshots = res.data?['snapshots'] as List? ?? [];
-        if (snapshots.isEmpty) {
-          return CallToolResult(
-            content: [TextContent(text: 'No saved snapshots found.')],
-          );
-        }
-        final summary = snapshots.map((s) => '- **${s['name']}** (${s['timestamp']}) - Route: `${s['currentRoute']}`').join('\n');
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '### ⏳ Saved State Snapshots (${snapshots.length})\n$summary',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'delete_state_snapshot',
-      description: 'Deletes a specific state snapshot by name.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Name of the snapshot to delete.',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
-        final res = await _callExtensionRaw('ext.flutterpilot.deleteStateSnapshot', {
-          'name': p['name'].toString(),
-        });
-        return res.toCallToolResult();
-      },
-    );
 
     // -- Network Fixture Record & Replay -------------------------------------
-    server.registerTool(
-      'record_fixtures',
-      description:
-          'Saves current or recent HTTP/Dio network traffic logs as an offline test fixture JSON file '
-          '(e.g. "test/fixtures/checkout_flow.json"). Enables deterministic offline test execution.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Fixture name (e.g. "checkout_success").',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        final name = p['name'].toString();
-        // Fetch recent network logs
-        final logsRes = await _callExtensionRaw('ext.flutterpilot.getNetworkLogs', {});
-        final logs = logsRes.data?['logs'] as List? ?? [];
-        final filePath = path.join(_projectRoot.path, 'test', 'fixtures', '$name.json');
-        final file = File(filePath);
-        if (!file.parent.existsSync()) {
-          file.parent.createSync(recursive: true);
-        }
-        file.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(logs));
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '📼 Saved ${logs.length} network interactions to fixture file: `${file.path}`. '
-                  'Use `replay_fixtures` in offline mode to mock these endpoints.',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'replay_fixtures',
-      description:
-          'Loads a recorded network fixture JSON file and registers mock rules for all endpoints, '
-          'enabling full offline application testing without hitting real backend servers.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Fixture name to load from test/fixtures/<name>.json.',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        final name = p['name'].toString();
-        final filePath = path.join(_projectRoot.path, 'test', 'fixtures', '$name.json');
-        final file = File(filePath);
-        if (!file.existsSync()) {
-          return CallToolResult(
-            content: [TextContent(text: 'Fixture file not found: ${file.path}')],
-            isError: true,
-          );
-        }
-        try {
-          final decoded = json.decode(file.readAsStringSync()) as List;
-          int registeredCount = 0;
-          for (final item in decoded) {
-            if (item is Map) {
-              final url = item['url']?.toString() ?? '';
-              final status = item['statusCode'] ?? 200;
-              final body = item['body']?.toString() ?? '{}';
-              if (url.isNotEmpty) {
-                await _callExtensionRaw('ext.flutterpilot.addHttpMock', {
-                  'urlPattern': url,
-                  'statusCode': status.toString(),
-                  'body': body,
-                });
-                registeredCount++;
-              }
-            }
-          }
-          return CallToolResult(
-            content: [
-              TextContent(
-                text: '⚡ Successfully loaded fixture "$name": registered $registeredCount offline endpoint mocks!',
-              ),
-            ],
-          );
-        } catch (err) {
-          return CallToolResult(
-            content: [TextContent(text: 'Failed to parse fixture: $err')],
-            isError: true,
-          );
-        }
-      },
-    );
   }
 }

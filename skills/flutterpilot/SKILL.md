@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, composite macros, time-travel state snapshots, crash flight recorder, visual regression diffing, memory sentinels, and autonomous chaos fuzzing via FlutterPilot MCP tools.
+description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, composite macros, state injection, crash flight recorder, visual regression diffing, network mocking and performance profiling via FlutterPilot MCP tools.
 ---
 
 # FlutterPilot Agent Skill
@@ -11,13 +11,10 @@ This skill guides AI coding agents (Antigravity, Claude, Cursor, Copilot, Cline,
 - **Autonomous UI Driving**: Filling forms, tapping buttons, and navigating complex user journeys without requiring manual `ValueKey`s.
 - **High-Speed Composite Macros**: Using `tap_and_wait` and `enter_text_and_submit` to execute multi-step user actions in 1 fast LLM turn.
 - **Subtree Scoping & Token Savings**: Using `get_widget_tree(rootKey: "form_id")` to inspect specific dialogs or forms with 90% fewer tokens.
-- **Time-Travel State Snapshots**: Instant point-in-time state checkpointing and restoration (`save_state_snapshot`, `restore_state_snapshot`, `batch_set_state`).
-- **Autonomous Crash Flight Recording**: Automatically retrieving rolling 30s crash timelines (`get_flight_log`) and synthesizing executable `repro_test.dart` reproduction tests.
-- **Autonomous Chaos & Stress Fuzzing**: Simulating aggressive monkey testing (`run_chaos_fuzzing`) to discover edge cases and unhandled exceptions.
+- **State Injection**: Seeding Riverpod/Bloc state directly (`set_riverpod_state`, `batch_set_state`; needs `--allow-destructive`).
+- **Crash Flight Recording**: Rolling crash timelines (`get_flight_log`) and crash reports with the failing source location (`get_latest_crash_report`).
 - **Memory & Asset Health Audits**: Checking for image memory bloat, uncompressed asset leaks, and oversize decodes (`audit_memory_health`).
-- **Production Test Suite Synthesis**: Exporting full Patrol, Integration, and Widget test suites (`export_test_suite`).
 - **Visual Regression Engine**: Word-aligned 32-bit pixel diff detection with magenta highlighting (`compare_screenshot`).
-- **Automated Pull Request Reports**: Generating structured markdown PR descriptions with reproduction steps, test coverage, and screenshots (`generate_pr_report`).
 
 ---
 
@@ -31,11 +28,10 @@ flowchart TD
     D -->|Single Action| E[tap_widget / enter_text]
     D -->|Composite Action| F[tap_and_wait / enter_text_and_submit]
     D -->|Batch Sequence| G[execute_action_chain]
-    E & F & G --> H[Save State Checkpoint: save_state_snapshot]
-    H --> I[Verify UI / State / Diff]
+    E & F & G --> I[Verify UI / State / Diff]
     I --> J{Error or Crash?}
-    J -- Yes --> K[get_flight_log -> generate_repro_test -> Fix Code -> hot_reload]
-    J -- No --> L[generate_pr_report -> Complete Task]
+    J -- Yes --> K[get_latest_crash_report -> Fix Code -> hot_reload -> assert_*]
+    J -- No --> L[Complete Task]
 ```
 
 ---
@@ -92,24 +88,18 @@ call_tool("batch_set_state", {
   }
 })
 
-// Time-Travel: Save state checkpoint before risky action
-call_tool("save_state_snapshot", {"name": "pre_checkout"})
-
-// Time-Travel: Rewind state in <100ms
-call_tool("restore_state_snapshot", {"name": "pre_checkout"})
 ```
 
-### 4. Continuous Diagnostics, Memory Health & Chaos Fuzzing
+### 4. Continuous Diagnostics & Performance
 ```json
 // Audit memory health (ImageCache, decode dimensions, oversize assets)
 call_tool("audit_memory_health", {})
 
-// Run autonomous chaos monkey testing (random taps, text entries, back navigations)
-call_tool("run_chaos_fuzzing", {
-  "iterations": 25,
-  "intensity": "high",
-  "injectNetworkErrors": true
-})
+// Frame timing: p50/p90/p99, build vs raster, jank
+call_tool("profile_frame_budget", {})
+
+// DevTools Network tab: status, timing, sizes for any HTTP client
+call_tool("get_http_profile", {"limit": 20})
 
 // Inspect deduplicated recent errors
 call_tool("get_errors", {})
@@ -118,25 +108,3 @@ call_tool("get_errors", {})
 call_tool("get_flight_log", {})
 ```
 
-### 5. Automated Test Generation & PR Reports
-```json
-// Synthesize standalone executable reproduction test to disk
-call_tool("generate_repro_test", {
-  "testName": "Reproduce checkout payment failure",
-  "writeToDisk": true
-})
-
-// Export production-ready Patrol or Integration test suite
-call_tool("export_test_suite", {
-  "framework": "patrol",
-  "testName": "User Onboarding Flow",
-  "filePath": "integration_test/onboarding_flow_test.dart"
-})
-
-// Generate formatted GitHub PR markdown description
-call_tool("generate_pr_report", {
-  "title": "Fix authentication race condition in token refresh",
-  "includeRepro": true,
-  "includeChecklist": true
-})
-```

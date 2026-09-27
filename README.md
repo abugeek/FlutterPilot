@@ -16,12 +16,16 @@
 # 1. Install CLI
 dart pub global activate --source path ./packages/flutterpilot_cli
 
-# 2. In your Flutter project root, auto-configure SDK & plugins:
-flutterpilot init
+# 2. In your Flutter project root, add the SDK + matching plugins (git deps)
+#    and FlutterPilot.initialize() to main.dart. It prints the one wiring line
+#    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
+flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPilot
 
-# 3. Launch app with automatic MCP binding:
-flutterpilot dev
+# 3. Run the app, then point your agent's MCP config at the server:
+flutter run
 ```
+
+> Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
 
 ### Option B: Zero-Code Mode (No App Changes Required)
 Connect FlutterPilot MCP Server to **any existing Flutter app** out of the box:
@@ -33,22 +37,24 @@ flutter run
 dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
 ```
 
-### Option C: Manual SDK Integration (1-Line Zero-Config)
-```bash
-flutter pub add --dev flutterpilot_sdk
+### Option C: Manual SDK Integration
+```yaml
+# pubspec.yaml
+dependencies:
+  flutterpilot_sdk:
+    git:
+      url: https://github.com/abugeek/FlutterPilot.git
+      path: packages/flutterpilot_sdk
 ```
 In `main.dart`:
 ```dart
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
-// Option 1: 1-line zero-config launcher (captures print logs, errors, and sets up custom binding)
-void main() => FlutterPilot.run(const MyApp());
-
-// Option 2: Explicit initialization
-// void main() {
-//   FlutterPilotBinding.ensureInitialized();
-//   runApp(const MyApp());
-// }
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterPilot.initialize();
+  runApp(const MyApp());
+}
 ```
 
 ---
@@ -58,9 +64,11 @@ void main() => FlutterPilot.run(const MyApp());
 ### MCP Tools Across 10 Categories
 
 #### ⚡ **Instant State & 360° Telemetry** (All-in-One <5ms)
-- `get_app_snapshot` — Complete instant consolidated state in ONE call: active route & stack, all visible hittable buttons/inputs, focused element, unhandled errors, recent logs, FPS, screen mutation count, and viewport size. Eliminates 5+ redundant roundtrip calls!
-- `get_logs` / `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, log level ("debug", "info", "warning", "error"), and `since_seconds` recency filtering.
-- **⚡ Live Post-Action Feedback**: Every interaction (`tap`, `enter_text`, `press_key`, `secondary_tap`) automatically returns instant post-action status (route changes, focused element, newly visible actions, error count) in the same turn!
+- `get_app_summary` — Call first: route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, and whether the app window is visible.
+- `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, level, and recency filters.
+- **⚡ Post-Action Feedback**: every interaction (`tap_widget`, `enter_text`, `press_key`, `secondary_tap`, ...) returns the route change, what appeared/disappeared, the tappable elements now on screen, and any new errors, in the same response.
+- **On-screen only**: finders, assertions and trees skip routes covered by another page and hidden tabs; ambiguous text matches are refused instead of guessed, and covered widgets are never tapped.
+- **Works with the window in the background**: FlutterPilot keeps the app rendering while an agent drives it, even when macOS/iOS/Android report it hidden.
 
 #### 🎬 **Screenshots, Elements & Visual Inspection** (6 tools)
 - `get_interactive_elements` — Auto-discovers all actionable, visible, and hittable widgets (buttons, inputs, switches)
@@ -89,11 +97,10 @@ void main() => FlutterPilot.run(const MyApp());
 - `set_text_scale_factor(scale)` — Accessibility text scaling
 - `pump_frames(count)` — Wait for N animation frames
 
-#### 🌐 **Network Chaos & Mocking Engine** (5 tools)
+#### 🌐 **Network Mocking & Conditioning** (4 tools)
 - `mock_http_response` — Mock HTTP endpoints with custom status code, delay, and response payload
 - `clear_http_mocks` — Clear active synthetic mocks
-- `simulate_network_condition` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
-- `simulate_offline` — Toggle offline mode for connectivity testing
+- `simulate_network` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
 - `get_network_logs` — HTTP requests/responses (Dio)
 
 #### 📱 **Multi-Device / Fleet Manager & Connection** (4 tools)
@@ -136,8 +143,7 @@ void main() => FlutterPilot.run(const MyApp());
 #### 🖥️ **Debug Console** (3 tools) ✨ *New*
 AI agents can read your app's console output automatically — no copy-pasting from VS Code.
 - `get_debug_logs` — Captured `print()`, `debugPrint()`, `developer.log()` with level/logger filters
-- `clear_debug_logs` — Reset the log buffer before a test scenario
-- `set_log_filter` — Clear both server + in-app log buffers
+- `clear_debug_logs` — Reset the server and in-app log buffers before a test scenario
 
 #### 🔬 **DevTools Deep Inspection** (12 tools) ✨ *New*
 Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
@@ -146,8 +152,6 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 - `get_gc_stats` — GC heap pressure across isolates
 - `get_http_profile` — All HTTP requests with URL/method/status/timing
 - `clear_http_profile` — Reset network tracking baseline
-- `get_render_tree` — Render object tree dump (layout debugging)
-- `get_layer_tree` — GPU compositing layer tree
 - `get_vm_info` — Dart VM version, PID, all isolates
 - `toggle_repaint_rainbow` — Visual repaint layer highlighting
 - `toggle_debug_paint` — Layout bounds, padding, hit areas overlay
@@ -225,18 +229,10 @@ Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 #### Step 1: Add Dependencies
 ```bash
 cd your-flutter-project
-flutter pub add --dev flutterpilot_sdk
-# Optional plugins:
-flutter pub add --dev flutterpilot_riverpod    # if using Riverpod
-flutter pub add --dev flutterpilot_bloc        # if using Bloc
-flutter pub add --dev flutterpilot_dio         # if using Dio
-flutter pub add --dev flutterpilot_shared_preferences  # if using SharedPreferences
-flutter pub add --dev flutterpilot_supabase    # if using Supabase
-flutter pub add --dev flutterpilot_gorouter    # if using GoRouter
-flutter pub add --dev flutterpilot_connectivity # if using connectivity_plus
-flutter pub add --dev flutterpilot_firebase    # if using Firebase
-flutter pub add --dev flutterpilot_secure_storage  # if using flutter_secure_storage
+flutterpilot init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds matching plugins
+flutter pub get
 ```
+Plugins do nothing until wired up — `init` prints the exact line for each one.
 
 #### Step 2: Initialize SDK
 ```dart

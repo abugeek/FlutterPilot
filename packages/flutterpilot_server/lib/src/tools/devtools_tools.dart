@@ -149,6 +149,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       callback: (params, extra) async {
         final limit = ((params['limit'] as int?) ?? 50).clamp(1, 500);
         final statusFilter = params['status_filter'] as int?;
+        // The VM records nothing until profiling is on; it resets on restart.
+        final wasOff = await _enableHttpProfiling(params);
         final res = await _callExtensionRaw(
           'ext.dart.io.getHttpProfile',
           _withDeviceId(params),
@@ -175,7 +177,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         }
         if (filtered.isEmpty) {
           return CallToolResult(
-            content: [TextContent(text: 'No HTTP requests recorded yet.')],
+            content: [
+              TextContent(
+                text: wasOff
+                    ? 'HTTP profiling was off and is now enabled. Repeat the action, then call this again.'
+                    : 'No HTTP requests recorded yet.',
+              ),
+            ],
           );
         }
         final shown = filtered.reversed.take(limit);
@@ -214,6 +222,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         properties: {'deviceId': _deviceIdProperty()},
       ),
       callback: (params, extra) async {
+        await _enableHttpProfiling(params);
         final res = await _callExtensionRaw(
           'ext.dart.io.clearHttpProfile',
           _withDeviceId(params),
@@ -226,61 +235,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [TextContent(text: 'HTTP profile cleared.')],
         );
-      },
-    );
-
-    // -- get_render_tree ------------------------------------------------------
-    server.registerTool(
-      'get_render_tree',
-      description:
-          'Dumps the render object tree — the layout/paint layer beneath the '
-          'widget tree. Use this to debug layout issues, overflow errors, or '
-          'understand exactly how Flutter is sizing and positioning widgets. '
-          'This is the DevTools Layout Explorer equivalent for AI agents.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (params, extra) async {
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugDumpRenderTree',
-          _withDeviceId(params),
-        );
-        if (res.isError) return res.toCallToolResult();
-        final tree =
-            res.data?['data']?.toString() ??
-            res.data?['result']?.toString() ??
-            jsonEncode(res.data);
-        final out = tree.length > _Constants.renderTreeMaxLen
-            ? '${tree.substring(0, _Constants.renderTreeMaxLen)}\n... (truncated, ${tree.length - _Constants.renderTreeMaxLen} chars omitted)'
-            : tree;
-        return CallToolResult(content: [TextContent(text: out)]);
-      },
-    );
-
-    // -- get_layer_tree -------------------------------------------------------
-    server.registerTool(
-      'get_layer_tree',
-      description:
-          'Dumps the compositing layer tree — the GPU-level representation of '
-          'the scene. Use this to debug performance issues caused by unnecessary '
-          'repaint layers, or to understand why widgets are not composited efficiently.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (params, extra) async {
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugDumpLayerTree',
-          _withDeviceId(params),
-        );
-        if (res.isError) return res.toCallToolResult();
-        final tree =
-            res.data?['data']?.toString() ??
-            res.data?['result']?.toString() ??
-            jsonEncode(res.data);
-        final out = tree.length > _Constants.layerTreeMaxLen
-            ? '${tree.substring(0, _Constants.layerTreeMaxLen)}\n... (truncated)'
-            : tree;
-        return CallToolResult(content: [TextContent(text: out)]);
       },
     );
 
@@ -501,12 +455,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
                     .toStringAsFixed(2);
                 final cap = ((newSpace.heapCapacity ?? 0) / (1024 * 1024))
                     .toStringAsFixed(2);
-                final pressure = newSpace.heapCapacity != null &&
-                        newSpace.heapCapacity! > 0
-                    ? ((newSpace.heapUsage ?? 0) /
-                            newSpace.heapCapacity! *
-                            100)
-                        .toStringAsFixed(0)
+                final pressure =
+                    newSpace.heapCapacity != null && newSpace.heapCapacity! > 0
+                    ? ((newSpace.heapUsage ?? 0) / newSpace.heapCapacity! * 100)
+                          .toStringAsFixed(0)
                     : '?';
                 buf.writeln(
                   '  ${iso.name ?? iso.id}: heap=$used/$cap MB  pressure=$pressure%',
@@ -565,5 +517,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(content: [TextContent(text: buf.toString())]);
       },
     );
+  }
+
+  /// Turns on dart:io HTTP profiling (what DevTools' Network tab does).
+  /// Returns true if it was off.
+  Future<bool> _enableHttpProfiling(Map<String, dynamic> params) async {
+    final state = await _callExtensionRaw(
+      'ext.dart.io.httpEnableTimelineLogging',
+      _withDeviceId(params),
+    );
+    if (state.data?['enabled'] == true) return false;
+    await _callExtensionRaw('ext.dart.io.httpEnableTimelineLogging', {
+      ..._withDeviceId(params),
+      'enabled': 'true',
+    });
+    return true;
   }
 }

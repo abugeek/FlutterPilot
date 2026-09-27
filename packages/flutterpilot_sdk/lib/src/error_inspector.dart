@@ -96,8 +96,30 @@ class ErrorInspector {
       'rawStackTrace': rawStack,
       'library': details.library,
       'context': details.context?.toString(),
+      'widget': _culpritWidget(details),
       'timestamp': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// Flutter's "The relevant error-causing widget was: Row file:///…:24:17"
+  /// line — for layout errors the stack is framework-only, so this is the
+  /// only pointer to the user's source.
+  static String? _culpritWidget(FlutterErrorDetails details) {
+    try {
+      final lines = details.toString().split('\n');
+      final i = lines.indexWhere(
+        (l) => l.contains('relevant error-causing widget was'),
+      );
+      if (i < 0) return null;
+      return lines
+          .skip(i + 1)
+          .take(3)
+          .takeWhile((l) => l.trim().isNotEmpty)
+          .map((l) => l.trim())
+          .join(' ');
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Returns an unmodifiable view of the current error buffer.

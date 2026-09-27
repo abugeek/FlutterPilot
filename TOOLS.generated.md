@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 147
+Tool count: 136
 
 ## `get_operation`
 
@@ -52,34 +52,12 @@ Switches the active device to target for all subsequent inspection and UI automa
 |---|---|---:|---|
 | `id` | string | yes | The ID or name of the registered device to switch to. |
 
-## `get_app_context`
-
-High-speed batch context fetcher: Concurrently gathers 360° app overview, active errors, and state snapshots (Riverpod/Bloc) in a single ~100ms round-trip. Saves 2-3 tool call latencies at the start of an agent session or after navigation.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_app_summary`
-
-Get a 360-degree overview of the app: current route, widget count, pending errors, loaded plugins, and FPS stats. CALL THIS FIRST upon connecting to orient yourself. AFTER: Use get_widget_tree to find interactable elements, or capture_screenshot to see the visual state.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
 ## `get_errors`
 
 Retrieve the most recent unhandled exceptions and stack traces with duplicate aggregation. CALL THIS whenever you suspect a crash or logic failure.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -87,7 +65,7 @@ Retrieve the most recent unhandled exceptions and stack traces with duplicate ag
 
 ## `get_recent_events`
 
-Retrieves the last 50 proactive events (errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.
+Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -117,24 +95,19 @@ Lists all .dart files in the Flutter project under the given directory (defaults
 
 ## `get_debug_logs`
 
-Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. This replaces the need to manually copy-paste from VS Code debug console. Use level filter ("debug", "info", "warning", "error") and limit to narrow results. Call this any time you need to see what the app is printing.
+Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `level` | string | no | Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels. |
-| `limit` | integer | no | Maximum number of log entries to return. Defaults to 100. Use smaller values for recent output only. |
-| `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", or a custom logger name. |
+| `query` | string | no | Search string to filter log messages. |
+| `since_seconds` | integer | no | Only return logs captured within the last N seconds. |
+| `limit` | integer | no | Maximum number of log entries to return (default: 100). |
+| `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print". |
 
 ## `clear_debug_logs`
 
-Clears the captured console log buffer on the server side. Use this before a specific test scenario so you get a clean baseline.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `set_log_filter`
-
-Clears the in-app SDK debug log buffer. Call before a test run to get a clean log window. Tip: pair with get_debug_logs(level:"error") after the action.
+Clears captured console logs (server and in-app buffers). Use this before a specific test scenario so you get a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -146,34 +119,12 @@ Returns the server capabilities: connection status, loaded plugins, available st
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
-## `assert_ui_health_batch`
-
-Unified 1-Shot UI Screen Health Auditor: Inspects current screen for RenderFlex overflows, touch targets smaller than 48x48 dp, and unlabelled interactive controls in <2ms. Returns a single structured health verdict.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `hot_restart_and_restore`
-
-Fast Hot Restart & State Re-hydration: Automatically snapshots current app state, performs hot restart, and re-applies the saved state snapshot. Keeps the app on the exact same screen and state after restart.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `profile_frame_budget`
 
 Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `replay_flight_log`
-
-Live Autonomous Flight Replay Engine: Re-executes the recorded rolling 30s user actions, taps, and gestures live inside the running app in fast-forward mode (~150ms per action). Enables instant live reproduction of bugs.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `delayMs` | integer | no | Delay between replayed actions in milliseconds (default: 150ms). |
 
 ## `get_stream_logs`
 
@@ -194,20 +145,64 @@ Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if 
 
 ## `tap_widget`
 
-Finds a widget by Key or Virtual Semantic Selector (e.g. "ElevatedButton['Log In']", "Button['Submit']", or plain visible button text "Log In") and taps its center. Works reliably across all devices without needing hardcoded coordinates. PREREQUISITES: Call get_widget_tree to discover available keys or semantic selectors. AFTER: Verify the tap worked with capture_screenshot or a state inspection tool.
+Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton['Log In']"), semantics identifier, visible text, or coordinates, and taps it. Works reliably across all screen sizes and device types without needing hardcoded coordinates. PREREQUISITES: Call get_interactive_elements or get_widget_tree to discover available widgets. The response reports whether the route changed, post-action state, and widget-tree diff.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string, semantic selector (e.g. "ElevatedButton['Sign In']"), or visible button text to tap. |
+| `key` | string | no | ValueKey string, semantic selector (e.g. "ElevatedButton['Sign In']"), visible button text, or icon name (e.g. "IconButton['settings']"). |
+| `identifier` | string | no | Semantics identifier property (Flutter 3.19+) for robust AI targeting. |
+| `semanticsId` | integer | no | Numeric SemanticsNode ID from get_semantics_tree for accessibility-first interaction. |
+| `text` | string | no | Visible text content within the widget to tap. |
+| `type` | string | no | Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton". |
+| `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
+| `x` | number | no | Optional direct X screen coordinate. |
+| `y` | number | no | Optional direct Y screen coordinate. |
 
 ## `enter_text`
 
-Types text into a TextField or TextFormField identified by Key or Semantic Selector (e.g. "TextField['Email']", placeholder, or label). Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button.
+Types text into a TextField, TextFormField, or editable widget. Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string, selector (e.g. "TextField['Email']"), or label of the text field to type into. |
 | `text` | string | yes | The text to enter into the text field. |
+| `key` | string | no | Optional ValueKey string, selector (e.g. "TextField['Email']"), or label of the text field to type into. |
+| `identifier` | string | no | Optional semantics identifier of the text field. |
+| `focused_element` | boolean | no | If true, enters text into the currently focused text field without requiring a key. |
+| `clear_first` | boolean | no | Whether to clear existing text before typing (default: true). |
+
+## `press_key`
+
+Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). The response says which widget received it. To change text use enter_text / clear_text_field — editing keys like backspace are handled by the OS on desktop.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | yes | Key name to press, e.g. "enter", "tab", "escape", "backspace", "arrowDown", "arrowUp", "space", or single characters. |
+| `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
+
+## `secondary_tap`
+
+Performs a secondary tap (right-click / context tap) on a widget or coordinates. Useful for triggering desktop/web context menus.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | The ValueKey or selector of the widget. |
+| `identifier` | string | no | Semantics identifier of the widget. |
+| `text` | string | no | Visible text of the widget. |
+| `type` | string | no | Widget runtime type. |
+| `x` | number | no | Optional direct X coordinate. |
+| `y` | number | no | Optional direct Y coordinate. |
+
+## `pinch_zoom`
+
+Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. Scale > 1 zooms in, scale < 1 zooms out.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `scale` | number | yes | Zoom scale factor (e.g. 1.5 to zoom in, 0.75 to zoom out). |
+| `key` | string | no | The ValueKey or selector of the target widget. |
+| `identifier` | string | no | Semantics identifier of the target widget. |
+| `x` | number | no | Optional center X coordinate for pinch gesture. |
+| `y` | number | no | Optional center Y coordinate for pinch gesture. |
 
 ## `scroll_into_view`
 
@@ -216,6 +211,7 @@ Ensures a widget is visible by scrolling its parent list. Works with Keys, seman
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | yes | The ValueKey string, semantic selector, or label of the widget to scroll into view. |
+| `maxAttempts` | integer | no | Max scroll attempts to locate the widget in lazy lists (default: 8). |
 
 ## `double_tap_widget`
 
@@ -344,7 +340,7 @@ Reliably polls until a target element or semantic selector is visible on screen,
 
 ## `audit_screen_health`
 
-Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex overflow errors (e.g. "overflowed by 14px") and flags touch targets smaller than the standard 48x48 dp accessibility guideline.
+Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -386,6 +382,50 @@ Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxe
 | `fields` | object | yes | Map of field targets (keys/selectors) to values (string for TextFields, bool for Checkboxes/Switches). Example: {"TextField['Email']": "alice@test.com", "Checkbox['Terms']": true} |
 | `submitTarget` | string | no | Optional key or selector of the submit button to tap after filling all fields. |
 
+## `native_screenshot`
+
+Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — unlike capture_screenshot, this sees native dialogs, the system keyboard, and any OS chrome layered above the Flutter view. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_tap`
+
+Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, alerts, and other OS chrome that tap_widget/tap_at cannot see because they are not part of the Flutter widget tree. Use native_screenshot first to find coordinates. Requires idb (brew install idb-companion && pip3 install fb-idb). macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `x` | number | yes | X coordinate in the native screenshot's pixel space. |
+| `y` | number | yes | Y coordinate in the native screenshot's pixel space. |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_text`
+
+Types text into the currently-focused native field via `idb ui text` — for native alert text fields, Safari, or anything outside the Flutter engine. For text fields inside the Flutter app itself, use enter_text instead (it is faster and semantic). Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `text` | string | yes | Text to type. |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_button`
+
+Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or APPLE_PAY. Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `button` | string | yes |  |
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_describe_screen`
+
+Returns the native accessibility tree (labels, frames, roles) for whatever is on screen right now via `idb ui describe-all` — including system dialogs and alerts that are invisible to get_widget_tree. Use this instead of guessing pixel coordinates from a screenshot before calling native_tap: it gives you the actual button labels and frames for "Allow"/"Don't Allow"-style native alerts. Requires idb. macOS + iOS Simulator only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
 ## `navigate_to`
 
 Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.
@@ -409,8 +449,6 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -440,7 +478,7 @@ Waits until all animations and frame callbacks have settled. Call this before ta
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `timeoutMs` | integer | no | Maximum milliseconds to wait for all animations to settle (default: 5000ms. |
+| `timeoutMs` | integer | no | Maximum milliseconds to wait for all animations to settle (default: 5000ms). |
 
 ## `wait_for_state`
 
@@ -479,12 +517,12 @@ Toggle Light/Dark mode. Use this to verify design consistency across themes.
 
 ## `capture_screenshot`
 
-Capture an image of the current screen for visual analysis with adaptive compression. Supports scale (e.g. 0.5x) and quality (e.g. 75) to reduce token payload by up to 80%.
+Capture an image of the current screen for visual analysis. Defaults to a scaled-down PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or format: "jpeg" with a quality if you specifically want lossy compression (jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, so it is opt-in, not the default).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `format` | string | no |  |
-| `scale` | number | no | Scale factor between 0.25 and 1.0 (default: 1.0). Use 0.5 for fast token-efficient AI vision. |
+| `scale` | number | no | Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution. |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
 
 ## `save_screenshot_baseline`
@@ -514,6 +552,21 @@ Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and 
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs. |
 | `compact` | boolean | no | Whether to prune intermediate unkeyed layout containers (default: true). Reduces tokens by 80%. |
 
+## `get_interactive_elements`
+
+Discovers all actionable, interactive widgets currently visible and hittable on screen (buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). Filters out offstage, occluded, or covered widgets using Flutter hit testing. Returns a clean, compact list with bounds, keys, identifiers, and visible labels.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `types` | array | no | Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]). |
+
+## `get_app_summary`
+
+CALL THIS FIRST. One-call overview of the running app: current route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, frame timing, viewport. Use get_widget_tree for layout structure and capture_screenshot for visuals.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
 ## `get_widget_tree_diff`
 
 Delta Widget Tree Inspector: Compares current screen with the previously captured tree and returns only added, removed, or updated elements. Saves 95% token consumption.
@@ -522,13 +575,6 @@ Delta Widget Tree Inspector: Compares current screen with the previously capture
 |---|---|---:|---|
 | `maxDepth` | integer | no | Maximum depth to inspect (default: 50). |
 | `compact` | boolean | no | Whether to prune intermediate layout wrappers (default: true). |
-
-## `get_screen_hash`
-
-Fast lightweight screen mutation checker (<10 tokens). Returns the 64-bit frame mutation counter and active route. Call this to check if a user action mutated the UI without fetching a full tree.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
 
 ## `get_widget_properties`
 
@@ -545,15 +591,6 @@ Returns the full accessibility semantics tree as seen by screen readers (VoiceOv
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values for faster results. |
-
-## `export_session_gif`
-
-Generates an animated GIF replay artifact of the interaction session or baseline screens. Saves directly to disk (e.g. "artifacts/session_replay.gif") for visual proof in pull requests or reviews.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `outputPath` | string | no | Target file path for the GIF (default: "artifacts/session_replay.gif"). |
-| `delayMs` | integer | no | Delay between frames in milliseconds (default: 500). |
 
 ## `get_self_heal_status`
 
@@ -577,29 +614,6 @@ Retrieves the chronological 30-60 second rolling flight recorder timeline (user 
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `generate_repro_test`
-
-Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug. Run the generated test with `flutter test test/repro_test.dart` to verify reproduction and fix.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `testName` | string | no | Optional descriptive name for the test. |
-| `widgetName` | string | no | Root widget or screen name to mount (default: "MyApp()"). |
-| `writeToDisk` | boolean | no | Whether to automatically write the test to test/repro_test.dart (default: false). |
-| `filePath` | string | no | Custom file path to write to (default: "test/repro_test.dart"). |
-
-## `export_test_suite`
-
-Exports recorded user journeys and flight sessions as production-ready test suites for Patrol, standard Flutter Integration Tests, or Widget Tests. Can write the file directly to disk (e.g. integration_test/flow_test.dart or test/flow_test.dart).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `framework` | string | no | Target test framework: "patrol", "integration_test", or "widget_test" (default: "patrol"). |
-| `testName` | string | no | Descriptive test name. |
-| `appWidget` | string | no | Target app/screen widget name (e.g. "MyApp()", "CheckoutScreen()"). |
-| `writeToDisk` | boolean | no | Whether to write generated test to disk (default: false). |
-| `filePath` | string | no | File path to write (e.g. "integration_test/checkout_flow_test.dart"). |
-
 ## `clear_flight_log`
 
 Clears the flight recorder event buffer.
@@ -610,14 +624,14 @@ Clears the flight recorder event buffer.
 
 ## `diagnose_last_error`
 
-[DEPRECATED] Use `get_latest_crash_report` or `get_flight_log` instead.
+Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
 ## `hot_reload`
 
-Trigger a source code hot reload. CALL THIS after you have modified a .dart file to apply the fix to the running app.
+Recompile edited .dart files and hot reload them into the running app, keeping state. CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -625,22 +639,11 @@ Trigger a source code hot reload. CALL THIS after you have modified a .dart file
 
 ## `hot_restart`
 
-Trigger a full app hot restart. CALL THIS for structural code changes (main(), providers) or to reset app state.
+Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), initState, global/static initializers, enums, generic type changes.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `generate_pr_report`
-
-Auto-generates a ready-to-paste GitHub Pull Request Markdown report summarizing the verified changes, UI Health Audit (0 overflows), test results, and visual proof replay links.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `title` | string | yes | Pull Request title (e.g. "feat: implement responsive product checkout"). |
-| `description` | string | no | Summary of what was built, changed, or fixed. |
-| `generatedTestPath` | string | no | Path to synthesized test file if generated (e.g. "integration_test/flow_test.dart"). |
-| `gifPath` | string | no | Path to exported session GIF if created (e.g. "artifacts/demo.gif"). |
 
 ## `get_riverpod_state`
 
@@ -648,8 +651,6 @@ Inspect current values of all active Riverpod providers. Returns provider name, 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -679,8 +680,6 @@ Inspect the current states of all active Blocs and Cubits. CALL THIS to verify b
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -701,8 +700,6 @@ View the last 50 HTTP requests and responses. CALL THIS if an API call failed or
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -714,8 +711,6 @@ Dump the contents of all registered Hive boxes. CALL THIS to verify local persis
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -728,8 +723,6 @@ List all tables in the SQLite (Drift) database.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `dbName` | string | no | The Drift database name registered via FlutterPilot. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -750,8 +743,6 @@ List all sqflite databases registered with FlutterPilot. PREREQUISITES: App must
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -764,8 +755,6 @@ List all tables in a sqflite database. PREREQUISITES: App must use flutterpilot_
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `dbName` | string | no | The sqflite database name registered via FlutterPilot. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -796,8 +785,6 @@ Returns all SharedPreferences keys and their typed values (String, int, double, 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | string | no | Set to "true" to reveal values for sensitive-looking keys. Default: redacted. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -849,53 +836,6 @@ Removes a specific URL pattern mock, or all mocks if urlPattern is omitted. Alwa
 |---|---|---:|---|
 | `urlPattern` | string | no | Pattern to remove. Omit to clear ALL mocks. |
 
-## `save_state_snapshot`
-
-Captures a named point-in-time snapshot of the entire running app state (active route, Riverpod/Bloc providers, storage). Use restore_state_snapshot later to rewind to this exact state in <100ms.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Descriptive identifier for the snapshot (e.g. "checkout_with_items"). |
-
-## `restore_state_snapshot`
-
-Instantly rewinds the running app back to a previously captured state snapshot (<100ms) without restarting the app.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Name of the snapshot to restore. |
-
-## `list_state_snapshots`
-
-Lists all available point-in-time state snapshots currently stored in memory.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `delete_state_snapshot`
-
-Deletes a specific state snapshot by name.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Name of the snapshot to delete. |
-
-## `record_fixtures`
-
-Saves current or recent HTTP/Dio network traffic logs as an offline test fixture JSON file (e.g. "test/fixtures/checkout_flow.json"). Enables deterministic offline test execution.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Fixture name (e.g. "checkout_success"). |
-
-## `replay_fixtures`
-
-Loads a recorded network fixture JSON file and registers mock rules for all endpoints, enabling full offline application testing without hitting real backend servers.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Fixture name to load from test/fixtures/<name>.json. |
-
 ## `start_recording`
 
 Starts recording manual interactions. User should perform the flow in the app while this is active.
@@ -918,8 +858,6 @@ Discover additional app-specific tools registered by the developer.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -984,15 +922,6 @@ Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizatio
 |---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `run_chaos_fuzzing`
-
-Runs autonomous monkey/chaos stress fuzzing against the running Flutter app for a specified duration. Randomly clicks interactive elements, inputs text, and navigates to detect crashes and unhandled exceptions.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `durationSeconds` | integer | no | Duration to run chaos fuzzing in seconds (default: 5). |
-| `eventRatePerSecond` | integer | no | Rate of chaos events per second (default: 5). |
-
 ## `get_memory_details`
 
 Returns a detailed memory breakdown of the running app: heap used, heap capacity, external (native) memory, and RSS for every Dart isolate. Use this to detect memory leaks or unexpected growth. Heap > 200 MB or external > 50 MB usually warrants investigation.
@@ -1022,22 +951,6 @@ Returns all HTTP requests made by the app — URL, method, status code, duration
 ## `clear_http_profile`
 
 Clears the HTTP request history so you get a clean baseline before triggering a specific API call. Pair with get_http_profile.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_render_tree`
-
-Dumps the render object tree — the layout/paint layer beneath the widget tree. Use this to debug layout issues, overflow errors, or understand exactly how Flutter is sizing and positioning widgets. This is the DevTools Layout Explorer equivalent for AI agents.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_layer_tree`
-
-Dumps the compositing layer tree — the GPU-level representation of the scene. Use this to debug performance issues caused by unnecessary repaint layers, or to understand why widgets are not composited efficiently.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -1089,7 +1002,7 @@ Enables or disables per-widget rebuild counting (equivalent to DevTools "Track W
 
 ## `get_gc_stats`
 
-Returns garbage collection statistics for all Dart isolates: number of GC rounds, total bytes collected, and current heap pressure. High GC frequency (>5/sec) can cause jank.
+Returns a heap snapshot per Dart isolate — heap used vs. capacity — which reflects GC pressure. High capacity utilization (>80%) signals frequent GC. Pair with get_allocation_profile to find which classes are causing heap growth.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -1110,8 +1023,6 @@ Inspect current Supabase auth state: user profile, session, JWT expiry, and rece
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | string | no | Set to "true" to reveal email/phone/user_id. Default: redacted. |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1123,8 +1034,6 @@ List all active Supabase Realtime channel subscriptions. Shows topic, join statu
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1139,8 +1048,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `table` | string | no | Supabase table name (required). |
 | `limit` | string | no | Max rows to return (1–200, default 20). |
 | `filter` | string | no | Optional equality filter in "column=value" format, e.g. "user_id=abc123". |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1153,6 +1060,10 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `scope` | string | no | Sign-out scope: "local" (this device), "global" (all devices), "others". |
+| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
+| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
+| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `supabase_refresh_session`
 
@@ -1160,8 +1071,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1173,8 +1082,6 @@ Inspect the current GoRouter navigation state: location, path parameters, query 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1186,8 +1093,6 @@ List all registered GoRouter routes and their configuration (paths, names, child
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1199,8 +1104,6 @@ View the recent navigation history — timestamped list of route changes.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1214,6 +1117,10 @@ Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), "
 |---|---|---:|---|
 | `location` | string | no | The route path to navigate to (e.g. "/home", "/user/123"). |
 | `action` | string | no | Navigation action. |
+| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
+| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
+| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_connectivity`
 
@@ -1221,8 +1128,6 @@ Check current network connectivity status: wifi, mobile, ethernet, vpn, none. Al
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1235,20 +1140,10 @@ View timestamped log of connectivity state transitions.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | string | no | Max number of entries to return (default: 100). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `simulate_offline`
-
-Toggle simulated offline mode. When enabled, ConnectivityPilotInspector.isSimulatedOffline returns true. App code can check this flag to simulate offline behavior for testing.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | string | yes | "true" to enable simulated offline, "false" to disable. |
 
 ## `get_firebase_status`
 
@@ -1256,8 +1151,6 @@ Check which Firebase services are registered and their status (Crashlytics, Anal
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1269,8 +1162,6 @@ Get the Firebase Cloud Messaging token (truncated for security).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1292,8 +1183,6 @@ View recent analytics events logged through FlutterPilot.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | string | no | Max number of events to return (default: 200). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
@@ -1331,8 +1220,6 @@ List all keys in FlutterSecureStorage. Values are redacted by default. Pass show
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showValues` | string | no | "true" to reveal values (except always-redacted keys). |
-| `ifMutation` | integer | no | Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed. |
-| `ifVersion` | integer | no | Alias for ifMutation. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |

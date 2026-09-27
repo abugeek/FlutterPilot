@@ -7,8 +7,6 @@ part of '../../flutterpilot_sdk.dart';
 /// - `waitForState` — Poll until a state value matches
 /// - `setLocale` — Override the app locale at runtime
 /// - `setTextScaleFactor` — Override the text scale factor
-/// - `saveStateSnapshot` — Capture current state into a named snapshot
-/// - `restoreStateSnapshot` — Rewind app state back to a named snapshot
 /// - `listStateSnapshots` — List all saved snapshots
 /// - `deleteStateSnapshot` — Delete a saved snapshot
 extension _StateExtensions on FlutterPilot {
@@ -162,6 +160,16 @@ extension _StateExtensions on FlutterPilot {
           'Missing locale',
         );
       }
+      // ignore: invalid_use_of_protected_member
+      if (!FlutterPilot.localeNotifier.hasListeners) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Locale override is not wired in this app, so it would have no effect. '
+          'Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
+          'FlutterPilot.localeNotifier, builder: (_, locale, _) => '
+          'MaterialApp(locale: locale, ...))',
+        );
+      }
       try {
         if (code == 'default') {
           FlutterPilot.localeNotifier.value = null;
@@ -201,6 +209,17 @@ extension _StateExtensions on FlutterPilot {
           'scale must be a numeric value',
         );
       }
+      // ignore: invalid_use_of_protected_member
+      if (!FlutterPilot.textScaleNotifier.hasListeners) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Text scale override is not wired in this app, so it would have no '
+          'effect. Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
+          'FlutterPilot.textScaleNotifier, builder: (_, scale, _) => MaterialApp('
+          'builder: (c, child) => scale == null ? child! : MediaQuery.withClampedTextScaling('
+          'minScaleFactor: scale, maxScaleFactor: scale, child: child!), ...))',
+        );
+      }
       FlutterPilot.textScaleNotifier.value = scale <= 0 ? null : scale;
       return ServiceExtensionResponse.result(
         json.encode({
@@ -210,69 +229,5 @@ extension _StateExtensions on FlutterPilot {
       );
     });
 
-    // -- ext.flutterpilot.saveStateSnapshot -----------------------------------
-    registerExtension('ext.flutterpilot.saveStateSnapshot', (
-      method,
-      parameters,
-    ) async {
-      final name = parameters['name'] ?? 'snapshot_${DateTime.now().millisecondsSinceEpoch}';
-      final snapshot = StateSnapshotManager.saveSnapshot(name);
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'saved', 'snapshot': snapshot.toJson()}),
-      );
-    });
-
-    // -- ext.flutterpilot.restoreStateSnapshot --------------------------------
-    registerExtension('ext.flutterpilot.restoreStateSnapshot', (
-      method,
-      parameters,
-    ) async {
-      final name = parameters['name'];
-      if (name == null || name.isEmpty) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing snapshot name',
-        );
-      }
-      final success = await StateSnapshotManager.restoreSnapshot(name);
-      if (!success) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Snapshot not found: $name',
-        );
-      }
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'restored', 'name': name}),
-      );
-    });
-
-    // -- ext.flutterpilot.listStateSnapshots ----------------------------------
-    registerExtension('ext.flutterpilot.listStateSnapshots', (
-      method,
-      parameters,
-    ) async {
-      final list = StateSnapshotManager.listSnapshots();
-      return ServiceExtensionResponse.result(
-        json.encode({'snapshots': list}),
-      );
-    });
-
-    // -- ext.flutterpilot.deleteStateSnapshot --------------------------------
-    registerExtension('ext.flutterpilot.deleteStateSnapshot', (
-      method,
-      parameters,
-    ) async {
-      final name = parameters['name'];
-      if (name == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing snapshot name',
-        );
-      }
-      final deleted = StateSnapshotManager.deleteSnapshot(name);
-      return ServiceExtensionResponse.result(
-        json.encode({'status': deleted ? 'deleted' : 'not_found', 'name': name}),
-      );
-    });
   }
 }

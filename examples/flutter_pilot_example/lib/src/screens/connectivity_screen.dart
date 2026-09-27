@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutterpilot_connectivity/flutterpilot_connectivity.dart';
 
 /// Demonstrates all Connectivity plugin tools:
 ///
@@ -9,7 +8,6 @@ import 'package:flutterpilot_connectivity/flutterpilot_connectivity.dart';
 /// |--------------------------------|-----------------------------------------|
 /// | get_connectivity_status        | live status display                     |
 /// | get_connectivity_history       | scrollable event log                    |
-/// | simulate_offline               | toggle offline simulation               |
 /// | clear_connectivity_history     | clear button                            |
 class ConnectivityScreen extends StatefulWidget {
   const ConnectivityScreen({super.key});
@@ -21,7 +19,6 @@ class ConnectivityScreen extends StatefulWidget {
 class _ConnectivityScreenState extends State<ConnectivityScreen> {
   List<ConnectivityResult> _currentStatus = [ConnectivityResult.none];
   final List<_ConnEvent> _log = [];
-  bool _simulatedOffline = false;
   StreamSubscription<List<ConnectivityResult>>? _sub;
 
   @override
@@ -53,7 +50,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   Color _statusColor(List<ConnectivityResult> results) {
-    if (_simulatedOffline) return Colors.red;
     if (results.contains(ConnectivityResult.wifi)) return Colors.green;
     if (results.contains(ConnectivityResult.mobile)) return Colors.blue;
     if (results.contains(ConnectivityResult.ethernet)) return Colors.teal;
@@ -61,7 +57,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   String _statusLabel(List<ConnectivityResult> results) {
-    if (_simulatedOffline) return 'Simulated Offline 🔴';
     if (results.isEmpty || results.every((r) => r == ConnectivityResult.none)) {
       return 'No Connection';
     }
@@ -92,7 +87,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             _aiHint(
               'AI Agent hints:\n'
               '  get_connectivity_status       → live network type\n'
-              '  simulate_offline(true)        → simulates no internet\n'
               '  get_connectivity_history      → event log\n'
               '  clear_connectivity_history    → resets log',
             ),
@@ -136,75 +130,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             ),
             const SizedBox(height: 16),
 
-            // ── Simulate Offline ─────────────────────────────────────────────
-            _sectionHeader('Simulate Offline', 'simulate_offline'),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'FlutterPilot can toggle a simulated-offline flag that '
-                      'your app code can check via '
-                      'ConnectivityPilotInspector.isSimulatedOffline. '
-                      'AI agents use this to test offline error handling without '
-                      'actually losing the network.',
-                      style: TextStyle(fontSize: 13),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Switch(
-                          key: const Key('simulate_offline_switch'),
-                          value: _simulatedOffline,
-                          onChanged: (v) {
-                            setState(() => _simulatedOffline = v);
-                            ConnectivityPilotInspector.setSimulatedOffline(v);
-                            _log.insert(
-                              0,
-                              _ConnEvent(
-                                time: DateTime.now(),
-                                status: v
-                                    ? 'SIMULATED OFFLINE (injected)'
-                                    : 'Simulation cleared',
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _simulatedOffline
-                              ? 'Offline simulation ACTIVE'
-                              : 'Simulation off',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _simulatedOffline ? Colors.red : Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        '// In your app code:\n'
-                        'if (ConnectivityPilotInspector.isSimulatedOffline) {\n'
-                        '  showOfflineBanner();\n'
-                        '}',
-                        style: TextStyle(fontFamily: 'monospace', fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
             // ── AI Test Scripts ───────────────────────────────────────────────
             _sectionHeader('AI Test Scripts', 'get_connectivity_status'),
             Card(
@@ -221,11 +146,11 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                     const SizedBox(height: 8),
                     _scriptBlock(
                       'Test offline graceful degradation',
-                      '1. simulate_offline(true)\n'
+                      '1. simulate_network(condition: "offline")\n'
                           '2. tap_widget("fetch_posts_button")\n'
                           '3. wait_for_state(\'error_shown == true\', 3000)\n'
                           '4. get_app_summary  // verify error UI shown\n'
-                          '5. simulate_offline(false)\n'
+                          '5. simulate_network(condition: "normal")\n'
                           '6. tap_widget("retry_button")',
                     ),
                     const SizedBox(height: 8),

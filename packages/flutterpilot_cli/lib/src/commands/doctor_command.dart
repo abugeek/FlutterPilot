@@ -32,7 +32,9 @@ class DoctorCommand extends Command<void> {
     try {
       final res = await Process.run('dart', ['--version']);
       if (res.exitCode == 0) {
-        final version = (res.stdout as String).trim().isEmpty ? (res.stderr as String).trim() : (res.stdout as String).trim();
+        final version = (res.stdout as String).trim().isEmpty
+            ? (res.stderr as String).trim()
+            : (res.stdout as String).trim();
         stdout.writeln('✅ Dart SDK: $version');
       }
     } catch (_) {
@@ -45,7 +47,9 @@ class DoctorCommand extends Command<void> {
       if (res.exitCode == 0) {
         stdout.writeln('\n📱 Connected Devices:');
         for (final line in (res.stdout as String).split('\n')) {
-          if (line.trim().isNotEmpty && !line.startsWith('Searching') && !line.startsWith('No devices')) {
+          if (line.trim().isNotEmpty &&
+              !line.startsWith('Searching') &&
+              !line.startsWith('No devices')) {
             stdout.writeln('   $line');
           }
         }
@@ -54,10 +58,21 @@ class DoctorCommand extends Command<void> {
 
     // 4. Check AI IDE Configs
     stdout.writeln('\n🤖 AI Assistant MCP Configurations:');
-    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
+    final home =
+        Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '';
 
     // Claude Desktop
-    final claudeConfig = File(p.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'));
+    final claudeConfig = File(
+      p.join(
+        home,
+        'Library',
+        'Application Support',
+        'Claude',
+        'claude_desktop_config.json',
+      ),
+    );
     if (claudeConfig.existsSync()) {
       stdout.writeln('✅ Claude Desktop config detected (${claudeConfig.path})');
     } else {
@@ -67,9 +82,13 @@ class DoctorCommand extends Command<void> {
     // Cursor
     final cursorConfig = File(p.join('.', '.cursor', 'mcp.json'));
     if (cursorConfig.existsSync()) {
-      stdout.writeln('✅ Local Cursor MCP config detected (${cursorConfig.path})');
+      stdout.writeln(
+        '✅ Local Cursor MCP config detected (${cursorConfig.path})',
+      );
     } else {
-      stdout.writeln('ℹ️ Cursor MCP config not found in current directory (.cursor/mcp.json)');
+      stdout.writeln(
+        'ℹ️ Cursor MCP config not found in current directory (.cursor/mcp.json)',
+      );
     }
 
     stdout.writeln('\n🩺 Doctor check completed.\n');

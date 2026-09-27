@@ -214,96 +214,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
-      'get_app_context',
-      description:
-          'High-speed batch context fetcher: Concurrently gathers 360° app overview, '
-          'active errors, and state snapshots (Riverpod/Bloc) in a single ~100ms round-trip. '
-          'Saves 2-3 tool call latencies at the start of an agent session or after navigation.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final results = await Future.wait([
-          _callExtensionRaw('ext.flutterpilot.getSummary', {}),
-          _callExtensionRaw('ext.flutterpilot.getErrors', {}),
-          _callExtensionRaw('ext.flutterpilot.getRiverpodStates', {}),
-          _callExtensionRaw('ext.flutterpilot.getBlocStates', {}),
-        ]);
-
-        final summaryRes = results[0];
-        final errorsRes = results[1];
-        final riverpodRes = results[2];
-        final blocRes = results[3];
-
-        final buffer = StringBuffer();
-        buffer.writeln('=== App Summary ===');
-        if (!summaryRes.isError && summaryRes.data != null) {
-          buffer.writeln(jsonEncode(summaryRes.data));
-        } else {
-          buffer.writeln('Unavailable or error: ${summaryRes.errorMessage}');
-        }
-
-        buffer.writeln('\n=== Active Errors ===');
-        if (!errorsRes.isError && errorsRes.data != null) {
-          final errors = errorsRes.data!['errors'] as List?;
-          if (errors == null || errors.isEmpty) {
-            buffer.writeln('No active errors.');
-          } else {
-            buffer.writeln('${errors.length} error(s) recorded:');
-            for (final err in errors.take(3)) {
-              buffer.writeln(' • ${(err as Map)['exception']}');
-            }
-          }
-        } else {
-          buffer.writeln('No active errors.');
-        }
-
-        if (!riverpodRes.isError && riverpodRes.data != null) {
-          final states = riverpodRes.data!['states'] as Map?;
-          if (states != null && states.isNotEmpty) {
-            buffer.writeln('\n=== Riverpod States ===');
-            for (final entry in states.entries.take(10)) {
-              buffer.writeln(' • ${entry.key}: ${entry.value['value']}');
-            }
-          }
-        }
-
-        if (!blocRes.isError && blocRes.data != null) {
-          final states = blocRes.data!['states'] as Map?;
-          if (states != null && states.isNotEmpty) {
-            buffer.writeln('\n=== Bloc States ===');
-            for (final entry in states.entries.take(10)) {
-              buffer.writeln(' • ${entry.key}: ${entry.value['state']}');
-            }
-          }
-        }
-
-        final activeLogs = _activeDebugLogs;
-        if (activeLogs.isNotEmpty) {
-          buffer.writeln('\n=== Recent Debug Logs ===');
-          for (final log in activeLogs.reversed.take(5).toList().reversed) {
-            buffer.writeln(' [${log['level']}] ${log['message']}');
-          }
-        }
-
-        return CallToolResult(
-          content: [TextContent(text: buffer.toString().trim())],
-        );
-      },
-    );
-
-    _registerAppTool(
-      name: 'get_app_summary',
-      description:
-          'Get a 360-degree overview of the app: current route, widget count, '
-          'pending errors, loaded plugins, and FPS stats. '
-          'CALL THIS FIRST upon connecting to orient yourself. '
-          'AFTER: Use get_widget_tree to find interactable elements, or '
-          'capture_screenshot to see the visual state.',
-      extension: 'ext.flutterpilot.getSummary',
-      nudge:
-          'HINT: Now that you have the summary, use get_widget_tree to find interactable elements or capture_screenshot to see the UI.',
-    );
-
     _registerAppTool(
       name: 'get_errors',
       description:
@@ -324,6 +234,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                 'count': 1,
                 'timestamp': item['timestamp'],
                 'stackTrace': item['stackTrace'],
+                'widget': item['widget'],
               };
             } else {
               deduped[key]!['count'] = (deduped[key]!['count'] as int) + 1;
@@ -335,189 +246,14 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return deduped.values
             .map(
               (e) =>
-                  '--- Error (x${e['count']}) ---\n${e['exception']}\nLatest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
+                  '--- Error (x${e['count']}) ---\n${e['exception']}\n'
+                  '${e['widget'] != null ? 'Widget: ${e['widget']}\n' : ''}'
+                  'Latest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
             )
             .join('\n\n');
       },
       nudge:
           'HINT: Analyze the stack trace to find the failing file, then use get_widget_tree to see the state of the UI at failure.',
-    );
-
-    server.registerTool(
-      'get_app_issues',
-      description:
-          'Fetches structured defect and health diagnostics automatically detected by FlutterPilot. '
-          'Covers database & offline sync (Supabase RLS, SQLite, network dropouts), '
-          'UI layout (RenderFlex overflow stripes, touch-target sizing), '
-          'performance (animation jank, frame budget overruns), runtime exceptions, and memory. '
-          'Filter by severity: "critical", "warning", "info", or "all".',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'severity': JsonSchema.string(
-            description:
-                'Minimum severity level to return: "critical", "warning", "info", or "all" (default: "warning").',
-            enumValues: ['critical', 'warning', 'info', 'all'],
-          ),
-          'unseenOnly': JsonSchema.boolean(
-            description:
-                'If true, only returns issues that have not yet been presented to the agent.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.getAppIssues', p);
-        if (res.isError) return res.toCallToolResult();
-        final data = res.data ?? {};
-        final isHealthy = data['isHealthy'] == true;
-        final criticalCount = data['criticalCount'] ?? 0;
-        final warningCount = data['warningCount'] ?? 0;
-        final infoCount = data['infoCount'] ?? 0;
-        final issues = (data['issues'] as List?) ?? [];
-
-        final buffer = StringBuffer();
-        if (isHealthy) {
-          buffer.writeln(
-            '🟢 App Health: 100% Clean! No active critical defects or warnings detected.',
-          );
-          return CallToolResult(
-            content: [TextContent(text: buffer.toString().trim())],
-          );
-        }
-
-        buffer.writeln('🛡️ Centralized App Health Audit:');
-        buffer.writeln('• Critical Breakages: $criticalCount');
-        buffer.writeln('• Warnings / Degradations: $warningCount');
-        if (infoCount > 0) buffer.writeln('• Info Observations: $infoCount');
-        buffer.writeln('');
-
-        for (final issue in issues) {
-          final isCrit = issue['severity'] == 'critical';
-          final icon = isCrit
-              ? '🚨 CRITICAL'
-              : (issue['severity'] == 'warning' ? '⚠️ WARNING' : 'ℹ️ INFO');
-          final cat = issue['category'] ?? 'unknown';
-          final title = issue['title'] ?? 'Unknown Issue';
-          final count = (issue['occurrenceCount'] as num?)?.toInt() ?? 1;
-          final details = issue['details']?.toString() ?? '';
-          final countStr = count > 1 ? ' (occurred $count times)' : '';
-
-          buffer.writeln('$icon [$cat]: $title$countStr');
-          if (details.isNotEmpty) {
-            final preview = details.length > 300
-                ? '${details.substring(0, 300)}...'
-                : details;
-            buffer.writeln('  Details: $preview');
-          }
-        }
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${buffer.toString().trim()}\n\nFull JSON Data:\n${jsonEncode(data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'clear_app_issues',
-      description:
-          'Clears active detected issues from FlutterPilot issue buffer.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res =
-            await _callExtensionRaw('ext.flutterpilot.clearAppIssues', {});
-        return res.toCallToolResult();
-      },
-    );
-
-    server.registerTool(
-      'audit_ui_design',
-      description:
-          'Comprehensive UI/UX Layout & Visual Design Quality Auditor: '
-          'Evaluates the active screen against professional Flutter design standards. '
-          'Detects layout overflows, touch target sizing (<48dp), asymmetric horizontal dead space/margins, '
-          'micro-typography legibility (<11sp), and component role mismatches (e.g. action buttons containing multi-line card text). '
-          'Returns a Design Quality Score (0-100), letter grade (A+ to F), and prioritized, actionable refactoring recommendations.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res =
-            await _callExtensionRaw('ext.flutterpilot.auditUiDesign', {});
-        if (res.isError) return res.toCallToolResult();
-        final data = res.data ?? {};
-        final isHealthy = data['isHealthy'] == true;
-        final score = data['designScore'] ?? 100;
-        final grade = data['designGrade'] ?? 'A+';
-        final overflows = (data['overflows'] as List?) ?? [];
-        final accessibility = (data['accessibilityIssues'] as List?) ?? [];
-        final designIssues = (data['designIssues'] as List?) ?? [];
-
-        final buffer = StringBuffer();
-        buffer.writeln('🎨 FlutterPilot UI/UX Design Quality Audit');
-        buffer.writeln('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        buffer.writeln('• Overall Design Score: $score/100 [$grade]');
-        buffer.writeln('• Layout Overflows: ${overflows.length}');
-        buffer.writeln('• Touch Target Violations: ${accessibility.length}');
-        buffer.writeln('• Visual Design Flaws: ${designIssues.length}');
-        buffer.writeln('');
-
-        if (isHealthy) {
-          buffer.writeln(
-            '🌟 Outstanding! The current screen meets all design, layout, and accessibility best practices.',
-          );
-          return CallToolResult(
-            content: [TextContent(text: buffer.toString().trim())],
-          );
-        }
-
-        if (overflows.isNotEmpty) {
-          buffer.writeln('🚨 RenderFlex Overflows:');
-          for (final o in overflows) {
-            buffer.writeln('  - [${o['type']}] ${o['details']}');
-          }
-          buffer.writeln('');
-        }
-
-        if (accessibility.isNotEmpty) {
-          buffer.writeln(
-            '⚠️ Accessibility Touch Target Violations (<48x48 dp):',
-          );
-          for (final a in accessibility) {
-            buffer.writeln('  - [${a['type']}] ${a['target']}: ${a['issue']}');
-          }
-          buffer.writeln('');
-        }
-
-        if (designIssues.isNotEmpty) {
-          buffer.writeln('⚠️ Visual Layout & UX Design Defects:');
-          for (final d in designIssues) {
-            final cat = d['category'] ?? 'design';
-            final target = d['target'] ?? '';
-            final type = d['type'] ?? '';
-            final msg = d['message'] ?? '';
-            final rec = d['recommendation'] ?? '';
-            buffer.writeln('  - [$cat] $type $target:');
-            buffer.writeln('    Issue: $msg');
-            buffer.writeln('    Fix: $rec');
-          }
-          buffer.writeln('');
-        }
-
-        buffer.writeln(
-          'Actionable Next Steps: Refactor the highlighted components to achieve a 100/100 A+ score.',
-        );
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${buffer.toString().trim()}\n\nFull Diagnostic JSON:\n${jsonEncode(data)}',
-            ),
-          ],
-        );
-      },
     );
 
     server.registerTool(
@@ -718,7 +454,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     Future<CallToolResult> executeGetLogs(Map<String, dynamic> params) async {
       final levelFilter = params['level'] as String?;
       final loggerFilter = params['logger'] as String?;
-      final query = (params['query'] ?? params['search'])?.toString().toLowerCase();
+      final query = (params['query'] ?? params['search'])
+          ?.toString()
+          .toLowerCase();
       final sinceSeconds = (params['since_seconds'] as num?)?.toInt();
       final rawLimit = (params['limit'] as int?) ?? 100;
       final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
@@ -730,8 +468,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       if (loggerFilter != null && loggerFilter.isNotEmpty) {
         entries = entries
             .where(
-              (e) =>
-                  (e['logger'] as String?)?.contains(loggerFilter) ?? false,
+              (e) => (e['logger'] as String?)?.contains(loggerFilter) ?? false,
             )
             .toList();
       }
@@ -762,7 +499,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text:
                   'No console logs matching the filter were found. '
-                  'Ensure FlutterPilot.run(MyApp()) or FlutterPilot.initialize() is called.',
+                  'Ensure FlutterPilot.initialize() is called before runApp().',
             ),
           ],
         );
@@ -850,47 +587,11 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     // Marionette standard alias
-    server.registerTool(
-      'get_logs',
-      description:
-          'Convenience alias for get_debug_logs. Returns application console logs with optional search, level, and recency filters.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'query': JsonSchema.string(
-            description: 'Search string to filter log messages.',
-          ),
-          'level': JsonSchema.string(
-            description: 'Filter by log level: "debug", "info", "warning", "error".',
-          ),
-          'since_seconds': JsonSchema.integer(
-            description: 'Only return logs captured in the last N seconds.',
-          ),
-          'limit': JsonSchema.integer(
-            description: 'Maximum number of logs to return (default: 100).',
-          ),
-        },
-      ),
-      callback: (params, extra) => executeGetLogs(params),
-    );
 
     // -- clear_debug_logs -----------------------------------------------------
-    server.registerTool(
-      'clear_debug_logs',
-      description:
-          'Clears the captured console log buffer on the server side. '
-          'Use this before a specific test scenario so you get a clean baseline.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) async {
-        final count = _debugLogBuffer.length;
-        _clearDebugLogBuffer();
-        return CallToolResult(
-          content: [TextContent(text: 'Cleared $count log entries.')],
-        );
-      },
-    );
-
-    // -- clear_all_logs / set_log_filter -------------------------------------
-    Future<CallToolResult> executeClearAllLogs(Map<String, dynamic> params) async {
+    Future<CallToolResult> executeClearAllLogs(
+      Map<String, dynamic> params,
+    ) async {
       final serverCleared = _debugLogBuffer.length;
       _clearDebugLogBuffer();
       final res = await _callExtensionRaw(
@@ -919,18 +620,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     }
 
     server.registerTool(
-      'clear_all_logs',
+      'clear_debug_logs',
       description:
-          'Clears both server-side and in-app SDK debug log buffers. Call before a test run '
-          'to get a clean log window. Pair with get_debug_logs(level:"error") after testing.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) => executeClearAllLogs(params),
-    );
-
-    server.registerTool(
-      'set_log_filter',
-      description:
-          'Alias for clear_all_logs. Clears both server-side and in-app SDK debug log buffers.',
+          'Clears captured console logs (server and in-app buffers). '
+          'Use this before a specific test scenario so you get a clean baseline.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) => executeClearAllLogs(params),
     );
@@ -1007,70 +700,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'assert_ui_health_batch',
-      description:
-          'Unified 1-Shot UI Screen Health Auditor: Inspects current screen for RenderFlex overflows, '
-          'touch targets smaller than 48x48 dp, and unlabelled interactive controls in <2ms. '
-          'Returns a single structured health verdict.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.auditUiHealth',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: 'UI Screen Health Report:\n${jsonEncode(res.data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'hot_restart_and_restore',
-      description:
-          'Fast Hot Restart & State Re-hydration: Automatically snapshots current app state, '
-          'performs hot restart, and re-applies the saved state snapshot. '
-          'Keeps the app on the exact same screen and state after restart.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        // 1. Snapshot state
-        await _callExtensionRaw('ext.flutterpilot.saveStateSnapshot', {
-          'name': '_auto_hot_restart',
-        });
-
-        // 2. Hot restart
-        final restartRes = await _callExtensionRaw(
-          'ext.flutterpilot.hotRestart',
-          {},
-        );
-        if (restartRes.isError) return restartRes.toCallToolResult();
-
-        // 3. Wait for app rebuild
-        await Future.delayed(const Duration(milliseconds: 600));
-
-        // 4. Restore state
-        final restoreRes = await _callExtensionRaw(
-          'ext.flutterpilot.restoreStateSnapshot',
-          {'name': '_auto_hot_restart'},
-        );
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '⚡ Hot restart completed and state snapshot restored: '
-                  '${restoreRes.isError ? "State restoration pending" : "State fully restored"}.',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
       'profile_frame_budget',
       description:
           'Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) '
@@ -1086,57 +715,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'get_frame_budget_profile',
-      description: 'Alias for profile_frame_budget.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getFrameBudgetProfile',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
-            ),
-          ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'replay_flight_log',
-      description:
-          'Live Autonomous Flight Replay Engine: Re-executes the recorded rolling 30s user actions, '
-          'taps, and gestures live inside the running app in fast-forward mode (~150ms per action). '
-          'Enables instant live reproduction of bugs.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'delayMs': JsonSchema.integer(
-            description:
-                'Delay between replayed actions in milliseconds (default: 150ms).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 150;
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.replayFlightLog',
-          {'delayMs': delayMs.toString()},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '⚡ Live Flight Replay finished: ${jsonEncode(res.data)}',
             ),
           ],
         );

@@ -9,8 +9,6 @@ void main() {
 
   group('Real-World Autonomous AI Agent Workflows', () {
     setUp(() {
-      PilotWidgetInspector.invalidateCache();
-      StateSnapshotManager.clear();
     });
 
     testWidgets('Flow 1: Autonomous Form Driving via Fuzzy Selectors & Scoped Capture', (tester) async {
@@ -68,38 +66,6 @@ void main() {
       // 3. Agent checks available suggestions when querying non-existent element
       final notFoundTargets = PilotWidgetInspector.getAvailableActionableTargets();
       expect(notFoundTargets, contains('login_card'));
-    });
-
-    testWidgets('Flow 2: Atomic Multi-State Seeding and Point-in-Time Rollback', (tester) async {
-      final appState = <String, dynamic>{
-        'isLoggedIn': false,
-        'user': {'name': 'Guest', 'tier': 'free'},
-        'cartItems': <String>[],
-      };
-
-      StateSnapshotManager.onCaptureStates = () => appState;
-      StateSnapshotManager.onRestoreStates = (states) async {
-        appState.clear();
-        appState.addAll(states);
-      };
-
-      // 1. Save pristine snapshot
-      final snap = StateSnapshotManager.saveSnapshot('clean_state');
-      expect(snap.states['isLoggedIn'], isFalse);
-
-      // 2. Agent mutates state
-      appState['isLoggedIn'] = true;
-      appState['cartItems'] = ['item_1', 'item_2'];
-      appState['user']['tier'] = 'pro';
-
-      expect(appState['isLoggedIn'], isTrue);
-      expect(appState['cartItems'].length, equals(2));
-
-      // 3. Agent rolls back state instantly
-      final success = await StateSnapshotManager.restoreSnapshot('clean_state');
-      expect(success, isTrue);
-      expect(appState['isLoggedIn'], isFalse);
-      expect(appState['user']['tier'], equals('free'));
     });
 
     test('Flow 3: 32-Bit Word-Aligned Visual Regression Engine', () {

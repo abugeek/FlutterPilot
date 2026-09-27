@@ -13,6 +13,9 @@ part of '../../flutterpilot_sdk.dart';
 /// - `getDebugLogs` — In-memory console capture buffer
 /// - `clearDebugLogs` — Clear the console capture buffer
 /// - `pumpFrames` — Wait for N animation frames
+/// Kept alive once get_semantics_tree is first used.
+SemanticsHandle? _semanticsHandle;
+
 extension _DiagnosticsExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.getAppSnapshot --------------------------------------
@@ -36,7 +39,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'currentRoute': NavigationTracker.currentRoute,
           'errorCount': ErrorInspector.errors.length,
           'isRecording': FlutterPilot._isRecording,
-          'contextVersion': FlutterPilot.screenMutationCount,
           'widgetCount': root != null
               ? PilotWidgetInspector.countElements(root)
               : 0,
@@ -134,13 +136,19 @@ extension _DiagnosticsExtensions on FlutterPilot {
         };
       }
 
+      // Flutter only builds semantics while an accessibility client asks for
+      // them (none on desktop / without a screen reader). Turn them on once.
+      if (_semanticsHandle == null) {
+        _semanticsHandle = SemanticsBinding.instance.ensureSemantics();
+        WidgetsBinding.instance.scheduleFrame();
+        await WidgetsBinding.instance.endOfFrame;
+      }
       SemanticsNode? root;
       try {
-        root = RendererBinding
-            .instance
-            .rootPipelineOwner
-            .semanticsOwner
-            ?.rootSemanticsNode;
+        // Semantics live on each view's PipelineOwner, not the root one.
+        for (final view in RendererBinding.instance.renderViews) {
+          root ??= view.owner?.semanticsOwner?.rootSemanticsNode;
+        }
       } catch (_) {
         // rootPipelineOwner is an internal Flutter API — may not be available
         // in all Flutter versions. Fall back gracefully.
@@ -236,24 +244,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode(profile));
     });
 
-    // -- ext.flutterpilot.auditUiHealth ---------------------------------------
-    registerExtension('ext.flutterpilot.auditUiHealth', (
-      method,
-      parameters,
-    ) async {
-      final health = UiHealthAuditor.audit();
-      return ServiceExtensionResponse.result(json.encode(health));
-    });
-
-    // -- ext.flutterpilot.auditUiDesign ---------------------------------------
-    registerExtension('ext.flutterpilot.auditUiDesign', (
-      method,
-      parameters,
-    ) async {
-      final health = UiHealthAuditor.audit();
-      return ServiceExtensionResponse.result(json.encode(health));
-    });
-
     // -- ext.flutterpilot.getStreamLogs ---------------------------------------
     registerExtension('ext.flutterpilot.getStreamLogs', (
       method,
@@ -275,34 +265,5 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
 
-    // -- ext.flutterpilot.getAppIssues ---------------------------------------
-    registerExtension('ext.flutterpilot.getAppIssues', (
-      method,
-      parameters,
-    ) async {
-      final sevStr = parameters['severity']?.toLowerCase() ?? 'warning';
-      final unseenOnly = parameters['unseenOnly'] == 'true';
-      IssueSeverity minSev = IssueSeverity.warning;
-      if (sevStr == 'critical') {
-        minSev = IssueSeverity.critical;
-      } else if (sevStr == 'info' || sevStr == 'all') {
-        minSev = IssueSeverity.info;
-      }
-
-      final summary = IssueDetector.getSummaryJson(
-        minSeverity: minSev,
-        unseenOnly: unseenOnly,
-      );
-      return ServiceExtensionResponse.result(json.encode(summary));
-    });
-
-    // -- ext.flutterpilot.clearAppIssues -------------------------------------
-    registerExtension('ext.flutterpilot.clearAppIssues', (
-      method,
-      parameters,
-    ) async {
-      IssueDetector.clear();
-      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
-    });
   }
 }

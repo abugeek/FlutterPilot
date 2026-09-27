@@ -229,7 +229,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         if (baselineImg == null || currentImg == null) {
           return CallToolResult(
             content: [
-              TextContent(text: 'Failed to decode screenshot images for comparison'),
+              TextContent(
+                text: 'Failed to decode screenshot images for comparison',
+              ),
             ],
             isError: true,
           );
@@ -243,22 +245,37 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         } else {
           int diffPixels = 0;
           final total = baselineImg.width * baselineImg.height;
-          diffImg = img.Image.from(currentImg);
+          diffImg = currentImg.convert(
+            format: img.Format.uint8,
+            numChannels: 4,
+          );
 
-          final baseBytes = baselineImg.toUint8List();
-          final currBytes = currentImg.toUint8List();
-          final baseWords = baseBytes.buffer.asUint32List();
-          final currWords = currBytes.buffer.asUint32List();
-          final minLen = baseWords.length < currWords.length
-              ? baseWords.length
-              : currWords.length;
-
-          for (int i = 0; i < minLen; i++) {
-            if (baseWords[i] != currWords[i]) {
+          // PNGs may decode as RGB/RGBA and 8- or 16-bit; compare as 8-bit RGBA.
+          final baseBytes = baselineImg
+              .convert(format: img.Format.uint8, numChannels: 4)
+              .toUint8List();
+          final currBytes = currentImg
+              .convert(format: img.Format.uint8, numChannels: 4)
+              .toUint8List();
+          for (
+            var i = 0;
+            i + 3 < baseBytes.length && i + 3 < currBytes.length;
+            i += 4
+          ) {
+            if (baseBytes[i] != currBytes[i] ||
+                baseBytes[i + 1] != currBytes[i + 1] ||
+                baseBytes[i + 2] != currBytes[i + 2] ||
+                baseBytes[i + 3] != currBytes[i + 3]) {
               diffPixels++;
-              final x = i % currentImg.width;
-              final y = i ~/ currentImg.width;
-              diffImg.setPixelRgba(x, y, 255, 0, 128, 255);
+              final px = i ~/ 4;
+              diffImg.setPixelRgba(
+                px % currentImg.width,
+                px ~/ currentImg.width,
+                255,
+                0,
+                128,
+                255,
+              );
             }
           }
           diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
@@ -362,29 +379,31 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
-          content: [
-            TextContent(
-              text: jsonEncode(res.data),
-            ),
-          ],
+          content: [TextContent(text: jsonEncode(res.data))],
         );
       },
     );
 
     server.registerTool(
-      'get_app_snapshot',
+      'get_app_summary',
       description:
-          'Instant 360-Degree Runtime Snapshot (<5ms): Returns complete consolidated application state in ONE call — '
-          'current route, all visible & hittable interactive elements (with keys, labels & bounds), '
-          'currently focused widget, recent uncaught errors, recent logs, FPS, screen mutation counter, and viewport dimensions. '
-          'Use this as your PRIMARY exploration and verification tool to eliminate 5+ redundant roundtrip tool calls.',
+          'CALL THIS FIRST. One-call overview of the running app: current route, '
+          'the tappable elements on screen (labels + keys), focused widget, recent '
+          'errors and logs, frame timing, viewport. Use get_widget_tree for layout '
+          'structure and capture_screenshot for visuals.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getAppSnapshot',
           {},
         );
-        if (res.isError) return res.toCallToolResult();
+        if (res.isError) {
+          // No SDK in the app (zero-code mode): basic summary from the VM.
+          return (await _callExtensionRaw(
+            'ext.flutterpilot.getSummary',
+            {},
+          )).toCallToolResult();
+        }
         final data = res.data ?? {};
         final route = data['route']?['current'] ?? '/';
         final depth = data['route']?['stackDepth'] ?? 1;
@@ -392,8 +411,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final errors = (data['recentErrors'] as List?) ?? [];
         final logs = (data['recentLogs'] as List?) ?? [];
         final perf = data['performance'] ?? {};
-        final fps = perf['fps'] ?? 0;
-        final effectiveFps = perf['effectiveFps'] ?? fps;
         final jankPct = (perf['jankPercentage'] as num?)?.toDouble() ?? 0.0;
         final avgMs = (perf['avgFrameDurationMs'] as num?)?.toDouble();
         final diagnosis = perf['diagnosis']?.toString();
@@ -401,52 +418,43 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final vp = data['viewport'] ?? {};
 
         final summary = StringBuffer();
-        summary.writeln('📱 Flutter App Runtime Snapshot:');
         summary.writeln('• Route: $route (Depth: $depth)');
         summary.writeln(
           '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
         );
-        summary.writeln(
-          '• Focused Element: ${focused != null ? "${focused['type']} (key: ${focused['key'] ?? 'none'}, text: \"${focused['text'] ?? ''}\")" : "None"}',
-        );
-        final perfStr = StringBuffer('• Performance: $effectiveFps FPS');
-        if (avgMs != null) perfStr.write(' | Frame: ${avgMs.toStringAsFixed(1)}ms');
-        if (jankPct > 0.0) perfStr.write(' | Jank: ${jankPct.toStringAsFixed(1)}%');
-        perfStr.write(' | Screen Mutations: ${perf['mutationCount']}');
-        summary.writeln(perfStr.toString());
-        if (jankPct >= 20.0 || (avgMs != null && avgMs > 20.0)) {
+        final lifecycle = data['lifecycle'];
+        if (lifecycle != null && lifecycle != 'resumed') {
           summary.writeln(
-            '  ⚠️ PERF WARNING: Dropping frames ($jankPct% jank). ${diagnosis ?? ""}',
+            '• App window: $lifecycle (not visible). FlutterPilot keeps it '
+            'rendering for inspection; frame timings are not profiled.',
           );
         }
-        final issues = data['issues'] as Map<String, dynamic>?;
-        if (issues != null) {
-          final isHealthy = issues['isHealthy'] == true;
-          final crit = issues['criticalCount'] ?? 0;
-          final warn = issues['warningCount'] ?? 0;
-          if (isHealthy) {
-            summary.writeln('• App Health: 🟢 Clean (0 Defects)');
-          } else {
-            summary.writeln(
-              '• App Health: 🚨 $crit Critical, ⚠️ $warn Warnings (call get_app_issues for details)',
-            );
-          }
+        final focusedType = focused?['type']?.toString() ?? '';
+        if (focused != null && !focusedType.startsWith('_')) {
+          summary.writeln(
+            '• Focused: $focusedType${focused['key'] != null ? ' [${focused['key']}]' : ''}',
+          );
+        }
+        // FPS is meaningless for an idle Flutter app; only report real jank.
+        if (jankPct >= 5.0) {
+          summary.writeln(
+            '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
+            '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '
+            '${diagnosis ?? ''} Call profile_frame_budget for details.',
+          );
         }
         summary.writeln(
           '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
         );
-        summary.writeln(
-          '• Hittable Interactive Elements (${elements.length}):',
-        );
+        summary.writeln('• Tappable Elements (${elements.length}):');
         for (final el in elements.take(15)) {
-          final label = el['label']?.toString() ?? '';
+          final label = el['text']?.toString() ?? '';
           final key = (el['key'] ?? el['identifier'] ?? '').toString();
           final type = el['type']?.toString() ?? 'Widget';
           final bounds = el['bounds'] != null
               ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
               : '';
-          final keyInfo =
-              key.isNotEmpty && key != label ? ' [key: $key]' : '';
+          final keyInfo = key.isNotEmpty && key != label ? ' [key: $key]' : '';
           summary.writeln(
             '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo',
           );
@@ -462,12 +470,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         }
 
         return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${summary.toString().trim()}\n\nFull JSON Data:\n${jsonEncode(data)}',
-            ),
-          ],
+          content: [TextContent(text: summary.toString().trim())],
         );
       },
     );
@@ -502,24 +505,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               text: 'Delta Tree Diff:\n${jsonEncode(res.data?['diff'] ?? {})}',
             ),
           ],
-        );
-      },
-    );
-
-    server.registerTool(
-      'get_screen_hash',
-      description:
-          'Fast lightweight screen mutation checker (<10 tokens). Returns the 64-bit frame mutation counter '
-          'and active route. Call this to check if a user action mutated the UI without fetching a full tree.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getScreenHash',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [TextContent(text: jsonEncode(res.data))],
         );
       },
     );
@@ -576,111 +561,6 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [TextContent(text: jsonEncode(res.data))],
         );
-      },
-    );
-
-    server.registerTool(
-      'export_session_gif',
-      description:
-          'Generates an animated GIF replay artifact of the interaction session or baseline screens. '
-          'Saves directly to disk (e.g. "artifacts/session_replay.gif") for visual proof in pull requests or reviews.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'outputPath': JsonSchema.string(
-            description:
-                'Target file path for the GIF (default: "artifacts/session_replay.gif").',
-          ),
-          'delayMs': JsonSchema.integer(
-            description: 'Delay between frames in milliseconds (default: 500).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final path =
-            p['outputPath']?.toString() ?? 'artifacts/session_replay.gif';
-        final delayMs = (p['delayMs'] as num?)?.toInt() ?? 500;
-
-        // Capture current screen if baselines empty
-        final activePrefix = '${_fleetManager.activeDeviceId ?? 'default'}::';
-        if (!_screenshotBaselines.keys.any(
-          (key) => key.startsWith(activePrefix),
-        )) {
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.captureScreenshot',
-            {},
-          );
-          if (res.isError) return res.toCallToolResult();
-          final data = res.data?['data'] as String?;
-          if (data != null) {
-            final decoded = base64Decode(data);
-            if (decoded.length <= _Constants.maxScreenshotBaselineBytes) {
-              final baselineKey = _baselineKey('current');
-              final previous = _screenshotBaselines[baselineKey];
-              _screenshotBaselineBytes -= previous?.length ?? 0;
-              _screenshotBaselines[baselineKey] = decoded;
-              _screenshotBaselineBytes += decoded.length;
-            }
-          }
-        }
-
-        final frames = _screenshotBaselines.entries
-            .where((entry) => entry.key.startsWith(activePrefix))
-            .map((entry) => entry.value)
-            .toList();
-        if (frames.isEmpty) {
-          return CallToolResult(
-            content: [
-              TextContent(text: 'No captured frames available to build GIF.'),
-            ],
-            isError: true,
-          );
-        }
-
-        try {
-          final file = File(path);
-          if (!file.parent.existsSync()) {
-            file.parent.createSync(recursive: true);
-          }
-
-          // Decode all frames and assemble into an animated GIF.
-          final frameDurationHundredths = (delayMs / 10).round().clamp(1, 6000);
-          img.Image? animation;
-          for (final frameBytes in frames) {
-            final decoded = img.decodeImage(frameBytes);
-            if (decoded == null) continue;
-            decoded.frameDuration = frameDurationHundredths;
-            if (animation == null) {
-              animation = decoded;
-            } else {
-              animation.addFrame(decoded);
-            }
-          }
-
-          if (animation == null) {
-            return CallToolResult(
-              content: [
-                TextContent(text: 'Failed to decode frames for GIF generation.'),
-              ],
-              isError: true,
-            );
-          }
-
-          final gifBytes = img.encodeGif(animation);
-          file.writeAsBytesSync(gifBytes);
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    '🎬 Session GIF exported to `$path` (${animation.numFrames} frames, ${delayMs}ms delay).',
-              ),
-            ],
-          );
-        } catch (err) {
-          return CallToolResult(
-            content: [TextContent(text: 'Failed to write GIF: $err')],
-            isError: true,
-          );
-        }
       },
     );
   }

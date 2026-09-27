@@ -199,11 +199,9 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       formatResult: (json) {
         final connectivity = json['connectivity'] as List? ?? [];
         final isOnline = json['isOnline'] == true;
-        final simulated = json['simulatedOffline'] == true;
         final buf = StringBuffer();
         buf.writeln('Online: $isOnline');
         buf.writeln('Connectivity: ${connectivity.join(', ')}');
-        if (simulated) buf.writeln('⚠ Simulated offline mode is ACTIVE');
         if (json['hasWifi'] == true) buf.writeln('  ✓ WiFi');
         if (json['hasMobile'] == true) buf.writeln('  ✓ Mobile');
         if (json['hasEthernet'] == true) buf.writeln('  ✓ Ethernet');
@@ -221,28 +219,6 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           description: 'Max number of entries to return (default: 100).',
         ),
       },
-    );
-
-    server.registerTool(
-      'simulate_offline',
-      description:
-          'Toggle simulated offline mode. When enabled, '
-          'ConnectivityPilotInspector.isSimulatedOffline returns true. '
-          'App code can check this flag to simulate offline behavior for testing.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'enabled': JsonSchema.string(
-            description:
-                '"true" to enable simulated offline, "false" to disable.',
-            enumValues: ['true', 'false'],
-          ),
-        },
-        required: ['enabled'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.simulateOffline',
-        p,
-      ).then((res) => res.toCallToolResult()),
     );
 
     // =========================================================================

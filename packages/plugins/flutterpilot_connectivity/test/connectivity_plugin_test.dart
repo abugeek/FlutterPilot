@@ -11,9 +11,6 @@ void main() {
   });
 
   group('ConnectivityPilotInspector', () {
-    test('isSimulatedOffline is false by default', () {
-      expect(ConnectivityPilotInspector.isSimulatedOffline, isFalse);
-    });
 
     test('register can be called without crashing', () {
       // registerExtension throws UnsupportedError in test environment
@@ -32,13 +29,6 @@ void main() {
       } on UnsupportedError {
         // Expected in test env.
       }
-    });
-
-    test('reset clears simulated offline flag', () {
-      // We can test the _simulatedOffline flag via the public getter
-      // by calling reset and confirming it is false.
-      ConnectivityPilotInspector.reset();
-      expect(ConnectivityPilotInspector.isSimulatedOffline, isFalse);
     });
 
     test('reset allows re-registration after reset', () {

@@ -558,12 +558,6 @@ Clear the debug log buffer on both the server and the app.
 { "cleared": true }
 ```
 
-#### `set_log_filter`
-Clear both the server and app debug log buffers (same as clear_debug_logs).
-```json
-{ "cleared": true }
-```
-
 ---
 
 ### 🔬 DevTools Deep Inspection (12 tools)
@@ -633,18 +627,6 @@ Get all HTTP requests from the Dart runtime (not just Dio — includes all `dart
 Reset the HTTP request profile. Call before testing a specific API flow.
 ```json
 { "cleared": true }
-```
-
-#### `get_render_tree`
-Get the Flutter render object tree (layout constraints, sizes, positions). Equivalent to DevTools Render Tree tab.
-```json
-{ "renderTree": "RenderView\n  RenderPositionedBox\n    RenderPadding..." }
-```
-
-#### `get_layer_tree`
-Get the Flutter compositing layer tree (GPU layer structure). Useful for finding unnecessary compositing.
-```json
-{ "layerTree": "TransformLayer\n  PictureLayer\n  TextLayer..." }
 ```
 
 #### `get_vm_info`

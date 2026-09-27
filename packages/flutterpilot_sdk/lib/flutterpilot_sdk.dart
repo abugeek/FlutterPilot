@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:developer' as developer show registerExtension;
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Checkbox, Radio, Slider, Switch;
@@ -9,47 +10,32 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-import 'src/flutterpilot_binding.dart';
 
-import 'src/chaos_fuzzer.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
-import 'src/repro_test_generator.dart';
 import 'src/ring_buffer.dart';
-import 'src/state_snapshot_manager.dart';
 import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
-import 'src/issue_detector.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/scroll_simulator.dart';
 import 'src/stream_inspector.dart';
-import 'src/test_synthesizer.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
-export 'src/chaos_fuzzer.dart';
 export 'src/error_inspector.dart';
-export 'src/fixture_manager.dart';
 export 'src/flight_recorder.dart';
-export 'src/flutterpilot_binding.dart';
 export 'src/frame_budget_profiler.dart';
-export 'src/gif_encoder.dart';
 export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
-export 'src/issue_detector.dart';
 export 'src/keyboard_simulator.dart';
 export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
-export 'src/pr_report_generator.dart';
-export 'src/repro_test_generator.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
-export 'src/state_snapshot_manager.dart';
 export 'src/stream_inspector.dart';
-export 'src/test_synthesizer.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
 
@@ -59,6 +45,58 @@ part 'src/extensions/navigation_extensions.dart';
 part 'src/extensions/state_extensions.dart';
 part 'src/extensions/diagnostics_extensions.dart';
 part 'src/extensions/recording_extensions.dart';
+
+/// Shadows `dart:developer`'s registerExtension for every ext.flutterpilot.*
+/// handler in this library: each call first makes sure the screen is fresh.
+///
+/// When the OS reports the app hidden (window covered, minimized, on another
+/// Space), Flutter disables frames: nothing builds, lays out or paints, and
+/// every inspection would silently see a stale screen.
+void registerExtension(String method, ServiceExtensionHandler handler) =>
+    developer.registerExtension(method, (m, p) async {
+      _applyProjectRoot(p['projectRoot']);
+      await _ensureFreshFrame();
+      return handler(m, p);
+    });
+
+String? _projectRoot;
+
+/// The server sends the app's root directory with every call. Registering it
+/// as a pub root lets [debugIsWidgetLocalCreation] tell app widgets from
+/// framework/package ones (DevTools' "summary tree" rule).
+void _applyProjectRoot(String? root) {
+  if (root == null || root.isEmpty || root == _projectRoot) return;
+  _projectRoot = root;
+  // ignore: invalid_use_of_protected_member
+  WidgetInspectorService.instance.addPubRootDirectories([root]);
+}
+
+DateTime _agentActiveUntil = DateTime(0);
+Timer? _forcedFrames;
+
+Future<void> _ensureFreshFrame() async {
+  final binding = SchedulerBinding.instance;
+  _agentActiveUntil = DateTime.now().add(const Duration(seconds: 30));
+  // Keep frames flowing while the agent works so taps settle and animations run.
+  final alreadyPumping = _forcedFrames != null;
+  _forcedFrames ??= Timer.periodic(const Duration(milliseconds: 16), (t) {
+    if (DateTime.now().isAfter(_agentActiveUntil)) {
+      t.cancel();
+      _forcedFrames = null;
+    } else if (!binding.framesEnabled &&
+        binding.schedulerPhase == SchedulerPhase.idle) {
+      binding.scheduleForcedFrame();
+    }
+  });
+  // While pumping, the screen is at most one frame old: no need to wait.
+  if (binding.framesEnabled || alreadyPumping) return;
+  binding.scheduleForcedFrame();
+  await binding.endOfFrame.timeout(
+    const Duration(milliseconds: 250),
+    onTimeout: () {},
+  );
+}
+
 
 /// The core class for the FlutterPilot SDK — an AI-native runtime
 /// introspection toolkit for Flutter applications.
@@ -191,16 +229,6 @@ class FlutterPilot {
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
-  static int _screenMutationCount = 0;
-
-  /// Current 64-bit frame mutation counter.
-  static int get screenMutationCount => _screenMutationCount;
-
-  /// Signals that the screen UI or state has mutated.
-  static void notifyMutation() {
-    _screenMutationCount++;
-    PilotWidgetInspector.invalidateCache();
-  }
 
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
@@ -215,39 +243,6 @@ class FlutterPilot {
   /// Each entry has keys: `timestamp`, `level`, `logger`, `message`.
   static List<Map<String, dynamic>> get consoleBuffer =>
       List.unmodifiable(_consoleBuffer.toList());
-
-  /// One-line zero-configuration launcher for FlutterPilot apps.
-  ///
-  /// Replaces boilerplate in `main.dart` with a single call:
-  /// ```dart
-  /// void main() => FlutterPilot.run(const MyApp());
-  /// ```
-  ///
-  /// Automatically:
-  /// 1. Ensures FlutterPilot custom binding is initialized.
-  /// 2. Intercepts all unhandled asynchronous errors and exceptions.
-  /// 3. Intercepts all standard `print()` and `debugPrint()` calls into structured logs.
-  /// 4. Launches [runApp] in a protected telemetry zone.
-  static void run(Widget app) {
-    FlutterPilotBinding.ensureInitialized();
-    runZonedGuarded(
-      () => runApp(app),
-      (error, stack) {
-        ErrorInspector.recordError(error, stack);
-        FlightRecorder.recordError(error.toString(), stack.toString());
-        postEvent('ext.flutterpilot.error', {
-          'exception': error.toString(),
-          'stack': stack.toString(),
-        });
-      },
-      zoneSpecification: ZoneSpecification(
-        print: (self, parent, zone, line) {
-          _captureConsoleLine(line, level: 'info', logger: 'print');
-          parent.print(zone, line);
-        },
-      ),
-    );
-  }
 
   /// Returns a comprehensive, consolidated snapshot of the running application
   /// in sub-millisecond execution time.
@@ -296,8 +291,6 @@ class FlutterPilot {
       final frameProfile = FrameBudgetProfiler.getProfile();
       final jankPct = (frameProfile['jankPercentage'] as num?)?.toDouble() ?? 0.0;
       final avgDuration = (frameProfile['avgFrameDurationMs'] as num?)?.toDouble() ?? 16.6;
-      IssueDetector.auditUiTree();
-      final issuesSummary = IssueDetector.getSummaryJson();
 
       return {
         'timestamp': DateTime.now().toIso8601String(),
@@ -311,25 +304,26 @@ class FlutterPilot {
           'height': logicalHeight.round(),
           'devicePixelRatio': devicePixelRatio,
         },
+        'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
         'interactiveElements': interactiveElements,
         'focusedElement': focusedInfo,
         'performance': {
           'fps': _lastFps,
           'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
-          'mutationCount': _screenMutationCount,
           'frameCount': _frameCount,
           'jankPercentage': jankPct,
           'avgFrameDurationMs': avgDuration,
           if (frameProfile['diagnosis'] != null)
             'diagnosis': frameProfile['diagnosis'],
         },
-        'issues': issuesSummary,
         'recentErrors': recentErrors.take(5).toList(),
         'recentLogs': recentLogs,
       };
     }
 
     /// Extracts instant post-action state for telemetry and feedback.
+    static int _errorsReported = 0;
+
     static Map<String, dynamic> getPostActionState({String? previousRoute}) {
       final currentRoute = NavigationTracker.currentRoute;
       String? focusedKey;
@@ -339,29 +333,23 @@ class FlutterPilot {
             PilotWidgetInspector.extractCleanKey(primaryFocus.context!.widget.key);
       }
       final interactive = PilotWidgetInspector.getInteractiveElements();
-      final elementsSummary = interactive
-          .map((e) => (e['label'] as String?)?.isNotEmpty == true
-              ? e['label']
-              : (e['key'] ?? e['identifier'] ?? e['type']))
-          .take(8)
-          .toList();
-
-      IssueDetector.auditUiTree();
-      final issueAlert = IssueDetector.getActionAlertSummary();
-      final issuesSummary = IssueDetector.getSummaryJson();
-
+      final errors = ErrorInspector.errors.length;
+      // Only errors caused since the previous action, not the whole history.
+      final newErrors = errors >= _errorsReported ? errors - _errorsReported : errors;
+      _errorsReported = errors;
       return {
         'route': currentRoute,
         if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
-        'mutationCount': _screenMutationCount,
+        'previousRoute': ?previousRoute,
         'focusedElement': ?focusedKey,
         'interactiveElementsCount': interactive.length,
-        'visibleInteractiveElements': elementsSummary,
-        'errorCount': ErrorInspector.errors.length,
-        'issueAlert': ?issueAlert,
-        'perfAlert': ?issueAlert,
-        'activeIssuesCount': issuesSummary['totalActive'],
-        'criticalIssuesCount': issuesSummary['criticalCount'],
+        'visibleInteractiveElements': [
+          for (final e in interactive.take(10))
+            e['key'] != null && e['text'] != null
+                ? '${e['text']} [${e['key']}]'
+                : (e['text'] ?? e['key'] ?? e['type']),
+        ],
+        'newErrorCount': newErrors,
       };
     }
 
@@ -382,7 +370,8 @@ class FlutterPilot {
   /// }
   /// ```
   static void initialize() {
-    if (_initialized) return;
+    // No VM service in release builds; skip the debugPrint/frame hooks too.
+    if (kReleaseMode || _initialized) return;
     _initialized = true;
 
     _setupModules();
@@ -390,7 +379,6 @@ class FlutterPilot {
     _setupFpsCounter();
     _setupDebugPrintCapture();
     FrameBudgetProfiler.initialize();
-    IssueDetector.initialize();
     debugPrint('FlutterPilot initialized 🚀');
   }
 
@@ -407,7 +395,6 @@ class FlutterPilot {
     // Errors
     ErrorInspector.initialize();
     ErrorInspector.onErrorCaptured = (details) {
-      IssueDetector.sniffError(details);
       FlightRecorder.recordError(
         details.exceptionAsString(),
         details.stack?.toString(),
@@ -478,7 +465,6 @@ class FlutterPilot {
     String logger = '',
   }) {
     final safeMessage = _redactDiagnosticText(message);
-    IssueDetector.sniffLog(safeMessage, level: level);
     final entry = {
       'timestamp': DateTime.now().toIso8601String(),
       'level': level,
@@ -518,66 +504,11 @@ class FlutterPilot {
     _customTools[name] = callback;
   }
 
-  /// Records an issue into the centralized automatic issue detector.
-  static AppIssue recordIssue({
-    required IssueSeverity severity,
-    required IssueCategory category,
-    required String title,
-    String details = '',
-    Map<String, dynamic>? metadata,
-  }) {
-    return IssueDetector.recordIssue(
-      severity: severity,
-      category: category,
-      title: title,
-      details: details,
-      metadata: metadata,
-    );
-  }
 
-  /// Records a database or offline sync failure (e.g. Supabase RLS, SQLite, sync conflict).
-  static AppIssue recordSyncError(
-    String title, {
-    dynamic error,
-    int? queueLength,
-    String? details,
-    Map<String, dynamic>? metadata,
-  }) {
-    return IssueDetector.recordIssue(
-      severity: IssueSeverity.critical,
-      category: IssueCategory.dataSync,
-      title: title,
-      details: '${error ?? details ?? ''}',
-      metadata: {
-        'queueLength': ?queueLength,
-        'error': ?error?.toString(),
-        ...?metadata,
-      },
-    );
-  }
 
-  /// Records an HTTP or remote network failure.
-  static AppIssue recordNetworkError(
-    String title, {
-    int? statusCode,
-    String? url,
-    dynamic error,
-    Map<String, dynamic>? metadata,
-  }) {
-    final isCritical = statusCode != null &&
-        (statusCode == 401 || statusCode == 403 || statusCode >= 500);
-    return IssueDetector.recordIssue(
-      severity: isCritical ? IssueSeverity.critical : IssueSeverity.warning,
-      category: IssueCategory.dataSync,
-      title: title,
-      details: '${error ?? ''}',
-      metadata: {
-        'statusCode': ?statusCode,
-        'url': ?url,
-        ...?metadata,
-      },
-    );
-  }
+
+
+
 
   /// Registers a state setter for a specific state-management [type].
   ///
@@ -777,7 +708,7 @@ class FlutterPilot {
         } catch (_) {}
         return;
       }
-      e.visitChildren(visitForEditable);
+      e.debugVisitOnstageChildren(visitForEditable);
     }
 
     visitForEditable(element);

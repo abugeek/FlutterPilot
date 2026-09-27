@@ -50,32 +50,12 @@ extension _NavigationExtensions on FlutterPilot {
         );
       }
       try {
-        if (NavigationTracker.customNavigateHandler != null) {
-          final handled = await NavigationTracker.customNavigateHandler!(route);
-          if (handled) {
-            if (FlutterPilot._isRecording) {
-              FlutterPilot._recordAction('navigate', {'route': route});
-            }
-            return ServiceExtensionResponse.result(
-              json.encode({'status': 'success', 'route': route}),
-            );
-          }
+        if (FlutterPilot._isRecording) {
+          FlutterPilot._recordAction('navigate', {'route': route});
         }
-
-        final nav = _resolveNavigatorState();
-        if (nav != null && nav.mounted) {
-          if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('navigate', {'route': route});
-          }
-          nav.pushNamed(route);
-          return ServiceExtensionResponse.result(
-            json.encode({'status': 'success', 'route': route}),
-          );
-        }
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'No Navigator available. Ensure NavigationTracker() is added to '
-          'navigatorObservers in your MaterialApp, or that your app contains a Navigator.',
+        await _pushRoute(route);
+        return ServiceExtensionResponse.result(
+          json.encode({'status': 'success', 'route': route}),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
@@ -94,9 +74,31 @@ extension _NavigationExtensions on FlutterPilot {
         }
         if (!popped) {
           final nav = _resolveNavigatorState();
-          if (nav != null && nav.mounted) {
-            popped = await nav.maybePop();
-          }
+          if (nav != null && nav.mounted) popped = await nav.maybePop();
+        }
+        if (!popped &&
+            NavigationTracker.stack.length <= 1 &&
+            parameters['allowExit'] != 'true') {
+          // At the root the OS back path calls SystemNavigator.pop(), which
+          // closes the app. Don't do that to an agent by accident.
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'success',
+              'popped': false,
+              'note': 'Already at the root route; back would exit the app. '
+                  'Pass allowExit=true to do that.',
+            }),
+          );
+        }
+        if (!popped) {
+          // Router-based apps without a plugin (auto_route, custom delegates):
+          // ask the root Router directly. Unlike WidgetsBinding.handlePopRoute,
+          // this never falls through to SystemNavigator.pop (quitting the app).
+          popped = await _rootRouterDelegate()?.popRoute() ?? false;
+        }
+        if (!popped && parameters['allowExit'] == 'true') {
+          // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+          popped = await WidgetsBinding.instance.handlePopRoute();
         }
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('pressBack', {});
@@ -168,7 +170,7 @@ extension _NavigationExtensions on FlutterPilot {
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
       Duration pollInterval = const Duration(milliseconds: 50);
       while (DateTime.now().isBefore(deadline)) {
-        final element = PilotWidgetInspector.findElementByKey(key);
+        final element = PilotWidgetInspector.findElement(key);
         if (element != null) {
           return ServiceExtensionResponse.result(
             json.encode({'status': 'found', 'key': key}),
@@ -234,7 +236,7 @@ extension _NavigationExtensions on FlutterPilot {
         );
       }
       try {
-        await SystemChannels.navigation.invokeMethod<void>('pushRoute', url);
+        await _pushRoute(url, deepLink: true);
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('simulateDeepLink', {'url': url});
         }
@@ -317,31 +319,16 @@ extension _NavigationExtensions on FlutterPilot {
 
       // 2. Teleport to target screen
       try {
-        final nav = NavigationTracker.navigatorState;
-        if (nav != null && nav.mounted) {
-          if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('jumpToScreen', {'route': route});
-          }
-          nav.pushNamed(route);
-          return ServiceExtensionResponse.result(
-            json.encode({'status': 'success', 'route': route, 'stateInjected': stateJson != null}),
-          );
+        if (FlutterPilot._isRecording) {
+          FlutterPilot._recordAction('jumpToScreen', {'route': route});
         }
-
-        final context = WidgetsBinding.instance.rootElement;
-        if (context != null) {
-          if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('jumpToScreen', {'route': route});
-          }
-          Navigator.of(context, rootNavigator: true).pushNamed(route);
-          return ServiceExtensionResponse.result(
-            json.encode({'status': 'success', 'route': route, 'stateInjected': stateJson != null}),
-          );
-        }
-
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'No Navigator available to jump to screen.',
+        await _pushRoute(route);
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'route': route,
+            'stateInjected': stateJson != null,
+          }),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(
@@ -351,4 +338,38 @@ extension _NavigationExtensions on FlutterPilot {
       }
     });
   }
+}
+
+/// Navigates to [route]: a router plugin's handler first, then pushNamed for
+/// apps using [NavigationTracker];
+/// Router-based apps (go_router, auto_route) and deep links go through
+/// [WidgetsBinding.handlePushRoute] — the same entry point the OS uses.
+Future<void> _pushRoute(String route, {bool deepLink = false}) async {
+  if (!deepLink && NavigationTracker.customNavigateHandler != null) {
+    if (await NavigationTracker.customNavigateHandler!(route)) return;
+  }
+  final nav = NavigationTracker.navigatorState;
+  if (!deepLink && nav != null && nav.mounted) {
+    nav.pushNamed(route);
+    return;
+  }
+  // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+  await WidgetsBinding.instance.handlePushRoute(route);
+}
+
+RouterDelegate<Object?>? _rootRouterDelegate() {
+  RouterDelegate<Object?>? found;
+  void visit(Element e) {
+    if (found != null) return;
+    final w = e.widget;
+    if (w is Router) {
+      found = w.routerDelegate;
+      return;
+    }
+    e.visitChildren(visit);
+  }
+
+  final root = WidgetsBinding.instance.rootElement;
+  if (root != null) visit(root);
+  return found;
 }

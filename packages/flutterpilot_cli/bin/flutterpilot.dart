@@ -10,8 +10,6 @@ void main(List<String> args) async {
     ..addCommand(InitCommand())
     ..addCommand(DevCommand())
     ..addCommand(DoctorCommand())
-    ..addCommand(ExportTestCommand())
-    ..addCommand(SnapshotCommand())
     ..addCommand(TestCommand())
     ..addCommand(AuditCommand());
 

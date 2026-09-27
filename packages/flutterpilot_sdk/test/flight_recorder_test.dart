@@ -1,9 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/flight_recorder.dart';
-import 'package:flutterpilot_sdk/src/repro_test_generator.dart';
 
 void main() {
-  group('FlightRecorder & ReproTestGenerator', () {
+  group('FlightRecorder', () {
     setUp(() {
       FlightRecorder.clear();
     });
@@ -50,21 +49,5 @@ void main() {
       expect(frozenTimeline.last['action'], equals('unhandled_exception'));
     });
 
-    test('synthesizes valid repro_test.dart Dart code', () {
-      FlightRecorder.recordRoute('push', {'name': '/settings'});
-      FlightRecorder.recordGesture('tapWidget', {'key': 'ElevatedButton[\'Save\']'});
-      FlightRecorder.recordGesture('enterText', {'key': 'username_field', 'text': 'john_doe'});
-
-      final code = ReproTestGenerator.generate(
-        testName: 'Repro Settings Save Flow',
-        initialWidgetName: 'SettingsApp()',
-      );
-
-      expect(code, contains("testWidgets('Repro Settings Save Flow'"));
-      expect(code, contains('await tester.pumpWidget(const SettingsApp());'));
-      expect(code, contains("await tester.tap(find.text('Save'));"));
-      expect(code, contains("await tester.enterText(find.byKey(const ValueKey('username_field')), 'john_doe');"));
-      expect(code, contains('expect(tester.takeException(), isNull);'));
-    });
   });
 }

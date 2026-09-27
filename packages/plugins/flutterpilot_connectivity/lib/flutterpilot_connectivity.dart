@@ -22,7 +22,6 @@ void _safeRegisterExtension(
 /// Provides visibility into:
 /// - **Current status**: wifi, mobile, none, ethernet, vpn, bluetooth
 /// - **Connectivity history**: timestamped log of transitions
-/// - **Simulated offline**: override connectivity for testing
 ///
 /// ## Setup
 /// ```dart
@@ -35,7 +34,6 @@ class ConnectivityPilotInspector {
   static final List<Map<String, dynamic>> _history = [];
   static StreamSubscription<List<ConnectivityResult>>? _sub;
   static List<ConnectivityResult> _currentResults = [];
-  static bool _simulatedOffline = false;
   static const int _maxHistory = 100;
 
   /// Registers the connectivity inspector with FlutterPilot.
@@ -51,7 +49,6 @@ class ConnectivityPilotInspector {
       extensions: [
         'ext.flutterpilot.getConnectivity',
         'ext.flutterpilot.getConnectivityHistory',
-        'ext.flutterpilot.simulateOffline',
       ],
       mutating: true,
     );
@@ -74,26 +71,7 @@ class ConnectivityPilotInspector {
     _sub = null;
     _history.clear();
     _currentResults = [];
-    _simulatedOffline = false;
     _registered = false;
-  }
-
-  /// Whether offline simulation is currently active.
-  ///
-  /// App code can check this to simulate offline behavior:
-  /// ```dart
-  /// if (ConnectivityPilotInspector.isSimulatedOffline) {
-  ///   throw SocketException('Simulated offline by FlutterPilot');
-  /// }
-  /// ```
-  static bool get isSimulatedOffline => _simulatedOffline;
-
-  /// Programmatically toggles the simulated-offline flag.
-  ///
-  /// Equivalent to calling the `simulate_offline` MCP tool.
-  /// Useful in integration tests and UI that needs to toggle the flag directly.
-  static void setSimulatedOffline(bool enabled) {
-    _simulatedOffline = enabled;
   }
 
   static void _startListening() {
@@ -112,7 +90,6 @@ class ConnectivityPilotInspector {
     _history.add({
       'results': results.map((r) => r.name).toList(),
       'timestamp': DateTime.now().toIso8601String(),
-      'simulatedOffline': _simulatedOffline,
     });
     while (_history.length > _maxHistory) {
       _history.removeAt(0);
@@ -132,8 +109,7 @@ class ConnectivityPilotInspector {
       return ServiceExtensionResponse.result(
         json.encode({
           'connectivity': _currentResults.map((r) => r.name).toList(),
-          'isOnline': !hasNone && !_simulatedOffline,
-          'simulatedOffline': _simulatedOffline,
+          'isOnline': !hasNone,
           'hasWifi': _currentResults.contains(ConnectivityResult.wifi),
           'hasMobile': _currentResults.contains(ConnectivityResult.mobile),
           'hasEthernet': _currentResults.contains(ConnectivityResult.ethernet),
@@ -165,21 +141,5 @@ class ConnectivityPilotInspector {
       );
     });
 
-    // -- ext.flutterpilot.simulateOffline --------------------------------------
-    _safeRegisterExtension('ext.flutterpilot.simulateOffline', (
-      method,
-      parameters,
-    ) async {
-      final enabled = parameters['enabled'] ?? 'true';
-      _simulatedOffline = enabled.toLowerCase() == 'true';
-      _addHistory(_currentResults); // log the simulation change
-
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'simulatedOffline': _simulatedOffline,
-        }),
-      );
-    });
   }
 }

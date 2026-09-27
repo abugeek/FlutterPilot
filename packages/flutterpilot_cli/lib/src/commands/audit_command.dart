@@ -9,7 +9,8 @@ class AuditCommand extends Command<void> {
   final String name = 'audit';
 
   @override
-  final String description = 'Audit Flutter app dependencies, assets, and bundle health.';
+  final String description =
+      'Audit Flutter app dependencies, assets, and bundle health.';
 
   @override
   Future<void> run() async {
@@ -17,12 +18,16 @@ class AuditCommand extends Command<void> {
     final pubspecFile = File('${root.path}/pubspec.yaml');
 
     if (!pubspecFile.existsSync()) {
-      stderr.writeln('❌ Error: pubspec.yaml not found in current directory (${root.path}).');
+      stderr.writeln(
+        '❌ Error: pubspec.yaml not found in current directory (${root.path}).',
+      );
       exitCode = 1;
       return;
     }
 
-    stdout.writeln('🔍 Running FlutterPilot Project & Dependency Health Audit...\n');
+    stdout.writeln(
+      '🔍 Running FlutterPilot Project & Dependency Health Audit...\n',
+    );
 
     final pubspecContent = pubspecFile.readAsStringSync();
     final directDeps = <String>[];
@@ -51,7 +56,9 @@ class AuditCommand extends Command<void> {
       if (inDeps && line.startsWith('  ') && !line.startsWith('    ')) {
         final name = trimmed.split(':').first.trim();
         if (name.isNotEmpty && name != 'flutter') directDeps.add(name);
-      } else if (inDevDeps && line.startsWith('  ') && !line.startsWith('    ')) {
+      } else if (inDevDeps &&
+          line.startsWith('  ') &&
+          !line.startsWith('    ')) {
         final name = trimmed.split(':').first.trim();
         if (name.isNotEmpty && name != 'flutter_test') devDeps.add(name);
       }
@@ -59,7 +66,9 @@ class AuditCommand extends Command<void> {
 
     // Check package_config.json for total transitive packages
     int totalTransitive = 0;
-    final packageConfigFile = File('${root.path}/.dart_tool/package_config.json');
+    final packageConfigFile = File(
+      '${root.path}/.dart_tool/package_config.json',
+    );
     if (packageConfigFile.existsSync()) {
       try {
         final decoded = json.decode(packageConfigFile.readAsStringSync());
@@ -88,16 +97,24 @@ class AuditCommand extends Command<void> {
     stdout.writeln('========================================');
     stdout.writeln('Direct Dependencies:     ${directDeps.length}');
     stdout.writeln('Dev Dependencies:        ${devDeps.length}');
-    stdout.writeln('Total Transitive Packages: ${totalTransitive > 0 ? totalTransitive : "Run flutter pub get"}');
-    stdout.writeln('Static Assets:           $assetCount file(s) (${assetMb.toStringAsFixed(2)} MB)');
+    stdout.writeln(
+      'Total Transitive Packages: ${totalTransitive > 0 ? totalTransitive : "Run flutter pub get"}',
+    );
+    stdout.writeln(
+      'Static Assets:           $assetCount file(s) (${assetMb.toStringAsFixed(2)} MB)',
+    );
     stdout.writeln('----------------------------------------');
 
     final warnings = <String>[];
     if (assetMb > 50.0) {
-      warnings.add('Assets directory exceeds 50MB (${assetMb.toStringAsFixed(1)}MB). Consider compressing static assets or using on-demand downloads.');
+      warnings.add(
+        'Assets directory exceeds 50MB (${assetMb.toStringAsFixed(1)}MB). Consider compressing static assets or using on-demand downloads.',
+      );
     }
     if (directDeps.length > 50) {
-      warnings.add('Direct dependencies count (${directDeps.length}) is high. Audit for redundant or unused packages.');
+      warnings.add(
+        'Direct dependencies count (${directDeps.length}) is high. Audit for redundant or unused packages.',
+      );
     }
 
     if (warnings.isNotEmpty) {

@@ -20,6 +20,13 @@ class DeviceRuntimeContext {
   StreamSubscription<Event>? extensionEvents;
   StreamSubscription<Event>? loggingEvents;
   StreamSubscription<Event>? stdoutEvents;
+  StreamSubscription<Event>? serviceEvents;
+
+  /// Services registered on the VM service by `flutter run` (or an IDE debug
+  /// session), e.g. `reloadSources` -> `s0.reloadSources`. Real hot reload and
+  /// hot restart must go through these: only flutter_tools can recompile the
+  /// edited sources.
+  final Map<String, String> registeredServices = {};
 
   bool get connected => service != null;
 
@@ -27,9 +34,12 @@ class DeviceRuntimeContext {
     await extensionEvents?.cancel();
     await loggingEvents?.cancel();
     await stdoutEvents?.cancel();
+    await serviceEvents?.cancel();
     extensionEvents = null;
     loggingEvents = null;
     stdoutEvents = null;
+    serviceEvents = null;
+    registeredServices.clear();
     await service?.dispose();
     service = null;
     cachedMainIsolateId = null;

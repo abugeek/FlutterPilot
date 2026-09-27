@@ -11,6 +11,11 @@ class FrameBudgetProfiler {
   static final RingBuffer<Map<String, dynamic>> _frameTimings = RingBuffer(bufferSize);
   static bool _installed = false;
 
+  static bool get _appVisible {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
   static double get _frameBudgetMs {
     try {
       final refreshRate =
@@ -32,6 +37,9 @@ class FrameBudgetProfiler {
   }
 
   static void _onTimings(List<FrameTiming> timings) {
+    // Frames FlutterPilot forces while the window is hidden aren't what a
+    // user sees; profiling them would report bogus jank.
+    if (!_appVisible) return;
     for (final t in timings) {
       final buildMs = t.buildDuration.inMicroseconds / 1000.0;
       final rasterMs = t.rasterDuration.inMicroseconds / 1000.0;
@@ -55,6 +63,9 @@ class FrameBudgetProfiler {
       return {
         'status': 'no_frames_recorded',
         'sampleCount': 0,
+        if (!_appVisible)
+          'note': 'App window is not visible, so frames are not profiled. '
+              'Bring the app to the foreground to measure real frame times.',
         'fps': 60.0,
         'frameBudgetMs': double.parse(_frameBudgetMs.toStringAsFixed(2)),
         'jankPercentage': 0.0,
@@ -103,6 +114,9 @@ class FrameBudgetProfiler {
       'worstFrameMs': double.parse(worst.toStringAsFixed(2)),
       'effectiveFps': double.parse((1000.0 / (avgTotal > 0 ? avgTotal : 16.6)).clamp(1.0, 120.0).toStringAsFixed(1)),
       'diagnosis': ?diagnosis,
+      if (!_appVisible)
+        'note': 'App window is not visible, so new frames are not profiled. '
+            'Bring the app to the foreground to measure real frame times.',
     };
   }
 

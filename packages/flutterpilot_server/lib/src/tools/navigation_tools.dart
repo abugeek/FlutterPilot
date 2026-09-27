@@ -31,7 +31,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'route': JsonSchema.string(
-            description: 'Target route name (e.g. "/order/123", "/settings/security").',
+            description:
+                'Target route name (e.g. "/order/123", "/settings/security").',
           ),
           'state': JsonSchema.object(
             description:
@@ -49,7 +50,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: '🚀 Teleported directly to "${p['route']}" with state injected.',
+              text:
+                  '🚀 Teleported directly to "${p['route']}" with state injected.',
             ),
           ],
         );

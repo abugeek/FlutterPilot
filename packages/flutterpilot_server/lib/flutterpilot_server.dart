@@ -72,6 +72,10 @@ abstract class _FlutterPilotServerBase {
 
   Future<VmService?> _vmServiceForParameters(Map<String, dynamic> parameters);
 
+  Future<DeviceRuntimeContext?> _deviceContextForParameters(
+    Map<String, dynamic> parameters,
+  );
+
   bool _cancelOperation(String operationId);
   _BackgroundOperation? _getBackgroundOperation(String operationId);
 
@@ -224,7 +228,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     }
   }
 
-  Future<void> _connectToVmService() async {
+  Future<void>? _connecting;
+
+  /// Tool calls and the reconnect timer can both trigger a connect; share one
+  /// attempt so they never race into two live connections.
+  Future<void> _connectToVmService() => _connecting ??= _doConnectToVmService()
+      .whenComplete(() => _connecting = null);
+
+  Future<void> _doConnectToVmService() async {
     if (_disposed) return;
     if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
       final discovered = await VmDiscoveryService.discover(
@@ -249,7 +260,23 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'Connecting to VM Service: ${_redactVmServiceUri(_vmServiceUri!)}',
     );
 
-    _vmService = await vmServiceConnectUri(_vmServiceUri!);
+    try {
+      _vmService = await vmServiceConnectUri(_vmServiceUri!);
+    } catch (_) {
+      // The app was most likely restarted on a new port: rediscover it
+      // instead of retrying a dead URI forever.
+      final discovered = await VmDiscoveryService.discover(
+        projectRoot: _projectRoot,
+      );
+      if (discovered == null ||
+          discovered == _vmServiceUri ||
+          !_isAllowedConnectionUri(discovered)) {
+        rethrow;
+      }
+      _log.info('App restarted; rediscovered VM Service.');
+      _vmServiceUri = discovered;
+      _vmService = await vmServiceConnectUri(discovered);
+    }
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
     );
@@ -269,27 +296,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.cachedMainIsolateId = null;
 
     _currentBackoff = _minBackoff;
+    _reconnectTimer?.cancel();
+    _isReconnecting = false;
 
     // ignore: unawaited_futures
     final connectedService = _vmService!;
     connectedService.onDone
         .then((_) {
-          if (identical(_vmService, connectedService)) {
-            _vmService = null;
-          }
-          if (!_disposed) {
-            _log.warning('VM Service connection lost');
-            _scheduleReconnect();
-          }
+          // A replaced connection closing is expected; only react to the live one.
+          if (_disposed || !identical(_vmService, connectedService)) return;
+          _log.warning('VM Service connection lost');
+          _scheduleReconnect();
         })
         .catchError((Object e) {
-          if (identical(_vmService, connectedService)) {
-            _vmService = null;
-          }
-          if (!_disposed) {
-            _log.warning('Error in VM Service done handler: $e');
-            _scheduleReconnect();
-          }
+          if (_disposed || !identical(_vmService, connectedService)) return;
+          _log.warning('Error in VM Service done handler: $e');
+          _scheduleReconnect();
         });
 
     await _setupEventStreaming(activeContext);
@@ -326,7 +348,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _isReconnecting = true;
     _vmService = null;
     _cachedMainIsolateId = null;
-    final activeContext = _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
+    final activeContext =
+        _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
     if (activeContext != null) {
       activeContext.cachedMainIsolateId = null;
       activeContext.service = null;
@@ -383,6 +406,28 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     context.loggingEvents = null;
     await context.stdoutEvents?.cancel();
     context.stdoutEvents = null;
+    await context.serviceEvents?.cancel();
+    context.serviceEvents = null;
+    context.registeredServices.clear();
+
+    // The VM service replays ServiceRegistered for already-registered services
+    // (flutter_tools' reloadSources/hotRestart) right after subscribing, so
+    // attach the listener before streamListen or those events are dropped.
+    try {
+      context.serviceEvents = service.onServiceEvent.listen((Event event) {
+        final name = event.service;
+        if (name == null) return;
+        if (event.kind == EventKind.kServiceRegistered &&
+            event.method != null) {
+          context.registeredServices[name] = event.method!;
+        } else if (event.kind == EventKind.kServiceUnregistered) {
+          context.registeredServices.remove(name);
+        }
+      });
+      await service.streamListen(EventStreams.kService);
+    } catch (e) {
+      _log.fine('Could not subscribe to Service stream: $e');
+    }
 
     try {
       await service.streamListen(EventStreams.kExtension);
@@ -424,6 +469,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           _log.warning('Extension event stream error', error);
         },
         onDone: () {
+          if (!identical(context.service, service)) return;
           _log.info('Extension event stream closed');
           context.service = null;
           context.connectionGeneration++;
@@ -469,7 +515,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         (Event event) {
           final bytes = event.bytes;
           if (bytes == null || bytes.isEmpty) return;
-          final raw = String.fromCharCodes(base64.decode(bytes)).trim();
+          final raw = utf8
+              .decode(base64.decode(bytes), allowMalformed: true)
+              .trim();
           if (raw.isEmpty) return;
           _appendDebugLog(
             message: raw,
@@ -587,12 +635,13 @@ You are connected to a live Flutter app via FlutterPilot.
 Use this guide to understand what tools to call, when, and in what order.
 
 ## First Steps (always start here)
-1. `get_app_summary` — Understand current state: route, errors, widget count
+1. `get_app_summary` — Route, tappable elements (labels + keys), errors, logs, window visibility
 2. `capture_screenshot` — See what the user sees right now
 3. `get_widget_tree` — Discover widget keys and structure for interactions
 
 ## Interaction Tools
-- `tap_widget(key)` — Tap by ValueKey string (find keys via get_widget_tree)
+- `tap_widget(key)` — Tap by key, `Type['text']` selector, or exact visible text. Ambiguous text is refused; covered widgets are never tapped
+- `get_interactive_elements` — Everything tappable on screen right now
 - `tap_at(x, y)` — Tap at pixel coordinates (use screenshot to determine coords)
 - `enter_text(key, text)` — Type into a text field
 - `swipe_widget(key, direction, durationMs)` — Swipe gesture
@@ -600,7 +649,10 @@ Use this guide to understand what tools to call, when, and in what order.
 - `double_tap_widget(key)` — Double tap
 - `set_slider_value(key, value)` — Move a slider
 - `toggle_checkbox(key)` — Toggle checkbox/switch/radio
-- `press_back` — Hardware back button
+- `press_back` — Back navigation (never quits the app unless allowExit=true)
+- `press_key(key, modifiers)` — Enter/Tab/Escape/arrows/shortcuts on the focused widget
+- `secondary_tap(key)` — Right-click / context menu
+- `pinch_zoom(key, scale)` — Two-finger zoom
 
 ## Navigation
 - `navigate_to(route)` — Go to a named route (e.g. "/home")
@@ -624,13 +676,10 @@ Use this guide to understand what tools to call, when, and in what order.
 
 ## Debug Console (replaces manual VS Code copy-paste)
 - `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
-- `clear_debug_logs` — Clear buffer before a test
-- `clear_all_logs` — Clear both server + in-app log buffers
+- `clear_debug_logs` — Clear server + in-app log buffers before a test
 - `get_gc_stats` — Heap pressure snapshot (used vs. capacity)
 - `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
 - `clear_http_profile` — Reset before testing a specific API call
-- `get_render_tree` — Render object layout tree
-- `get_layer_tree` — GPU compositing layers
 - `get_vm_info` — Dart VM version, all isolates
 - `toggle_repaint_rainbow(enabled)` — Highlight layers that repaint (perf debugging)
 - `toggle_debug_paint(enabled)` — Show layout bounds and padding
@@ -724,11 +773,6 @@ Use this guide to understand what tools to call, when, and in what order.
   }) {
     final toolProperties = <String, JsonSchema>{
       ...?properties,
-      'ifMutation': JsonSchema.integer(
-        description:
-            'Optional optimistic-concurrency contextVersion. The mutation is rejected if the app changed.',
-      ),
-      'ifVersion': JsonSchema.integer(description: 'Alias for ifMutation.'),
       'operationId': JsonSchema.string(
         description:
             'Optional caller-supplied ID, enabling cancellation while queued.',
@@ -858,6 +902,7 @@ Use this guide to understand what tools to call, when, and in what order.
     return _callExtensionScheduled(extension, parameters, operationId, context);
   }
 
+  @override
   Future<DeviceRuntimeContext?> _deviceContextForParameters(
     Map<String, dynamic> parameters,
   ) async {
@@ -909,26 +954,6 @@ Use this guide to understand what tools to call, when, and in what order.
             'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
             ErrorCategory.staleOperation,
           ).withOperationId(operationId);
-        }
-        if (mutating) {
-          final expectedMutation = _parseMutationVersion(parameters);
-          if (expectedMutation != null) {
-            final versionResult = await _callExtensionImmediate(
-              'ext.flutterpilot.getScreenHash',
-              const {},
-              context: context,
-            );
-            final actualMutation = _extractMutationVersion(versionResult);
-            if (actualMutation == null || actualMutation != expectedMutation) {
-              return _ExtensionResult.error(
-                'Mutation precondition failed for $operationId: expected '
-                'context version $expectedMutation, but the active app is at '
-                '${actualMutation ?? 'an unknown version'}. Re-read the screen '
-                'state and retry with the latest contextVersion.',
-                ErrorCategory.preconditionFailed,
-              ).withOperationId(operationId);
-            }
-          }
         }
         final callParameters = Map<String, dynamic>.from(parameters)
           ..remove('operationDeadlineMs')
@@ -997,17 +1022,6 @@ Use this guide to understand what tools to call, when, and in what order.
     return context;
   }
 
-  static int? _parseMutationVersion(Map<String, dynamic> parameters) {
-    final value = parameters['ifMutation'] ?? parameters['ifVersion'];
-    return int.tryParse(value?.toString() ?? '');
-  }
-
-  static int? _extractMutationVersion(_ExtensionResult result) {
-    if (result.isError) return null;
-    final value = result.data?['mutationCount'];
-    return value is int ? value : int.tryParse(value?.toString() ?? '');
-  }
-
   static Duration _operationDeadline(Map<String, dynamic> parameters) {
     final requested = int.tryParse(
       parameters['operationDeadlineMs']?.toString() ?? '',
@@ -1046,6 +1060,39 @@ Use this guide to understand what tools to call, when, and in what order.
       _vmService = null;
       _scheduleReconnect();
     }
+  }
+
+  final Map<String, String> _appRootByIsolate = {};
+
+  /// Tells the SDK where the app's own code lives, so it can tell app widgets
+  /// from framework/package widgets (the DevTools "summary tree" rule). Taken
+  /// from the isolate's root library, not from where this server was started.
+  Future<Map<String, String>> _withAppRoot(
+    VmService vm,
+    String isolateId,
+    String extension,
+    Map<String, String> args,
+  ) async {
+    if (!extension.startsWith('ext.flutterpilot.')) return args;
+    var root = _appRootByIsolate[isolateId];
+    if (root == null) {
+      var resolved = _projectRoot.absolute.path;
+      try {
+        var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
+        if (uri != null && uri.startsWith('package:')) {
+          uri = (await vm.lookupResolvedPackageUris(isolateId, [
+            uri,
+          ])).uris?.first;
+        }
+        if (uri != null && uri.startsWith('file:')) {
+          final path = Uri.parse(uri).path;
+          final lib = path.lastIndexOf('/lib/');
+          if (lib > 0) resolved = path.substring(0, lib);
+        }
+      } catch (_) {}
+      root = _appRootByIsolate[isolateId] = resolved;
+    }
+    return {...args, 'projectRoot': root};
   }
 
   Future<_ExtensionResult> _callExtensionImmediate(
@@ -1092,7 +1139,12 @@ Use this guide to understand what tools to call, when, and in what order.
             .callServiceExtension(
               extension,
               isolateId: cachedIsolateId!,
-              args: stringArgs,
+              args: await _withAppRoot(
+                vmService,
+                cachedIsolateId!,
+                extension,
+                stringArgs,
+              ),
             )
             .timeout(_Constants.extensionCallTimeout);
         if (response.json != null) {
@@ -1124,7 +1176,9 @@ Use this guide to understand what tools to call, when, and in what order.
       } on TimeoutException {
         // Fall back to full isolate refresh
       } catch (e) {
-        _log.fine('Unexpected error calling extension on cached isolate, clearing cache: $e');
+        _log.fine(
+          'Unexpected error calling extension on cached isolate, clearing cache: $e',
+        );
         cacheIsolate(null);
       }
     }
@@ -1138,7 +1192,12 @@ Use this guide to understand what tools to call, when, and in what order.
               .callServiceExtension(
                 extension,
                 isolateId: isolateRef.id!,
-                args: stringArgs,
+                args: await _withAppRoot(
+                  vmService,
+                  isolateRef.id!,
+                  extension,
+                  stringArgs,
+                ),
               )
               .timeout(_Constants.extensionCallTimeout);
           if (response.json != null) {
@@ -1174,7 +1233,11 @@ Use this guide to understand what tools to call, when, and in what order.
         }
       }
       return _ExtensionResult.error(
-        'Extension "$extension" is not registered in the running Flutter app. If this is a plugin or deep state tool, run "flutterpilot init" to install matching packages.',
+        'Extension "$extension" is not registered in the running Flutter app. '
+        'Plugin extensions register only once the app runs the plugin\'s setup code '
+        '(e.g. the first `Dio()` with DioPilotInterceptor is created). If the package is lazily '
+        'created, trigger that code path first, or wire the plugin in main(). '
+        'If the plugin is not installed at all, run "flutterpilot init".',
         ErrorCategory.extensionError,
       );
     } on TimeoutException {
@@ -1232,12 +1295,6 @@ Use this guide to understand what tools to call, when, and in what order.
           'hint':
               'Running in Zero-Code mode. Install flutterpilot_sdk to unlock deep state inspection (Riverpod, Bloc, Drift, Dio) and deterministic key tapping.',
         });
-      } else if (extension == 'ext.flutterpilot.hotReload') {
-        await vmService.callServiceExtension(
-          'ext.flutter.reassemble',
-          isolateId: isolateId,
-        );
-        return _ExtensionResult.success({'status': 'hot_reload_applied'});
       } else if (extension == 'ext.flutterpilot.getWidgetTree') {
         final res = await vmService.callServiceExtension(
           'ext.flutter.inspector.getRootWidgetTree',
@@ -1323,9 +1380,6 @@ enum ErrorCategory {
 
   /// The operation was queued for an older device connection or isolate.
   staleOperation,
-
-  /// The caller's context version no longer matches the active app state.
-  preconditionFailed,
 
   /// The server-side operation deadline elapsed before completion.
   deadlineExceeded,

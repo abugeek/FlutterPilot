@@ -630,18 +630,6 @@ Directly teleports to a deep application screen with optional seed state injecti
 
 ---
 
-### `export_session_gif`
-
-Generates an animated GIF replay artifact of the interaction session or baseline screens.
-
-**Parameters:**
-- `outputPath` (optional string): Target file path for the GIF (default: `"artifacts/session_replay.gif"`).
-- `delayMs` (optional integer): Delay between frames in milliseconds (default: `500`).
-
-**Returns:** `{"status": "exported", "path": "artifacts/session_replay.gif"}`
-
----
-
 ### `execute_action_chain`
 
 Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed.
@@ -653,18 +641,6 @@ Executes a batch sequence of UI actions (taps, text entries) inside the Flutter 
 
 ---
 
-### `run_chaos_fuzzing`
-
-Runs autonomous monkey/chaos stress fuzzing against the running Flutter app for a specified duration.
-
-**Parameters:**
-- `durationSeconds` (optional integer): Duration to run chaos fuzzing in seconds (default: `5`).
-- `eventRatePerSecond` (optional integer): Rate of chaos events per second (default: `5`).
-
-**Returns:** `{"status": "passed", "eventsExecuted": 25, "newErrorsCaught": 0}`
-
----
-
 ### `audit_memory_health`
 
 Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, and flags oversized image allocations.
@@ -672,54 +648,6 @@ Audits Flutter ImageCache memory, checks total allocated megabytes against thres
 **Parameters:** None
 
 **Returns:** Structured report with cache statistics and oversized allocation warnings.
-
----
-
-### `record_fixtures`
-
-Saves recent network interactions as an offline test fixture JSON file.
-
-**Parameters:**
-- `name` (required string): Fixture name (e.g. `"checkout_success"`).
-
-**Returns:** `{"status": "saved", "path": "test/fixtures/checkout_success.json"}`
-
----
-
-### `replay_fixtures`
-
-Loads a recorded network fixture JSON file and registers mock rules for all endpoints.
-
-**Parameters:**
-- `name` (required string): Fixture name.
-
-**Returns:** `{"status": "success", "mocksRegistered": 3}`
-
----
-
-### `generate_pr_report`
-
-Auto-generates a ready-to-paste GitHub Pull Request Markdown report summarizing verified changes, UI Health Audit, test status, and visual proof links.
-
-**Parameters:**
-- `title` (required string): Pull Request title.
-- `description` (optional string): Description of changes.
-- `generatedTestPath` (optional string): Path to synthesized test suite.
-- `gifPath` (optional string): Path to exported session GIF replay.
-
-**Returns:** Ready-to-paste GitHub PR Markdown string.
-
-**Returns:**
-```json
-{
-  "success": true
-}
-```
-
-**Use Cases:**
-- Close keyboard after text entry
-- Reset focus state
-- Clear input UI
 
 ---
 
@@ -1190,20 +1118,6 @@ Retrieves the rolling 30-60 second continuous Flight Recorder timeline (user ges
 
 ---
 
-### `generate_repro_test`
-
-Synthesizes a standalone, executable Flutter widget test (`test/repro_test.dart`) from the continuous Flight Recorder session leading up to a crash or bug.
-
-**Parameters:**
-- `testName` (optional string): Descriptive name for the test.
-- `widgetName` (optional string): Root widget or screen name to mount (default: `"MyApp()"`).
-- `writeToDisk` (optional boolean): Automatically write test code to disk (default: `false`).
-- `filePath` (optional string): Target file path to write (default: `"test/repro_test.dart"`).
-
-**Returns:** Complete, runnable `testWidgets` Dart code string.
-
----
-
 ### `clear_flight_log`
 
 Resets the flight recorder buffer and clears frozen snapshots.
@@ -1211,64 +1125,6 @@ Resets the flight recorder buffer and clears frozen snapshots.
 **Parameters:** None
 
 **Returns:** `{"status": "cleared"}`
-
----
-
-### `export_test_suite`
-
-Exports recorded interactive user journeys and flight sessions into production-ready test suites for Patrol, standard Flutter Integration Tests, or Widget Tests.
-
-**Parameters:**
-- `framework` (optional string): `"patrol"`, `"integration_test"`, or `"widget_test"` (default: `"patrol"`).
-- `testName` (optional string): Descriptive name for the test.
-- `appWidget` (optional string): Target root widget to mount (default: `"MyApp()"`).
-- `writeToDisk` (optional boolean): Whether to write the synthesized test file directly to disk.
-- `filePath` (optional string): Custom file path (default: `"integration_test/flow_test.dart"` or `"test/flow_test.dart"`).
-
-**Returns:** Complete, runnable test file string.
-
----
-
-### `save_state_snapshot`
-
-Captures a named point-in-time snapshot of the entire running application state (current route, Riverpod/Bloc providers, and storage).
-
-**Parameters:**
-- `name` (required string): Descriptive identifier for the snapshot (e.g. `"checkout_with_items"`).
-
-**Returns:** `{"status": "saved", "snapshot": {...}}`
-
----
-
-### `restore_state_snapshot`
-
-Instantly rewinds the running application back to a previously captured state snapshot (<100ms) without restarting.
-
-**Parameters:**
-- `name` (required string): Name of the snapshot to restore.
-
-**Returns:** `{"status": "restored", "name": "checkout_with_items"}`
-
----
-
-### `list_state_snapshots`
-
-Lists all point-in-time state snapshots stored in memory.
-
-**Parameters:** None
-
-**Returns:** List of saved snapshot metadata.
-
----
-
-### `delete_state_snapshot`
-
-Deletes a saved state snapshot by name.
-
-**Parameters:**
-- `name` (required string): Name of the snapshot to delete.
-
-**Returns:** `{"status": "deleted"}`
 
 ---
 
@@ -2133,16 +1989,6 @@ Clears the server-side log capture buffer.
 
 ---
 
-### `set_log_filter`
-
-Clears both the server-side and in-app SDK log buffers at once.
-
-**Parameters:** None
-
-**Use Cases:** Full reset before starting a new debug session.
-
----
-
 ## DevTools Deep Inspection
 
 *These tools use the same VM Service Protocol as Flutter DevTools. No browser needed — AI agents can read memory, network, render trees directly.*
@@ -2228,34 +2074,6 @@ Resets the HTTP request history.
 **Parameters:** None
 
 **Use Cases:** Clean baseline before testing a specific user flow's network calls.
-
----
-
-### `get_render_tree`
-
-Dumps the render object tree — how Flutter sizes and positions widgets (DevTools Layout Explorer equivalent).
-
-**Parameters:** None
-
-**Returns:** Full render tree as text (truncated at 8000 chars if very large).
-
-**Use Cases:**
-- Debug layout issues and overflow errors
-- Understand exact sizing constraints
-- Find unexpected padding or clipping
-
----
-
-### `get_layer_tree`
-
-Dumps the compositing layer tree — the GPU-level scene representation.
-
-**Parameters:** None
-
-**Use Cases:**
-- Debug why widgets are causing unnecessary GPU layers
-- Check compositing efficiency
-- Investigate transparency/opacity rendering
 
 ---
 
@@ -2494,18 +2312,6 @@ View timestamped log of connectivity state transitions.
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | `limit` | string | No | Max entries to return (default: 100). |
-
----
-
-#### `simulate_offline`
-
-Toggle simulated offline mode for testing.
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | string | Yes | `"true"` to simulate offline, `"false"` to restore. |
-
-**Note:** App code can check `ConnectivityPilotInspector.isSimulatedOffline` to honor this flag.
 
 ---
 
