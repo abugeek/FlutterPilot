@@ -87,108 +87,54 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 ## 📋 What You Get
 
-### MCP Tools Across 10 Categories
+### MCP Tools
 
-#### ⚡ **Instant State & 360° Telemetry** (All-in-One <5ms)
-- `get_app_summary` — Call first: route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, and whether the app window is visible.
-- `get_debug_logs` — Application console logs (`print`, `debugPrint`, error) with search query, level, and recency filters.
-- **⚡ Post-Action Feedback**: every interaction (`tap_widget`, `enter_text`, `press_key`, `secondary_tap`, ...) returns the route change, what appeared/disappeared, the tappable elements now on screen, and any new errors, in the same response.
-- **On-screen only**: finders, assertions and trees skip routes covered by another page and hidden tabs; ambiguous text matches are refused instead of guessed, and covered widgets are never tapped.
-- **Works with the window in the background**: FlutterPilot keeps the app rendering while an agent drives it, even when macOS/iOS/Android report it hidden.
+The full, always-current list with every parameter is
+**[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
+registrations). Plugin tools appear only when that plugin is installed. The
+ones you'll use most:
 
-#### 🎬 **Screenshots, Elements & Visual Inspection** (6 tools)
-- `get_interactive_elements` — Auto-discovers all actionable, visible, and hittable widgets (buttons, inputs, switches)
-- `capture_screenshot` — PNG screenshot as MCP Image with adaptive compression
-- `get_widget_tree` — Full widget hierarchy with positions and semantic compaction
-- `get_widget_properties` — Read text, enabled state, value, bounds from any widget
-- `save_screenshot_baseline` — Save baseline image for visual regression tests
-- `compare_screenshot` — Pixel-by-pixel regression comparison with automatic magenta visual diff generation
+**Orientation** — `get_app_summary` (call first: route, tappable elements,
+errors, logs, window visibility), `get_interactive_elements`,
+`get_widget_tree`, `get_widget_properties`, `capture_screenshot`.
 
-#### 🖱️ **UI Automation & Gesture Simulator** (18 tools)
-- `tap / tap_widget(key, identifier, text, type, x, y)` — Robust widget tapping by Key, Semantics identifier, text, or coordinates
-- `enter_text(text, key, identifier, focused_element)` — Type text into targeted or currently focused text field
-- `press_key(key, modifiers)` — Hardware keyboard key dispatch (Enter, Tab, Escape, modifiers)
-- `secondary_tap(key/coordinates)` — Right click / context menu gesture
-- `pinch_zoom(scale)` — Two-finger pinch-to-zoom gesture
-- `scroll_into_view(key/identifier/text)` — Actively scrolls scrollables (including lazy ListViews) until item mounts
-- `scroll_by(dx, dy)` — Scroll by pixel amount
-- `double_tap_widget(key)` — Double-tap a widget
-- `long_press_widget(key)` — Long-press a widget
-- `clear_text_field(key)` — Clear a text field
-- `press_back` — Pop current route (hardware back button)
-- `set_slider_value(key, value)` — Set slider to numeric value
-- `toggle_checkbox(key)` — Toggle checkbox/switch/radio
-- `focus_widget(key)` — Request focus on a widget
-- `unfocus_all` — Dismiss keyboard
-- `set_text_scale_factor(scale)` — Accessibility text scaling
-- `pump_frames(count)` — Wait for N animation frames
+**Driving the UI** — `tap_widget`, `enter_text`, `press_key`,
+`secondary_tap`, `long_press_widget`, `double_tap_widget`, `swipe_widget`,
+`drag_widget`, `scroll_into_view`, `toggle_checkbox`, `set_slider_value`,
+`clear_text_field`, `press_back`. Batch known sequences with
+`execute_action_chain`, `fill_form_batch`, `tap_and_wait`,
+`enter_text_and_submit`. Every action reports its own result — route change,
+what appeared/disappeared, tappable elements now, new errors — so you rarely
+need a follow-up read.
 
-#### 🌐 **Network Mocking & Conditioning** (4 tools)
-- `mock_http_response` — Mock HTTP endpoints with custom status code, delay, and response payload
-- `clear_http_mocks` — Clear active synthetic mocks
-- `simulate_network` — Simulate `slow_3g` (1500ms), `fast_4g` (100ms), `offline`, or `normal`
-- `get_network_logs` — HTTP requests/responses (Dio)
+**Verifying** — `assert_widget_visible`, `assert_text_visible`,
+`assert_widget_count`, `assert_widget_enabled` / `assert_widget_disabled`,
+`wait_for_condition`, `save_screenshot_baseline` + `compare_screenshot`,
+`audit_screen_health`.
 
-#### 📱 **Multi-Device / Fleet Manager & Connection** (4 tools)
-- `connect_app(uri)` — Connect or auto-discover running Flutter app
-- `list_connected_devices` — List all registered iOS, Android, and Web instances
-- `register_device(id, uri)` — Register new simulator/device in the fleet
-- `switch_device(id)` — Switch active target device on the fly
+**Navigation & environment** — `navigate_to`, `get_navigation_stack`,
+`simulate_deep_link`, `set_locale`, `set_text_scale_factor`,
+`set_device_rotation` (mobile only), `hot_reload`, `hot_restart`.
 
-#### 🧭 **Navigation & Routing** (8 tools)
-- `navigate_to(route)` — Push a named route
-- `get_navigation_stack` — Current route stack
-- `simulate_deep_link(url)` — Trigger deep link routing
-- `set_locale(locale)` — Switch app language at runtime
-- `set_theme(theme)` — Switch light/dark mode
-- `set_device_rotation(rotation)` — Device orientation
-- `wait_for_state(condition, timeout)` — Wait until condition is true
-- `hot_reload` — Apply code changes
+**Errors** — `get_errors`, `get_latest_crash_report` (exception, your source
+line, culprit widget), `get_debug_logs`, `get_flight_log`.
 
-#### 🔍 **State & Inspection** (18 tools)
-- `get_app_summary` — Current route, errors, widget count
-- `get_errors` — Buffered runtime errors
-- `diagnose_last_error` — Full error report with state & stack
-- `get_navigation_stack` — Route history
-- `profile_frame_budget` — Per-frame budget + jank threshold
-- `get_widget_tree` — Full widget JSON tree
-- `get_semantics_tree` — Accessibility tree (VoiceOver/TalkBack)
-- `assert_widget_enabled(key)` — Assert widget is interactive
-- `assert_widget_disabled(key)` — Assert widget is disabled
-- `get_riverpod_states` — Active Riverpod providers
-- `get_bloc_states` — Active Bloc/Cubit states
-- `get_network_logs` — HTTP requests/responses (Dio)
-- `query_drift_db(sql)` — SQL queries on your database
-- `get_hive_contents` — All local storage data
-- `get_shared_preferences` — SharedPreferences contents
-- `set_shared_preference` — Write to SharedPreferences
-- `clear_shared_preferences` — Clear SharedPreferences
-- `get_build_config` — pubspec.yaml + build metadata
-- `read_dart_file(path)` — Read source files
+**Network** — `mock_http_response` / `clear_http_mocks`, `simulate_network`,
+`get_network_logs` (Dio plugin), `get_http_profile` (any `dart:io` client).
 
-#### 🖥️ **Debug Console** (3 tools) ✨ *New*
-AI agents can read your app's console output automatically — no copy-pasting from VS Code.
-- `get_debug_logs` — Captured `print()`, `debugPrint()`, `developer.log()` with level/logger filters
-- `clear_debug_logs` — Reset the server and in-app log buffers before a test scenario
+**Performance** — `profile_frame_budget`, `get_memory_details`,
+`get_allocation_profile`.
 
-#### 🔬 **DevTools Deep Inspection** (8 tools) ✨ *New*
-Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
-- `get_memory_details` — Heap used/capacity/external per isolate
-- `get_allocation_profile` — Top Dart classes by heap bytes (memory leak detection)
-- `get_http_profile` — All HTTP requests with URL/method/status/timing
-- `clear_http_profile` — Reset network tracking baseline
-- `get_vm_info` — Dart VM version, PID, all isolates
-- `toggle_repaint_rainbow` — Visual repaint layer highlighting
-- `toggle_debug_paint` — Layout bounds, padding, hit areas overlay
-- `toggle_slow_animations` — 5× slow-motion animation inspection
+**State & storage (plugins)** — Riverpod `get_riverpod_state` /
+`set_riverpod_state`, Bloc `get_bloc_state` / `set_bloc_state`, go_router,
+SharedPreferences, sqflite `exec_sql_query`, Drift `list_drift_tables` /
+`query_drift`, Hive `get_hive_contents`, plus Supabase, Firebase,
+secure_storage and connectivity. Riverpod, go_router, Dio, sqflite,
+SharedPreferences and connectivity are field-tested on a real app; the others
+are not yet (see [ROADMAP.md](ROADMAP.md) §2).
 
-#### 🩹 **Self-Heal & Testing** (20+ tools)
-- `get_latest_crash_report` — Auto-intercepted crash with context
-- `start_recording` — Record user interactions
-- `stop_and_generate_test` — Generate test code from recording
-- `list_custom_tools` — App-specific tools registered
-- `call_custom_tool` — Execute app-specific tool
-- And 15+ more...
+**Devices** — `connect_app`, `list_connected_devices`, `register_device`,
+`switch_device`.
 
 ---
 
