@@ -133,10 +133,25 @@ class SqflitePilotInspector {
     ) async {
       final dbName = parameters['dbName'];
       final sql = parameters['sql'];
-      if (dbName == null || sql == null) {
+      if (sql == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameters: dbName, sql',
+          'Missing required parameter: sql',
+        );
+      }
+
+      final resolvedDbName =
+          dbName ?? (_databases.length == 1 ? _databases.keys.first : null);
+      if (resolvedDbName == null) {
+        if (_databases.isEmpty) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'No sqflite databases registered.',
+          );
+        }
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Multiple databases registered (${_databases.keys.join(', ')}). Specify dbName.',
         );
       }
 
@@ -148,11 +163,11 @@ class SqflitePilotInspector {
         );
       }
 
-      final db = _databases[dbName];
+      final db = _databases[resolvedDbName];
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Database "$dbName" not found. Registered: ${_databases.keys.join(', ')}',
+          'Database "$resolvedDbName" not found. Registered: ${_databases.keys.join(', ')}',
         );
       }
 
@@ -182,18 +197,26 @@ class SqflitePilotInspector {
       parameters,
     ) async {
       final dbName = parameters['dbName'];
-      if (dbName == null) {
+      final resolvedDbName =
+          dbName ?? (_databases.length == 1 ? _databases.keys.first : null);
+      if (resolvedDbName == null) {
+        if (_databases.isEmpty) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'No sqflite databases registered.',
+          );
+        }
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing required parameter: dbName',
+          'Multiple databases registered (${_databases.keys.join(', ')}). Specify dbName.',
         );
       }
 
-      final db = _databases[dbName];
+      final db = _databases[resolvedDbName];
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Database "$dbName" not found. Registered: ${_databases.keys.join(', ')}',
+          'Database "$resolvedDbName" not found. Registered: ${_databases.keys.join(', ')}',
         );
       }
 

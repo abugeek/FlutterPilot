@@ -102,6 +102,7 @@ Future<void> main(List<String> args) async {
       List<String> contains = const [],
       bool expectError = false,
       Duration within = Duration.zero,
+      int? maxBytes,
     ]) async {
       final deadline = DateTime.now().add(within);
       String text;
@@ -118,22 +119,51 @@ Future<void> main(List<String> args) async {
                   .map((c) => c['text'] ?? '')
                   .join('\n');
         final isError = res['error'] != null || result?['isError'] == true;
-        ok = isError == expectError && contains.every(text.contains);
+        final withinBudget = maxBytes == null || text.length <= maxBytes;
+        ok =
+            isError == expectError &&
+            contains.every(text.contains) &&
+            withinBudget;
         if (!ok && DateTime.now().isBefore(deadline)) {
           await Future<void>.delayed(const Duration(milliseconds: 500));
         }
       } while (!ok && DateTime.now().isBefore(deadline));
       if (!ok) failed++;
       final shown = text.length > 300 ? '${text.substring(0, 300)}…' : text;
-      print('${ok ? '✅' : '❌'} $label${ok ? '' : '\n   $shown'}');
+      print(
+        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $shown'}',
+      );
     }
 
     const settle = Duration(seconds: 10);
-    await check('app summary', 'get_app_summary', {}, [], false, settle);
-    await check('widget tree shows app widgets', 'get_widget_tree', {}, [
-      'Home',
-      'Send',
-    ]);
+    await check('app summary', 'get_app_summary', {}, [], false, settle, 4096);
+    await check(
+      'list_connected_devices shows auto-discovered default',
+      'list_connected_devices',
+      {},
+      ['default'],
+    );
+    await check(
+      'set_device_rotation honest on desktop',
+      'set_device_rotation',
+      {'orientation': 'landscape'},
+      ['Not applicable on desktop', 'skipped'],
+    );
+    await check(
+      'TextField isEnabled is true',
+      'get_widget_properties',
+      {'key': "TextField['Name']"},
+      ['"isEnabled":true'],
+    );
+    await check(
+      'widget tree shows app widgets',
+      'get_widget_tree',
+      {},
+      ['Home', 'Send'],
+      false,
+      Duration.zero,
+      16384,
+    );
     await check('mock /ping', 'mock_http_response', {
       'urlPattern': '/ping',
       'statusCode': 200,

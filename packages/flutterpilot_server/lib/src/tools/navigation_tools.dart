@@ -47,11 +47,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           if (p['state'] != null) 'state': json.encode(p['state']),
         });
         if (res.isError) return res.toCallToolResult();
+        final stateInjected =
+            p['state'] != null && (p['state'] as Map).isNotEmpty;
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  '🚀 Teleported directly to "${p['route']}" with state injected.',
+              text: stateInjected
+                  ? '🚀 Teleported directly to "${p['route']}" with state injected.'
+                  : '🚀 Teleported directly to "${p['route']}".',
             ),
           ],
         );
@@ -70,23 +73,33 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'wait_for_widget',
       description:
-          'Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.',
+          'Deprecated: use `wait_for_condition` instead. Polls until a widget with the given target/key appears in the tree, or times out.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
+          'target': JsonSchema.string(
             description:
-                'The ValueKey string of the widget to wait for to appear.',
+                'The ValueKey or text string of the widget to wait for.',
           ),
+          'key': JsonSchema.string(description: 'Legacy alias for target.'),
           'timeoutMs': JsonSchema.integer(
             description:
                 'Maximum milliseconds to wait for the widget (default: 5000ms).',
           ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
+        final target = p['target'] ?? p['key'] ?? p['selector'];
+        if (target == null) {
+          return CallToolResult(
+            content: [
+              TextContent(text: 'Missing required parameter: target (or key)'),
+            ],
+            isError: true,
+          );
+        }
         final args = {
-          'key': p['key'] as String,
+          'key': target.toString(),
+          'selector': target.toString(),
           if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
         };
         return _callExtensionRaw(

@@ -194,39 +194,5 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         return res.toCallToolResult();
       },
     );
-
-    server.registerTool(
-      'get_perf_metrics',
-      description:
-          'Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizations actually improved performance.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (p, e) async {
-        final fpsRes = await _callExtensionRaw(
-          'ext.flutterpilot.getPerfMetrics',
-          _withDeviceId(p),
-        );
-        String memory = 'N/A';
-        final vmService = await _vmServiceForParameters(p);
-        if (vmService != null) {
-          final vm = await vmService.getVM();
-          final mainIsolateId = vm.isolates?.firstOrNull?.id;
-          if (mainIsolateId != null) {
-            final usage = await vmService.getMemoryUsage(mainIsolateId);
-            memory =
-                '${((usage.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(2)} MB';
-          }
-        }
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'FPS: ${fpsRes.data?['fps'] ?? 'N/A'}\nHeap: $memory\n\nHINT: If FPS is below 60, use show_performance_overlay to find heavy build cycles.',
-            ),
-          ],
-        );
-      },
-    );
   }
 }

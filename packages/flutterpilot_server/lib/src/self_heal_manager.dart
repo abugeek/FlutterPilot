@@ -26,7 +26,7 @@ class CrashReport {
     this.widgetTreeData,
   });
 
-  /// Formats the report as a Markdown string for AI agents.
+  /// Formats the report as a compact Markdown string (<4KB budget) for AI agents.
   String toMarkdown() {
     final buffer = StringBuffer()..writeln('# 🚨 Critical App Crash Report');
     buffer.writeln('\n**Timestamp:** $timestamp');
@@ -49,15 +49,18 @@ class CrashReport {
 
   void _addSection(StringBuffer buffer, String title, dynamic data) {
     buffer.writeln('\n## $title');
-    if (data == null || (data is String && data == 'N/A')) {
+    if (data == null || (data is String && (data == 'N/A' || data.isEmpty))) {
       buffer.writeln('No data available.');
     } else {
-      buffer.writeln('```json\n$data\n```');
+      final str = data.toString();
+      final clipped = str.length > 2000
+          ? '${str.substring(0, 2000)}... [Truncated]'
+          : str;
+      buffer.writeln('```json\n$clipped\n```');
     }
   }
 
   dynamic _truncateTree(dynamic tree) {
-    // Basic truncation to keep the prompt context reasonable
     if (tree == null) return null;
     final str = tree.toString();
     if (str.length > 2000) return '${str.substring(0, 2000)}... [Truncated]';
@@ -70,21 +73,75 @@ class SelfHealManager {
   final McpServer server;
   bool isUnstable = false;
   CrashReport? lastCrashReport;
+  String? _lastCrashException;
+  String? _lastCrashTimestamp;
+  String? _lastCrashDeviceId;
+  String? get lastCrashDeviceId => _lastCrashDeviceId;
+  DateTime? _lastCrashTime;
+  String? _lastDebouncedException;
+
+  CrashReport? _cachedReport;
+  DateTime? _cachedReportTime;
 
   SelfHealManager({required this.server});
 
-  /// Marks the app as unstable and starts gathering diagnostic data.
+  /// Handles an error event from the app.
+  /// Debounces repeated identical errors within 2s, classifies severity,
+  /// and defers diagnostic data collection until [getLatestReport] is called
+  /// (or immediately if [callExtension] is provided).
   Future<void> handleCrash({
     required String exception,
-    required Future<dynamic> Function(String extension) callExtension,
+    String severity = 'critical',
+    String? deviceId,
+    Future<dynamic> Function(String extension)? callExtension,
   }) async {
-    isUnstable = true;
-    final timestamp = DateTime.now().toIso8601String();
+    final now = DateTime.now();
+    if (_lastDebouncedException == exception &&
+        _lastCrashTime != null &&
+        now.difference(_lastCrashTime!) < const Duration(seconds: 2)) {
+      return; // Debounced repeated error
+    }
+    _lastDebouncedException = exception;
+    _lastCrashTime = now;
 
-    // Proactive Notification (Logging Message)
+    if (severity == 'warning') {
+      _log.warning('⚠️ Layout overflow / warning detected: $exception');
+      return;
+    }
+
+    isUnstable = true;
+    _lastCrashException = exception;
+    _lastCrashTimestamp = now.toIso8601String();
+    _lastCrashDeviceId = deviceId;
+    _cachedReport = null;
+    _cachedReportTime = null;
+
     _sendProactiveAlert(exception);
 
-    // Parallel data gathering — individual failures return 'N/A' instead of crashing the whole report.
+    if (callExtension != null) {
+      await getLatestReport(callExtension);
+    }
+  }
+
+  /// Lazily fetches and constructs the crash report, caching it for 5s.
+  Future<CrashReport?> getLatestReport(
+    Future<dynamic> Function(String extension) callExtension,
+  ) async {
+    if (_cachedReport != null &&
+        _cachedReportTime != null &&
+        DateTime.now().difference(_cachedReportTime!) <
+            const Duration(seconds: 5)) {
+      return _cachedReport;
+    }
+
+    if (_lastCrashException == null && lastCrashReport == null) {
+      return null;
+    }
+
+    final exception =
+        _lastCrashException ?? lastCrashReport?.exception ?? 'Unknown';
+    final timestamp = _lastCrashTimestamp ?? DateTime.now().toIso8601String();
+
     final results = await Future.wait([
       callExtension('ext.flutterpilot.getErrors').catchError((_) => 'N/A'),
       callExtension(
@@ -98,7 +155,7 @@ class SelfHealManager {
       callExtension('ext.flutterpilot.getWidgetTree').catchError((_) => 'N/A'),
     ]);
 
-    lastCrashReport = CrashReport(
+    final report = CrashReport(
       timestamp: timestamp,
       exception: exception,
       errorData: results[0],
@@ -108,6 +165,11 @@ class SelfHealManager {
       navigationData: results[4],
       widgetTreeData: results[5],
     );
+
+    _cachedReport = report;
+    _cachedReportTime = DateTime.now();
+    lastCrashReport = report;
+    return report;
   }
 
   void _sendProactiveAlert(String exception) {
@@ -137,6 +199,11 @@ class SelfHealManager {
   /// unless [clearReport] is set to true.
   void reset({bool clearReport = false}) {
     isUnstable = false;
+    _lastCrashException = null;
+    _lastCrashTimestamp = null;
+    _lastCrashDeviceId = null;
+    _cachedReport = null;
+    _cachedReportTime = null;
     if (clearReport) {
       lastCrashReport = null;
     }
@@ -145,5 +212,9 @@ class SelfHealManager {
   /// Explicitly clears the recorded crash report.
   void clearCrashReport() {
     lastCrashReport = null;
+    _lastCrashException = null;
+    _lastCrashTimestamp = null;
+    _cachedReport = null;
+    _cachedReportTime = null;
   }
 }

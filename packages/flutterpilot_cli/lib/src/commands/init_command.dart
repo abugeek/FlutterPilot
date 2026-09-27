@@ -217,6 +217,10 @@ class InitCommand extends Command<void> {
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
     );
+    stdout.writeln(
+      '\nTip: To enable runtime locale and text scale overrides (set_locale / set_text_scale), '
+      'wrap MaterialApp in ValueListenableBuilder with FlutterPilot.localeNotifier and FlutterPilot.textScaleNotifier.',
+    );
   }
 
   /// Adds `NavigationTracker()` to a plain `MaterialApp(` (not `.router`),

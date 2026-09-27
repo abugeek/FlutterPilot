@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 136
+Tool count: 132
 
 ## `get_operation`
 
@@ -456,11 +456,12 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 
 ## `wait_for_widget`
 
-Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.
+Deprecated: use `wait_for_condition` instead. Polls until a widget with the given target/key appears in the tree, or times out.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to wait for to appear. |
+| `target` | string | no | The ValueKey or text string of the widget to wait for. |
+| `key` | string | no | Legacy alias for target. |
 | `timeoutMs` | integer | no | Maximum milliseconds to wait for the widget (default: 5000ms). |
 
 ## `wait_for_route`
@@ -658,12 +659,14 @@ Inspect current values of all active Riverpod providers. Returns provider name, 
 
 ## `set_riverpod_state`
 
-Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\"hello\"").
+Inject a new state into a Riverpod provider. Use the provider name or notifier name from `get_riverpod_state`. Accepts plain values (e.g. 42, "active", true) or JSON.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `provider` | string | yes | The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider"). |
-| `value` | string | yes | The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings. |
+| `provider` | string | no | The Riverpod provider name (e.g. "counterProvider", "FeedNotifier"). |
+| `name` | string | no | Alias for provider. |
+| `target` | string | no | Alias for provider. |
+| `value` | any | yes | The new state value to inject. Can be a primitive value (int, bool, string) or JSON string. |
 
 ## `batch_set_state`
 
@@ -696,7 +699,7 @@ Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_
 
 ## `get_network_logs`
 
-View the last 50 HTTP requests and responses. CALL THIS if an API call failed or to verify network payload accuracy.
+View recent HTTP requests and responses (bodies truncated and redacted; mock status shown). CALL THIS if an API call failed or to verify network payload accuracy.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -914,14 +917,6 @@ Asserts that the widget identified by key is DISABLED (onPressed / onTap / onCha
 |---|---|---:|---|
 | `key` | string | yes | The ValueKey string of the widget to assert is disabled. |
 
-## `get_perf_metrics`
-
-Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizations actually improved performance.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
 ## `get_memory_details`
 
 Returns a detailed memory breakdown of the running app: heap used, heap capacity, external (native) memory, and RSS for every Dart isolate. Use this to detect memory leaks or unexpected growth. Heap > 200 MB or external > 50 MB usually warrants investigation.
@@ -989,31 +984,6 @@ Slows all animations to 1/5 speed (timeDilation=5) or restores normal speed (tim
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `enable_widget_rebuild_tracking`
-
-Enables or disables per-widget rebuild counting (equivalent to DevTools "Track Widget Builds"). After enabling, interact with the app, then call get_debug_logs to see rebuild events, or check the performance overlay via get_perf_metrics. Set enabled=false to stop tracking.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | boolean | yes | true to start tracking per-widget rebuild counts, false to stop. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_gc_stats`
-
-Returns a heap snapshot per Dart isolate — heap used vs. capacity — which reflects GC pressure. High capacity utilization (>80%) signals frequent GC. Pair with get_allocation_profile to find which classes are causing heap growth.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `audit_memory_health`
-
-Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, and identifies oversized image allocations (>4x layout size) causing memory bloat.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_supabase_auth`

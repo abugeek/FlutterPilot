@@ -10,7 +10,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
@@ -96,7 +95,6 @@ Future<void> _ensureFreshFrame() async {
     onTimeout: () {},
   );
 }
-
 
 /// The core class for the FlutterPilot SDK — an AI-native runtime
 /// introspection toolkit for Flutter applications.
@@ -229,7 +227,6 @@ class FlutterPilot {
   static int _frameCount = 0;
   static DateTime _lastFpsUpdate = DateTime.now();
 
-
   // -- Debug console capture -------------------------------------------------
   static DebugPrintCallback? _originalDebugPrint;
   static const int _consoleBufferMax = 500;
@@ -288,70 +285,138 @@ class FlutterPilot {
     final logicalWidth = physicalSize.width / devicePixelRatio;
     final logicalHeight = physicalSize.height / devicePixelRatio;
 
-      final frameProfile = FrameBudgetProfiler.getProfile();
-      final jankPct = (frameProfile['jankPercentage'] as num?)?.toDouble() ?? 0.0;
-      final avgDuration = (frameProfile['avgFrameDurationMs'] as num?)?.toDouble() ?? 16.6;
+    final frameProfile = FrameBudgetProfiler.getProfile();
+    final jankPct = (frameProfile['jankPercentage'] as num?)?.toDouble() ?? 0.0;
+    final avgDuration =
+        (frameProfile['avgFrameDurationMs'] as num?)?.toDouble() ?? 16.6;
 
-      return {
-        'timestamp': DateTime.now().toIso8601String(),
-        'route': {
-          'current': currentRoute,
-          'stackDepth': navStack.length,
-          'history': navStack.whereType<String>().toList(),
-        },
-        'viewport': {
-          'width': logicalWidth.round(),
-          'height': logicalHeight.round(),
-          'devicePixelRatio': devicePixelRatio,
-        },
-        'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
-        'interactiveElements': interactiveElements,
-        'focusedElement': focusedInfo,
-        'performance': {
-          'fps': _lastFps,
-          'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
-          'frameCount': _frameCount,
-          'jankPercentage': jankPct,
-          'avgFrameDurationMs': avgDuration,
-          if (frameProfile['diagnosis'] != null)
-            'diagnosis': frameProfile['diagnosis'],
-        },
-        'recentErrors': recentErrors.take(5).toList(),
-        'recentLogs': recentLogs,
-      };
+    return {
+      'timestamp': DateTime.now().toIso8601String(),
+      'route': {
+        'current': currentRoute,
+        'stackDepth': navStack.length,
+        'history': navStack.whereType<String>().toList(),
+      },
+      'viewport': {
+        'width': logicalWidth.round(),
+        'height': logicalHeight.round(),
+        'devicePixelRatio': devicePixelRatio,
+      },
+      'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
+      'interactiveElements': interactiveElements,
+      'focusedElement': focusedInfo,
+      'performance': {
+        'fps': _lastFps,
+        'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
+        'frameCount': _frameCount,
+        'jankPercentage': jankPct,
+        'avgFrameDurationMs': avgDuration,
+        if (frameProfile['diagnosis'] != null)
+          'diagnosis': frameProfile['diagnosis'],
+      },
+      'recentErrors': recentErrors.take(5).toList(),
+      'recentLogs': recentLogs,
+    };
+  }
+
+  /// Extracts instant post-action state for telemetry and feedback.
+  static int _errorsReported = 0;
+
+  static Future<Map<String, dynamic>> getPostActionState({
+    String? previousRoute,
+  }) async {
+    await _waitForRouteSettled();
+    final currentRoute = NavigationTracker.currentRoute;
+    String? focusedKey;
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus != null && primaryFocus.context is Element) {
+      focusedKey = PilotWidgetInspector.extractCleanKey(
+        primaryFocus.context!.widget.key,
+      );
     }
+    final interactive = PilotWidgetInspector.getInteractiveElements();
+    final errors = ErrorInspector.errors.length;
+    final newErrors = errors >= _errorsReported
+        ? errors - _errorsReported
+        : errors;
+    _errorsReported = errors;
+    return {
+      'route': currentRoute,
+      if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
+      'previousRoute': previousRoute,
+      'focusedElement': focusedKey,
+      'interactiveElementsCount': interactive.length,
+      'visibleInteractiveElements': [
+        for (final e in interactive.take(10))
+          e['key'] != null && e['text'] != null
+              ? '${e['text']} [${e['key']}]'
+              : (e['text'] ?? e['key'] ?? e['type']),
+      ],
+      'newErrorCount': newErrors,
+    };
+  }
 
-    /// Extracts instant post-action state for telemetry and feedback.
-    static int _errorsReported = 0;
+  /// Waits until the navigator route stack has settled: no routes mid-animation,
+  /// no popups/dialogs mid-transition, and the top-most route's animation has
+  /// completed or been dismissed. Capped at [timeout] so an infinite animation
+  /// never blocks action responses.
+  static Future<void> _waitForRouteSettled({
+    Duration timeout = const Duration(milliseconds: 300),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    const tick = Duration(milliseconds: 16);
+    while (DateTime.now().isBefore(deadline)) {
+      final nav = NavigationTracker.navigatorState;
+      final ok = await _navigatorSettled(nav);
+      if (ok) return;
+      await Future.delayed(tick);
+    }
+  }
 
-    static Map<String, dynamic> getPostActionState({String? previousRoute}) {
-      final currentRoute = NavigationTracker.currentRoute;
-      String? focusedKey;
-      final primaryFocus = FocusManager.instance.primaryFocus;
-      if (primaryFocus != null && primaryFocus.context is Element) {
-        focusedKey =
-            PilotWidgetInspector.extractCleanKey(primaryFocus.context!.widget.key);
+  static Future<bool> _navigatorSettled(NavigatorState? nav) async {
+    try {
+      if (nav == null || !nav.mounted) return true;
+      bool settled = true;
+      void checkElement(Element e) {
+        try {
+          final w = e.widget;
+          final dyn = w as dynamic;
+          try {
+            final anim = dyn.animation;
+            if (anim is Animation && !anim.isCompleted && !anim.isDismissed) {
+              settled = false;
+            }
+          } catch (_) {}
+          try {
+            final routeAnim = dyn.secondaryAnimation;
+            if (routeAnim is Animation &&
+                !routeAnim.isCompleted &&
+                !routeAnim.isDismissed) {
+              settled = false;
+            }
+          } catch (_) {}
+          try {
+            final barrierDismiss = dyn.barrierDismissible;
+            final dismissAnim = dyn.animation;
+            if (barrierDismiss != null &&
+                dismissAnim is Animation &&
+                !dismissAnim.isCompleted &&
+                !dismissAnim.isDismissed) {
+              settled = false;
+            }
+          } catch (_) {}
+        } catch (_) {}
+        if (settled) {
+          e.visitChildren(checkElement);
+        }
       }
-      final interactive = PilotWidgetInspector.getInteractiveElements();
-      final errors = ErrorInspector.errors.length;
-      // Only errors caused since the previous action, not the whole history.
-      final newErrors = errors >= _errorsReported ? errors - _errorsReported : errors;
-      _errorsReported = errors;
-      return {
-        'route': currentRoute,
-        if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
-        'previousRoute': ?previousRoute,
-        'focusedElement': ?focusedKey,
-        'interactiveElementsCount': interactive.length,
-        'visibleInteractiveElements': [
-          for (final e in interactive.take(10))
-            e['key'] != null && e['text'] != null
-                ? '${e['text']} [${e['key']}]'
-                : (e['text'] ?? e['key'] ?? e['type']),
-        ],
-        'newErrorCount': newErrors,
-      };
+
+      (nav.context as Element).visitChildren(checkElement);
+      return settled;
+    } catch (_) {
+      return true;
     }
+  }
 
   /// Initializes the FlutterPilot SDK.
   ///
@@ -504,12 +569,6 @@ class FlutterPilot {
     _customTools[name] = callback;
   }
 
-
-
-
-
-
-
   /// Registers a state setter for a specific state-management [type].
   ///
   /// The setter is invoked by the `ext.flutterpilot.setState` service
@@ -653,16 +712,46 @@ class FlutterPilot {
     final widget = element.widget;
     final dyn = widget as dynamic;
 
+    // TextField / TextFormField / EditableText enabled/readOnly check — must be
+    // applied FIRST so later generic onPressed/onTap/onChanged callback checks don't
+    // overwrite it to false (TextField often has no onPressed callback even when
+    // enabled — it responds to focus + IME input).
+    try {
+      final w = widget;
+      bool? explicitEnabled;
+      try {
+        explicitEnabled = dyn.enabled as bool?;
+      } catch (_) {}
+      bool? readOnly;
+      try {
+        readOnly = dyn.readOnly as bool?;
+      } catch (_) {}
+      final isEditableKind =
+          w.toString().startsWith('TextField<') ||
+          w.toString().startsWith('TextFormField<') ||
+          w.toString().startsWith('EditableText<') ||
+          w.runtimeType.toString() == 'TextField' ||
+          w.runtimeType.toString() == 'TextFormField' ||
+          w.runtimeType.toString() == 'EditableText';
+      if (isEditableKind || explicitEnabled != null || readOnly != null) {
+        props['isEnabled'] = (explicitEnabled ?? true) && !(readOnly == true);
+        if (readOnly == true) props['readOnly'] = true;
+      }
+    } catch (_) {}
+
     // Direct text content (Text widget)
     try {
       final t = dyn.data;
       if (t is String) props['text'] = t;
     } catch (_) {}
 
-    // Enabled/disabled via common callback names
-    try {
-      props['isEnabled'] = (dyn.onPressed as Object?) != null;
-    } catch (_) {}
+    // Enabled/disabled via common callback names — only set if not already set
+    // by the widget-specific check above.
+    if (!props.containsKey('isEnabled')) {
+      try {
+        props['isEnabled'] = (dyn.onPressed as Object?) != null;
+      } catch (_) {}
+    }
     if (!props.containsKey('isEnabled')) {
       try {
         props['isEnabled'] = (dyn.onTap as Object?) != null;

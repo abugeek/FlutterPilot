@@ -25,13 +25,18 @@ class BlocPilotObserver extends BlocObserver {
   static const int _maxEntries = 100;
 
   BlocPilotObserver() {
+    register();
+  }
+
+  /// Explicitly registers Bloc capabilities with FlutterPilot.
+  static void register() {
     if (!_initialized) {
       _initialized = true;
       _registerExtension();
     }
   }
 
-  void _registerExtension() {
+  static void _registerExtension() {
     FlutterPilot.registerCapability(
       'bloc',
       version: '1',
@@ -56,7 +61,10 @@ class BlocPilotObserver extends BlocObserver {
         }
       }
       if (bloc == null) {
-        throw Exception('Bloc "$name" not found or not yet active.');
+        final available = _activeBlocs.keys.take(5).join(', ');
+        throw Exception(
+          'Bloc "$name" not found or not yet active. Available candidates: ${available.isEmpty ? 'none' : available}',
+        );
       }
 
       try {

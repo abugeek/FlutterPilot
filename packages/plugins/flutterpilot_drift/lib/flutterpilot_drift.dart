@@ -116,10 +116,25 @@ class DriftPilotInspector {
     ) async {
       final dbName = parameters['dbName'];
       final sql = parameters['sql'];
-      if (dbName == null || sql == null) {
+      if (sql == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing dbName/sql',
+          'Missing sql parameter',
+        );
+      }
+
+      final resolvedDbName =
+          dbName ?? (_databases.length == 1 ? _databases.keys.first : null);
+      if (resolvedDbName == null) {
+        if (_databases.isEmpty) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'No Drift databases registered.',
+          );
+        }
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Multiple Drift databases registered (${_databases.keys.join(', ')}). Specify dbName.',
         );
       }
 
@@ -131,11 +146,11 @@ class DriftPilotInspector {
         );
       }
 
-      final db = _databases[dbName];
+      final db = _databases[resolvedDbName];
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'DB not found',
+          'DB "$resolvedDbName" not found',
         );
       }
       try {
@@ -162,17 +177,25 @@ class DriftPilotInspector {
       parameters,
     ) async {
       final dbName = parameters['dbName'];
-      if (dbName == null) {
+      final resolvedDbName =
+          dbName ?? (_databases.length == 1 ? _databases.keys.first : null);
+      if (resolvedDbName == null) {
+        if (_databases.isEmpty) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'No Drift databases registered.',
+          );
+        }
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing dbName',
+          'Multiple Drift databases registered (${_databases.keys.join(', ')}). Specify dbName.',
         );
       }
-      final db = _databases[dbName];
+      final db = _databases[resolvedDbName];
       if (db == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'DB not found',
+          'DB "$resolvedDbName" not found',
         );
       }
       return ServiceExtensionResponse.result(

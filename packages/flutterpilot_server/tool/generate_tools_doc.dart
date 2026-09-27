@@ -17,6 +17,7 @@ Future<void> main() async {
   ]);
   final responses = <int, Completer<Map<String, dynamic>>>{};
   var nextId = 0;
+  process.stderr.transform(utf8.decoder).listen(stderr.write);
   final reader = process.stdout
       .transform(utf8.decoder)
       .transform(const LineSplitter())
@@ -49,7 +50,7 @@ Future<void> main() async {
 
   try {
     await request('initialize', {
-      'protocolVersion': '2025-06-18',
+      'protocolVersion': '2024-11-05',
       'capabilities': <String, dynamic>{},
       'clientInfo': {'name': 'flutterpilot-doc-generator', 'version': '1.0.0'},
     });

@@ -85,7 +85,8 @@ extension _NavigationExtensions on FlutterPilot {
             json.encode({
               'status': 'success',
               'popped': false,
-              'note': 'Already at the root route; back would exit the app. '
+              'note':
+                  'Already at the root route; back would exit the app. '
                   'Pass allowExit=true to do that.',
             }),
           );
@@ -200,7 +201,8 @@ extension _NavigationExtensions on FlutterPilot {
       var stableFrames = 0;
       while (DateTime.now().isBefore(deadline)) {
         final scheduler = SchedulerBinding.instance;
-        final busy = scheduler.hasScheduledFrame || scheduler.transientCallbackCount > 0;
+        final busy =
+            scheduler.hasScheduledFrame || scheduler.transientCallbackCount > 0;
         if (busy) {
           stableFrames = 0;
         } else {
@@ -218,7 +220,8 @@ extension _NavigationExtensions on FlutterPilot {
         json.encode({
           'status': 'timeout',
           'note': 'Animation may still be running',
-          'transientCallbackCount': SchedulerBinding.instance.transientCallbackCount,
+          'transientCallbackCount':
+              SchedulerBinding.instance.transientCallbackCount,
         }),
       );
     });
@@ -277,9 +280,20 @@ extension _NavigationExtensions on FlutterPilot {
             'orientation must be: portrait | landscape | all',
           );
       }
+      final platform = defaultTargetPlatform;
+      final isDesktop =
+          platform == TargetPlatform.macOS ||
+          platform == TargetPlatform.linux ||
+          platform == TargetPlatform.windows;
       await SystemChrome.setPreferredOrientations(preferred);
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', 'orientation': orientation}),
+        json.encode({
+          'status': isDesktop ? 'skipped' : 'success',
+          'orientation': orientation,
+          'note': isDesktop
+              ? 'Not applicable on desktop; window size is controlled by the OS.'
+              : null,
+        }),
       );
     });
 

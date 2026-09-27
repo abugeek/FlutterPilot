@@ -145,12 +145,12 @@ Use absolute paths; `-p` is your Flutter app's root:
 - `wait_for_state(condition, timeout)` — Wait until condition is true
 - `hot_reload` — Apply code changes
 
-#### 🔍 **State & Inspection** (19 tools)
+#### 🔍 **State & Inspection** (18 tools)
 - `get_app_summary` — Current route, errors, widget count
 - `get_errors` — Buffered runtime errors
 - `diagnose_last_error` — Full error report with state & stack
 - `get_navigation_stack` — Route history
-- `get_perf_metrics` — FPS, memory, frame timing
+- `profile_frame_budget` — Per-frame budget + jank threshold
 - `get_widget_tree` — Full widget JSON tree
 - `get_semantics_tree` — Accessibility tree (VoiceOver/TalkBack)
 - `assert_widget_enabled(key)` — Assert widget is interactive
@@ -171,18 +171,16 @@ AI agents can read your app's console output automatically — no copy-pasting f
 - `get_debug_logs` — Captured `print()`, `debugPrint()`, `developer.log()` with level/logger filters
 - `clear_debug_logs` — Reset the server and in-app log buffers before a test scenario
 
-#### 🔬 **DevTools Deep Inspection** (12 tools) ✨ *New*
+#### 🔬 **DevTools Deep Inspection** (8 tools) ✨ *New*
 Same VM Service Protocol as Flutter DevTools — but queryable by AI agents.
 - `get_memory_details` — Heap used/capacity/external per isolate
 - `get_allocation_profile` — Top Dart classes by heap bytes (memory leak detection)
-- `get_gc_stats` — GC heap pressure across isolates
 - `get_http_profile` — All HTTP requests with URL/method/status/timing
 - `clear_http_profile` — Reset network tracking baseline
 - `get_vm_info` — Dart VM version, PID, all isolates
 - `toggle_repaint_rainbow` — Visual repaint layer highlighting
 - `toggle_debug_paint` — Layout bounds, padding, hit areas overlay
 - `toggle_slow_animations` — 5× slow-motion animation inspection
-- `enable_widget_rebuild_tracking` — Per-widget rebuild counting
 
 #### 🩹 **Self-Heal & Testing** (20+ tools)
 - `get_latest_crash_report` — Auto-intercepted crash with context
