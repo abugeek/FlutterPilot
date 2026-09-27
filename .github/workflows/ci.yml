@@ -73,9 +73,15 @@ jobs:
               echo "DEVICE=$UDID" >> "$GITHUB_ENV" ;;
           esac
 
+      # Hosted iOS simulators are slow enough to occasionally drop the VM
+      # service connection; retry once and leave a visible warning.
       - name: End-to-end test
         working-directory: packages/flutterpilot_server
-        run: dart run tool/e2e_test.dart -d "$DEVICE"
+        run: |
+          dart run tool/e2e_test.dart -d "$DEVICE" && exit 0
+          [ "${{ matrix.target }}" = ios ] || exit 1
+          echo "::warning::iOS e2e failed once on this runner; retrying"
+          dart run tool/e2e_test.dart -d "$DEVICE"
 
   e2e-android:
     runs-on: ubuntu-latest
@@ -112,4 +118,5 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: false
-          script: cd packages/flutterpilot_server && dart run tool/e2e_test.dart -d emulator-5554
+          # Emulators on hosted runners are slow; retry once, visibly.
+          script: cd packages/flutterpilot_server && (dart run tool/e2e_test.dart -d emulator-5554 || (echo "::warning::Android e2e failed once on this runner; retrying" && dart run tool/e2e_test.dart -d emulator-5554))

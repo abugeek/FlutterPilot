@@ -1174,7 +1174,45 @@ Use this guide to understand what tools to call, when, and in what order.
     return {...args, 'projectRoot': root};
   }
 
+  /// Runs [extension] once; if the VM service connection drops mid-call
+  /// (slow simulators do this), reconnects. Reads are retried; actions are
+  /// not — they may already have run — and say so instead.
   Future<_ExtensionResult> _callExtensionImmediate(
+    String extension,
+    Map<String, dynamic> parameters, {
+    DeviceRuntimeContext? context,
+  }) async {
+    final result = await _callExtensionImmediateOnce(
+      extension,
+      parameters,
+      context: context,
+    );
+    final message = result.errorMessage ?? '';
+    final dropped =
+        message.contains('Service connection disposed') ||
+        message.contains('Service has disappeared');
+    if (!dropped) return result;
+
+    _markContextConnectionLost(context);
+    try {
+      await _connectToVmService();
+    } catch (_) {}
+    if (_isReadOnlyExtension(extension) && _vmService != null) {
+      return _callExtensionImmediateOnce(
+        extension,
+        parameters,
+        context: context,
+      );
+    }
+    return _ExtensionResult.error(
+      'The connection to the app dropped during this call (reconnected: '
+      '${_vmService != null}). The action may or may not have run — check '
+      'with get_app_summary before retrying.',
+      ErrorCategory.connectionLost,
+    );
+  }
+
+  Future<_ExtensionResult> _callExtensionImmediateOnce(
     String extension,
     Map<String, dynamic> parameters, {
     DeviceRuntimeContext? context,
