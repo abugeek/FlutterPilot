@@ -28,13 +28,32 @@ base class RiverpodPilotObserver extends ProviderObserver {
   static const int _maxEntries = 100;
 
   RiverpodPilotObserver() {
+    register();
+  }
+
+  /// Explicitly registers Riverpod capabilities with FlutterPilot.
+  static void register() {
     if (!_initialized) {
       _initialized = true;
       _registerExtension();
     }
   }
 
-  void _registerExtension() {
+  static String? _resolveProviderKey(String query) {
+    if (_providers.containsKey(query)) return query;
+    final qLower = query.toLowerCase();
+    final exactCaseInsensitive = _providers.keys
+        .where((k) => k.toLowerCase() == qLower)
+        .toList();
+    if (exactCaseInsensitive.isNotEmpty) return exactCaseInsensitive.first;
+    final matches = _providers.keys
+        .where((k) => k.toLowerCase().contains(qLower))
+        .toList();
+    if (matches.length == 1) return matches.first;
+    return null;
+  }
+
+  static void _registerExtension() {
     FlutterPilot.registerCapability(
       'riverpod',
       version: '1',
@@ -48,16 +67,43 @@ base class RiverpodPilotObserver extends ProviderObserver {
     }
 
     FlutterPilot.registerStateSetter('riverpod', (name, value) async {
-      final container = _containers[name];
-      if (container == null) {
+      final resolvedName = _resolveProviderKey(name);
+      if (resolvedName == null) {
+        final matches = _providers.keys
+            .where((k) => k.toLowerCase().contains(name.toLowerCase()))
+            .toList();
+        if (matches.length > 1) {
+          throw Exception(
+            'Multiple providers match "$name": ${matches.join(', ')}. Please specify the exact name.',
+          );
+        }
+        final available = _providers.keys.take(5).join(', ');
         throw Exception(
-          'No ProviderContainer found for "$name". Is the app running?',
+          'Provider "$name" not found or not yet active. Available candidates: ${available.isEmpty ? 'none' : available}',
         );
       }
 
-      final provider = _providers[name];
+      final container = _containers[resolvedName];
+      if (container == null) {
+        throw Exception(
+          'No ProviderContainer found for "$resolvedName". Is the app running?',
+        );
+      }
+
+      final provider = _providers[resolvedName];
       if (provider == null) {
-        throw Exception('Provider "$name" not found or not yet active.');
+        throw Exception(
+          'Provider "$resolvedName" not found or not yet active.',
+        );
+      }
+
+      dynamic parsedValue = value;
+      if (value is String) {
+        try {
+          parsedValue = json.decode(value);
+        } catch (_) {
+          parsedValue = value;
+        }
       }
 
       try {
@@ -65,21 +111,26 @@ base class RiverpodPilotObserver extends ProviderObserver {
         final dynamic notifier = container.read(dynamicProvider.notifier);
 
         try {
-          notifier.state = value;
+          notifier.state = parsedValue;
         } catch (e) {
           throw Exception(
-            'Provider "$name" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
+            'Provider "$resolvedName" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
           );
         }
-        return {'status': 'success', 'name': name, 'newValue': value};
+        return {
+          'status': 'success',
+          'name': resolvedName,
+          'newValue': parsedValue,
+        };
       } catch (e) {
         if (e is Exception) rethrow;
-        throw Exception('Failed to set state for "$name": $e');
+        throw Exception('Failed to set state for "$resolvedName": $e');
       }
     });
 
     FlutterPilot.registerStateReader('riverpod', (name) {
-      final entry = _states[name];
+      final resolvedName = _resolveProviderKey(name) ?? name;
+      final entry = _states[resolvedName];
       if (entry == null) return null;
       return entry['value']?.toString();
     });

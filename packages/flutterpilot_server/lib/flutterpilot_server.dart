@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service_io.dart';
 import 'src/fleet_manager.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
+import 'src/param_aliases.dart';
 import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
 
@@ -281,6 +282,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
     );
     _connectionGeneration++;
+    if (_fleetManager.activeDeviceId == null) {
+      _fleetManager.registerDevice('default', _vmServiceUri!);
+    }
     final activeDevice = _fleetManager.activeDeviceId ?? 'default';
     final activeContext =
         _deviceContexts[activeDevice] ??
@@ -436,23 +440,20 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           try {
             final timestamp = DateTime.now().toIso8601String();
             if (event.extensionKind == 'ext.flutterpilot.error') {
+              final data = event.extensionData?.data;
               final exception =
-                  event.extensionData?.data['exception']?.toString() ??
-                  'Unknown Exception';
+                  data?['exception']?.toString() ?? 'Unknown Exception';
+              final severity = data?['severity']?.toString() ?? 'error';
               _appendEvent({
                 'type': 'error',
                 'timestamp': timestamp,
-                'data': event.extensionData?.data,
+                'data': data,
               }, deviceId: context.deviceId);
 
               await _selfHealManager.handleCrash(
                 exception: exception,
-                callExtension: (ext) async {
-                  final res = await _callExtensionRaw(ext, {
-                    'deviceId': context.deviceId,
-                  });
-                  return res.isError ? 'N/A' : res.data;
-                },
+                severity: severity,
+                deviceId: context.deviceId,
               );
             } else if (event.extensionKind == 'ext.flutterpilot.action') {
               _appendEvent({
@@ -660,7 +661,7 @@ Use this guide to understand what tools to call, when, and in what order.
 - `wait_for_route(route, timeoutMs)` — Wait for navigation to complete
 
 ## Waiting & Synchronization
-- `wait_for_widget(key, timeoutMs)` — Wait for a widget to appear
+- `wait_for_condition(selector, timeoutMs)` — Wait for a widget to appear
 - `wait_for_animation(timeoutMs)` — Wait for all animations to settle
 - `wait_for_state(condition, timeoutMs)` — Wait for custom condition
 - `pump_frames(count)` — Advance N animation frames manually
@@ -677,14 +678,12 @@ Use this guide to understand what tools to call, when, and in what order.
 ## Debug Console (replaces manual VS Code copy-paste)
 - `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
 - `clear_debug_logs` — Clear server + in-app log buffers before a test
-- `get_gc_stats` — Heap pressure snapshot (used vs. capacity)
 - `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
 - `clear_http_profile` — Reset before testing a specific API call
 - `get_vm_info` — Dart VM version, all isolates
 - `toggle_repaint_rainbow(enabled)` — Highlight layers that repaint (perf debugging)
 - `toggle_debug_paint(enabled)` — Show layout bounds and padding
 - `toggle_slow_animations(enabled)` — 5x slow motion for animation inspection
-- `enable_widget_rebuild_tracking(enabled)` — Count per-widget rebuilds
 
 ## Visual Testing
 - `capture_screenshot` — Get current screen as image
@@ -700,7 +699,8 @@ Use this guide to understand what tools to call, when, and in what order.
 - `assert_widget_count(type, count)` — Assert N widgets of given type
 
 ## Performance & Overlays
-- `get_perf_metrics` — FPS + heap summary
+- `profile_frame_budget` — Per-frame budget + jank
+- `get_memory_details` — Heap used/capacity/external
 - `hot_reload` — Apply code changes without restarting
 - `hot_restart` — Full app restart
 
@@ -725,7 +725,7 @@ Use this guide to understand what tools to call, when, and in what order.
 ### Testing a user flow
 1. clear_debug_logs → clear_http_profile (clean baseline)
 2. Perform interactions with tap_widget / enter_text
-3. wait_for_animation or wait_for_widget after each step
+3. wait_for_animation or wait_for_condition after each step
 4. assert_widget_visible / assert_text_visible to verify outcome
 5. capture_screenshot for visual record
 
@@ -737,10 +737,10 @@ Use this guide to understand what tools to call, when, and in what order.
 5. get_allocation_profile (find which class is accumulating)
 
 ### Performance debugging
-1. enable_widget_rebuild_tracking(true)
+1. profile_frame_budget
 2. toggle_repaint_rainbow(true)
 3. Interact with the app
-4. get_perf_metrics → look for FPS drops
+4. get_memory_details
 5. toggle_slow_animations(true) to inspect animations visually
 
 ## Key Rules
@@ -835,6 +835,7 @@ Use this guide to understand what tools to call, when, and in what order.
     String extension,
     Map<String, dynamic> parameters,
   ) async {
+    parameters = normalizeToolParams(parameters);
     final context = await _deviceContextForParameters(parameters);
     final deviceId =
         context?.deviceId ??

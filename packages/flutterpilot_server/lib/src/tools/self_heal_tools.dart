@@ -22,7 +22,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           'Retrieve the most recent structured crash report. CALL THIS immediately if you receive a Self-Heal notification or if `get_self_heal_status` returns UNSTABLE.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final report = _selfHealManager.lastCrashReport;
+        final report = await _selfHealManager.getLatestReport((ext) async {
+          final res = await _callExtensionRaw(ext, _withDeviceId(p));
+          return res.isError ? 'N/A' : res.data;
+        });
         if (report == null) {
           return CallToolResult(
             content: [TextContent(text: 'No crash reports available.')],
@@ -79,7 +82,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           'Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final report = _selfHealManager.lastCrashReport;
+        final report = await _selfHealManager.getLatestReport((ext) async {
+          final res = await _callExtensionRaw(ext, _withDeviceId(p));
+          return res.isError ? 'N/A' : res.data;
+        });
         if (report == null) {
           return CallToolResult(
             content: [TextContent(text: 'No crash reports available.')],

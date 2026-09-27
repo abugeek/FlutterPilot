@@ -324,16 +324,8 @@ Full diagnostic report: error, stack trace, screenshot, widget tree, state, at t
 }
 ```
 
-#### `get_perf_metrics`
-Real-time performance metrics.
-```json
-{
-  "fpsEstimate": 59.8,
-  "frameTimes": [16.2, 16.1, 16.0],
-  "memory": { "heapUsage": 45000000, "externalMemory": 12000000 },
-  "refreshRate": 60.0
-}
-```
+#### `profile_frame_budget`
+Detailed frame timing against the 16.6ms / 8.3ms refresh budget. Replaces `get_perf_metrics` for real performance analysis. (For memory details, use `get_memory_details`.)
 
 #### `get_semantics_tree`
 Full accessibility tree (VoiceOver/TalkBack compatible).
@@ -592,17 +584,6 @@ Show top Dart classes by current heap allocation (find memory leaks).
 }
 ```
 
-#### `get_gc_stats`
-Get garbage collection pressure and heap stats.
-```json
-{
-  "isolateId": "isolates/1",
-  "heapUsage": 14680064,
-  "heapCapacity": 33554432,
-  "gcOldSpaceUsed": 8388608,
-  "gcOldSpaceCapacity": 16777216
-}
-```
 
 #### `get_http_profile` `limit?: number, status_filter?: string`
 Get all HTTP requests from the Dart runtime (not just Dio — includes all `dart:io` HttpClient calls).
@@ -657,11 +638,6 @@ Slow animations to 5× speed for inspection.
 { "enabled": true }
 ```
 
-#### `enable_widget_rebuild_tracking` `enabled: boolean`
-Count how many times each widget rebuilds (find excessive rebuild issues).
-```json
-{ "enabled": true }
-```
 
 ---
 

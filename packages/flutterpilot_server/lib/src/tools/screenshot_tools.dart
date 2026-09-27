@@ -522,13 +522,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'The ValueKey string of the widget to inspect.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getWidgetProperties',
-          {'key': p['key'].toString()},
+          {'key': (p['key'] ?? p['target']).toString()},
         );
         return res.toCallToolResult();
       },

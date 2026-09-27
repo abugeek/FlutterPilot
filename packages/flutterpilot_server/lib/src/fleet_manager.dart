@@ -7,6 +7,12 @@ class FleetManager {
 
   /// Registers or updates a device with its VM Service URI.
   void registerDevice(String name, String uri) {
+    if (name != 'default' &&
+        _devices.length == 1 &&
+        _devices.containsKey('default')) {
+      _devices.remove('default');
+      _activeDeviceId = name;
+    }
     _devices[name] = uri;
     _activeDeviceId ??= name;
   }

@@ -82,8 +82,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is visible.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.assertWidgetVisible',
@@ -159,13 +161,15 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is enabled.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetEnabled',
-          _withDeviceId(p, {'key': p['key'].toString()}),
+          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
         );
         return res.toCallToolResult();
       },
@@ -183,49 +187,17 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             description:
                 'The ValueKey string of the widget to assert is disabled.',
           ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
         },
-        required: ['key'],
       ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetDisabled',
-          _withDeviceId(p, {'key': p['key'].toString()}),
+          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
         );
         return res.toCallToolResult();
-      },
-    );
-
-    server.registerTool(
-      'get_perf_metrics',
-      description:
-          'Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizations actually improved performance.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
-      callback: (p, e) async {
-        final fpsRes = await _callExtensionRaw(
-          'ext.flutterpilot.getPerfMetrics',
-          _withDeviceId(p),
-        );
-        String memory = 'N/A';
-        final vmService = await _vmServiceForParameters(p);
-        if (vmService != null) {
-          final vm = await vmService.getVM();
-          final mainIsolateId = vm.isolates?.firstOrNull?.id;
-          if (mainIsolateId != null) {
-            final usage = await vmService.getMemoryUsage(mainIsolateId);
-            memory =
-                '${((usage.heapUsage ?? 0) / (1024 * 1024)).toStringAsFixed(2)} MB';
-          }
-        }
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'FPS: ${fpsRes.data?['fps'] ?? 'N/A'}\nHeap: $memory\n\nHINT: If FPS is below 60, use show_performance_overlay to find heavy build cycles.',
-            ),
-          ],
-        );
       },
     );
   }

@@ -102,25 +102,33 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       int? semanticsId = int.tryParse(parameters['semanticsId'] ?? '');
-      final rawTarget = parameters['key'] ??
+      final rawTarget =
+          parameters['key'] ??
           parameters['target'] ??
           parameters['identifier'] ??
           parameters['text'] ??
           parameters['type'];
 
       if (semanticsId == null && rawTarget != null) {
-        final semMatch = RegExp(r'^(?:semantics:|Semantics#|id:)(\d+)$', caseSensitive: false)
-            .firstMatch(rawTarget.toString().trim());
+        final semMatch = RegExp(
+          r'^(?:semantics:|Semantics#|id:)(\d+)$',
+          caseSensitive: false,
+        ).firstMatch(rawTarget.toString().trim());
         if (semMatch != null) {
           semanticsId = int.tryParse(semMatch.group(1)!);
         }
       }
 
       if (semanticsId != null) {
-        FlutterPilot._semanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
+        FlutterPilot._semanticsHandle ??= SemanticsBinding.instance
+            .ensureSemantics();
         SemanticsNode? root;
         try {
-          root = RendererBinding.instance.rootPipelineOwner.semanticsOwner?.rootSemanticsNode;
+          root = RendererBinding
+              .instance
+              .rootPipelineOwner
+              .semanticsOwner
+              ?.rootSemanticsNode;
         } catch (_) {}
 
         SemanticsNode? targetNode;
@@ -136,6 +144,7 @@ extension _WidgetExtensions on FlutterPilot {
               return targetNode == null;
             });
           }
+
           search(root);
         }
 
@@ -148,15 +157,25 @@ extension _WidgetExtensions on FlutterPilot {
             }
             curr = curr.parent;
           }
-          final globalRect = MatrixUtils.transformRect(transform, targetNode!.rect);
+          final globalRect = MatrixUtils.transformRect(
+            transform,
+            targetNode!.rect,
+          );
           final center = globalRect.center;
           final routeBefore = NavigationTracker.currentRoute;
           if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('tapWidget', {'semanticsId': semanticsId});
+            FlutterPilot._recordAction('tapWidget', {
+              'semanticsId': semanticsId,
+            });
           }
-          await InteractionManager.tapAt(center, label: 'Semantics #$semanticsId');
+          await InteractionManager.tapAt(
+            center,
+            label: 'Semantics #$semanticsId',
+          );
           final routeAfter = NavigationTracker.currentRoute;
-          final postActionState = FlutterPilot.getPostActionState(previousRoute: routeBefore);
+          final postActionState = await FlutterPilot.getPostActionState(
+            previousRoute: routeBefore,
+          );
           return ServiceExtensionResponse.result(
             json.encode({
               'status': 'success',
@@ -190,7 +209,10 @@ extension _WidgetExtensions on FlutterPilot {
 
       var element = PilotWidgetInspector.findElement(target);
       if (element == null || !HitTestUtils.isElementHittable(element)) {
-        await ScrollSimulator.scrollUntilVisible(target, maxAttempts: maxAttempts);
+        await ScrollSimulator.scrollUntilVisible(
+          target,
+          maxAttempts: maxAttempts,
+        );
         element = PilotWidgetInspector.findElement(target);
       }
 
@@ -204,7 +226,10 @@ extension _WidgetExtensions on FlutterPilot {
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       RenderObject? ro = element.renderObject;
-      if (ro is! RenderBox || !ro.hasSize || !ro.attached || !HitTestUtils.isElementHittable(element)) {
+      if (ro is! RenderBox ||
+          !ro.hasSize ||
+          !ro.attached ||
+          !HitTestUtils.isElementHittable(element)) {
         try {
           await Scrollable.ensureVisible(
             element,
@@ -225,8 +250,9 @@ extension _WidgetExtensions on FlutterPilot {
         if (covered != null) return covered;
         await InteractionManager.tapAt(pos, label: target);
         final routeAfter = NavigationTracker.currentRoute;
-        final postActionState =
-            FlutterPilot.getPostActionState(previousRoute: routeBefore);
+        final postActionState = await FlutterPilot.getPostActionState(
+          previousRoute: routeBefore,
+        );
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -260,11 +286,15 @@ extension _WidgetExtensions on FlutterPilot {
           label: 'Right Click (${xVal.round()}, ${yVal.round()})',
         );
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', 'coordinates': {'x': xVal, 'y': yVal}}),
+          json.encode({
+            'status': 'success',
+            'coordinates': {'x': xVal, 'y': yVal},
+          }),
         );
       }
 
-      final target = parameters['key'] ??
+      final target =
+          parameters['key'] ??
           parameters['target'] ??
           parameters['identifier'] ??
           parameters['text'];
@@ -293,8 +323,11 @@ extension _WidgetExtensions on FlutterPilot {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         final covered = _refuseIfCovered(element, target);
         if (covered != null) return covered;
-        await InteractionManager.secondaryTapAt(pos, label: 'Right Click: $target');
-        final postActionState = FlutterPilot.getPostActionState();
+        await InteractionManager.secondaryTapAt(
+          pos,
+          label: 'Right Click: $target',
+        );
+        final postActionState = await FlutterPilot.getPostActionState();
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -312,12 +345,14 @@ extension _WidgetExtensions on FlutterPilot {
 
     // -- ext.flutterpilot.enterText -------------------------------------------
     registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
-      final target = parameters['key'] ??
+      final target =
+          parameters['key'] ??
           parameters['target'] ??
           parameters['identifier'] ??
           parameters['text'];
       final text = parameters['text'] ?? parameters['value'];
-      final isFocusedRequested = parameters['focused_element'] == 'true' ||
+      final isFocusedRequested =
+          parameters['focused_element'] == 'true' ||
           target == 'focused' ||
           target == null ||
           target.isEmpty;
@@ -395,7 +430,7 @@ extension _WidgetExtensions on FlutterPilot {
         }
 
         final routeAfter = NavigationTracker.currentRoute;
-        final postActionState = FlutterPilot.getPostActionState();
+        final postActionState = await FlutterPilot.getPostActionState();
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -457,7 +492,7 @@ extension _WidgetExtensions on FlutterPilot {
             'modifiers': modifiers.toList(),
           });
         }
-        final postActionState = FlutterPilot.getPostActionState(
+        final postActionState = await FlutterPilot.getPostActionState(
           previousRoute: routeBefore,
         );
         return ServiceExtensionResponse.result(
@@ -542,7 +577,7 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       await InteractionManager.pinchZoomAt(center, scale: scale);
-      final postActionState = FlutterPilot.getPostActionState();
+      final postActionState = await FlutterPilot.getPostActionState();
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
@@ -558,7 +593,8 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final target = parameters['key'] ??
+      final target =
+          parameters['key'] ??
           parameters['target'] ??
           parameters['identifier'] ??
           parameters['text'];
@@ -569,7 +605,10 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final maxAttempts = int.tryParse(parameters['maxAttempts'] ?? '') ?? 8;
-      final success = await ScrollSimulator.scrollUntilVisible(target, maxAttempts: maxAttempts);
+      final success = await ScrollSimulator.scrollUntilVisible(
+        target,
+        maxAttempts: maxAttempts,
+      );
       if (!success) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -1110,16 +1149,17 @@ extension _WidgetExtensions on FlutterPilot {
       try {
         final maxDepth = int.tryParse(parameters['maxDepth'] ?? '');
         final compact = parameters['compact'] != 'false';
-        final rootQuery = parameters['rootKey'] ?? parameters['rootSelector'] ?? parameters['root'];
+        final rootQuery =
+            parameters['rootKey'] ??
+            parameters['rootSelector'] ??
+            parameters['root'];
         final tree = PilotWidgetInspector.captureWidgetTree(
           maxDepth: maxDepth,
           compact: compact,
           rootQuery: rootQuery,
         );
         PilotWidgetInspector.lastCapturedTree = tree;
-        return ServiceExtensionResponse.result(
-          json.encode({'tree': tree}),
-        );
+        return ServiceExtensionResponse.result(json.encode({'tree': tree}));
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -1140,12 +1180,11 @@ extension _WidgetExtensions on FlutterPilot {
           maxDepth: maxDepth,
           compact: compact,
         );
-        final oldTree = PilotWidgetInspector.lastCapturedTree ?? {'type': 'Empty'};
+        final oldTree =
+            PilotWidgetInspector.lastCapturedTree ?? {'type': 'Empty'};
         final diff = PilotWidgetInspector.diffWidgetTrees(oldTree, currentTree);
         PilotWidgetInspector.lastCapturedTree = currentTree;
-        return ServiceExtensionResponse.result(
-          json.encode({'diff': diff}),
-        );
+        return ServiceExtensionResponse.result(json.encode({'diff': diff}));
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -1330,7 +1369,8 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final selector = parameters['selector'] ?? parameters['target'] ?? parameters['key'];
+      final selector =
+          parameters['selector'] ?? parameters['target'] ?? parameters['key'];
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
 
@@ -1348,7 +1388,9 @@ extension _WidgetExtensions on FlutterPilot {
             json.encode({
               'status': 'matched',
               'selector': selector,
-              'elapsedMs': timeoutMs - deadline.difference(DateTime.now()).inMilliseconds,
+              'elapsedMs':
+                  timeoutMs -
+                  deadline.difference(DateTime.now()).inMilliseconds,
             }),
           );
         }
@@ -1386,7 +1428,8 @@ extension _WidgetExtensions on FlutterPilot {
           final val = entry.value;
           final element = PilotWidgetInspector.findElement(target);
           if (element != null) {
-            if (element.renderObject is! RenderBox || !(element.renderObject as RenderBox).hasSize) {
+            if (element.renderObject is! RenderBox ||
+                !(element.renderObject as RenderBox).hasSize) {
               try {
                 await Scrollable.ensureVisible(
                   element,
@@ -1421,12 +1464,16 @@ extension _WidgetExtensions on FlutterPilot {
                     } catch (_) {}
                   }
                   if (entered && FlutterPilot._isRecording) {
-                    FlutterPilot._recordAction('enterText', {'key': target, 'text': text});
+                    FlutterPilot._recordAction('enterText', {
+                      'key': target,
+                      'text': text,
+                    });
                   }
                   return;
                 }
                 e.debugVisitOnstageChildren(findText);
               }
+
               findText(element);
               if (entered) filledCount++;
             }
@@ -1489,9 +1536,7 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       final auditReport = UiHealthAuditor.audit();
-      return ServiceExtensionResponse.result(
-        json.encode(auditReport),
-      );
+      return ServiceExtensionResponse.result(json.encode(auditReport));
     });
 
     // -- ext.flutterpilot.executeActionChain ----------------------------------
@@ -1557,13 +1602,16 @@ extension _WidgetExtensions on FlutterPilot {
                 if (entered) return;
                 if (e is StatefulElement && e.state is EditableTextState) {
                   try {
-                    (e.state as EditableTextState).updateEditingValue(TextEditingValue(text: text));
+                    (e.state as EditableTextState).updateEditingValue(
+                      TextEditingValue(text: text),
+                    );
                     entered = true;
                   } catch (_) {}
                   return;
                 }
                 e.debugVisitOnstageChildren(findText);
               }
+
               findText(element);
               if (entered) {
                 executedCount++;

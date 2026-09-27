@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -95,44 +96,48 @@ class KeyboardSimulator {
 
     String? character;
     if (!hasNonShiftModifier && keyDef.character != null) {
-      character =
-          hasShift ? keyDef.character!.toUpperCase() : keyDef.character;
+      character = hasShift ? keyDef.character!.toUpperCase() : keyDef.character;
     }
 
     for (final modifier in modifierDefs) {
-      _dispatch(_downEvent(modifier, character: null));
+      _dispatchDown(modifier);
     }
-    _dispatch(_downEvent(keyDef, character: character));
-    _dispatch(_upEvent(keyDef));
+    _dispatchDown(keyDef, character: character);
+    _dispatchUp(keyDef);
     for (final modifier in modifierDefs.reversed) {
-      _dispatch(_upEvent(modifier));
+      _dispatchUp(modifier);
     }
 
     _performTextInputActionForEnter(keyDef, modifiers);
     WidgetsBinding.instance.scheduleFrame();
   }
 
-  KeyEvent _downEvent(_KeyDef def, {required String? character}) =>
-      KeyDownEvent(
-        physicalKey: def.physical,
-        logicalKey: def.logical,
-        character: character,
-        timeStamp: Duration(microseconds: _timeStampMicros++),
-      );
-
-  KeyEvent _upEvent(_KeyDef def) => KeyUpEvent(
-        physicalKey: def.physical,
-        logicalKey: def.logical,
-        timeStamp: Duration(microseconds: _timeStampMicros++),
-      );
-
-  void _dispatch(KeyEvent event) {
-    HardwareKeyboard.instance.handleKeyEvent(event);
-    // Route to focus manager
+  void _dispatchDown(_KeyDef def, {String? character}) {
     // ignore: deprecated_member_use
-    ServicesBinding.instance.keyEventManager.keyMessageHandler
-        // ignore: deprecated_member_use
-        ?.call(KeyMessage(<KeyEvent>[event], null));
+    ServicesBinding.instance.keyEventManager.handleKeyData(
+      ui.KeyData(
+        type: ui.KeyEventType.down,
+        physical: def.physical.usbHidUsage,
+        logical: def.logical.keyId,
+        timeStamp: Duration(microseconds: _timeStampMicros++),
+        character: character,
+        synthesized: true,
+      ),
+    );
+  }
+
+  void _dispatchUp(_KeyDef def) {
+    // ignore: deprecated_member_use
+    ServicesBinding.instance.keyEventManager.handleKeyData(
+      ui.KeyData(
+        type: ui.KeyEventType.up,
+        physical: def.physical.usbHidUsage,
+        logical: def.logical.keyId,
+        timeStamp: Duration(microseconds: _timeStampMicros++),
+        character: null,
+        synthesized: true,
+      ),
+    );
   }
 
   void _performTextInputActionForEnter(_KeyDef keyDef, Set<String> modifiers) {
@@ -156,7 +161,8 @@ class KeyboardSimulator {
     if (editableTextState == null) return;
 
     final widget = editableTextState!.widget;
-    final action = widget.textInputAction ??
+    final action =
+        widget.textInputAction ??
         (widget.keyboardType == TextInputType.multiline
             ? TextInputAction.newline
             : TextInputAction.done);
@@ -171,7 +177,8 @@ class KeyboardSimulator {
       if (codeUnit >= 97 && codeUnit <= 122) {
         // a-z
         return (
-          physical: PhysicalKeyboardKey.findKeyByCode(0x00070004 + (codeUnit - 97)) ??
+          physical:
+              PhysicalKeyboardKey.findKeyByCode(0x00070004 + (codeUnit - 97)) ??
               PhysicalKeyboardKey.keyA,
           logical: LogicalKeyboardKey(0x00000061 + (codeUnit - 97)),
           character: clean,
@@ -180,8 +187,10 @@ class KeyboardSimulator {
       if (codeUnit >= 48 && codeUnit <= 57) {
         // 0-9
         return (
-          physical: PhysicalKeyboardKey.findKeyByCode(
-                  codeUnit == 48 ? 0x00070027 : 0x0007001e + (codeUnit - 49)) ??
+          physical:
+              PhysicalKeyboardKey.findKeyByCode(
+                codeUnit == 48 ? 0x00070027 : 0x0007001e + (codeUnit - 49),
+              ) ??
               PhysicalKeyboardKey.digit0,
           logical: LogicalKeyboardKey(0x00000030 + (codeUnit - 48)),
           character: clean,
@@ -198,75 +207,75 @@ class KeyboardSimulator {
 
     return switch (clean) {
       'enter' || 'return' => (
-          physical: PhysicalKeyboardKey.enter,
-          logical: LogicalKeyboardKey.enter,
-          character: '\n',
-        ),
+        physical: PhysicalKeyboardKey.enter,
+        logical: LogicalKeyboardKey.enter,
+        character: '\n',
+      ),
       'tab' => (
-          physical: PhysicalKeyboardKey.tab,
-          logical: LogicalKeyboardKey.tab,
-          character: '\t',
-        ),
+        physical: PhysicalKeyboardKey.tab,
+        logical: LogicalKeyboardKey.tab,
+        character: '\t',
+      ),
       'backspace' => (
-          physical: PhysicalKeyboardKey.backspace,
-          logical: LogicalKeyboardKey.backspace,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.backspace,
+        logical: LogicalKeyboardKey.backspace,
+        character: null,
+      ),
       'delete' => (
-          physical: PhysicalKeyboardKey.delete,
-          logical: LogicalKeyboardKey.delete,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.delete,
+        logical: LogicalKeyboardKey.delete,
+        character: null,
+      ),
       'escape' || 'esc' => (
-          physical: PhysicalKeyboardKey.escape,
-          logical: LogicalKeyboardKey.escape,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.escape,
+        logical: LogicalKeyboardKey.escape,
+        character: null,
+      ),
       'arrowup' || 'up' => (
-          physical: PhysicalKeyboardKey.arrowUp,
-          logical: LogicalKeyboardKey.arrowUp,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.arrowUp,
+        logical: LogicalKeyboardKey.arrowUp,
+        character: null,
+      ),
       'arrowdown' || 'down' => (
-          physical: PhysicalKeyboardKey.arrowDown,
-          logical: LogicalKeyboardKey.arrowDown,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.arrowDown,
+        logical: LogicalKeyboardKey.arrowDown,
+        character: null,
+      ),
       'arrowleft' || 'left' => (
-          physical: PhysicalKeyboardKey.arrowLeft,
-          logical: LogicalKeyboardKey.arrowLeft,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.arrowLeft,
+        logical: LogicalKeyboardKey.arrowLeft,
+        character: null,
+      ),
       'arrowright' || 'right' => (
-          physical: PhysicalKeyboardKey.arrowRight,
-          logical: LogicalKeyboardKey.arrowRight,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.arrowRight,
+        logical: LogicalKeyboardKey.arrowRight,
+        character: null,
+      ),
       'home' => (
-          physical: PhysicalKeyboardKey.home,
-          logical: LogicalKeyboardKey.home,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.home,
+        logical: LogicalKeyboardKey.home,
+        character: null,
+      ),
       'end' => (
-          physical: PhysicalKeyboardKey.end,
-          logical: LogicalKeyboardKey.end,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.end,
+        logical: LogicalKeyboardKey.end,
+        character: null,
+      ),
       'pageup' => (
-          physical: PhysicalKeyboardKey.pageUp,
-          logical: LogicalKeyboardKey.pageUp,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.pageUp,
+        logical: LogicalKeyboardKey.pageUp,
+        character: null,
+      ),
       'pagedown' => (
-          physical: PhysicalKeyboardKey.pageDown,
-          logical: LogicalKeyboardKey.pageDown,
-          character: null,
-        ),
+        physical: PhysicalKeyboardKey.pageDown,
+        logical: LogicalKeyboardKey.pageDown,
+        character: null,
+      ),
       'space' => (
-          physical: PhysicalKeyboardKey.space,
-          logical: LogicalKeyboardKey.space,
-          character: ' ',
-        ),
+        physical: PhysicalKeyboardKey.space,
+        logical: LogicalKeyboardKey.space,
+        character: ' ',
+      ),
       _ => null,
     };
   }

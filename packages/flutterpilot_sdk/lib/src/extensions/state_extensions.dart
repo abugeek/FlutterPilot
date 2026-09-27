@@ -32,7 +32,12 @@ extension _StateExtensions on FlutterPilot {
       }
 
       try {
-        final dynamic value = json.decode(valueJson);
+        dynamic value;
+        try {
+          value = json.decode(valueJson);
+        } catch (_) {
+          value = valueJson;
+        }
         final result = await FlutterPilot._stateSetters[type]!(name, value);
         return ServiceExtensionResponse.result(
           json.encode({
@@ -109,8 +114,11 @@ extension _StateExtensions on FlutterPilot {
       parameters,
     ) async {
       final type = parameters['type'];
-      final name = parameters['name'];
-      final expectedValue = parameters['expectedValue'];
+      final name = parameters['name'] ?? parameters['target'];
+      final expectedValue =
+          parameters['expectedValue'] ??
+          parameters['expected'] ??
+          parameters['expect'];
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
 
       if (type == null || name == null || expectedValue == null) {
@@ -228,6 +236,5 @@ extension _StateExtensions on FlutterPilot {
         }),
       );
     });
-
   }
 }

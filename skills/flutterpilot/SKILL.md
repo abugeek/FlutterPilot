@@ -11,9 +11,9 @@ This skill guides AI coding agents (Antigravity, Claude, Cursor, Copilot, Cline,
 - **Autonomous UI Driving**: Filling forms, tapping buttons, and navigating complex user journeys without requiring manual `ValueKey`s.
 - **High-Speed Composite Macros**: Using `tap_and_wait` and `enter_text_and_submit` to execute multi-step user actions in 1 fast LLM turn.
 - **Subtree Scoping & Token Savings**: Using `get_widget_tree(rootKey: "form_id")` to inspect specific dialogs or forms with 90% fewer tokens.
-- **State Injection**: Seeding Riverpod/Bloc state directly (`set_riverpod_state`, `batch_set_state`; needs `--allow-destructive`).
+- **State Injection**: Seeding Riverpod/Bloc state directly (`set_riverpod_state`, `batch_set_state`).
 - **Crash Flight Recording**: Rolling crash timelines (`get_flight_log`) and crash reports with the failing source location (`get_latest_crash_report`).
-- **Memory & Asset Health Audits**: Checking for image memory bloat, uncompressed asset leaks, and oversize decodes (`audit_memory_health`).
+- **Memory & Allocation Inspections**: Checking heap capacity, used bytes, and top Dart classes (`get_memory_details`, `get_allocation_profile`).
 - **Visual Regression Engine**: Word-aligned 32-bit pixel diff detection with magenta highlighting (`compare_screenshot`).
 
 ---
@@ -92,8 +92,8 @@ call_tool("batch_set_state", {
 
 ### 4. Continuous Diagnostics & Performance
 ```json
-// Audit memory health (ImageCache, decode dimensions, oversize assets)
-call_tool("audit_memory_health", {})
+// Inspect memory details (heap used, capacity, external memory)
+call_tool("get_memory_details", {})
 
 // Frame timing: p50/p90/p99, build vs raster, jank
 call_tool("profile_frame_budget", {})

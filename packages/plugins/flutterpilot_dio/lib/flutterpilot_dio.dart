@@ -34,21 +34,64 @@ enum NetworkCondition {
 /// dio.interceptors.add(DioPilotInterceptor());
 /// ```
 class DioPilotInterceptor extends Interceptor {
-  static const int maxLogEntries = 100;
-  static final RingBuffer<Map<String, dynamic>> _logs = RingBuffer(maxLogEntries);
+  static const int maxLogEntries = 500;
+  static final RingBuffer<Map<String, dynamic>> _logs = RingBuffer(
+    maxLogEntries,
+  );
   static bool _initialized = false;
   static NetworkCondition _condition = NetworkCondition.normal;
   static final Map<String, Map<String, dynamic>> _mocks = {};
   static const int _maxDelayMs = 60000;
 
+  static final RegExp _sensitiveKeys = RegExp(
+    r'(password|token|secret|auth|bearer|apikey|api_key|credit_card)',
+    caseSensitive: false,
+  );
+
   DioPilotInterceptor() {
+    register();
+  }
+
+  /// Explicitly registers Dio capabilities with FlutterPilot.
+  static void register() {
     if (!_initialized) {
       _initialized = true;
       _registerExtensions();
     }
   }
 
-  void _registerExtensions() {
+  static dynamic _sanitizeData(dynamic data, {int maxLen = 2048}) {
+    if (data == null) return null;
+    try {
+      if (data is Map) {
+        final sanitized = <String, dynamic>{};
+        for (final entry in data.entries) {
+          final k = entry.key.toString();
+          if (_sensitiveKeys.hasMatch(k)) {
+            sanitized[k] = '[REDACTED]';
+          } else {
+            sanitized[k] = _sanitizeData(entry.value, maxLen: maxLen);
+          }
+        }
+        return sanitized;
+      }
+      if (data is List) {
+        return data
+            .take(20)
+            .map((e) => _sanitizeData(e, maxLen: maxLen))
+            .toList();
+      }
+      final str = data.toString();
+      if (str.length > maxLen) {
+        return '${str.substring(0, maxLen)}... [Truncated]';
+      }
+      return str;
+    } catch (_) {
+      return '[Unparseable payload]';
+    }
+  }
+
+  static void _registerExtensions() {
     FlutterPilot.registerCapability(
       'dio',
       version: '1',
@@ -71,7 +114,9 @@ class DioPilotInterceptor extends Interceptor {
       method,
       parameters,
     ) async {
-      return ServiceExtensionResponse.result(json.encode({'logs': _logs.toList()}));
+      return ServiceExtensionResponse.result(
+        json.encode({'logs': _logs.toList()}),
+      );
     });
 
     registerExtension('ext.flutterpilot.simulateNetwork', (
@@ -167,10 +212,13 @@ class DioPilotInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    final reqBody = _sanitizeData(options.data, maxLen: 2048);
     _addLog({
       'type': 'request',
       'method': options.method,
       'uri': options.uri.toString(),
+      if (reqBody != null) 'body': reqBody,
+      if (options.contentType != null) 'contentType': options.contentType,
       'timestamp': DateTime.now().toIso8601String(),
     });
 
@@ -195,11 +243,13 @@ class DioPilotInterceptor extends Interceptor {
       } catch (_) {
         decodedBody = mock['body'];
       }
+      options.extra['flutterpilot_mocked'] = true;
       handler.resolve(
         Response(
           requestOptions: options,
           statusCode: mock['statusCode'] as int,
           data: decodedBody,
+          extra: {'flutterpilot_mocked': true},
         ),
         true, // run onResponse so mocked responses are logged too
       );
@@ -231,10 +281,16 @@ class DioPilotInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final isMocked =
+        response.requestOptions.extra['flutterpilot_mocked'] == true ||
+        response.extra['flutterpilot_mocked'] == true;
+    final resBody = _sanitizeData(response.data, maxLen: 4096);
     _addLog({
       'type': 'response',
       'statusCode': response.statusCode,
       'uri': response.requestOptions.uri.toString(),
+      if (isMocked) 'mocked': true,
+      if (resBody != null) 'body': resBody,
       'timestamp': DateTime.now().toIso8601String(),
     });
     super.onResponse(response, handler);
@@ -242,11 +298,14 @@ class DioPilotInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    final errBody = _sanitizeData(err.response?.data, maxLen: 2048);
     _addLog({
       'type': 'error',
       'statusCode': err.response?.statusCode,
       'uri': err.requestOptions.uri.toString(),
       'message': err.message,
+      'errorType': err.type.name,
+      if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),
     });
     super.onError(err, handler);

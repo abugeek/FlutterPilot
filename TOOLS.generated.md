@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 136
+Tool count: 132
 
 ## `get_operation`
 
@@ -210,7 +210,8 @@ Ensures a widget is visible by scrolling its parent list. Works with Keys, seman
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string, semantic selector, or label of the widget to scroll into view. |
+| `key` | string | no | The ValueKey string, semantic selector, or label of the widget to scroll into view. |
+| `target` | string | no | Same as key (either name works). |
 | `maxAttempts` | integer | no | Max scroll attempts to locate the widget in lazy lists (default: 8). |
 
 ## `double_tap_widget`
@@ -219,7 +220,8 @@ Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection t
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys. |
+| `key` | string | no | The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `long_press_widget`
 
@@ -227,7 +229,8 @@ Long-presses a widget by Key. Use to trigger context menus, drag handles, or lon
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to long-press. |
+| `key` | string | no | The ValueKey string of the widget to long-press. |
+| `target` | string | no | Same as key (either name works). |
 | `durationMs` | integer | no | Duration of the long press in milliseconds (default: 600ms). |
 
 ## `swipe_widget`
@@ -236,7 +239,8 @@ Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dis
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to swipe. |
+| `key` | string | no | The ValueKey string of the widget to swipe. |
+| `target` | string | no | Same as key (either name works). |
 | `direction` | string | yes |  |
 | `distance` | number | no | Scroll distance in logical pixels. Positive = down/right, negative = up/left. |
 
@@ -255,7 +259,8 @@ Clears the text of a TextField / TextFormField identified by its widget key. Equ
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the text field to clear. |
+| `key` | string | no | The ValueKey string of the text field to clear. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `focus_widget`
 
@@ -263,7 +268,8 @@ Taps the centre of the widget identified by key to request focus (opens the soft
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to focus. |
+| `key` | string | no | The ValueKey string of the widget to focus. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `unfocus_all`
 
@@ -286,7 +292,8 @@ Sets the value of a Slider widget identified by key. Computes the correct tap po
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the Slider widget. |
+| `key` | string | no | The ValueKey string of the Slider widget. |
+| `target` | string | no | Same as key (either name works). |
 | `value` | number | yes | The new slider value. Must be within the slider min/max range. |
 
 ## `toggle_checkbox`
@@ -295,7 +302,8 @@ Taps the centre of the first Checkbox, Switch, or Radio widget found under the g
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the Checkbox, Switch, or Radio widget to toggle. |
+| `key` | string | no | The ValueKey string of the Checkbox, Switch, or Radio widget to toggle. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `pump_frames`
 
@@ -335,7 +343,9 @@ Reliably polls until a target element or semantic selector is visible on screen,
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `selector` | string | yes | Semantic selector or key to wait for (e.g. "Text['Dashboard']" or "order_confirmed_icon"). |
+| `key` | string | no | Same as selector. |
+| `target` | string | no | Same as selector. |
+| `selector` | string | no | Semantic selector or key to wait for (e.g. "Text['Dashboard']" or "order_confirmed_icon"). |
 | `timeoutMs` | integer | no | Maximum milliseconds to wait before failing (default: 3000). |
 
 ## `audit_screen_health`
@@ -359,7 +369,8 @@ Macro composite tool: Taps a target widget and immediately waits for an expected
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `target` | string | yes | Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button['Submit']"). |
+| `key` | string | no | Same as target. |
+| `target` | string | no | Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button['Submit']"). |
 | `expect` | string | yes | Key, semantic selector, or text of the widget expected to appear (e.g. "home_dashboard", "Text['Welcome']"). |
 | `timeout` | integer | no | Timeout in milliseconds to wait for the expected widget (default: 5000ms). |
 
@@ -369,7 +380,8 @@ Macro composite tool: Enters text into an input field and immediately taps a sub
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `target` | string | yes | Key or semantic selector of the text field (e.g. "email_input", "TextField['Email']"). |
+| `key` | string | no | Same as target. |
+| `target` | string | no | Key or semantic selector of the text field (e.g. "email_input", "TextField['Email']"). |
 | `text` | string | yes | Text string to enter into the field. |
 | `submitTarget` | string | yes | Key or semantic selector of the submit button to tap after entering text (e.g. "submit_btn", "Button['Continue']"). |
 
@@ -456,11 +468,12 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 
 ## `wait_for_widget`
 
-Polls until a widget with the given Key appears in the tree, or times out. Use after navigation or async operations. Default timeout 5000ms.
+Deprecated: use `wait_for_condition` instead. Polls until a widget with the given target/key appears in the tree, or times out.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to wait for to appear. |
+| `target` | string | no | The ValueKey or text string of the widget to wait for. |
+| `key` | string | no | Legacy alias for target. |
 | `timeoutMs` | integer | no | Maximum milliseconds to wait for the widget (default: 5000ms). |
 
 ## `wait_for_route`
@@ -582,7 +595,8 @@ Reads the semantic properties of a widget identified by its key. Returns: type, 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to inspect. |
+| `key` | string | no | The ValueKey string of the widget to inspect. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `get_semantics_tree`
 
@@ -658,12 +672,14 @@ Inspect current values of all active Riverpod providers. Returns provider name, 
 
 ## `set_riverpod_state`
 
-Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\"hello\"").
+Inject a new state into a Riverpod provider. Use the provider name or notifier name from `get_riverpod_state`. Accepts plain values (e.g. 42, "active", true) or JSON.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `provider` | string | yes | The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider"). |
-| `value` | string | yes | The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings. |
+| `provider` | string | no | The Riverpod provider name (e.g. "counterProvider", "FeedNotifier"). |
+| `name` | string | no | Alias for provider. |
+| `target` | string | no | Alias for provider. |
+| `value` | any | yes | The new state value to inject. Can be a primitive value (int, bool, string) or JSON string. |
 
 ## `batch_set_state`
 
@@ -696,7 +712,7 @@ Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_
 
 ## `get_network_logs`
 
-View the last 50 HTTP requests and responses. CALL THIS if an API call failed or to verify network payload accuracy.
+View recent HTTP requests and responses (bodies truncated and redacted; mock status shown). CALL THIS if an API call failed or to verify network payload accuracy.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -878,7 +894,8 @@ Asserts that a widget with the given Key is present and has layout. Returns erro
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to assert is visible. |
+| `key` | string | no | The ValueKey string of the widget to assert is visible. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `assert_text_visible`
 
@@ -904,7 +921,8 @@ Asserts that the widget identified by key is ENABLED (has a non-null onPressed /
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to assert is enabled. |
+| `key` | string | no | The ValueKey string of the widget to assert is enabled. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `assert_widget_disabled`
 
@@ -912,15 +930,8 @@ Asserts that the widget identified by key is DISABLED (onPressed / onTap / onCha
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The ValueKey string of the widget to assert is disabled. |
-
-## `get_perf_metrics`
-
-Get current FPS and Heap Memory usage. CALL THIS to verify that code optimizations actually improved performance.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
+| `key` | string | no | The ValueKey string of the widget to assert is disabled. |
+| `target` | string | no | Same as key (either name works). |
 
 ## `get_memory_details`
 
@@ -989,31 +1000,6 @@ Slows all animations to 1/5 speed (timeDilation=5) or restores normal speed (tim
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `enable_widget_rebuild_tracking`
-
-Enables or disables per-widget rebuild counting (equivalent to DevTools "Track Widget Builds"). After enabling, interact with the app, then call get_debug_logs to see rebuild events, or check the performance overlay via get_perf_metrics. Set enabled=false to stop tracking.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | boolean | yes | true to start tracking per-widget rebuild counts, false to stop. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `get_gc_stats`
-
-Returns a heap snapshot per Dart isolate — heap used vs. capacity — which reflects GC pressure. High capacity utilization (>80%) signals frequent GC. Pair with get_allocation_profile to find which classes are causing heap growth.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `audit_memory_health`
-
-Audits Flutter ImageCache memory, checks total allocated megabytes against thresholds, and identifies oversized image allocations (>4x layout size) causing memory bloat.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_supabase_auth`

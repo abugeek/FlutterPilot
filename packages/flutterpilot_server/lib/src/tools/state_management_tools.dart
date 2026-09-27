@@ -53,26 +53,41 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'set_riverpod_state',
       description:
-          'Inject a new state into a Riverpod provider. Use the provider name (type) from `get_riverpod_state`. The `value` should be a JSON-compatible string (e.g. "42", "true", "\\"hello\\"").',
+          'Inject a new state into a Riverpod provider. Use the provider name or notifier name from `get_riverpod_state`. Accepts plain values (e.g. 42, "active", true) or JSON.',
       inputSchema: ToolInputSchema(
         properties: {
           'provider': JsonSchema.string(
             description:
-                'The Riverpod provider name as registered with FlutterPilot.registerStateSetter (e.g. "counterProvider").',
+                'The Riverpod provider name (e.g. "counterProvider", "FeedNotifier").',
           ),
-          'value': JsonSchema.string(
-            description:
-                'The new state value to inject. Use JSON-serializable types. Complex objects should be JSON strings.',
-          ),
+          'name': JsonSchema.string(description: 'Alias for provider.'),
+          'target': JsonSchema.string(description: 'Alias for provider.'),
+          'value': JsonSchema.fromJson({
+            'description':
+                'The new state value to inject. Can be a primitive value (int, bool, string) or JSON string.',
+          }),
         },
-        required: ['provider', 'value'],
+        required: ['value'],
       ),
       callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
+        // Memory-only write: allowed by default without --allow-destructive
+        final provider = p['provider'] ?? p['name'] ?? p['target'];
+        if (provider == null) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'Missing required parameter: provider (or target/name)',
+              ),
+            ],
+            isError: true,
+          );
+        }
+        final val = p['value'];
+        final valueStr = val is String ? val : json.encode(val);
         final res = await _callExtensionRaw('ext.flutterpilot.setState', {
           'type': 'riverpod',
-          'name': p['provider'],
-          'value': p['value'],
+          'name': provider.toString(),
+          'value': valueStr,
         });
         return res.toCallToolResult();
       },
@@ -164,16 +179,26 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_network_logs',
       description:
-          'View the last 50 HTTP requests and responses. CALL THIS if an API call failed or to verify network payload accuracy.',
+          'View recent HTTP requests and responses (bodies truncated and redacted; mock status shown). CALL THIS if an API call failed or to verify network payload accuracy.',
       extension: 'ext.flutterpilot.getNetworkLogs',
       formatResult: (json) {
         final logs = json['logs'] as List?;
         if (logs == null || logs.isEmpty) return 'No network traffic captured.';
         return logs
-            .map(
-              (l) =>
-                  '[${l['timestamp']}] ${l['type'].toUpperCase()} ${l['method'] ?? ''} ${l['uri']} ${l['statusCode'] ?? ''}',
-            )
+            .map((l) {
+              final type = l['type']?.toString().toUpperCase() ?? 'LOG';
+              final method = l['method'] != null ? '${l['method']} ' : '';
+              final uri = l['uri'] ?? '';
+              final status = l['statusCode'] != null
+                  ? ' ${l['statusCode']}'
+                  : '';
+              final mocked = l['mocked'] == true ? ' [MOCKED]' : '';
+              final msg = l['message'] != null
+                  ? ' error="${l['message']}"'
+                  : '';
+              final body = l['body'] != null ? ' body=${l['body']}' : '';
+              return '[${l['timestamp']}] $type $method$uri$status$mocked$msg$body';
+            })
             .join('\n');
       },
     );
@@ -359,22 +384,24 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         final sql = p['sql']?.toString() ?? '';
-        final db = p['database']?.toString();
+        final db = (p['database'] ?? p['dbName'])?.toString();
         if (!allowDestructive && !_isReadOnlySql(sql)) {
           return _destructiveOperationDenied();
         }
 
+        final args = {'sql': sql, 'dbName': ?db};
+
         // 1. Try sqflite
         final sqfRes = await _callExtensionRaw(
           'ext.flutterpilot.querySqflite',
-          {'sql': sql, 'database': ?db},
+          args,
         );
         if (!sqfRes.isError) return sqfRes.toCallToolResult();
 
         // 2. Try drift
         final driftRes = await _callExtensionRaw(
           'ext.flutterpilot.queryDrift',
-          {'sql': sql},
+          args,
         );
         if (!driftRes.isError) return driftRes.toCallToolResult();
 
@@ -382,7 +409,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage}',
+                  'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage ?? driftRes.errorMessage}',
             ),
           ],
           isError: true,

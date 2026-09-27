@@ -83,9 +83,11 @@ void main() {
       expect(snapshot.containsKey('recentLogs'), isTrue);
     });
 
-    test('getPostActionState returns concise post-action summary', () {
+    test('getPostActionState returns concise post-action summary', () async {
       FlutterPilot.initialize();
-      final state = FlutterPilot.getPostActionState(previousRoute: '/login');
+      final state = await FlutterPilot.getPostActionState(
+        previousRoute: '/login',
+      );
 
       expect(state, isA<Map<String, dynamic>>());
       expect(state.containsKey('route'), isTrue);
