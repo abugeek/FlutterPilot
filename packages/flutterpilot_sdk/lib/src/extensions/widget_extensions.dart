@@ -209,11 +209,17 @@ extension _WidgetExtensions on FlutterPilot {
 
       var element = PilotWidgetInspector.findElement(target);
       if (element == null || !HitTestUtils.isElementHittable(element)) {
-        await ScrollSimulator.scrollUntilVisible(
-          target,
-          maxAttempts: maxAttempts,
+        await FlutterPilot._waitForRouteSettled(
+          timeout: const Duration(milliseconds: 200),
         );
         element = PilotWidgetInspector.findElement(target);
+        if (element == null || !HitTestUtils.isElementHittable(element)) {
+          await ScrollSimulator.scrollUntilVisible(
+            target,
+            maxAttempts: maxAttempts,
+          );
+          element = PilotWidgetInspector.findElement(target);
+        }
       }
 
       if (element == null) {

@@ -138,6 +138,10 @@ void main() {
         final mainContent = mainFile.readAsStringSync();
         expect(mainContent.contains('FlutterPilot.initialize();'), isTrue);
         expect(mainContent.contains('NavigationTracker()'), isTrue);
+        expect(mainContent.contains('FlutterPilot.localeNotifier'), isTrue);
+        expect(mainContent.contains('FlutterPilot.textScaleNotifier'), isTrue);
+        expect(mainContent.contains('ValueListenableBuilder<Locale?>'), isTrue);
+        expect(mainContent.contains('ValueListenableBuilder<double?>'), isTrue);
         // A non-const observer inside `const MaterialApp(` would not compile.
         expect(mainContent, isNot(contains('const MaterialApp')));
       },
@@ -152,6 +156,39 @@ void main() {
       );
       const router = 'MaterialApp.router(routerConfig: r)';
       expect(InitCommand.addNavigationTracker(router), router);
+    });
+
+    test('addValueListenableOverrides wraps MaterialApp idempotently', () {
+      const input = 'MaterialApp(home: Scaffold())';
+      final wrapped = InitCommand.addValueListenableOverrides(input);
+      expect(wrapped, contains('ValueListenableBuilder<Locale?>'));
+      expect(wrapped, contains('ValueListenableBuilder<double?>'));
+      expect(wrapped, contains('FlutterPilot.localeNotifier'));
+      expect(wrapped, contains('FlutterPilot.textScaleNotifier'));
+      expect(InitCommand.addValueListenableOverrides(wrapped), wrapped);
+    });
+
+    test('patchMain handles arrow-bodied main', () {
+      final out = InitCommand.patchMain('void main() => runApp(const App());')!;
+      expect(out, contains('FlutterPilot.initialize();'));
+      expect(out, contains('runApp(const App());'));
+      expect(out, isNot(contains('=>')));
+    });
+
+    test('ensureImport adds the SDK import when injected code needs it', () {
+      expect(
+        InitCommand.ensureImport('x(NavigationTracker())'),
+        startsWith("import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';"),
+      );
+      expect(InitCommand.ensureImport('plain()'), 'plain()');
+    });
+
+    test('overrides skip text scale when the app has its own builder', () {
+      final out = InitCommand.addValueListenableOverrides(
+        'MaterialApp(builder: (c, w) => w!, home: X())',
+      );
+      expect(out, contains('FlutterPilot.localeNotifier'));
+      expect(out, isNot(contains('FlutterPilot.textScaleNotifier')));
     });
   });
 }

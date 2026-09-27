@@ -831,11 +831,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         );
         if (res.isError) return res.toCallToolResult();
         final elapsed = res.data?['elapsedMs'] ?? 0;
+        final targetName = p['selector'] ?? p['target'] ?? p['key'];
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  '🎯 Condition satisfied: "${p['selector']}" is now visible on screen (${elapsed}ms).',
+                  '🎯 Condition satisfied: "$targetName" is now visible on screen (${elapsed}ms).',
             ),
           ],
         );

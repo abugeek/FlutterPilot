@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 132
+Tool count: 131
 
 ## `get_operation`
 
@@ -465,16 +465,6 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
-
-## `wait_for_widget`
-
-Deprecated: use `wait_for_condition` instead. Polls until a widget with the given target/key appears in the tree, or times out.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `target` | string | no | The ValueKey or text string of the widget to wait for. |
-| `key` | string | no | Legacy alias for target. |
-| `timeoutMs` | integer | no | Maximum milliseconds to wait for the widget (default: 5000ms). |
 
 ## `wait_for_route`
 
