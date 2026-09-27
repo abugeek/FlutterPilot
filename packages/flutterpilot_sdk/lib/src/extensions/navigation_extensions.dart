@@ -360,15 +360,28 @@ extension _NavigationExtensions on FlutterPilot {
 /// [WidgetsBinding.handlePushRoute] — the same entry point the OS uses.
 Future<void> _pushRoute(String route, {bool deepLink = false}) async {
   if (!deepLink && NavigationTracker.customNavigateHandler != null) {
-    if (await NavigationTracker.customNavigateHandler!(route)) return;
+    if (await NavigationTracker.customNavigateHandler!(route)) {
+      await _pumpAndSettleRoute();
+      return;
+    }
   }
   final nav = NavigationTracker.navigatorState;
   if (!deepLink && nav != null && nav.mounted) {
     nav.pushNamed(route);
+    await _pumpAndSettleRoute();
     return;
   }
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
   await WidgetsBinding.instance.handlePushRoute(route);
+  await _pumpAndSettleRoute();
+}
+
+Future<void> _pumpAndSettleRoute() async {
+  WidgetsBinding.instance.scheduleFrame();
+  try {
+    await WidgetsBinding.instance.endOfFrame;
+  } catch (_) {}
+  await FlutterPilot._waitForRouteSettled();
 }
 
 RouterDelegate<Object?>? _rootRouterDelegate() {

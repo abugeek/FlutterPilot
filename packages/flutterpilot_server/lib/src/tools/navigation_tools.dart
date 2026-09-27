@@ -71,45 +71,6 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'wait_for_widget',
-      description:
-          'Deprecated: use `wait_for_condition` instead. Polls until a widget with the given target/key appears in the tree, or times out.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'target': JsonSchema.string(
-            description:
-                'The ValueKey or text string of the widget to wait for.',
-          ),
-          'key': JsonSchema.string(description: 'Legacy alias for target.'),
-          'timeoutMs': JsonSchema.integer(
-            description:
-                'Maximum milliseconds to wait for the widget (default: 5000ms).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final target = p['target'] ?? p['key'] ?? p['selector'];
-        if (target == null) {
-          return CallToolResult(
-            content: [
-              TextContent(text: 'Missing required parameter: target (or key)'),
-            ],
-            isError: true,
-          );
-        }
-        final args = {
-          'key': target.toString(),
-          'selector': target.toString(),
-          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.waitForWidget',
-          args,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    server.registerTool(
       'wait_for_route',
       description:
           'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',

@@ -199,6 +199,19 @@ class InitCommand extends Command<void> {
       }
     }
 
+    var overridesAdded = false;
+    if (mainFile.existsSync()) {
+      final content = await mainFile.readAsString();
+      final withOverrides = addValueListenableOverrides(content);
+      if (withOverrides != content) {
+        await mainFile.writeAsString(withOverrides);
+        overridesAdded = true;
+        stdout.writeln(
+          '✅ Wired MaterialApp with ValueListenableBuilder for locale and text scale overrides.',
+        );
+      }
+    }
+
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
@@ -217,10 +230,15 @@ class InitCommand extends Command<void> {
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
     );
-    stdout.writeln(
-      '\nTip: To enable runtime locale and text scale overrides (set_locale / set_text_scale), '
-      'wrap MaterialApp in ValueListenableBuilder with FlutterPilot.localeNotifier and FlutterPilot.textScaleNotifier.',
-    );
+    if (!overridesAdded && mainFile.existsSync()) {
+      final content = await mainFile.readAsString();
+      if (!content.contains('FlutterPilot.localeNotifier')) {
+        stdout.writeln(
+          '\nTip: To enable runtime locale and text scale overrides (set_locale / set_text_scale), '
+          'wrap MaterialApp in ValueListenableBuilder with FlutterPilot.localeNotifier and FlutterPilot.textScaleNotifier.',
+        );
+      }
+    }
   }
 
   /// Adds `NavigationTracker()` to a plain `MaterialApp(` (not `.router`),
@@ -245,6 +263,125 @@ class InitCommand extends Command<void> {
       match.end,
       'MaterialApp(\n      navigatorObservers: [NavigationTracker()],',
     );
+  }
+
+  /// Wraps `MaterialApp` in `ValueListenableBuilder`s for locale and text scale overrides.
+  static String addValueListenableOverrides(String content) {
+    if (content.contains('FlutterPilot.localeNotifier') ||
+        content.contains('FlutterPilot.textScaleNotifier')) {
+      return content;
+    }
+    final app = RegExp(r'(?:const\s+)?(MaterialApp(?:\.router)?\s*\()');
+    final match = app.firstMatch(content);
+    if (match == null) return content;
+
+    final openParenIndex = match.end - 1;
+    final closeParenIndex = _findMatchingClosingParen(content, openParenIndex);
+    if (closeParenIndex == -1) return content;
+
+    var appCode = content.substring(match.start, closeParenIndex + 1);
+    appCode = appCode.replaceFirst(RegExp(r'^const\s+'), '');
+
+    if (!appCode.contains('locale:')) {
+      final insertIdx = appCode.indexOf('(') + 1;
+      appCode =
+          '${appCode.substring(0, insertIdx)}\n      locale: pilotLocale,${appCode.substring(insertIdx)}';
+    }
+
+    if (!appCode.contains('builder:')) {
+      final insertIdx = appCode.indexOf('(') + 1;
+      appCode = '''${appCode.substring(0, insertIdx)}
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: pilotScale != null
+                ? TextScaler.linear(pilotScale)
+                : media.textScaler,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },${appCode.substring(insertIdx)}''';
+    }
+
+    final wrapped =
+        '''ValueListenableBuilder<Locale?>(
+  valueListenable: FlutterPilot.localeNotifier,
+  builder: (context, pilotLocale, _) => ValueListenableBuilder<double?>(
+    valueListenable: FlutterPilot.textScaleNotifier,
+    builder: (context, pilotScale, _) => $appCode,
+  ),
+)''';
+
+    return content.replaceRange(match.start, closeParenIndex + 1, wrapped);
+  }
+
+  static int _findMatchingClosingParen(String text, int openParenIndex) {
+    var depth = 0;
+    var inSingleQuote = false;
+    var inDoubleQuote = false;
+    var inLineComment = false;
+    var inBlockComment = false;
+
+    for (var i = openParenIndex; i < text.length; i++) {
+      final ch = text[i];
+      final next = i + 1 < text.length ? text[i + 1] : '';
+
+      if (inLineComment) {
+        if (ch == '\n') inLineComment = false;
+        continue;
+      }
+      if (inBlockComment) {
+        if (ch == '*' && next == '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+      if (inSingleQuote) {
+        if (ch == '\\') {
+          i++;
+        } else if (ch == "'") {
+          inSingleQuote = false;
+        }
+        continue;
+      }
+      if (inDoubleQuote) {
+        if (ch == '\\') {
+          i++;
+        } else if (ch == '"') {
+          inDoubleQuote = false;
+        }
+        continue;
+      }
+
+      if (ch == '/' && next == '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+      if (ch == '/' && next == '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+      if (ch == "'") {
+        inSingleQuote = true;
+        continue;
+      }
+      if (ch == '"') {
+        inDoubleQuote = true;
+        continue;
+      }
+
+      if (ch == '(') {
+        depth++;
+      } else if (ch == ')') {
+        depth--;
+        if (depth == 0) return i;
+      }
+    }
+    return -1;
   }
 
   /// Returns [content] with the import and `FlutterPilot.initialize()` added,

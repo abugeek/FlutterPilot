@@ -138,6 +138,10 @@ void main() {
         final mainContent = mainFile.readAsStringSync();
         expect(mainContent.contains('FlutterPilot.initialize();'), isTrue);
         expect(mainContent.contains('NavigationTracker()'), isTrue);
+        expect(mainContent.contains('FlutterPilot.localeNotifier'), isTrue);
+        expect(mainContent.contains('FlutterPilot.textScaleNotifier'), isTrue);
+        expect(mainContent.contains('ValueListenableBuilder<Locale?>'), isTrue);
+        expect(mainContent.contains('ValueListenableBuilder<double?>'), isTrue);
         // A non-const observer inside `const MaterialApp(` would not compile.
         expect(mainContent, isNot(contains('const MaterialApp')));
       },
@@ -152,6 +156,16 @@ void main() {
       );
       const router = 'MaterialApp.router(routerConfig: r)';
       expect(InitCommand.addNavigationTracker(router), router);
+    });
+
+    test('addValueListenableOverrides wraps MaterialApp idempotently', () {
+      const input = 'MaterialApp(home: Scaffold())';
+      final wrapped = InitCommand.addValueListenableOverrides(input);
+      expect(wrapped, contains('ValueListenableBuilder<Locale?>'));
+      expect(wrapped, contains('ValueListenableBuilder<double?>'));
+      expect(wrapped, contains('FlutterPilot.localeNotifier'));
+      expect(wrapped, contains('FlutterPilot.textScaleNotifier'));
+      expect(InitCommand.addValueListenableOverrides(wrapped), wrapped);
     });
   });
 }
