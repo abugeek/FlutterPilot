@@ -4,7 +4,7 @@ part of '../../flutterpilot_server.dart';
 /// and changing device orientation, locale, and theme.
 mixin _NavigationToolsMixin on _FlutterPilotServerBase {
   void _registerNavigationTools() {
-    server.registerTool(
+    _tool(
       'navigate_to',
       description:
           'Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.',
@@ -23,7 +23,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'jump_to_screen',
       description:
           'Directly teleports to a deep application screen with optional seed state injection (Riverpod/Bloc/storage). '
@@ -70,7 +70,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'Navigation Stack: ${json['stack']?.join(' -> ') ?? 'Empty'}',
     );
 
-    server.registerTool(
+    _tool(
       'wait_for_route',
       description:
           'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',
@@ -99,7 +99,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'wait_for_animation',
       description:
           'Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.',
@@ -122,7 +122,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'wait_for_state',
       description:
           'Polls a Riverpod provider or Bloc/Cubit until its current value string contains '
@@ -162,7 +162,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_device_rotation',
       description:
           'Rotates the device to portrait or landscape orientation. Use to test responsive layouts, '
@@ -181,7 +181,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'set_locale',
       description:
           'Switch app language (e.g., "en", "de_DE"). Use this to check for text overflows in different languages.',
@@ -200,7 +200,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'set_theme',
       description:
           'Toggle Light/Dark mode. Use this to verify design consistency across themes.',

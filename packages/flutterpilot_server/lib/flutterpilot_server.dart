@@ -53,6 +53,36 @@ Map<String, dynamic> _withDeviceId(
 
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
+  /// Registers a tool. An unexpected exception becomes an error that names
+  /// the tool and the cause — mcp_dart would replace it with a bare
+  /// "Tool execution failed." and log the reason where the agent can't see it.
+  RegisteredTool _tool(
+    String name, {
+    String? description,
+    ToolInputSchema? inputSchema,
+    required ToolFunction callback,
+  }) => server.registerTool(
+    name,
+    description: description,
+    inputSchema: inputSchema,
+    callback: (args, extra) async {
+      try {
+        return await callback(args, extra);
+      } catch (e) {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  '$name failed: $e. If the app was busy or reloading, retry; '
+                  'call get_app_summary to check its state.',
+            ),
+          ],
+        );
+      }
+    },
+  );
+
   McpServer get server;
   String get vmServiceUri;
   bool get allowDestructive;
@@ -836,7 +866,7 @@ Use this guide to understand what tools to call, when, and in what order.
             'when omitted, the active device is used.',
       ),
     };
-    server.registerTool(
+    _tool(
       name,
       description: description,
       inputSchema: ToolInputSchema(properties: toolProperties),
@@ -1144,7 +1174,45 @@ Use this guide to understand what tools to call, when, and in what order.
     return {...args, 'projectRoot': root};
   }
 
+  /// Runs [extension] once; if the VM service connection drops mid-call
+  /// (slow simulators do this), reconnects. Reads are retried; actions are
+  /// not — they may already have run — and say so instead.
   Future<_ExtensionResult> _callExtensionImmediate(
+    String extension,
+    Map<String, dynamic> parameters, {
+    DeviceRuntimeContext? context,
+  }) async {
+    final result = await _callExtensionImmediateOnce(
+      extension,
+      parameters,
+      context: context,
+    );
+    final message = result.errorMessage ?? '';
+    final dropped =
+        message.contains('Service connection disposed') ||
+        message.contains('Service has disappeared');
+    if (!dropped) return result;
+
+    _markContextConnectionLost(context);
+    try {
+      await _connectToVmService();
+    } catch (_) {}
+    if (_isReadOnlyExtension(extension) && _vmService != null) {
+      return _callExtensionImmediateOnce(
+        extension,
+        parameters,
+        context: context,
+      );
+    }
+    return _ExtensionResult.error(
+      'The connection to the app dropped during this call (reconnected: '
+      '${_vmService != null}). The action may or may not have run — check '
+      'with get_app_summary before retrying.',
+      ErrorCategory.connectionLost,
+    );
+  }
+
+  Future<_ExtensionResult> _callExtensionImmediateOnce(
     String extension,
     Map<String, dynamic> parameters, {
     DeviceRuntimeContext? context,

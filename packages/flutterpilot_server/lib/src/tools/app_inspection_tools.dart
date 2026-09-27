@@ -13,7 +13,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       .toList();
 
   void _registerAppInspectionTools() {
-    server.registerTool(
+    _tool(
       'get_operation',
       description:
           'Polls an asynchronous operation submitted with async:true. '
@@ -60,7 +60,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'cancel_operation',
       description:
           'Cancels a queued FlutterPilot operation before it starts. '
@@ -95,7 +95,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'connect_app',
       description:
           'Connects or reconnects FlutterPilot to a running Flutter application. '
@@ -133,7 +133,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'list_connected_devices',
       description:
           'Lists all registered Flutter devices/instances in the multi-device fleet and which one is active.',
@@ -145,7 +145,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'register_device',
       description:
           'Registers a new device or instance in the multi-device fleet with its name and VM Service URI.',
@@ -171,7 +171,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'switch_device',
       description:
           'Switches the active device to target for all subsequent inspection and UI automation commands.',
@@ -255,7 +255,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'HINT: Analyze the stack trace to find the failing file, then use get_widget_tree to see the state of the UI at failure.',
     );
 
-    server.registerTool(
+    _tool(
       'get_recent_events',
       description:
           'Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.',
@@ -281,7 +281,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_build_config',
       description:
           'Reads the project\'s pubspec.yaml and returns the app name, '
@@ -304,7 +304,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'read_dart_file',
       description:
           'Reads a Dart source file from the connected Flutter project. '
@@ -378,7 +378,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'list_dart_files',
       description:
           'Lists all .dart files in the Flutter project under the given '
@@ -555,7 +555,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       );
     }
 
-    server.registerTool(
+    _tool(
       'get_debug_logs',
       description:
           'Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. '
@@ -618,7 +618,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       );
     }
 
-    server.registerTool(
+    _tool(
       'clear_debug_logs',
       description:
           'Clears captured console logs (server and in-app buffers). '
@@ -628,7 +628,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- get_capabilities -----------------------------------------------------
-    server.registerTool(
+    _tool(
       'get_capabilities',
       description:
           'Returns the server capabilities: connection status, loaded plugins, '
@@ -698,7 +698,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'profile_frame_budget',
       description:
           'Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) '
@@ -720,7 +720,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_stream_logs',
       description:
           'Real-Time WebSocket & Stream Channel Inspector: Returns captured incoming and outgoing '

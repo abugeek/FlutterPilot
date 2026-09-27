@@ -3,7 +3,7 @@ part of '../../flutterpilot_server.dart';
 /// Tools for self-heal status, crash flight recorder, reproduction tests, diagnostics, and hot reload/restart.
 mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   void _registerSelfHealTools() {
-    server.registerTool(
+    _tool(
       'get_self_heal_status',
       description:
           'Check if the application is currently in an unstable/crash state. Use this to verify if your last fix worked or if a new crash was intercepted.',
@@ -16,7 +16,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_latest_crash_report',
       description:
           'Retrieve the most recent structured crash report. CALL THIS immediately if you receive a Self-Heal notification or if `get_self_heal_status` returns UNSTABLE.',
@@ -37,7 +37,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'get_flight_log',
       description:
           'Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.',
@@ -61,7 +61,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'clear_flight_log',
       description: 'Clears the flight recorder event buffer.',
       inputSchema: ToolInputSchema(
@@ -76,7 +76,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'diagnose_last_error',
       description:
           'Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.',
@@ -97,7 +97,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'hot_reload',
       description:
           'Recompile edited .dart files and hot reload them into the running app, keeping state. '
@@ -112,7 +112,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       ),
     );
 
-    server.registerTool(
+    _tool(
       'hot_restart',
       description:
           'Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), '

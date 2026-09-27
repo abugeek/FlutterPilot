@@ -4,7 +4,7 @@ part of '../../flutterpilot_server.dart';
 mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   void _registerDevtoolsTools() {
     // -- get_memory_details ---------------------------------------------------
-    server.registerTool(
+    _tool(
       'get_memory_details',
       description:
           'Returns a detailed memory breakdown of the running app: heap used, '
@@ -63,7 +63,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- get_allocation_profile -----------------------------------------------
-    server.registerTool(
+    _tool(
       'get_allocation_profile',
       description:
           'Returns the top Dart classes by current heap allocation (like the '
@@ -126,7 +126,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- get_http_profile -----------------------------------------------------
-    server.registerTool(
+    _tool(
       'get_http_profile',
       description:
           'Returns all HTTP requests made by the app — URL, method, status code, '
@@ -213,7 +213,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- clear_http_profile ---------------------------------------------------
-    server.registerTool(
+    _tool(
       'clear_http_profile',
       description:
           'Clears the HTTP request history so you get a clean baseline '
@@ -239,7 +239,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- get_vm_info ----------------------------------------------------------
-    server.registerTool(
+    _tool(
       'get_vm_info',
       description:
           'Returns Dart VM version, process ID, all running isolates and their '
@@ -275,7 +275,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- toggle_repaint_rainbow -----------------------------------------------
-    server.registerTool(
+    _tool(
       'toggle_repaint_rainbow',
       description:
           'Enables or disables the repaint rainbow overlay (each layer '
@@ -312,7 +312,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- toggle_debug_paint ---------------------------------------------------
-    server.registerTool(
+    _tool(
       'toggle_debug_paint',
       description:
           'Enables or disables debug paint — shows layout padding (blue), '
@@ -346,7 +346,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- toggle_slow_animations -----------------------------------------------
-    server.registerTool(
+    _tool(
       'toggle_slow_animations',
       description:
           'Slows all animations to 1/5 speed (timeDilation=5) or restores '

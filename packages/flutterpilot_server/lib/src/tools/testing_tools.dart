@@ -4,7 +4,7 @@ part of '../../flutterpilot_server.dart';
 /// and making assertions about widget state.
 mixin _TestingToolsMixin on _FlutterPilotServerBase {
   void _registerTestingTools() {
-    server.registerTool(
+    _tool(
       'start_recording',
       description:
           'Starts recording manual interactions. User should perform the flow in the app while this is active.',
@@ -17,7 +17,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'stop_and_generate_test',
       description:
           'Stops recording and returns a log of actions. Use your LLM capability to convert this log into a Flutter `testWidgets` block.',
@@ -49,7 +49,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       extension: 'ext.flutterpilot.listCustomTools',
     );
 
-    server.registerTool(
+    _tool(
       'call_custom_tool',
       description:
           'Executes an app-specific tool defined by the developer. CALL THIS if you see a relevant tool listed in `list_custom_tools`.',
@@ -72,7 +72,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'assert_widget_visible',
       description:
           'Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.',
@@ -93,7 +93,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'assert_text_visible',
       description:
           'Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.',
@@ -121,7 +121,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'assert_widget_count',
       description:
           'Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.',
@@ -149,7 +149,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'assert_widget_enabled',
       description:
           'Asserts that the widget identified by key is ENABLED '
@@ -175,7 +175,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'assert_widget_disabled',
       description:
           'Asserts that the widget identified by key is DISABLED '

@@ -50,7 +50,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_riverpod_state',
       description:
           'Inject a new state into a Riverpod provider. Use the provider name or notifier name from `get_riverpod_state`. Accepts plain values (e.g. 42, "active", true) or JSON.',
@@ -93,7 +93,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'batch_set_state',
       description:
           'Atomic multi-state setter: Injects multiple state values at once (Riverpod, Bloc) in 1ms. '
@@ -148,7 +148,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_bloc_state',
       description:
           'Emit a new state into a live Bloc/Cubit (in memory only). Works when '
@@ -259,7 +259,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'exec_sql_query',
       description:
           'Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the '
@@ -356,7 +356,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'set_shared_preference',
       description:
           'Writes a key-value pair to SharedPreferences. '
@@ -390,7 +390,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'clear_shared_preferences',
       description:
           '⚠ DESTRUCTIVE — Removes SharedPreferences entries. '
@@ -420,7 +420,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'simulate_network',
       description:
           'Simulates a network condition for all Dio HTTP requests. Use to test offline states, loading skeletons, and slow-connection UX. Conditions: normal | slow_3g | fast_4g | offline.',
@@ -438,7 +438,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ).then((res) => res.toCallToolResult()),
     );
 
-    server.registerTool(
+    _tool(
       'mock_http_response',
       description:
           'Registers a URL pattern mock so that any Dio request whose URL contains '
@@ -478,7 +478,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
+    _tool(
       'clear_http_mocks',
       description:
           'Removes a specific URL pattern mock, or all mocks if urlPattern is omitted. '
