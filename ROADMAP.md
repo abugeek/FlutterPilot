@@ -22,7 +22,8 @@ tools that always work beat many tools that sometimes work.
   sqflite bookmarks, shared_preferences theme, connectivity banner, right-click
   context menu, Enter-to-search. Launch it with
   `flutter run -d macos --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`.
-- Only macOS desktop has been field-tested. iOS/Android/web: untested.
+- e2e passes on macOS, iOS simulator, Android emulator and web (Chrome);
+  all four run in CI. Field tests (real apps) so far on macOS only.
 - Plugins field-tested: riverpod, go_router, dio, sqflite, shared_preferences,
   connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
   secure_storage, supabase in `../notes_app`. **Untested in a real app:**
@@ -116,7 +117,8 @@ current major. §1 is done.
   dead URI; the connect path now refreshes it.
 - README tool list rewritten without counts (it named four tools that no
   longer exist); `TOOLS.generated.md` is the reference.
-- **Still manual:** make `analyze-and-test` and `e2e-macos` required status
+- **Still manual:** make `analyze-and-test`, `e2e-apple-web (macos|ios|web)`
+  and `e2e-android` required status
   checks on `main` (GitHub → Settings → Branches).
 
 1. **Weak perf tools — fix or delete:**
@@ -191,18 +193,20 @@ current major. §1 is done.
    `supabase/seed_accounts.md`). 22 findings, all fixed: see
    `docs/field-test-findings.md` round 4. Left: **Firebase** (needs the
    emulator suite), plain `hive` (only `hive_ce` exercised).
-2. **Mobile + web:** run the e2e and the field test on iOS simulator and
-   Android emulator (touch vs mouse pointers, keyboard/IME, lifecycle, native_*
-   tools which are iOS-only today) and on web (DWDS VM service differs;
-   hot restart path differs). Gate platform-specific tools so they don't show
-   up where they can't work.
+2. **Mobile + web:** e2e done — identical results on macOS, iOS simulator,
+   Android emulator and Chrome (tap, text, keys, secondary tap, pinch,
+   rotation, chains, hot reload + restart; web via DWDS). The `native_*`
+   tools are listed only when the app runs on iOS and `idb`/`xcrun` exist
+   (`tools/list_changed`). Left: `native_tap/text/button/describe_screen`
+   are untested (idb not installed here); field-test a real app on a phone
+   (IME, permissions dialogs, lifecycle/backgrounding).
 3. **Zero-code mode** (no SDK installed) is advertised but untested.
 4. **Multi-device fleet** (`register_device`/`switch_device`) untested.
 5. **VS Code extension** (`packages/flutterpilot_vscode`) untested — test or remove.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
-   plugin-range check on Linux, `e2e_test.dart` on macOS, weekly cron.
-   Left: mark both jobs as required checks on `main`; add iOS/Android/web
-   e2e jobs once §2.2 proves those platforms.
+   plugin-range check on Linux; `e2e_test.dart` on macOS, iOS simulator and
+   Chrome (macos runner) and Android emulator (Linux + KVM); weekly cron.
+   Left: mark them as required checks on `main`.
 
 ## 3. Setup that "just works"
 

@@ -173,7 +173,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
        server = McpServer(
          Implementation(name: 'FlutterPilot', version: '0.1.0'),
          options: McpServerOptions(
-           capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+           capabilities: ServerCapabilities(
+             tools: ServerCapabilitiesTools(listChanged: true),
+           ),
          ),
        ) {
     _selfHealManager = SelfHealManager(server: server);
@@ -231,6 +233,30 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   Future<void>? _connecting;
+
+  Future<void>? _sdkExtensionsReady;
+
+  /// Right after launch (notably on web, via DWDS) the app may not have
+  /// registered FlutterPilot's extensions yet. Wait for them once per
+  /// connection, at most 5 s, instead of misreporting "Zero-Code mode" or
+  /// "not registered" for the first calls. Apps without the SDK pay once.
+  static Future<void> _waitForSdkExtensions(VmService vm) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final isolates = (await vm.getVM()).isolates ?? const <IsolateRef>[];
+        for (final ref in isolates) {
+          final rpcs = (await vm.getIsolate(ref.id!)).extensionRPCs;
+          if (rpcs?.any((e) => e.startsWith('ext.flutterpilot.')) ?? false) {
+            return;
+          }
+        }
+      } catch (_) {
+        return; // Connection trouble is reported by the call itself.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
 
   /// Tool calls and the reconnect timer can both trigger a connect; share one
   /// attempt so they never race into two live connections.
@@ -302,6 +328,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.service = _vmService;
     activeContext.connectionGeneration = _connectionGeneration;
     activeContext.cachedMainIsolateId = null;
+    _sdkExtensionsReady = _waitForSdkExtensions(_vmService!);
+    try {
+      await _updateNativeToolVisibility(
+        (await _vmService!.getVM()).operatingSystem,
+      );
+    } catch (_) {
+      // Visibility is best-effort; the tools still explain themselves.
+    }
 
     _currentBackoff = _minBackoff;
     _reconnectTimer?.cancel();
@@ -606,6 +640,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerAppInspectionTools();
     _registerUiAutomationTools();
     _registerNativeAutomationTools();
+    // Hidden until a connection shows they can work (iOS + idb/xcrun).
+    // The docs generator sets FLUTTERPILOT_LIST_ALL_TOOLS to see them all.
+    if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] == null) {
+      for (final tool in _nativeTools.values) {
+        tool.disable();
+      }
+    }
     _registerNavigationTools();
     _registerScreenshotTools();
     _registerSelfHealTools();
@@ -842,6 +883,7 @@ Use this guide to understand what tools to call, when, and in what order.
     Map<String, dynamic> parameters,
   ) async {
     parameters = normalizeToolParams(parameters);
+    if (extension.startsWith('ext.flutterpilot.')) await _sdkExtensionsReady;
     final context = await _deviceContextForParameters(parameters);
     final deviceId =
         context?.deviceId ??
