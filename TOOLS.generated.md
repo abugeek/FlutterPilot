@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 131
+Tool count: 129
 
 ## `get_operation`
 
@@ -361,7 +361,7 @@ Executes a batch sequence of UI actions (taps, text entries) inside the Flutter 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `actions` | array | yes | List of action objects, e.g. [{"action": "tap", "target": "Icon['menu']"}, {"action": "enterText", "target": "TextField['Search']", "text": "theme"}]. |
+| `actions` | array | yes | Steps run in order; the chain stops at the first step that fails. Actions: "tap" (target) and "enter_text" (target, text). Targets work like tap_widget's, e.g. [{"action": "tap", "target": "New note"}, {"action": "enter_text", "target": "Title", "text": "Groceries"}]. |
 
 ## `tap_and_wait`
 
@@ -693,12 +693,12 @@ Inspect the current states of all active Blocs and Cubits. CALL THIS to verify b
 
 ## `set_bloc_state`
 
-Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_bloc_state`. The `state` should be a JSON string (e.g. "42", "true").
+Emit a new state into a live Bloc/Cubit (in memory only). Works when the state is a bool/number/String/List/Map; for class-typed states it explains why not — drive the UI instead. Names come from get_bloc_state.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `cubit` | string | yes | The Bloc/Cubit class name as registered (e.g. "CounterCubit", "AuthBloc"). |
-| `state` | string | yes | The new state value to inject. Use JSON-serializable representation. |
+| `cubit` | string | yes | Name from get_bloc_state (e.g. "CounterCubit", or "CounterCubit#2" for a second instance). |
+| `state` | any | yes | New state as a plain value or JSON, e.g. 42, true, "text", [1,2]. |
 
 ## `get_network_logs`
 
@@ -734,15 +734,6 @@ List all tables in the SQLite (Drift) database.
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `query_drift`
-
-Execute a raw SQL SELECT query on the local database. CALL THIS to verify complex data relationships or transaction history.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `dbName` | string | yes | The Drift database name registered via FlutterPilot. |
-| `sql` | string | yes | A SQL SELECT, EXPLAIN, or WITH query. Write-operations (INSERT/UPDATE/DELETE) are blocked. |
-
 ## `list_sqflite_databases`
 
 List all sqflite databases registered with FlutterPilot. PREREQUISITES: App must use flutterpilot_sqflite plugin.
@@ -766,23 +757,14 @@ List all tables in a sqflite database. PREREQUISITES: App must use flutterpilot_
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 | `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
-## `query_sqflite`
-
-Execute a read-only SQL SELECT query on a sqflite database. Only SELECT/EXPLAIN/PRAGMA/WITH are allowed — write operations are blocked. PREREQUISITES: App must use flutterpilot_sqflite plugin.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `dbName` | string | yes | The sqflite database name registered via FlutterPilot. |
-| `sql` | string | yes | A read-only SQL query (SELECT, EXPLAIN, PRAGMA, WITH). Write operations are blocked. |
-
 ## `exec_sql_query`
 
-Unified SQL Query Executor: Auto-detects active database (Sqflite or Drift) and executes a safe SQL query (SELECT, WITH, PRAGMA, EXPLAIN). Returns structured result rows.
+Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. List tables with "SELECT name FROM sqlite_master WHERE type='table'".
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `sql` | string | yes | SQL statement to execute. |
-| `database` | string | no | Optional database name if multiple databases exist. |
+| `database` | string | no | Database name, only needed when the app registers several. |
 
 ## `get_shared_preferences`
 

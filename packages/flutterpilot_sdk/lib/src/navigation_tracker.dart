@@ -19,7 +19,7 @@ import 'package:flutter/widgets.dart';
 /// create a separate [NavigationTracker] instance for each. The static
 /// [_stack] is shared across all instances.
 class NavigationTracker extends NavigatorObserver {
-  static final List<String?> _stack = [];
+  static final List<Route<dynamic>> _stack = [];
 
   /// The most-recently registered [NavigationTracker] instance.
   ///
@@ -59,7 +59,7 @@ class NavigationTracker extends NavigatorObserver {
   /// The list is ordered from bottom to top — the last element is the
   /// currently visible route.
   static List<String?> get stack =>
-      List.unmodifiable(stackProvider?.call() ?? _stack);
+      List.unmodifiable(stackProvider?.call() ?? _stack.map(describe));
 
   /// Set by router plugins (e.g. flutterpilot_gorouter) whose navigation is
   /// not visible to a [NavigatorObserver]. Returns the stack, bottom to top.
@@ -71,6 +71,43 @@ class NavigationTracker extends NavigatorObserver {
   static String get currentRoute {
     final s = stack;
     return s.isNotEmpty ? (s.last ?? 'Unknown') : 'Unknown';
+  }
+
+  /// A readable name for [route]: its settings name, else what it is —
+  /// "(menu)", "(dialog)", "(bottom sheet)", or the page's first app widget
+  /// (e.g. "EditorScreen") for an unnamed `MaterialPageRoute(builder: ...)`.
+  static String describe(Route<dynamic> route) {
+    final name = route.settings.name;
+    if (name != null) return name;
+    final type = route.runtimeType.toString();
+    if (route is PopupRoute) {
+      if (type.contains('PopupMenu')) return '(menu)';
+      if (type.contains('BottomSheet')) return '(bottom sheet)';
+      if (type.contains('Dialog')) return '(dialog)';
+      return '(popup)';
+    }
+    if (route is ModalRoute) {
+      final page = _firstAppWidget(route.subtreeContext);
+      if (page != null) return page;
+    }
+    return type.split('<').first;
+  }
+
+  static String? _firstAppWidget(BuildContext? context) {
+    if (context is! Element) return null;
+    String? found;
+    var budget = 300; // pages are shallow; never walk a whole screen
+    void visit(Element e) {
+      if (found != null || --budget < 0) return;
+      if (debugIsWidgetLocalCreation(e.widget)) {
+        found = e.widget.runtimeType.toString();
+        return;
+      }
+      e.visitChildren(visit);
+    }
+
+    context.visitChildren(visit);
+    return found;
   }
 
   /// Clears the navigation stack and removes the [onStateChange] callback.
@@ -85,7 +122,7 @@ class NavigationTracker extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    _stack.add(route.settings.name);
+    _stack.add(route);
     onStateChange?.call('navigation', 'push', route.settings.name);
   }
 
@@ -100,18 +137,15 @@ class NavigationTracker extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didRemove(route, previousRoute);
     // Use lastIndexOf to remove the correct occurrence when duplicate names exist
-    final index = _stack.lastIndexOf(route.settings.name);
-    if (index != -1) _stack.removeAt(index);
+    _stack.remove(route);
     onStateChange?.call('navigation', 'remove', route.settings.name);
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
-    final index = _stack.lastIndexOf(oldRoute?.settings.name);
-    if (index != -1) {
-      _stack[index] = newRoute?.settings.name;
-    }
+    final index = oldRoute == null ? -1 : _stack.indexOf(oldRoute);
+    if (index != -1 && newRoute != null) _stack[index] = newRoute;
     onStateChange?.call('navigation', 'replace', newRoute?.settings.name);
   }
 }

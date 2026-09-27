@@ -41,12 +41,17 @@ class SecureStoragePilotInspector {
 
   /// Sensitive key patterns that trigger automatic redaction even when
   /// `showValues` is true. Override via [register]'s `alwaysRedactPatterns`.
-  static Set<String> _alwaysRedactPatterns = {
+  static Set<String> _alwaysRedactPatterns = {..._defaultRedactPatterns};
+
+  static const _defaultRedactPatterns = {
     'password',
     'secret',
     'private_key',
     'api_key',
     'apikey',
+    'token',
+    'jwt',
+    'credential',
   };
 
   /// Registers a [FlutterSecureStorage] instance with FlutterPilot.
@@ -76,13 +81,12 @@ class SecureStoragePilotInspector {
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] SecureStoragePilotInspector.register called before '
-        'FlutterPilot.initialize(). Extensions will not be registered.',
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
       );
-      return;
     }
+    _storage = storage;
     if (_registered) return;
     _registered = true;
-    _storage = storage;
     if (alwaysRedactPatterns != null) {
       _alwaysRedactPatterns = alwaysRedactPatterns;
     }
@@ -93,13 +97,7 @@ class SecureStoragePilotInspector {
   static void reset() {
     _storage = null;
     _registered = false;
-    _alwaysRedactPatterns = {
-      'password',
-      'secret',
-      'private_key',
-      'api_key',
-      'apikey',
-    };
+    _alwaysRedactPatterns = {..._defaultRedactPatterns};
   }
 
   /// Returns `true` if [key] matches any always-redact pattern.
@@ -172,7 +170,9 @@ class SecureStoragePilotInspector {
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Failed to read secure storage: $e',
+          'Could not list secure storage keys: this platform/keychain setup '
+          'does not support readAll() ($e). Read a key you know with '
+          'read_secure_storage_key instead.',
         );
       }
     });

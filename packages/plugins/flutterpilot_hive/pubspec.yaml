@@ -1,5 +1,5 @@
 name: flutterpilot_hive
-description: "Hive storage inspector plugin for FlutterPilot — exposes box contents to AI agents."
+description: "Hive / Hive CE storage inspector plugin for FlutterPilot — exposes box contents to AI agents."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -17,7 +17,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  hive: ^2.2.3
   flutterpilot_sdk: ^0.1.0
 dev_dependencies:
   flutter_test:

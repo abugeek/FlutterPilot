@@ -1,6 +1,6 @@
 # FlutterPilot Hive Plugin
 
-Expose Hive box contents to FlutterPilot for AI inspection.
+Expose Hive / Hive CE box contents to FlutterPilot for AI inspection.
 
 ## Setup
 
@@ -13,9 +13,9 @@ dependencies:
 ```dart
 import 'package:flutterpilot_hive/flutterpilot_hive.dart';
 
-// After opening a Hive box:
-final box = await Hive.openBox('settings');
-HivePilotInspector.registerBox('settings');
+// After opening a box (works with hive and hive_ce):
+final settings = await Hive.openBox('settings');
+HivePilotInspector.registerBox(settings);
 ```
 
 ## What It Exposes

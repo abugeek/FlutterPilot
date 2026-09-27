@@ -112,6 +112,37 @@ in PR #1. Items still open are tracked in `ROADMAP.md`.
 | 95 | Escape via keyData path | ✅ | closes a popup menu on macOS |
 | 96 | riverpod plain values/short names, SQL auto-detect, Dio bodies | ✅ | verified in HN reader |
 
+## Round 4 — second field-test app (`../notes_app`, §2.1)
+
+Notes app: Bloc + Drift + Hive CE + flutter_secure_storage + local Supabase
+(auth, `notes` table with RLS, realtime). Wired with `flutterpilot init --local`
+exactly as a new user would, driven only through fp_bridge.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 97 | `init` plugin detection | ❌→fixed | `hive_ce` (maintained fork; `hive` last released 2022) not detected |
+| 98 | `init` text-scale wiring | ❌→fixed | printed "locale and text scale" but only wired locale: `builder:` of a nested `BlocBuilder` counted as MaterialApp's own |
+| 99 | `init` binding | ⚠️→fixed | second `WidgetsFlutterBinding.ensureInitialized()` added |
+| 100 | target by field label | ❌→fixed | summary lists `[TextField] "Email"`, `enter_text(target:"Email")` failed; `tap_widget` claimed it was "covered by an overlay" (label Text is a sibling of the input) |
+| 101 | `enter_text` password echo | ❌→fixed | obscured text echoed in the response and stored in recordings/flight log |
+| 102 | `enter_text` without target | ❌→fixed | used the text itself as the target instead of the focused field |
+| 103 | `execute_action_chain` | ❌→rewritten | `enter_text` (the tool's own name) was "unsupportedAction"; no route-settle wait → "covered"; ran on after failures. Now shares tap/type code with the single tools and stops at the first failure |
+| 104 | AI overlay badge | ❌→fixed | `🤖 …` Text showed in tree diffs; now invisible to the inspector and cleared before screenshots |
+| 105 | `tap_and_wait` | ⚠️→fixed | reported the diff from right after the tap, not the screen it waited for |
+| 106 | unnamed routes | ⚠️→fixed | "Unknown" → `EditorScreen`, `(menu)`, `(dialog)` |
+| 107 | element labels | ⚠️→fixed | icon glyph names appended to tooltips: "Delete delete", "New note add" |
+| 108 | SQL tools | ❌→merged | `query_drift` required `dbName`, hid SQLite's error ("check SQL syntax"), printed Dart maps; `query_sqflite` duplicate. One read-only `exec_sql_query` now |
+| 109 | Hive plugin | ❌→rewritten | imported `package:hive` → saw nothing in hive_ce apps; `box.add` int keys broke JSON encoding. Now takes the box itself |
+| 110 | plugin `reset()` | ❌→fixed | re-registering an extension threw; SDK now swaps handlers |
+| 111 | `get_bloc_state` | ⚠️→fixed | every bloc listed twice; unbounded state strings |
+| 112 | `set_bloc_state` | ⚠️→fixed | needed `--allow-destructive` for an in-memory change; class-typed states now refused with what to do instead |
+| 113 | secure_storage on macOS | ✅/⚠️ | debug builds need `usesDataProtectionKeychain: false` (-34018, surfaced by `get_errors` with the source line); legacy keychain can't `readAll()` → key listing fails with guidance, `read_secure_storage_key` works |
+| 114 | Supabase / Firebase network tools | ❌→fixed | `supabase_sign_out`, `supabase_refresh_session`, `log_analytics_event`, `record_crashlytics_error` ran without `--allow-destructive` |
+| 115 | `get_supabase_auth` / `query_supabase_table` / `get_supabase_realtime` | ✅ | realtime verified: row inserted from "another device" appeared in the app |
+| 116 | trailing `[operationId: op-N]` on every response | ⚠️→removed | token noise; async results still carry it |
+| 117 | summary jank / lifecycle | ⚠️→fixed | "40% jank" from 5 startup frames; `inactive` (visible, unfocused) reported as "not visible" |
+| 118 | fp_bridge | ⚠️→fixed | empty POST crashed it |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)

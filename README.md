@@ -127,11 +127,12 @@ line, culprit widget), `get_debug_logs`, `get_flight_log`.
 
 **State & storage (plugins)** — Riverpod `get_riverpod_state` /
 `set_riverpod_state`, Bloc `get_bloc_state` / `set_bloc_state`, go_router,
-SharedPreferences, sqflite `exec_sql_query`, Drift `list_drift_tables` /
-`query_drift`, Hive `get_hive_contents`, plus Supabase, Firebase,
-secure_storage and connectivity. Riverpod, go_router, Dio, sqflite,
-SharedPreferences and connectivity are field-tested on a real app; the others
-are not yet (see [ROADMAP.md](ROADMAP.md) §2).
+SharedPreferences, `exec_sql_query` (Drift or sqflite, read-only), Hive /
+Hive CE `get_hive_contents`, Supabase (`get_supabase_auth`,
+`query_supabase_table`, `get_supabase_realtime`), secure_storage and
+connectivity. Field-tested on real apps: Riverpod, go_router, Dio, sqflite,
+SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage and
+Supabase. Firebase is not yet (see [ROADMAP.md](ROADMAP.md) §2).
 
 **Devices** — `connect_app`, `list_connected_devices`, `register_device`,
 `switch_device`.

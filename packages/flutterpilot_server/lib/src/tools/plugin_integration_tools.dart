@@ -107,6 +107,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'Scope: "local" (default, this device only), "global" (all devices), '
           '"others" (other sessions only). Only use in dev/test environments.',
       extension: 'ext.flutterpilot.supabaseSignOut',
+      destructive: true,
       properties: {
         'scope': JsonSchema.string(
           description:
@@ -123,6 +124,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'session token via the Supabase Auth API. Use when testing token '
           'expiry flows. Only use in dev/test environments.',
       extension: 'ext.flutterpilot.supabaseRefreshSession',
+      destructive: true,
     );
 
     // =========================================================================
@@ -283,10 +285,14 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         },
         required: ['name'],
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.logAnalyticsEvent',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.logAnalyticsEvent',
+          p,
+        );
+        return res.toCallToolResult();
+      },
     );
 
     _registerAppTool(
@@ -353,10 +359,14 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.recordCrashlyticsError',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.recordCrashlyticsError',
+          p,
+        );
+        return res.toCallToolResult();
+      },
     );
 
     // =========================================================================

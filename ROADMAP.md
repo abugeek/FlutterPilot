@@ -11,11 +11,11 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-27 (PR #1 merged)
 
-- 131 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
+- 129 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
-  drives it through the MCP server over stdio. 29/29 checks pass on macOS
+  drives it through the MCP server over stdio. 32/32 checks pass on macOS
   (also runs in CI on `macos-latest`).
 - Field-test app: `../hn_reader` (sibling of this repo, its own git history):
   Hacker News reader with Riverpod 3, go_router 18, Dio (+ Algolia search),
@@ -24,8 +24,9 @@ tools that always work beat many tools that sometimes work.
   `flutter run -d macos --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`.
 - Only macOS desktop has been field-tested. iOS/Android/web: untested.
 - Plugins field-tested: riverpod, go_router, dio, sqflite, shared_preferences,
-  connectivity (read-only). **Untested in a real app:** bloc, drift, hive,
-  supabase, firebase, secure_storage.
+  connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
+  secure_storage, supabase in `../notes_app`. **Untested in a real app:**
+  firebase.
 
 ### How to work (the method that found every real bug so far)
 
@@ -184,9 +185,12 @@ current major. §1 is done.
 
 ## 2. Coverage the product claims but hasn't proven
 
-1. **Second real app for untested plugins:** e.g. a notes app with Bloc +
-   Drift + Hive + secure_storage + Supabase auth. Field-test every plugin tool;
-   delete the ones that don't hold up.
+1. **Second real app for untested plugins:** done for Bloc, Drift, Hive CE,
+   secure_storage and Supabase — `../notes_app` (own git repo; local Supabase
+   via `supabase start`, ports 553xx, test account in
+   `supabase/seed_accounts.md`). 22 findings, all fixed: see
+   `docs/field-test-findings.md` round 4. Left: **Firebase** (needs the
+   emulator suite), plain `hive` (only `hive_ce` exercised).
 2. **Mobile + web:** run the e2e and the field test on iOS simulator and
    Android emulator (touch vs mouse pointers, keyboard/IME, lifecycle, native_*
    tools which are iOS-only today) and on web (DWDS VM service differs;

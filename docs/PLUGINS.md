@@ -383,7 +383,7 @@ void main() {
 ```
 
 **Server Tools**: 
-- `query_drift` — Execute SELECT/EXPLAIN/PRAGMA/WITH
+- `exec_sql_query` — Read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH); rows as JSON, real SQLite errors
 - `list_drift_tables` — Enumerate tables
 
 **Capabilities**: Read-only SQL with injection prevention
@@ -410,13 +410,13 @@ void main() async {
 **Server Tools**:
 - `list_sqflite_databases` — List all registered sqflite databases
 - `list_sqflite_tables` — Enumerate tables in a named database
-- `query_sqflite` — Execute read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH)
+- `exec_sql_query` — Read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH), shared with Drift
 
 **Capabilities**: Read-only SQL with the same injection prevention as Drift. Supports multiple databases registered by name.
 
 ### flutterpilot_hive
 
-**Purpose**: Inspect Hive boxes (read-only)
+**Purpose**: Inspect Hive / Hive CE boxes (read-only)
 
 **Setup**:
 ```dart
@@ -428,7 +428,7 @@ void main() async {
   FlutterPilot.initialize();
   
   final box = await Hive.openBox('settings');
-  HivePilotInspector.registerBox('settings');
+  HivePilotInspector.registerBox(box); // works with hive and hive_ce
   
   runApp(MyApp());
 }

@@ -1,5 +1,15 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'ai_overlay_manager.dart';
 import 'hit_test_utils.dart';
+
+extension on Element {
+  /// On-screen children, minus FlutterPilot's own overlay (the AI tap badge).
+  void visitScreenChildren(ElementVisitor visitor) =>
+      debugVisitOnstageChildren((c) {
+        if (c.widget is! AiOverlayMarker) visitor(c);
+      });
+}
 
 /// Provides high-performance, single-pass introspection and semantic element querying into the live Flutter widget tree.
 /// All screen queries traverse with [Element.debugVisitOnstageChildren] (what
@@ -93,7 +103,7 @@ class PilotWidgetInspector {
     final childDepth = keep ? depth + 1 : depth;
     final children = <Map<String, dynamic>>[];
     if (childDepth <= maxDepth) {
-      element.debugVisitOnstageChildren(
+      element.visitScreenChildren(
         (c) => children.addAll(_summaryNodes(c, childDepth, maxDepth)),
       );
     }
@@ -282,6 +292,20 @@ class PilotWidgetInspector {
         }
       }
 
+      // Priority 75: a text field's label / hint / placeholder. The label is a
+      // sibling of the input, so resolving to the label Text would leave
+      // enter_text without a field and make tap_widget report it covered.
+      if ((targetIndex != null || bestPriority < 75 + 5) &&
+          (widget is TextField || widget is CupertinoTextField)) {
+        final q = queryToSearch.toLowerCase();
+        final names = widget is TextField
+            ? [widget.decoration?.labelText, widget.decoration?.hintText]
+            : [(widget as CupertinoTextField).placeholder];
+        if (names.any((n) => n != null && n.toLowerCase() == q)) {
+          consider(75);
+        }
+      }
+
       // Priority 70 / 60: Text / RichText / EditableText Direct Match
       if (targetIndex != null || bestPriority < 70 + 5) {
         if (widget is Text && widget.data != null) {
@@ -329,7 +353,7 @@ class PilotWidgetInspector {
 
       // Continue single-pass traversal if not already resolved by exact key
       if (!foundExact) {
-        element.debugVisitOnstageChildren(evaluateElement);
+        element.visitScreenChildren(evaluateElement);
       }
     }
 
@@ -434,7 +458,7 @@ class PilotWidgetInspector {
         final selector = _computeSemanticSelector(element);
         if (selector != null) suggestions.add(selector);
       }
-      element.debugVisitOnstageChildren(collect);
+      element.visitScreenChildren(collect);
     }
 
     collect(root);
@@ -455,7 +479,7 @@ class PilotWidgetInspector {
         found = element;
         return;
       }
-      element.debugVisitOnstageChildren(search);
+      element.visitScreenChildren(search);
     }
 
     search(root);
@@ -465,7 +489,7 @@ class PilotWidgetInspector {
   /// Recursively counts all elements.
   static int countElements(Element element) {
     int count = 1;
-    element.debugVisitOnstageChildren((child) {
+    element.visitScreenChildren((child) {
       count += countElements(child);
     });
     return count;
@@ -542,6 +566,9 @@ class PilotWidgetInspector {
     // Ordered and de-duplicated: widgets like NavigationDestination render
     // their label twice (text + tooltip).
     final parts = <String>{};
+    // Glyph names ("delete", "add") only label icon-only widgets; next to a
+    // tooltip or text they'd just repeat it ("Delete delete").
+    final iconNames = <String>{};
     void add(String? t) {
       final v = t?.trim();
       if (v != null && v.isNotEmpty) parts.add(v);
@@ -561,17 +588,19 @@ class PilotWidgetInspector {
         add(w.tooltip);
       } else if (w is Icon) {
         // Only meaningful names; unknown glyphs would just add "Icon#e5d2" noise.
-        final name =
-            w.semanticLabel ??
-            (w.icon == null ? null : _resolveIconName(w.icon!));
-        if (name != null && !name.startsWith('Icon#')) add(name);
+        if (w.semanticLabel != null) {
+          add(w.semanticLabel);
+        } else if (w.icon != null) {
+          final name = _resolveIconName(w.icon!);
+          if (!name.startsWith('Icon#')) iconNames.add(name);
+        }
         return; // its child RichText is just the private-use glyph character
       }
-      e.debugVisitOnstageChildren(extract);
+      e.visitScreenChildren(extract);
     }
 
     extract(element);
-    return parts.join(' ');
+    return (parts.isEmpty ? iconNames : parts).join(' ');
   }
 
   static String? _computeSemanticSelector(Element element) {
@@ -647,7 +676,7 @@ class PilotWidgetInspector {
     }
 
     final List<Map<String, dynamic>> children = [];
-    element.debugVisitOnstageChildren((child) {
+    element.visitScreenChildren((child) {
       final childJson = _elementToJson(
         child,
         currentDepth + 1,
@@ -852,7 +881,7 @@ class PilotWidgetInspector {
           }
         }
       }
-      element.debugVisitOnstageChildren((c) => visit(c, ownerHere));
+      element.visitScreenChildren((c) => visit(c, ownerHere));
     }
 
     visit(root, null);

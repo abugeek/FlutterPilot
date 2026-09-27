@@ -135,6 +135,31 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    /// Like [check], but passes only if the text contains none of [absent].
+    Future<void> checkAbsent(
+      String label,
+      String tool,
+      Map<String, dynamic> a,
+      List<String> absent,
+    ) async {
+      final res = await mcp.request('tools/call', {
+        'name': tool,
+        'arguments': a,
+      });
+      final result = res['result'] as Map?;
+      final text = ((result?['content'] as List?) ?? [])
+          .map((c) => c['text'] ?? '')
+          .join('\n');
+      final ok =
+          res['error'] == null &&
+          result?['isError'] != true &&
+          !absent.any(text.contains);
+      if (!ok) failed++;
+      print(
+        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $text'}',
+      );
+    }
+
     const settle = Duration(seconds: 10);
     await check('app summary', 'get_app_summary', {}, [], false, settle, 4096);
     await check(
@@ -169,8 +194,9 @@ Future<void> main(List<String> args) async {
       'statusCode': 200,
       'body': '{"ok":true}',
     });
-    await check('enter text', 'enter_text', {
-      'key': "TextField['Name']",
+    // A field's label targets the field itself (not the label Text).
+    await check('enter text by field label', 'enter_text', {
+      'target': 'Name',
       'text': 'Pilot',
     });
     await check('tap Send', 'tap_widget', {'key': 'Send'});
@@ -209,6 +235,28 @@ Future<void> main(List<String> args) async {
       [],
       true,
     );
+    await check(
+      'action chain accepts enter_text',
+      'execute_action_chain',
+      {
+        'actions': [
+          {'action': 'enter_text', 'target': 'Name', 'text': 'Pilot'},
+        ],
+      },
+      ['1/1 steps done'],
+    );
+    await check(
+      'action chain stops at a failed step',
+      'execute_action_chain',
+      {
+        'actions': [
+          {'action': 'tap', 'target': 'No such button'},
+          {'action': 'enter_text', 'target': 'Name', 'text': 'never'},
+        ],
+      },
+      ['stopped after 0/2', 'No such button', 'skipped'],
+      true,
+    );
     await check('interactive elements', 'get_interactive_elements', {}, [
       'Send',
       'card',
@@ -221,7 +269,7 @@ Future<void> main(List<String> args) async {
       'open details',
       'tap_widget',
       {'key': 'Details'},
-      ['Route changed', 'Back'],
+      ['Route changed', 'DetailsPage', 'Back'],
     );
     await check(
       'covered route is not "visible"',
@@ -230,6 +278,12 @@ Future<void> main(List<String> args) async {
       [],
       true,
       const Duration(seconds: 3), // after the page transition ends
+    );
+    await checkAbsent(
+      'password is not echoed',
+      'enter_text',
+      {'target': 'PIN', 'text': 's3cret-pin'},
+      ['s3cret-pin'],
     );
     await check('back', 'press_back');
     await check(
@@ -408,12 +462,24 @@ class _HomeState extends State<Home> {
       ElevatedButton(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => Scaffold(appBar: AppBar(title: const Text('Details page'))),
+            builder: (_) => const DetailsPage(),
           ),
         ),
         child: const Text('Details'),
       ),
     ]),
+  );
+}
+
+class DetailsPage extends StatelessWidget {
+  const DetailsPage({super.key});
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Details page')),
+    body: const TextField(
+      obscureText: true,
+      decoration: InputDecoration(labelText: 'PIN'),
+    ),
   );
 }
 ''';

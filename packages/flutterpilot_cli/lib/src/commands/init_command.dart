@@ -26,10 +26,12 @@ const _plugins = {
     'flutterpilot_drift',
     "DriftPilotInspector.registerDatabase('main', db);",
   ),
-  'hive': ('flutterpilot_hive', "HivePilotInspector.registerBox('boxName');"),
-  'hive_flutter': (
+  'hive': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_flutter': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_ce': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_ce_flutter': (
     'flutterpilot_hive',
-    "HivePilotInspector.registerBox('boxName');",
+    'HivePilotInspector.registerBox(box);',
   ),
   'shared_preferences': (
     'flutterpilot_shared_preferences',
@@ -206,9 +208,23 @@ class InitCommand extends Command<void> {
       if (withOverrides != content) {
         await mainFile.writeAsString(withOverrides);
         overridesAdded = true;
+        final wired = wiredOverrides(withOverrides);
         stdout.writeln(
-          '✅ Wired MaterialApp with ValueListenableBuilder for locale and text scale overrides.',
+          '✅ Wired MaterialApp for $wired overrides '
+          '(set_locale / set_text_scale_factor).',
         );
+        if (!wired.contains('locale')) {
+          stdout.writeln(
+            '   Skipped locale: MaterialApp already sets locale:, so set_locale '
+            'would change nothing.',
+          );
+        }
+        if (!wired.contains('text scale')) {
+          stdout.writeln(
+            '   Skipped text scale: MaterialApp has its own builder:. Apply '
+            'FlutterPilot.textScaleNotifier inside it to use set_text_scale_factor.',
+          );
+        }
       }
     }
 
@@ -292,8 +308,8 @@ class InitCommand extends Command<void> {
     // has its own `builder:`, leave that override unwired: a listener that
     // changes nothing would make set_locale/set_text_scale_factor report a
     // false success.
-    final wireLocale = !appCode.contains('locale:');
-    final wireScale = !appCode.contains('builder:');
+    final wireLocale = !_hasTopLevelArg(appCode, 'locale');
+    final wireScale = !_hasTopLevelArg(appCode, 'builder');
     if (!wireLocale && !wireScale) return content;
 
     if (wireLocale) {
@@ -335,6 +351,34 @@ class InitCommand extends Command<void> {
 
     return content.replaceRange(match.start, closeParenIndex + 1, wrapped);
   }
+
+  /// Whether the call [code] (e.g. `MaterialApp(...)`) passes [name] as one
+  /// of its own arguments — not a nested widget's (`home: X(builder: ...)`).
+  static bool _hasTopLevelArg(String code, String name) {
+    final arg = RegExp('^\\s*$name\\s*:');
+    var depth = 0;
+    for (var i = 0; i < code.length; i++) {
+      final ch = code[i];
+      if ('([{'.contains(ch)) {
+        depth++;
+        if (depth == 1 && arg.hasMatch(code.substring(i + 1))) return true;
+      } else if (')]}'.contains(ch)) {
+        depth--;
+      } else if (ch == ',' &&
+          depth == 1 &&
+          arg.hasMatch(code.substring(i + 1))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// What [addValueListenableOverrides] wired into [content], for the
+  /// summary line: 'locale and text scale', 'locale', 'text scale' or ''.
+  static String wiredOverrides(String content) => [
+    if (content.contains('FlutterPilot.localeNotifier')) 'locale',
+    if (content.contains('FlutterPilot.textScaleNotifier')) 'text scale',
+  ].join(' and ');
 
   static int _findMatchingClosingParen(String text, int openParenIndex) {
     var depth = 0;
@@ -408,6 +452,14 @@ class InitCommand extends Command<void> {
   /// the unchanged [content] if already initialized, or null if no main() found.
   static String? patchMain(String content) {
     if (content.contains('FlutterPilot.initialize')) return content;
+    // Reuse the app's own binding call instead of adding a second one.
+    const binding = 'WidgetsFlutterBinding.ensureInitialized();';
+    if (content.contains(binding)) {
+      return content.replaceFirst(
+        binding,
+        '$binding\n  FlutterPilot.initialize();',
+      );
+    }
     const init =
         '\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();';
     final blockMain = RegExp(

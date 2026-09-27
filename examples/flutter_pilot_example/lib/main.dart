@@ -48,7 +48,7 @@ Future<Widget> initializeApp() async {
   // 4. Initialize Hive and register with FlutterPilot
   await Hive.initFlutter();
   final settingsBox = await Hive.openBox('settings');
-  HivePilotInspector.registerBox('settings');
+  HivePilotInspector.registerBox(settingsBox);
 
   // 5. Initialize SharedPreferences and register with FlutterPilot
   final prefs = await SharedPreferences.getInstance();

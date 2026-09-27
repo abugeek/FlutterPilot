@@ -174,7 +174,13 @@ extension _NavigationExtensions on FlutterPilot {
         final element = PilotWidgetInspector.findElement(key);
         if (element != null) {
           return ServiceExtensionResponse.result(
-            json.encode({'status': 'found', 'key': key}),
+            json.encode({
+              'status': 'found',
+              'key': key,
+              'postActionState': await FlutterPilot.getPostActionState(
+                previousRoute: parameters['previousRoute'],
+              ),
+            }),
           );
         }
         await Future.delayed(pollInterval);

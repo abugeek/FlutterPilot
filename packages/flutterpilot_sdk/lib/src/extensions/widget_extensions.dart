@@ -34,11 +34,145 @@ extension _WidgetExtensions on FlutterPilot {
     if (HitTestUtils.isElementHittable(element)) return null;
     return ServiceExtensionResponse.error(
       ServiceExtensionResponse.extensionError,
-      '"$target" is on screen but not tappable: a dialog, menu or overlay '
-      'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
-      'press_back) or interact with what is on top.',
+      _coveredMessage(target),
     );
   }
+
+  static String _coveredMessage(String target) =>
+      '"$target" is on screen but not tappable: a dialog, menu or overlay '
+      'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
+      'press_back) or interact with what is on top.';
+
+  /// Finds [target] (waiting out a route transition, then scrolling to it)
+  /// and taps it. Shared by tap_widget and execute_action_chain so both
+  /// resolve targets the same way. [error] is set unless status is 'ok'.
+  static Future<({String status, String? error})> _tapTarget(
+    String target, {
+    int maxAttempts = 8,
+  }) async {
+    var element = PilotWidgetInspector.findElement(target);
+    if (element == null || !HitTestUtils.isElementHittable(element)) {
+      await FlutterPilot._waitForRouteSettled();
+      element = PilotWidgetInspector.findElement(target);
+      if (element == null || !HitTestUtils.isElementHittable(element)) {
+        await ScrollSimulator.scrollUntilVisible(
+          target,
+          maxAttempts: maxAttempts,
+        );
+        element = PilotWidgetInspector.findElement(target);
+      }
+    }
+    if (element == null) {
+      return (status: 'notFound', error: _makeWidgetNotFoundMessage(target));
+    }
+
+    RenderObject? ro = element.renderObject;
+    if (ro is! RenderBox ||
+        !ro.hasSize ||
+        !ro.attached ||
+        !HitTestUtils.isElementHittable(element)) {
+      try {
+        await Scrollable.ensureVisible(
+          element,
+          duration: const Duration(milliseconds: 150),
+          alignment: 0.5,
+        );
+        await InteractionManager.pumpAndSettleAdaptive();
+        ro = element.renderObject;
+      } catch (_) {}
+    }
+    if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
+      return (status: 'noLayout', error: 'No layout for target: $target');
+    }
+    if (!HitTestUtils.isElementHittable(element)) {
+      return (status: 'covered', error: _coveredMessage(target));
+    }
+    if (FlutterPilot._isRecording) {
+      FlutterPilot._recordAction('tapWidget', {'key': target});
+    }
+    await InteractionManager.tapAt(
+      ro.localToGlobal(ro.size.center(Offset.zero)),
+      label: target,
+    );
+    return (status: 'ok', error: null);
+  }
+
+  /// Types [text] into the field [target] resolves to (or the focused field
+  /// when [target] is null/empty/'focused'), focusing it like a user would so
+  /// a following press_key (Enter, Tab) reaches it. Shared by enter_text and
+  /// execute_action_chain.
+  static Future<({String status, String? error})> _enterTextInto(
+    String? target,
+    String text,
+  ) async {
+    EditableTextState? field;
+    final useFocused = target == null || target.isEmpty || target == 'focused';
+    if (useFocused) {
+      FocusManager.instance.primaryFocus?.context?.visitAncestorElements((e) {
+        if (e is StatefulElement && e.state is EditableTextState) {
+          field = e.state as EditableTextState;
+          return false;
+        }
+        return true;
+      });
+    } else {
+      var element = PilotWidgetInspector.findElement(target);
+      if (element == null) {
+        await FlutterPilot._waitForRouteSettled();
+        element = PilotWidgetInspector.findElement(target);
+      }
+      if (element == null) {
+        await ScrollSimulator.scrollUntilVisible(target);
+        element = PilotWidgetInspector.findElement(target);
+      }
+      if (element == null) {
+        return (status: 'notFound', error: _makeWidgetNotFoundMessage(target));
+      }
+      void find(Element e) {
+        if (field != null) return;
+        if (e is StatefulElement && e.state is EditableTextState) {
+          field = e.state as EditableTextState;
+          return;
+        }
+        e.debugVisitOnstageChildren(find);
+      }
+
+      find(element);
+    }
+    final state = field;
+    if (state == null) {
+      return (
+        status: 'noTextField',
+        error:
+            'Could not find text input field for "${target ?? 'focused element'}"',
+      );
+    }
+    _lastFieldObscured = state.widget.obscureText;
+    state.widget.focusNode.requestFocus();
+    state.updateEditingValue(
+      TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      ),
+    );
+    WidgetsBinding.instance.scheduleFrame();
+    await InteractionManager.pumpAndSettleAdaptive();
+    if (FlutterPilot._isRecording) {
+      FlutterPilot._recordAction('enterText', {
+        'key': target ?? 'focused',
+        'text': _echoText(text),
+        if (_lastFieldObscured) 'obscured': true,
+      });
+    }
+    return (status: 'ok', error: null);
+  }
+
+  /// Whether the field the last [_enterTextInto] typed into hides its text.
+  static bool _lastFieldObscured = false;
+
+  /// What to echo back for text just typed: never a password.
+  static String _echoText(String text) =>
+      _lastFieldObscured ? '•' * text.length : text;
 
   static String _makeWidgetNotFoundMessage(String target) {
     final ambiguity = PilotWidgetInspector.lastAmbiguity;
@@ -207,75 +341,31 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
 
-      var element = PilotWidgetInspector.findElement(target);
-      if (element == null || !HitTestUtils.isElementHittable(element)) {
-        await FlutterPilot._waitForRouteSettled(
-          timeout: const Duration(milliseconds: 200),
-        );
-        element = PilotWidgetInspector.findElement(target);
-        if (element == null || !HitTestUtils.isElementHittable(element)) {
-          await ScrollSimulator.scrollUntilVisible(
-            target,
-            maxAttempts: maxAttempts,
-          );
-          element = PilotWidgetInspector.findElement(target);
-        }
-      }
-
-      if (element == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          _makeWidgetNotFoundMessage(target),
-        );
-      }
-
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
-      RenderObject? ro = element.renderObject;
-      if (ro is! RenderBox ||
-          !ro.hasSize ||
-          !ro.attached ||
-          !HitTestUtils.isElementHittable(element)) {
-        try {
-          await Scrollable.ensureVisible(
-            element,
-            duration: const Duration(milliseconds: 150),
-            alignment: 0.5,
-          );
-          await InteractionManager.pumpAndSettleAdaptive();
-          ro = element.renderObject;
-        } catch (_) {}
-      }
-
-      if (ro is RenderBox && ro.hasSize && ro.attached) {
-        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('tapWidget', {'key': target});
-        }
-        final covered = _refuseIfCovered(element, target);
-        if (covered != null) return covered;
-        await InteractionManager.tapAt(pos, label: target);
-        final routeAfter = NavigationTracker.currentRoute;
-        final postActionState = await FlutterPilot.getPostActionState(
-          previousRoute: routeBefore,
-        );
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'target': target,
-            'postActionState': postActionState,
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
-          }),
+      final tapped = await _tapTarget(target, maxAttempts: maxAttempts);
+      if (tapped.status != 'ok') {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          tapped.error!,
         );
       }
-      return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.extensionError,
-        'No layout for target: $target',
+      final routeAfter = NavigationTracker.currentRoute;
+      final postActionState = await FlutterPilot.getPostActionState(
+        previousRoute: routeBefore,
+      );
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'target': target,
+          'postActionState': postActionState,
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
+          ),
+        }),
       );
     });
 
@@ -351,18 +441,10 @@ extension _WidgetExtensions on FlutterPilot {
 
     // -- ext.flutterpilot.enterText -------------------------------------------
     registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
+      // No target means the focused field (never "search for the text").
       final target =
-          parameters['key'] ??
-          parameters['target'] ??
-          parameters['identifier'] ??
-          parameters['text'];
+          parameters['key'] ?? parameters['target'] ?? parameters['identifier'];
       final text = parameters['text'] ?? parameters['value'];
-      final isFocusedRequested =
-          parameters['focused_element'] == 'true' ||
-          target == 'focused' ||
-          target == null ||
-          target.isEmpty;
-
       if (text == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
@@ -372,89 +454,30 @@ extension _WidgetExtensions on FlutterPilot {
 
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
-      EditableTextState? editableTextState;
-
-      // 1. Try focused element if requested or no target given
-      if (isFocusedRequested) {
-        final focusNode = FocusManager.instance.primaryFocus;
-        final ctx = focusNode?.context;
-        if (ctx != null) {
-          ctx.visitAncestorElements((e) {
-            if (e is StatefulElement && e.state is EditableTextState) {
-              editableTextState = e.state as EditableTextState;
-              return false;
-            }
-            return true;
-          });
-        }
+      final entered = await _enterTextInto(
+        parameters['focused_element'] == 'true' ? null : target,
+        text,
+      );
+      if (entered.status != 'ok') {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          entered.error!,
+        );
       }
-
-      // 2. If not found or target was explicit, find via widget inspector
-      if (editableTextState == null && target != null && target.isNotEmpty) {
-        var element = PilotWidgetInspector.findElement(target);
-        if (element == null) {
-          await ScrollSimulator.scrollUntilVisible(target);
-          element = PilotWidgetInspector.findElement(target);
-        }
-        if (element == null) {
-          return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.extensionError,
-            _makeWidgetNotFoundMessage(target),
-          );
-        }
-
-        void findText(Element e) {
-          if (editableTextState != null) return;
-          if (e is StatefulElement && e.state is EditableTextState) {
-            editableTextState = e.state as EditableTextState;
-            return;
-          }
-          e.debugVisitOnstageChildren(findText);
-        }
-
-        findText(element);
-      }
-
-      if (editableTextState != null) {
-        // Focus like a user would, so a following press_key (Enter, Tab)
-        // reaches this field.
-        editableTextState!.widget.focusNode.requestFocus();
-        editableTextState!.updateEditingValue(
-          TextEditingValue(
-            text: text,
-            selection: TextSelection.collapsed(offset: text.length),
+      final routeAfter = NavigationTracker.currentRoute;
+      final postActionState = await FlutterPilot.getPostActionState();
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'text': _echoText(text),
+          'postActionState': postActionState,
+          'delta': _buildActionDelta(
+            routeBefore: routeBefore,
+            routeAfter: routeAfter,
+            treeBefore: treeBefore,
+            treeAfter: PilotWidgetInspector.captureWidgetTree(),
           ),
-        );
-        WidgetsBinding.instance.scheduleFrame();
-        await InteractionManager.pumpAndSettleAdaptive();
-
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('enterText', {
-            'key': target ?? 'focused',
-            'text': text,
-          });
-        }
-
-        final routeAfter = NavigationTracker.currentRoute;
-        final postActionState = await FlutterPilot.getPostActionState();
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'text': text,
-            'postActionState': postActionState,
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
-          }),
-        );
-      }
-
-      return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.extensionError,
-        'Could not find text input field for "${target ?? 'focused element'}"',
+        }),
       );
     });
 
@@ -1461,6 +1484,7 @@ extension _WidgetExtensions on FlutterPilot {
                 if (e is StatefulElement && e.state is EditableTextState) {
                   try {
                     final state = e.state as EditableTextState;
+                    _lastFieldObscured = state.widget.obscureText;
                     state.updateEditingValue(TextEditingValue(text: text));
                     entered = true;
                   } catch (_) {
@@ -1472,7 +1496,8 @@ extension _WidgetExtensions on FlutterPilot {
                   if (entered && FlutterPilot._isRecording) {
                     FlutterPilot._recordAction('enterText', {
                       'key': target,
-                      'text': text,
+                      'text': _echoText(text),
+                      if (_lastFieldObscured) 'obscured': true,
                     });
                   }
                   return;
@@ -1571,78 +1596,48 @@ extension _WidgetExtensions on FlutterPilot {
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         int executedCount = 0;
         final steps = <Map<String, dynamic>>[];
+        String? failure;
         for (var i = 0; i < decoded.length; i++) {
           final item = decoded[i];
-          if (item is! Map) {
-            steps.add({'index': i, 'status': 'invalidStep'});
+          final action = item is Map ? item['action']?.toString() : null;
+          final target = item is Map
+              ? (item['target'] ?? item['key'])?.toString()
+              : null;
+          // A later step usually depends on an earlier one (tap "Next", then
+          // type on the next page): after a failure, don't act blindly.
+          if (failure != null) {
+            steps.add({'index': i, 'action': action, 'status': 'skipped'});
             continue;
           }
-          final action = item['action']?.toString();
-          final target = item['target']?.toString() ?? item['key']?.toString();
-          String status;
-          if (action == 'tap' && target != null) {
-            final element = PilotWidgetInspector.findElement(target);
-            if (element == null) {
-              status = 'notFound';
-            } else {
-              final ro = element.renderObject;
-              if (!HitTestUtils.isElementHittable(element)) {
-                status = 'covered';
-              } else if (ro is RenderBox && ro.hasSize) {
-                final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-                await InteractionManager.tapAt(pos, label: target);
-                executedCount++;
-                status = 'ok';
-              } else {
-                status = 'noLayout';
-              }
-            }
-          } else if (action == 'enterText' && target != null) {
-            final text = item['text']?.toString() ?? '';
-            final element = PilotWidgetInspector.findElement(target);
-            if (element == null) {
-              status = 'notFound';
-            } else {
-              bool entered = false;
-              void findText(Element e) {
-                if (entered) return;
-                if (e is StatefulElement && e.state is EditableTextState) {
-                  try {
-                    (e.state as EditableTextState).updateEditingValue(
-                      TextEditingValue(text: text),
-                    );
-                    entered = true;
-                  } catch (_) {}
-                  return;
-                }
-                e.debugVisitOnstageChildren(findText);
-              }
-
-              findText(element);
-              if (entered) {
-                executedCount++;
-                status = 'ok';
-              } else {
-                status = 'noTextField';
-              }
-            }
+          ({String status, String? error}) r;
+          switch (action) {
+            case 'tap' || 'tap_widget' || 'tapWidget' when target != null:
+              r = await _tapTarget(target);
+            case 'enter_text' || 'enterText' || 'type':
+              r = await _enterTextInto(
+                target,
+                (item as Map)['text']?.toString() ?? '',
+              );
+            default:
+              r = (
+                status: 'unsupportedAction',
+                error:
+                    'Step $i: unsupported action "$action". Use "tap" '
+                    '(target) or "enter_text" (target, text).',
+              );
+          }
+          if (r.status == 'ok') {
+            executedCount++;
           } else {
-            status = 'unsupportedAction';
+            failure =
+                'Step $i (${action ?? '?'} "${target ?? ''}"): ${r.error}';
           }
           steps.add({
             'index': i,
             'action': action,
             'target': target,
-            'status': status,
+            'status': r.status,
           });
-          // 'tap' already settles inside InteractionManager.tapAt — only
-          // 'enterText' needs an explicit settle here to let its onChanged
-          // rebuild commit before the next step or the final tree capture.
-          if (status == 'ok' && action == 'enterText') {
-            await InteractionManager.pumpAndSettleAdaptive(
-              timeout: InteractionManager.postMutationSettleTimeout,
-            );
-          }
         }
 
         final routeAfter = NavigationTracker.currentRoute;
@@ -1652,6 +1647,10 @@ extension _WidgetExtensions on FlutterPilot {
             'executedCount': executedCount,
             'totalActions': decoded.length,
             'steps': steps,
+            'failure': ?failure,
+            'postActionState': await FlutterPilot.getPostActionState(
+              previousRoute: routeBefore,
+            ),
             'delta': _buildActionDelta(
               routeBefore: routeBefore,
               routeAfter: routeAfter,
