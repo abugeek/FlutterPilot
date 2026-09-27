@@ -72,7 +72,7 @@ Add to `.cursor/settings.json`:
 |------|----------|---------|-------------|
 | `--uri <uri>` | ✅ Yes | — | VM Service URI of your running app |
 | `--project-root <path>` | ❌ No | `cwd` | Project root for file reading tools (`read_dart_file`, `list_dart_files`) |
-| `--allow-destructive` | ❌ No | false | Allow non-SELECT SQL queries via `query_drift_db` (use with caution!) |
+| `--allow-destructive` | ❌ No | false | Allow tools that change app data or call real services (secure storage writes, Supabase sign-out, Firebase events). SQL stays read-only. |
 | `--timeout <ms>` | ❌ No | 10000 | Tool call timeout in milliseconds |
 
 ### Examples
@@ -390,14 +390,12 @@ All HTTP requests/responses captured by Dio.
 }
 ```
 
-#### `query_drift_db` `sql: string` *(requires flutterpilot_drift)*
-Execute a SQL query on your Drift database.
-```json
-{
-  "rows": [
-    { "id": 1, "name": "Alice", "email": "alice@example.com" }
-  ]
-}
+#### `exec_sql_query` `sql: string` *(requires flutterpilot_drift or flutterpilot_sqflite)*
+Read-only SQL (SELECT/WITH/PRAGMA/EXPLAIN) on whichever database is wired. One JSON row per line:
+```
+2 row(s)
+{"id":1,"name":"Alice"}
+{"id":2,"name":"Bob"}
 ```
 *Supports SELECT, INSERT, UPDATE, DELETE (if `--allow-destructive`)*
 
@@ -760,10 +758,8 @@ The server listens to the VM service. If your app crashes:
 - Screenshots timeout after 500ms
 - Increase timeout: `--timeout 15000` (15 seconds)
 
-### "query_drift_db: SQL injection detected"
-- `--allow-destructive` requires explicit flag for writes
-- SELECT queries are always allowed
-- Avoid raw SQL; use Drift's query builder when possible
+### "exec_sql_query is read-only"
+- Only SELECT, WITH, PRAGMA and EXPLAIN run; change data through the app's UI
 
 ### "File not found: read_dart_file"
 - Ensure `--project-root` is set to your Flutter project directory

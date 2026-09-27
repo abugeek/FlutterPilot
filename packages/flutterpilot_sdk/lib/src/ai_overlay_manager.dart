@@ -5,6 +5,17 @@ import 'package:flutter/material.dart';
 class AiOverlayManager {
   static bool enabled = true;
 
+  static final Set<OverlayEntry> _live = {};
+
+  /// Removes every ripple still on screen (screenshots call this first so
+  /// visual diffs never contain the badge).
+  static void clearNow() {
+    for (final e in _live.toList()) {
+      e.remove();
+    }
+    _live.clear();
+  }
+
   /// Displays an animated ripple effect and action badge at [position].
   static void showAction(Offset position, String label) {
     if (!enabled) return;
@@ -32,20 +43,33 @@ class AiOverlayManager {
           return Positioned(
             left: position.dx - 40,
             top: position.dy - 40,
-            child: IgnorePointer(child: _AiRippleWidget(label: label)),
+            child: AiOverlayMarker(
+              child: IgnorePointer(child: _AiRippleWidget(label: label)),
+            ),
           );
         },
       );
 
       overlayState!.insert(entry);
+      _live.add(entry);
 
       Timer(const Duration(milliseconds: 700), () {
-        entry.remove();
+        if (_live.remove(entry)) entry.remove();
       });
     } catch (_) {
       // Best-effort visual indicator; should never interrupt core automation.
     }
   }
+}
+
+/// Wraps FlutterPilot's own on-screen feedback so the inspector (trees,
+/// finders, tappable lists, diffs) never reports it as part of the app.
+class AiOverlayMarker extends StatelessWidget {
+  const AiOverlayMarker({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
 }
 
 class _AiRippleWidget extends StatefulWidget {

@@ -60,7 +60,16 @@ Future<void> main(List<String> args) async {
   final http = await HttpServer.bind(InternetAddress.loopbackIPv4, 8765);
   print('bridge ready on :8765');
   await for (final req in http) {
-    final body = jsonDecode(await utf8.decodeStream(req)) as Map;
+    final Map body;
+    try {
+      body = jsonDecode(await utf8.decodeStream(req)) as Map;
+    } on FormatException {
+      req.response
+        ..statusCode = HttpStatus.badRequest
+        ..write('POST {"name": "<tool>", "arguments": {...}}\n')
+        ..close();
+      continue;
+    }
     final sw = Stopwatch()..start();
     final res = body['name'] == '__list'
         ? await rpc('tools/list', {})

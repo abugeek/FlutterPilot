@@ -29,7 +29,7 @@ void _safeRegisterExtension(
 ///
 /// ## What AI agents can do
 /// - `list_sqflite_tables` — list all tables in a named database
-/// - `query_sqflite` — run a read-only SELECT/EXPLAIN/PRAGMA query
+/// - `exec_sql_query` — run a read-only SELECT/EXPLAIN/PRAGMA query
 class SqflitePilotInspector {
   SqflitePilotInspector._();
 

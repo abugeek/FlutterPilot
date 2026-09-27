@@ -423,7 +423,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
         );
         final lifecycle = data['lifecycle'];
-        if (lifecycle != null && lifecycle != 'resumed') {
+        // 'inactive' is a visible, unfocused window: nothing to report.
+        if (lifecycle != null &&
+            lifecycle != 'resumed' &&
+            lifecycle != 'inactive') {
           summary.writeln(
             '• App window: $lifecycle (not visible). FlutterPilot keeps it '
             'rendering for inspection; frame timings are not profiled.',
@@ -435,8 +438,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             '• Focused: $focusedType${focused['key'] != null ? ' [${focused['key']}]' : ''}',
           );
         }
-        // FPS is meaningless for an idle Flutter app; only report real jank.
-        if (jankPct >= 5.0) {
+        // FPS is meaningless for an idle Flutter app; only report real jank,
+        // and not from a handful of startup frames.
+        final jankSamples = (perf['jankSampleCount'] as num?)?.toInt() ?? 0;
+        if (jankPct >= 5.0 && jankSamples >= 30) {
           summary.writeln(
             '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
             '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '

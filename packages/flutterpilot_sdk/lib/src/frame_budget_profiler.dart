@@ -14,8 +14,11 @@ class FrameBudgetProfiler {
   static bool _installed = false;
 
   static bool get _appVisible {
+    // inactive = visible but not focused (desktop) — frames still render.
     final state = WidgetsBinding.instance.lifecycleState;
-    return state == null || state == AppLifecycleState.resumed;
+    return state == null ||
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
   }
 
   static double get _frameBudgetMs {

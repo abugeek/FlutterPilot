@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'src/ai_overlay_manager.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
@@ -51,12 +52,22 @@ part 'src/extensions/recording_extensions.dart';
 /// When the OS reports the app hidden (window covered, minimized, on another
 /// Space), Flutter disables frames: nothing builds, lays out or paints, and
 /// every inspection would silently see a stale screen.
-void registerExtension(String method, ServiceExtensionHandler handler) =>
-    developer.registerExtension(method, (m, p) async {
-      _applyProjectRoot(p['projectRoot']);
-      await _ensureFreshFrame();
-      return handler(m, p);
-    });
+///
+/// Registering the same [method] again replaces its handler instead of
+/// throwing, so a plugin's reset() + register() (or a second initialize())
+/// works and serves the new instance.
+void registerExtension(String method, ServiceExtensionHandler handler) {
+  final isNew = !_extensionHandlers.containsKey(method);
+  _extensionHandlers[method] = handler;
+  if (!isNew) return;
+  developer.registerExtension(method, (m, p) async {
+    _applyProjectRoot(p['projectRoot']);
+    await _ensureFreshFrame();
+    return _extensionHandlers[method]!(m, p);
+  });
+}
+
+final _extensionHandlers = <String, ServiceExtensionHandler>{};
 
 String? _projectRoot;
 
@@ -310,6 +321,7 @@ class FlutterPilot {
         'effectiveFps': frameProfile['effectiveFps'] ?? _lastFps,
         'frameCount': _frameCount,
         'jankPercentage': jankPct,
+        'jankSampleCount': frameProfile['sampleCount'] ?? 0,
         'avgFrameDurationMs': avgDuration,
         if (frameProfile['diagnosis'] != null)
           'diagnosis': frameProfile['diagnosis'],
@@ -864,6 +876,7 @@ class FlutterPilot {
   }
 
   static Future<Uint8List?> _captureScreenshot({double scale = 1.0}) async {
+    AiOverlayManager.clearNow();
     try {
       final basePixelRatio =
           WidgetsBinding

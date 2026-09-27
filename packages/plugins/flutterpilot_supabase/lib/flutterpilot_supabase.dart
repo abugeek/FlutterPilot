@@ -61,9 +61,8 @@ class SupabasePilotInspector {
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] SupabasePilotInspector.register called before '
-        'FlutterPilot.initialize(). Extensions will not be registered.',
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
       );
-      return;
     }
     if (_registered) return;
     _registered = true;

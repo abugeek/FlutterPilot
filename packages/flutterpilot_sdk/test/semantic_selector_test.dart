@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/widget_inspector.dart';
@@ -180,5 +181,66 @@ void main() {
         expect(elDirect, isNotNull);
       },
     );
+
+    testWidgets('a field label or hint resolves to the TextField, not the '
+        'label Text', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                TextField(decoration: InputDecoration(labelText: 'Email')),
+                TextField(
+                  decoration: InputDecoration(hintText: 'Search notes'),
+                ),
+                CupertinoTextField(placeholder: 'Nickname'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        PilotWidgetInspector.findElement('Email')!.widget,
+        isA<TextField>(),
+      );
+      expect(
+        PilotWidgetInspector.findElement('email')!.widget,
+        isA<TextField>(),
+      );
+      expect(
+        PilotWidgetInspector.findElement('Search notes')!.widget,
+        isA<TextField>(),
+      );
+      expect(
+        PilotWidgetInspector.findElement('Nickname')!.widget,
+        isA<CupertinoTextField>(),
+      );
+    });
+
+    testWidgets('icon names label only icon-only buttons', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete),
+                  onPressed: () {},
+                ),
+                IconButton(icon: const Icon(Icons.add), onPressed: () {}),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final labels = PilotWidgetInspector.getInteractiveElements()
+          .map((e) => e['text'])
+          .toList();
+      expect(labels, containsAll(['Delete', 'add']));
+      expect(labels, isNot(contains('Delete delete')));
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/navigation_tracker.dart';
@@ -94,8 +96,37 @@ void main() {
       );
 
       tracker.didPush(nullRoute, null);
-      expect(NavigationTracker.stack, [null]);
-      expect(NavigationTracker.currentRoute, 'Unknown');
+      // Not built yet, so no page widget to name it by: falls back to type.
+      expect(NavigationTracker.stack, ['MaterialPageRoute']);
+      expect(NavigationTracker.currentRoute, 'MaterialPageRoute');
+    });
+
+    testWidgets('unnamed pages and menus get readable names', (tester) async {
+      // ignore: invalid_use_of_protected_member
+      WidgetInspectorService.instance.addPubRootDirectories([
+        Directory.current.path,
+      ]);
+      final navKey = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navKey,
+          navigatorObservers: [NavigationTracker()],
+          home: const Text('home'),
+        ),
+      );
+      navKey.currentState!.push(
+        MaterialPageRoute<void>(builder: (_) => const _EditorPage()),
+      );
+      await tester.pumpAndSettle();
+      expect(NavigationTracker.currentRoute, '_EditorPage');
+
+      showMenu<int>(
+        context: navKey.currentContext!,
+        position: RelativeRect.fill,
+        items: const [PopupMenuItem(value: 1, child: Text('One'))],
+      );
+      await tester.pumpAndSettle();
+      expect(NavigationTracker.currentRoute, '(menu)');
     });
 
     test('pop on empty stack does not throw', () {
@@ -197,4 +228,10 @@ void main() {
       expect(NavigationTracker.currentRoute, '/screen-14');
     });
   });
+}
+
+class _EditorPage extends StatelessWidget {
+  const _EditorPage();
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: Text('editor'));
 }

@@ -11,7 +11,7 @@ part 'app_database.g.dart';
 // Schema
 // ---------------------------------------------------------------------------
 
-/// A simple notes table so AI agents can demo `query_drift_db` and
+/// A simple notes table so AI agents can demo `exec_sql_query` and
 /// `list_drift_tables` against a real Drift database.
 class Notes extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -69,7 +69,7 @@ class AppDatabase extends _$AppDatabase {
     if (existing.isNotEmpty) return;
     await insertNote(
       'Welcome to FlutterPilot',
-      'AI agents can query this DB using query_drift_db.',
+      'AI agents can query this DB using exec_sql_query.',
     );
     await insertNote('SQL Tip', 'Try: SELECT * FROM notes WHERE pinned = 1');
     await insertNote(

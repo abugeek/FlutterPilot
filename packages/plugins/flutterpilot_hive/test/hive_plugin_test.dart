@@ -1,41 +1,62 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_hive/flutterpilot_hive.dart';
 
+/// Same shape as hive's and hive_ce's `Box` (the plugin duck-types it).
+class _FakeBox {
+  _FakeBox(this.name, this._data, {this.isOpen = true});
+  final String name;
+  final Map<dynamic, dynamic> _data;
+  final bool isOpen;
+  Map<dynamic, dynamic> toMap() => _data;
+}
+
+class _Note {
+  @override
+  String toString() => 'Note(groceries)';
+}
+
 void main() {
-  group('HivePilotInspector', () {
-    test('registerBox can be called without error', () {
-      // registerExtension may throw in test environment since it requires
-      // dart:developer VM service support. We catch that to verify the
-      // public API itself doesn't fail for other reasons.
-      try {
-        HivePilotInspector.registerBox('testBox');
-      } on UnsupportedError {
-        // Expected in test environment where VM service extensions
-        // are not available.
-      }
-    });
+  setUp(HivePilotInspector.reset);
 
-    test('registerBox is idempotent for the same box name (Set semantics)', () {
-      // Calling registerBox multiple times with the same name should not
-      // throw. The internal Set ensures no duplicates. The registerExtension
-      // guard (_extensionRegistered) prevents a second registration attempt.
-      try {
-        HivePilotInspector.registerBox('duplicateBox');
-        HivePilotInspector.registerBox('duplicateBox');
-        HivePilotInspector.registerBox('duplicateBox');
-      } on UnsupportedError {
-        // Expected — registerExtension not supported in test runner.
-      }
-    });
+  test('int keys (box.add), DateTime and custom objects are JSON-safe', () {
+    HivePilotInspector.registerBox(_FakeBox('recent', {0: 'milk', 1: 'eggs'}));
+    HivePilotInspector.registerBox(
+      _FakeBox('settings', {
+        'sort': 'title',
+        'lastSync': DateTime.utc(2026, 9, 27, 12),
+        'draft': _Note(),
+        'tags': ['a', 1, true],
+      }),
+    );
 
-    test('registerBox accepts different box names without error', () {
-      try {
-        HivePilotInspector.registerBox('boxA');
-        HivePilotInspector.registerBox('boxB');
-        HivePilotInspector.registerBox('boxC');
-      } on UnsupportedError {
-        // Expected — registerExtension not supported in test runner.
-      }
+    final c = HivePilotInspector.contents();
+    expect(() => json.encode(c), returnsNormally);
+    expect(c['recent'], {'0': 'milk', '1': 'eggs'});
+    expect(c['settings'], {
+      'sort': 'title',
+      'lastSync': '2026-09-27T12:00:00.000Z',
+      'draft': 'Note(groceries)',
+      'tags': ['a', 1, true],
     });
+  });
+
+  test('closed boxes are reported, not read', () {
+    HivePilotInspector.registerBox(_FakeBox('old', {'a': 1}, isOpen: false));
+    expect(HivePilotInspector.contents()['old'], {'_status': 'closed'});
+  });
+
+  test('passing a box name instead of the box explains the fix', () {
+    expect(
+      () => HivePilotInspector.registerBox('settings'),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('Pass the opened Box'),
+        ),
+      ),
+    );
   });
 }

@@ -93,6 +93,7 @@ abstract class _FlutterPilotServerBase {
     Map<String, JsonSchema>? properties,
     String Function(Map<String, dynamic> json)? formatResult,
     String? nudge,
+    bool destructive = false,
   });
 
   /// Returns an MCP error for an operation that mutates app data when the
@@ -773,6 +774,7 @@ Use this guide to understand what tools to call, when, and in what order.
     Map<String, JsonSchema>? properties,
     String Function(Map<String, dynamic> json)? formatResult,
     String? nudge,
+    bool destructive = false,
   }) {
     final toolProperties = <String, JsonSchema>{
       ...?properties,
@@ -798,17 +800,18 @@ Use this guide to understand what tools to call, when, and in what order.
       description: description,
       inputSchema: ToolInputSchema(properties: toolProperties),
       callback: (p, e) async {
+        if (destructive && !allowDestructive) {
+          return _destructiveOperationDenied();
+        }
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();
         final text = formatResult != null
             ? formatResult(res.data!)
-            : res.data.toString();
+            : jsonEncode(res.data);
         return CallToolResult(
           content: [
             TextContent(
-              text: _boundToolText(
-                '${nudge != null ? '$text\n\n$nudge' : text}\n[operationId: ${res.operationId}]',
-              ),
+              text: _boundToolText(nudge != null ? '$text\n\n$nudge' : text),
             ),
           ],
         );
@@ -1431,15 +1434,7 @@ class _ExtensionResult {
               : (errorMessage ?? 'Unknown error'))
         : jsonEncode(data ?? {});
     return CallToolResult(
-      content: [
-        TextContent(
-          text: operationId == null
-              ? FlutterPilotServer._boundToolText(message)
-              : FlutterPilotServer._boundToolText(
-                  '$message\n[operationId: $operationId]',
-                ),
-        ),
-      ],
+      content: [TextContent(text: FlutterPilotServer._boundToolText(message))],
       isError: isError,
     );
   }

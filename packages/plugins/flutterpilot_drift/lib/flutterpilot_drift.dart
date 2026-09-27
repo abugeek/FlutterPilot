@@ -141,8 +141,7 @@ class DriftPilotInspector {
       if (!_isSafeReadOnly(sql)) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed in the SDK. '
-          'Start the server with --allow-destructive to enable write operations.',
+          'Drift queries are read-only: use SELECT, EXPLAIN, PRAGMA or WITH.',
         );
       }
 
@@ -167,7 +166,7 @@ class DriftPilotInspector {
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Query execution failed. Check SQL syntax.',
+          'Query failed: $e',
         );
       }
     });

@@ -227,7 +227,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionFeedback('Text entered', p, res)),
+            TextContent(
+              // Echo the SDK's copy of the text: it masks password fields.
+              text: _formatActionFeedback(
+                'Typed "${res.data?['text'] ?? ''}" into',
+                {'key': p['target'] ?? p['key'] ?? 'the focused field'},
+                res,
+              ),
+            ),
           ],
         );
       },
@@ -269,7 +276,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionFeedback('Key pressed', p, res)),
+            TextContent(
+              text: _formatActionFeedback(
+                'Key "${p['key']}" pressed on',
+                p,
+                res,
+              ),
+            ),
           ],
         );
       },
@@ -902,7 +915,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'actions': JsonSchema.array(
             items: JsonSchema.object(),
             description:
-                'List of action objects, e.g. [{"action": "tap", "target": "Icon[\'menu\']"}, {"action": "enterText", "target": "TextField[\'Search\']", "text": "theme"}].',
+                'Steps run in order; the chain stops at the first step that fails. '
+                'Actions: "tap" (target) and "enter_text" (target, text). '
+                'Targets work like tap_widget\'s, e.g. [{"action": "tap", "target": "New note"}, '
+                '{"action": "enter_text", "target": "Title", "text": "Groceries"}].',
           ),
         },
         required: ['actions'],
@@ -915,33 +931,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         final executed = res.data?['executedCount'] ?? 0;
         final total = res.data?['totalActions'] ?? 0;
-        final steps = res.data?['steps'] as List? ?? const [];
-        final failed = steps
-            .where((s) => s is Map && s['status'] != 'ok')
-            .toList();
-        final delta = res.data?['delta'] as Map<String, dynamic>?;
-        final navigated = delta?['navigated'] == true;
+        final failure = res.data?['failure'] as String?;
         final buffer = StringBuffer(
-          '⚡ Action Chain: $executed/$total actions completed natively.',
+          failure == null
+              ? '⚡ Action chain: $executed/$total steps done.\n'
+              : '❌ Action chain stopped after $executed/$total steps. '
+                    '$failure\nRemaining steps were skipped. State now:\n',
         );
-        if (navigated) {
-          buffer.write(
-            ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.',
-          );
-        }
-        buffer.write(
-          _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
+        buffer.write(_formatActionFeedback('Chain finished', const {}, res));
+        return CallToolResult(
+          isError: failure != null,
+          content: [TextContent(text: buffer.toString())],
         );
-        if (failed.isNotEmpty) {
-          buffer.write('\n⚠️ ${failed.length} step(s) did not execute:');
-          for (final s in failed) {
-            final m = s as Map;
-            buffer.write(
-              '\n  - step ${m['index']}: ${m['action']}("${m['target']}") → ${m['status']}',
-            );
-          }
-        }
-        return CallToolResult(content: [TextContent(text: buffer.toString())]);
       },
     );
 
@@ -979,24 +980,24 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         });
         if (tapRes.isError) return tapRes.toCallToolResult();
 
-        final waitRes = await _callExtensionRaw(
-          'ext.flutterpilot.waitForWidget',
-          {'key': expectKey, 'timeoutMs': timeoutMs.toString()},
-        );
+        final fromRoute =
+            (tapRes.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+        final waitRes =
+            await _callExtensionRaw('ext.flutterpilot.waitForWidget', {
+              'key': expectKey,
+              'timeoutMs': timeoutMs.toString(),
+              'previousRoute': ?fromRoute?.toString(),
+            });
         if (waitRes.isError) return waitRes.toCallToolResult();
-
-        final delta = tapRes.data?['delta'] as Map<String, dynamic>?;
-        final routeNote = delta?['navigated'] == true
-            ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
-            : '';
-        final diffNote = _widgetDiffSummary(
-          delta?['widgetDiff'] as Map<String, dynamic>?,
-        );
+        // Report the screen after the wait, not the one right after the tap.
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  '⚡ Tapped "$target" and successfully waited for "$expectKey" to appear.$routeNote$diffNote',
+              text: _formatActionFeedback(
+                '⚡ Tapped "$target", waited for',
+                const {},
+                waitRes,
+              ),
             ),
           ],
         );
@@ -1042,18 +1043,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         });
         if (tapRes.isError) return tapRes.toCallToolResult();
 
-        final delta = tapRes.data?['delta'] as Map<String, dynamic>?;
-        final routeNote = delta?['navigated'] == true
-            ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
-            : ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).';
-        final diffNote = _widgetDiffSummary(
-          delta?['widgetDiff'] as Map<String, dynamic>?,
-        );
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  '⚡ Entered text into "$target" and tapped "$submitTarget".$routeNote$diffNote',
+              text: _formatActionFeedback(
+                '⚡ Entered text into "$target" and tapped',
+                {'key': submitTarget},
+                tapRes,
+              ),
             ),
           ],
         );

@@ -151,26 +151,28 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     server.registerTool(
       'set_bloc_state',
       description:
-          'Force a new state into a Bloc or Cubit. Use the Bloc/Cubit class name from `get_bloc_state`. The `state` should be a JSON string (e.g. "42", "true").',
+          'Emit a new state into a live Bloc/Cubit (in memory only). Works when '
+          'the state is a bool/number/String/List/Map; for class-typed states '
+          'it explains why not — drive the UI instead. Names come from get_bloc_state.',
       inputSchema: ToolInputSchema(
         properties: {
           'cubit': JsonSchema.string(
             description:
-                'The Bloc/Cubit class name as registered (e.g. "CounterCubit", "AuthBloc").',
+                'Name from get_bloc_state (e.g. "CounterCubit", or "CounterCubit#2" for a second instance).',
           ),
-          'state': JsonSchema.string(
-            description:
-                'The new state value to inject. Use JSON-serializable representation.',
-          ),
+          'state': JsonSchema.fromJson({
+            'description':
+                'New state as a plain value or JSON, e.g. 42, true, "text", [1,2].',
+          }),
         },
         required: ['cubit', 'state'],
       ),
       callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
+        final val = p['state'];
         final res = await _callExtensionRaw('ext.flutterpilot.setState', {
           'type': 'bloc',
           'name': p['cubit'],
-          'value': p['state'],
+          'value': val is String ? val : json.encode(val),
         });
         return res.toCallToolResult();
       },
@@ -221,59 +223,6 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    server.registerTool(
-      'query_drift',
-      description:
-          'Execute a raw SQL SELECT query on the local database. CALL THIS to verify complex data relationships or transaction history.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'dbName': JsonSchema.string(
-            description: 'The Drift database name registered via FlutterPilot.',
-          ),
-          'sql': JsonSchema.string(
-            description:
-                'A SQL SELECT, EXPLAIN, or WITH query. Write-operations (INSERT/UPDATE/DELETE) are blocked.',
-          ),
-        },
-        required: ['dbName', 'sql'],
-      ),
-      callback: (params, extra) async {
-        final sqlParam = params['sql'] as String?;
-        if (sqlParam == null || sqlParam.trim().isEmpty) {
-          return CallToolResult(
-            content: [TextContent(text: 'sql parameter is required')],
-            isError: true,
-          );
-        }
-        final sql = sqlParam.trim();
-        if (!allowDestructive && !_isReadOnlySql(sql)) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Security: Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed. Start server with --allow-destructive to enable write operations.',
-              ),
-            ],
-            isError: true,
-          );
-        }
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.queryDrift',
-          params,
-        );
-        if (res.isError) return res.toCallToolResult();
-        final results = res.data?['results'] ?? 'No results returned';
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Results:\n$results\n\nHINT: If data is missing, check get_network_logs to see if the last sync failed.',
-            ),
-          ],
-        );
-      },
-    );
-
     // =========================================================================
     // sqflite
     // =========================================================================
@@ -311,109 +260,82 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     );
 
     server.registerTool(
-      'query_sqflite',
-      description:
-          'Execute a read-only SQL SELECT query on a sqflite database. '
-          'Only SELECT/EXPLAIN/PRAGMA/WITH are allowed — write operations are blocked. '
-          'PREREQUISITES: App must use flutterpilot_sqflite plugin.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'dbName': JsonSchema.string(
-            description:
-                'The sqflite database name registered via FlutterPilot.',
-          ),
-          'sql': JsonSchema.string(
-            description:
-                'A read-only SQL query (SELECT, EXPLAIN, PRAGMA, WITH). Write operations are blocked.',
-          ),
-        },
-        required: ['dbName', 'sql'],
-      ),
-      callback: (params, extra) async {
-        final sqlParam = params['sql'] as String?;
-        if (sqlParam == null || sqlParam.trim().isEmpty) {
-          return CallToolResult(
-            content: [TextContent(text: 'sql parameter is required')],
-            isError: true,
-          );
-        }
-        final sql = sqlParam.trim();
-        if (!allowDestructive && !_isReadOnlySql(sql)) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Security: Only SELECT/EXPLAIN/PRAGMA/WITH queries are allowed.',
-              ),
-            ],
-            isError: true,
-          );
-        }
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.querySqflite',
-          params,
-        );
-        if (res.isError) return res.toCallToolResult();
-        final results = res.data?['results'] ?? 'No results returned';
-        final rowCount = res.data?['rowCount'] ?? 0;
-        final truncated = res.data?['truncated'] == true;
-        final buf = StringBuffer('$rowCount row(s)\n');
-        if (results is List) {
-          for (final row in results.take(50)) {
-            buf.writeln('  $row');
-          }
-          if (truncated) buf.writeln('  (results truncated)');
-        }
-        return CallToolResult(content: [TextContent(text: buf.toString())]);
-      },
-    );
-
-    server.registerTool(
       'exec_sql_query',
       description:
-          'Unified SQL Query Executor: Auto-detects active database (Sqflite or Drift) and executes '
-          'a safe SQL query (SELECT, WITH, PRAGMA, EXPLAIN). Returns structured result rows.',
+          'Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the '
+          'app\'s local database — Drift or sqflite, whichever is wired. Rows '
+          'come back as JSON. List tables with '
+          '"SELECT name FROM sqlite_master WHERE type=\'table\'".',
       inputSchema: ToolInputSchema(
         properties: {
           'sql': JsonSchema.string(description: 'SQL statement to execute.'),
           'database': JsonSchema.string(
-            description: 'Optional database name if multiple databases exist.',
+            description:
+                'Database name, only needed when the app registers several.',
           ),
         },
         required: ['sql'],
       ),
       callback: (p, e) async {
-        final sql = p['sql']?.toString() ?? '';
-        final db = (p['database'] ?? p['dbName'])?.toString();
-        if (!allowDestructive && !_isReadOnlySql(sql)) {
-          return _destructiveOperationDenied();
+        final sql = p['sql']?.toString().trim() ?? '';
+        if (!_isReadOnlySql(sql)) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'exec_sql_query is read-only: use SELECT, WITH, PRAGMA or '
+                    'EXPLAIN. To change data, drive the app\'s UI.',
+              ),
+            ],
+            isError: true,
+          );
         }
-
+        final db = (p['database'] ?? p['dbName'])?.toString();
         final args = {'sql': sql, 'dbName': ?db};
 
-        // 1. Try sqflite
-        final sqfRes = await _callExtensionRaw(
-          'ext.flutterpilot.querySqflite',
-          args,
-        );
-        if (!sqfRes.isError) return sqfRes.toCallToolResult();
+        // Use whichever plugin is wired; a real SQL error from it wins over
+        // the other plugin's "not installed".
+        bool absent(_ExtensionResult r) {
+          final m = r.errorMessage ?? '';
+          return m.contains('is not registered in the running Flutter app') ||
+              m.contains('databases registered');
+        }
 
-        // 2. Try drift
-        final driftRes = await _callExtensionRaw(
+        _ExtensionResult? res;
+        for (final ext in [
           'ext.flutterpilot.queryDrift',
-          args,
-        );
-        if (!driftRes.isError) return driftRes.toCallToolResult();
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Database query failed. Neither Sqflite nor Drift plugin returned results: ${sqfRes.errorMessage ?? driftRes.errorMessage}',
-            ),
-          ],
-          isError: true,
-        );
+          'ext.flutterpilot.querySqflite',
+        ]) {
+          final r = await _callExtensionRaw(ext, args);
+          if (!r.isError || !absent(r)) {
+            res = r;
+            break;
+          }
+        }
+        if (res == null) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'No database registered. Wire one in main(): '
+                    'DriftPilotInspector.registerDatabase(\'main\', db) or '
+                    'SqflitePilotInspector.registerDatabase(\'main\', db).',
+              ),
+            ],
+            isError: true,
+          );
+        }
+        if (res.isError) return res.toCallToolResult();
+        final rows = res.data?['results'] as List? ?? const [];
+        final buf = StringBuffer('${rows.length} row(s)');
+        if (res.data?['truncated'] == true) {
+          buf.write(' (truncated from ${res.data?['total']})');
+        }
+        for (final row in rows.take(50)) {
+          buf.write('\n${jsonEncode(row)}');
+        }
+        if (rows.length > 50) buf.write('\n… ${rows.length - 50} more');
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
       },
     );
 
