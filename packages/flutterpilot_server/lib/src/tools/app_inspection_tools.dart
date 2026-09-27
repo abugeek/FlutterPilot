@@ -220,7 +220,14 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       extension: 'ext.flutterpilot.getErrors',
       formatResult: (json) {
         final errors = json['errors'] as List?;
-        if (errors == null || errors.isEmpty) return 'No recent errors found.';
+        if (errors == null || errors.isEmpty) {
+          return json['sdkMode'] == 'zero-code'
+              ? 'No errors since FlutterPilot connected. Without '
+                    'flutterpilot_sdk, earlier errors are not recorded; '
+                    'hot_reload re-runs layout and reports layout errors that '
+                    'still occur. On web, errors only reach get_debug_logs.'
+              : 'No recent errors found.';
+        }
 
         // Deduplicate identical errors
         final Map<String, Map<String, dynamic>> deduped = {};
@@ -497,8 +504,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'No console logs matching the filter were found. '
-                  'Ensure FlutterPilot.initialize() is called before runApp().',
+                  'No console logs matching the filter since FlutterPilot '
+                  'connected (print, debugPrint and dart:developer log output '
+                  'is captured from then on).',
             ),
           ],
         );
@@ -558,7 +566,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_debug_logs',
       description:
-          'Returns captured console output from the running app — including print(), debugPrint(), and dart:developer log() calls. '
+          'Returns console output the running app printed since FlutterPilot connected — print(), debugPrint(), and dart:developer log() calls. '
           'Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.',
       inputSchema: ToolInputSchema(
         properties: {
@@ -602,8 +610,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'Server buffer cleared ($serverCleared entries). '
-                  'In-app buffer: ${res.errorMessage}',
+                  'Server buffer cleared ($serverCleared entries).'
+                  '${res.errorMessage?.contains('zero-code') == true ? '' : ' In-app buffer: ${res.errorMessage}'}',
             ),
           ],
         );
@@ -677,7 +685,13 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           },
           'plugins': pluginStatus,
           'sdkCapabilities': sdkCapabilities.isError
-              ? <String, dynamic>{'status': 'unavailable'}
+              ? <String, dynamic>{
+                  'status':
+                      sdkCapabilities.errorMessage?.contains('zero-code') ==
+                          true
+                      ? 'flutterpilot_sdk not installed (zero-code mode)'
+                      : 'unavailable',
+                }
               : sdkCapabilities.data,
           'buffers': {
             'events': _activeEvents.length,

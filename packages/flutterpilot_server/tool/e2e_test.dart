@@ -2,18 +2,26 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutterpilot_server/src/zero_code.dart';
+
 /// End-to-end test of the real agent path:
 ///   fresh `flutter create` app -> `flutterpilot init --local` -> `flutter run`
 ///   -> MCP server over stdio -> tools/call.
 ///
 /// Usage (from packages/flutterpilot_server):
 ///   dart run tool/e2e_test.dart [-d <device>]   # default device: macos
+///   dart run tool/e2e_test.dart --zero-code [-d <device>]
+///
+/// --zero-code runs a plain `flutter create` app without flutterpilot_sdk
+/// and checks what an agent gets from Flutter's own inspector instead.
 ///
 /// Covers: init wiring, widget tree, enter_text, press_key, secondary_tap,
 /// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot_restart.
 Future<void> main(List<String> args) async {
-  final device = args.length == 2 && args[0] == '-d' ? args[1] : 'macos';
+  final d = args.indexOf('-d');
+  final device = d >= 0 && d + 1 < args.length ? args[d + 1] : 'macos';
+  final zeroCode = args.contains('--zero-code');
   final isDesktop = const {'macos', 'linux', 'windows'}.contains(device);
   final isWeb = device == 'chrome' || device == 'web-server';
   final isMobile = !isDesktop && !isWeb;
@@ -39,16 +47,20 @@ Future<void> main(List<String> args) async {
       '--platforms=macos,ios,android,web',
       'fixture',
     ], cwd: work.path);
-    await sh('flutter', ['pub', 'add', 'dio'], cwd: app);
-    await sh('dart', [
-      'run',
-      '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
-      'init',
-      '--local',
-      repo,
-    ], cwd: app);
-    File('$app/lib/main.dart').writeAsStringSync(_fixtureMain);
-    await sh('flutter', ['pub', 'get'], cwd: app);
+    if (zeroCode) {
+      File('$app/lib/main.dart').writeAsStringSync(_plainMain);
+    } else {
+      await sh('flutter', ['pub', 'add', 'dio'], cwd: app);
+      await sh('dart', [
+        'run',
+        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+        'init',
+        '--local',
+        repo,
+      ], cwd: app);
+      File('$app/lib/main.dart').writeAsStringSync(_fixtureMain);
+      await sh('flutter', ['pub', 'get'], cwd: app);
+    }
 
     print('▶ flutter run -d $device (first build can take a few minutes)');
     flutter = await Process.start('flutter', [
@@ -77,6 +89,14 @@ Future<void> main(List<String> args) async {
           }
         });
     flutter.stderr.transform(utf8.decoder).listen(stderr.write);
+    // A failed build ends flutter run; say so instead of waiting 20 minutes.
+    unawaited(
+      flutter.exitCode.then((code) {
+        if (!wsUri.isCompleted) {
+          wsUri.completeError('flutter run exited ($code) before the app ran');
+        }
+      }),
+    );
     // First Gradle/Xcode builds on CI runners can take well over 10 minutes.
     final uri = await wsUri.future.timeout(const Duration(minutes: 20));
     await started.future.timeout(const Duration(minutes: 2));
@@ -190,213 +210,302 @@ Future<void> main(List<String> args) async {
       print('${ok ? '✅' : '❌'} $label ($seen)');
     }
 
-    const settle = Duration(seconds: 10);
-    await check('app summary', 'get_app_summary', {}, [], false, settle, 4096);
-
-    // Platform-specific tools are listed only where they can work.
-    final listed =
-        ((await mcp.request('tools/list', {}))['result']['tools'] as List)
-            .map((t) => t['name'] as String)
-            .toSet();
-    final isIos = isMobile && !device.startsWith('emulator');
-    final nativeOk = isIos
-        ? listed.contains('native_screenshot')
-        : !listed.any((n) => n.startsWith('native_'));
-    if (!nativeOk) failed++;
-    print(
-      '${nativeOk ? '✅' : '❌'} native tools '
-      '${isIos ? 'listed on iOS' : 'hidden off iOS'} (${listed.length} tools)',
-    );
-    await check(
-      'list_connected_devices shows auto-discovered default',
-      'list_connected_devices',
-      {},
-      ['default'],
-    );
-    if (isDesktop) {
-      await check(
-        'set_device_rotation honest on desktop',
-        'set_device_rotation',
-        {'orientation': 'landscape'},
-        ['Not applicable on desktop', 'skipped'],
+    if (zeroCode) {
+      // The SDK check runs up to 5 s after connecting; then the list shrinks.
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      Set<String> listed;
+      do {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        listed =
+            ((await mcp.request('tools/list', {}))['result']['tools'] as List)
+                .map((t) => t['name'] as String)
+                .toSet();
+      } while (listed.length != zeroCodeTools.length &&
+          DateTime.now().isBefore(deadline));
+      final listOk =
+          listed.length == zeroCodeTools.length &&
+          listed.containsAll(zeroCodeTools);
+      if (!listOk) failed++;
+      print(
+        '${listOk ? '✅' : '❌'} only zero-code tools listed (${listed.length})',
       );
-    } else if (isMobile) {
-      await check('rotate to landscape', 'set_device_rotation', {
-        'orientation': 'landscape',
+      const settle = Duration(seconds: 10);
+      await check(
+        'summary says zero-code and shows the screen',
+        'get_app_summary',
+        {},
+        ['zero-code', 'flutterpilot init', 'Details page', 'Tab B'],
+        false,
+        settle,
+        4096,
+      );
+      await checkAbsent(
+        'summary leaves out the covered route and hidden tab',
+        'get_app_summary',
+        {},
+        ['Home page', 'Tab A'],
+      );
+      await check(
+        'widget tree from the inspector',
+        'get_widget_tree',
+        {},
+        ['DetailsPage', 'lib/main.dart:'],
+        false,
+        Duration.zero,
+        16384,
+      );
+      await check('screenshot', 'capture_screenshot', {}, [
+        'Screenshot captured',
+      ]);
+      await check(
+        'SDK-only tool not callable',
+        'tap_widget',
+        {'target': 'Details page'},
+        [],
+        true,
+      );
+      await check('hot_reload', 'hot_reload');
+      await check(
+        'print output captured',
+        'get_debug_logs',
+        {},
+        ['details built'],
+        false,
+        const Duration(seconds: 5),
+      );
+      // Structured errors (Flutter.Error events) are off on web.
+      if (!isWeb) {
+        await check(
+          'layout error with its source line',
+          'get_errors',
+          {},
+          ['overflowed', 'lib/main.dart:'],
+          false,
+          const Duration(seconds: 5),
+        );
+      }
+    } else {
+      const settle = Duration(seconds: 10);
+      await check(
+        'app summary',
+        'get_app_summary',
+        {},
+        [],
+        false,
+        settle,
+        4096,
+      );
+
+      // Platform-specific tools are listed only where they can work.
+      final listed =
+          ((await mcp.request('tools/list', {}))['result']['tools'] as List)
+              .map((t) => t['name'] as String)
+              .toSet();
+      final isIos = isMobile && !device.startsWith('emulator');
+      final nativeOk = isIos
+          ? listed.contains('native_screenshot')
+          : !listed.any((n) => n.startsWith('native_'));
+      if (!nativeOk) failed++;
+      print(
+        '${nativeOk ? '✅' : '❌'} native tools '
+        '${isIos ? 'listed on iOS' : 'hidden off iOS'} (${listed.length} tools)',
+      );
+      await check(
+        'list_connected_devices shows auto-discovered default',
+        'list_connected_devices',
+        {},
+        ['default'],
+      );
+      if (isDesktop) {
+        await check(
+          'set_device_rotation honest on desktop',
+          'set_device_rotation',
+          {'orientation': 'landscape'},
+          ['Not applicable on desktop', 'skipped'],
+        );
+      } else if (isMobile) {
+        await check('rotate to landscape', 'set_device_rotation', {
+          'orientation': 'landscape',
+        });
+        await expectViewport('viewport is landscape', landscape: true);
+        await check('rotate back to portrait', 'set_device_rotation', {
+          'orientation': 'portrait',
+        });
+        await expectViewport('viewport is portrait again', landscape: false);
+      }
+      await check(
+        'TextField isEnabled is true',
+        'get_widget_properties',
+        {'key': "TextField['Name']"},
+        ['"isEnabled":true'],
+      );
+      await check(
+        'widget tree shows app widgets',
+        'get_widget_tree',
+        {},
+        ['Home', 'Send'],
+        false,
+        Duration.zero,
+        16384,
+      );
+      await check('mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 200,
+        'body': '{"ok":true}',
       });
-      await expectViewport('viewport is landscape', landscape: true);
-      await check('rotate back to portrait', 'set_device_rotation', {
-        'orientation': 'portrait',
+      // A field's label targets the field itself (not the label Text).
+      await check('enter text by field label', 'enter_text', {
+        'target': 'Name',
+        'text': 'Pilot',
       });
-      await expectViewport('viewport is portrait again', landscape: false);
+      await check('tap Send', 'tap_widget', {'key': 'Send'});
+      await check(
+        'mocked response reached UI',
+        'assert_text_visible',
+        {'text': 'Hello, Pilot (200)'},
+        [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check('network log has mocked call', 'get_network_logs', {}, [
+        '/ping',
+        '200',
+      ]);
+
+      // Keyboard, context menu, pinch, discovery, and on-screen-only assertions.
+      // enter_text focuses the field (the tap on Send above moved focus away).
+      await check('focus field again', 'enter_text', {
+        'key': "TextField['Name']",
+        'text': 'Pilot',
+      });
+      await check('press_key enter submits field', 'press_key', {
+        'key': 'enter',
+      });
+      // CI emulators can render the resulting frame a moment after the action.
+      const react = Duration(seconds: 5);
+      await check(
+        'submit handled',
+        'assert_text_visible',
+        {'text': 'Submitted: Pilot'},
+        [],
+        false,
+        react,
+      );
+      await check('secondary_tap', 'secondary_tap', {'key': 'card'});
+      await check(
+        'context handler ran',
+        'assert_text_visible',
+        {'text': 'Context menu opened'},
+        [],
+        false,
+        react,
+      );
+      await check('pinch_zoom', 'pinch_zoom', {
+        'key': 'zoomable',
+        'scale': 2.0,
+      });
+      await check(
+        'zoom applied',
+        'assert_text_visible',
+        {'text': 'zoom 1.0'},
+        [],
+        true,
+      );
+      await check(
+        'action chain accepts enter_text',
+        'execute_action_chain',
+        {
+          'actions': [
+            {'action': 'enter_text', 'target': 'Name', 'text': 'Pilot'},
+          ],
+        },
+        ['1/1 steps done'],
+      );
+      await check(
+        'action chain stops at a failed step',
+        'execute_action_chain',
+        {
+          'actions': [
+            {'action': 'tap', 'target': 'No such button'},
+            {'action': 'enter_text', 'target': 'Name', 'text': 'never'},
+          ],
+        },
+        ['stopped after 0/2', 'No such button', 'skipped'],
+        true,
+      );
+      await check('interactive elements', 'get_interactive_elements', {}, [
+        'Send',
+        'card',
+      ]);
+      // `target` works wherever `key` does.
+      await check('target alias', 'assert_widget_visible', {'target': 'Send'});
+      // Post-action state waits for the page transition: it lists the new
+      // page's back button, not the previous screen.
+      await check(
+        'open details',
+        'tap_widget',
+        {'key': 'Details'},
+        ['Route changed', 'DetailsPage', 'Back'],
+      );
+      await check(
+        'covered route is not "visible"',
+        'assert_text_visible',
+        {'text': 'Version A'},
+        [],
+        true,
+        const Duration(seconds: 3), // after the page transition ends
+      );
+      await checkAbsent(
+        'password is not echoed',
+        'enter_text',
+        {'target': 'PIN', 'text': 's3cret-pin'},
+        ['s3cret-pin'],
+      );
+      // press_back waits for the pop transition and reports the new screen.
+      await check('back', 'press_back', {}, ['Route changed', 'Send']);
+      await check(
+        'home visible again',
+        'assert_text_visible',
+        {'text': 'Version A'},
+        [],
+        false,
+        settle, // CI simulators can be slow to dismiss the keyboard and pop
+      );
+
+      final main = File('$app/lib/main.dart');
+      main.writeAsStringSync(
+        main.readAsStringSync().replaceFirst('Version A', 'Version B'),
+      );
+      await check('hot_reload', 'hot_reload');
+      await check(
+        'reload applied edited source',
+        'assert_text_visible',
+        {'text': 'Version B'},
+        [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check('reload kept state', 'assert_text_visible', {
+        'text': 'Hello, Pilot (200)',
+      });
+
+      await check('hot_restart', 'hot_restart');
+      await check(
+        'app back after restart',
+        'assert_text_visible',
+        {'text': 'Version B'},
+        [],
+        false,
+        settle,
+      );
+      await check(
+        'restart reset state',
+        'assert_text_visible',
+        {'text': 'Hello, Pilot'},
+        [],
+        true,
+      );
     }
-    await check(
-      'TextField isEnabled is true',
-      'get_widget_properties',
-      {'key': "TextField['Name']"},
-      ['"isEnabled":true'],
-    );
-    await check(
-      'widget tree shows app widgets',
-      'get_widget_tree',
-      {},
-      ['Home', 'Send'],
-      false,
-      Duration.zero,
-      16384,
-    );
-    await check('mock /ping', 'mock_http_response', {
-      'urlPattern': '/ping',
-      'statusCode': 200,
-      'body': '{"ok":true}',
-    });
-    // A field's label targets the field itself (not the label Text).
-    await check('enter text by field label', 'enter_text', {
-      'target': 'Name',
-      'text': 'Pilot',
-    });
-    await check('tap Send', 'tap_widget', {'key': 'Send'});
-    await check(
-      'mocked response reached UI',
-      'assert_text_visible',
-      {'text': 'Hello, Pilot (200)'},
-      [],
-      false,
-      const Duration(seconds: 5),
-    );
-    await check('network log has mocked call', 'get_network_logs', {}, [
-      '/ping',
-      '200',
-    ]);
-
-    // Keyboard, context menu, pinch, discovery, and on-screen-only assertions.
-    // enter_text focuses the field (the tap on Send above moved focus away).
-    await check('focus field again', 'enter_text', {
-      'key': "TextField['Name']",
-      'text': 'Pilot',
-    });
-    await check('press_key enter submits field', 'press_key', {'key': 'enter'});
-    // CI emulators can render the resulting frame a moment after the action.
-    const react = Duration(seconds: 5);
-    await check(
-      'submit handled',
-      'assert_text_visible',
-      {'text': 'Submitted: Pilot'},
-      [],
-      false,
-      react,
-    );
-    await check('secondary_tap', 'secondary_tap', {'key': 'card'});
-    await check(
-      'context handler ran',
-      'assert_text_visible',
-      {'text': 'Context menu opened'},
-      [],
-      false,
-      react,
-    );
-    await check('pinch_zoom', 'pinch_zoom', {'key': 'zoomable', 'scale': 2.0});
-    await check(
-      'zoom applied',
-      'assert_text_visible',
-      {'text': 'zoom 1.0'},
-      [],
-      true,
-    );
-    await check(
-      'action chain accepts enter_text',
-      'execute_action_chain',
-      {
-        'actions': [
-          {'action': 'enter_text', 'target': 'Name', 'text': 'Pilot'},
-        ],
-      },
-      ['1/1 steps done'],
-    );
-    await check(
-      'action chain stops at a failed step',
-      'execute_action_chain',
-      {
-        'actions': [
-          {'action': 'tap', 'target': 'No such button'},
-          {'action': 'enter_text', 'target': 'Name', 'text': 'never'},
-        ],
-      },
-      ['stopped after 0/2', 'No such button', 'skipped'],
-      true,
-    );
-    await check('interactive elements', 'get_interactive_elements', {}, [
-      'Send',
-      'card',
-    ]);
-    // `target` works wherever `key` does.
-    await check('target alias', 'assert_widget_visible', {'target': 'Send'});
-    // Post-action state waits for the page transition: it lists the new
-    // page's back button, not the previous screen.
-    await check(
-      'open details',
-      'tap_widget',
-      {'key': 'Details'},
-      ['Route changed', 'DetailsPage', 'Back'],
-    );
-    await check(
-      'covered route is not "visible"',
-      'assert_text_visible',
-      {'text': 'Version A'},
-      [],
-      true,
-      const Duration(seconds: 3), // after the page transition ends
-    );
-    await checkAbsent(
-      'password is not echoed',
-      'enter_text',
-      {'target': 'PIN', 'text': 's3cret-pin'},
-      ['s3cret-pin'],
-    );
-    // press_back waits for the pop transition and reports the new screen.
-    await check('back', 'press_back', {}, ['Route changed', 'Send']);
-    await check(
-      'home visible again',
-      'assert_text_visible',
-      {'text': 'Version A'},
-      [],
-      false,
-      settle, // CI simulators can be slow to dismiss the keyboard and pop
-    );
-
-    final main = File('$app/lib/main.dart');
-    main.writeAsStringSync(
-      main.readAsStringSync().replaceFirst('Version A', 'Version B'),
-    );
-    await check('hot_reload', 'hot_reload');
-    await check(
-      'reload applied edited source',
-      'assert_text_visible',
-      {'text': 'Version B'},
-      [],
-      false,
-      const Duration(seconds: 5),
-    );
-    await check('reload kept state', 'assert_text_visible', {
-      'text': 'Hello, Pilot (200)',
-    });
-
-    await check('hot_restart', 'hot_restart');
-    await check(
-      'app back after restart',
-      'assert_text_visible',
-      {'text': 'Version B'},
-      [],
-      false,
-      settle,
-    );
-    await check(
-      'restart reset state',
-      'assert_text_visible',
-      {'text': 'Hello, Pilot'},
-      [],
-      true,
-    );
 
     if (appId != null) {
       flutter.stdin.writeln(
@@ -550,5 +659,52 @@ class DetailsPage extends StatelessWidget {
       decoration: InputDecoration(labelText: 'PIN'),
     ),
   );
+}
+''';
+
+/// A plain app: no flutterpilot_sdk. It opens a page over the home page on
+/// start; that page has a hidden IndexedStack child and a layout overflow.
+const _plainMain = r'''
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MaterialApp(home: Home()));
+
+class Home extends StatefulWidget {
+  const Home({super.key});
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const DetailsPage()),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Home page')));
+}
+
+class DetailsPage extends StatelessWidget {
+  const DetailsPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    print('details built');
+    return Scaffold(
+      appBar: AppBar(title: const Text('Details page')),
+      body: Column(children: [
+        const IndexedStack(index: 1, children: [Text('Tab A'), Text('Tab B')]),
+        Row(children: [
+          for (var i = 0; i < 40; i++) const Text('overflowing text '),
+        ]),
+      ]),
+    );
+  }
 }
 ''';

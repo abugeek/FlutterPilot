@@ -349,7 +349,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text:
                   '${jsonEncode(res.data)}\n\n'
-                  'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.',
+                  '${res.data?['sdkMode'] == 'zero-code' ? 'Zero-code mode: widgets off screen (covered routes, hidden IndexedStack children) are left out.' : 'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.'}',
             ),
           ],
         );
@@ -398,11 +398,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           {},
         );
         if (res.isError) {
-          // No SDK in the app (zero-code mode): basic summary from the VM.
-          return (await _callExtensionRaw(
+          // No SDK in the app (zero-code mode): summary from the inspector.
+          final basic = await _callExtensionRaw(
             'ext.flutterpilot.getSummary',
             {},
-          )).toCallToolResult();
+          );
+          if (basic.isError || basic.data?['sdkMode'] != 'zero-code') {
+            return res.toCallToolResult();
+          }
+          return CallToolResult(
+            content: [TextContent(text: zeroCodeSummary(basic.data!))],
+          );
         }
         final data = res.data ?? {};
         final route = data['route']?['current'] ?? '/';
