@@ -59,6 +59,32 @@ void main() {
 
 ---
 
+## 🔌 MCP Setup (any IDE)
+
+Build the server once (fast startup, no `dart` on the IDE's PATH needed):
+```bash
+cd packages/flutterpilot_server && dart compile exe bin/flutterpilot_server.dart -o build/flutterpilot_server
+```
+
+Then add it to your IDE's MCP config (Trae, Cursor, Windsurf, Claude Desktop use this `mcpServers` shape).
+Use absolute paths; `-p` is your Flutter app's root:
+```json
+{
+  "mcpServers": {
+    "flutterpilot": {
+      "command": "/ABSOLUTE/PATH/FlutterPilot/packages/flutterpilot_server/build/flutterpilot_server",
+      "args": ["-p", "/ABSOLUTE/PATH/your_flutter_app"]
+    }
+  }
+}
+```
+- Add `"--allow-destructive"` to `args` to allow state/storage writes.
+- Without compiling: `"command": "/path/to/flutter/bin/dart", "args": ["run", "/ABSOLUTE/PATH/.../bin/flutterpilot_server.dart", "-p", "..."]` (slower start).
+- VS Code (`.vscode/mcp.json`) uses `"servers"` instead of `"mcpServers"` and `"type": "stdio"`.
+- Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../build/flutterpilot_server -p /ABSOLUTE/PATH/your_flutter_app`
+- Run the app with `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` (or `flutterpilot dev`) so the server finds it.
+- Rebuild the executable after pulling server changes.
+
 ## 📋 What You Get
 
 ### MCP Tools Across 10 Categories
