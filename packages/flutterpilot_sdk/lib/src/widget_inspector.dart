@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'hit_test_utils.dart';
 
-
 /// Provides high-performance, single-pass introspection and semantic element querying into the live Flutter widget tree.
 /// All screen queries traverse with [Element.debugVisitOnstageChildren] (what
 /// flutter_test's finders do by default): routes covered by an opaque route
@@ -21,8 +20,7 @@ class PilotWidgetInspector {
       return key.value.toString();
     }
     final raw = key.toString();
-    final match =
-        RegExp(r"\[<'(.*)'>\]|\[<(.*)>\]|\['(.*)'\]").firstMatch(raw);
+    final match = RegExp(r"\[<'(.*)'>\]|\[<(.*)>\]|\['(.*)'\]").firstMatch(raw);
     if (match != null) {
       return match.group(1) ?? match.group(2) ?? match.group(3) ?? raw;
     }
@@ -87,7 +85,8 @@ class PilotWidgetInspector {
     final userKey =
         key != null &&
         key is! GlobalKey &&
-        (local || (key is ValueKey && (key.value is String || key.value is num)));
+        (local ||
+            (key is ValueKey && (key.value is String || key.value is num)));
     final keyStr = userKey ? key.toString() : null;
     final keep = keyStr != null || widget is Text || local;
 
@@ -236,7 +235,8 @@ class PilotWidgetInspector {
 
       // Priority 100: Exact Key Match or Semantics Identifier Match
       if (widgetKey != null || cleanKey != null || id != null) {
-        final keyMatches = widgetKey == queryToSearch ||
+        final keyMatches =
+            widgetKey == queryToSearch ||
             widgetKey == "['$queryToSearch']" ||
             widgetKey == "[<'$queryToSearch'>]" ||
             (cleanKey != null && cleanKey == queryToSearch);
@@ -256,9 +256,9 @@ class PilotWidgetInspector {
         }
       }
 
-
       // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
-      if (typeTarget != null && (targetIndex != null || bestPriority < 90 + 5)) {
+      if (typeTarget != null &&
+          (targetIndex != null || bestPriority < 90 + 5)) {
         if (_isMatchingType(typeName, typeTarget)) {
           if (valueTarget == null || valueTarget.isEmpty) {
             consider(90);
@@ -344,7 +344,9 @@ class PilotWidgetInspector {
 
     // Substring-only tiers (69 button text, 60 text, 50 tooltip, ±5 boost):
     // several different texts contain the query, so any pick is a guess.
-    final raw = bestPriority >= 5 && bestMatch != null &&
+    final raw =
+        bestPriority >= 5 &&
+            bestMatch != null &&
             HitTestUtils.isElementHittable(bestMatch!)
         ? bestPriority - 5
         : bestPriority;
@@ -559,7 +561,8 @@ class PilotWidgetInspector {
         add(w.tooltip);
       } else if (w is Icon) {
         // Only meaningful names; unknown glyphs would just add "Icon#e5d2" noise.
-        final name = w.semanticLabel ??
+        final name =
+            w.semanticLabel ??
             (w.icon == null ? null : _resolveIconName(w.icon!));
         if (name != null && !name.startsWith('Icon#')) add(name);
         return; // its child RichText is just the private-use glyph character
@@ -570,7 +573,6 @@ class PilotWidgetInspector {
     extract(element);
     return parts.join(' ');
   }
-
 
   static String? _computeSemanticSelector(Element element) {
     final type = element.widget.runtimeType.toString();
@@ -641,11 +643,7 @@ class PilotWidgetInspector {
 
     // Early Depth Exit: immediately short-circuit if maxDepth reached
     if (currentDepth >= maxDepth) {
-      return {
-        'type': typeName,
-        'key': ?keyStr,
-        'truncated': true,
-      };
+      return {'type': typeName, 'key': ?keyStr, 'truncated': true};
     }
 
     final List<Map<String, dynamic>> children = [];
@@ -750,7 +748,8 @@ class PilotWidgetInspector {
     }
 
     final totalChanges = added.length + removed.length + modified.length;
-    final truncated = added.length > sampleLimit ||
+    final truncated =
+        added.length > sampleLimit ||
         removed.length > sampleLimit ||
         modified.length > sampleLimit;
 
@@ -789,7 +788,10 @@ class PilotWidgetInspector {
       final nodeIdentifier = '$path:$semanticIdentity';
       final nodeDescription =
           '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
-      result[nodeIdentifier] = (label: semanticIdentity, description: nodeDescription);
+      result[nodeIdentifier] = (
+        label: semanticIdentity,
+        description: nodeDescription,
+      );
 
       final children = current['children'] as List?;
       if (children != null) {
@@ -866,6 +868,4 @@ class PilotWidgetInspector {
       w.runtimeType.toString() == 'Switch' ||
       w.runtimeType.toString() == 'Radio' ||
       w.runtimeType.toString() == 'Slider';
-
 }
-

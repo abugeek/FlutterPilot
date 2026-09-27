@@ -49,9 +49,7 @@ class _AnimationLabScreenState extends State<AnimationLabScreen>
   Widget build(BuildContext context) {
     // Optimization 1: Scaffold and all static layout cards are built once, NOT inside AnimatedBuilder.
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Animation Lab'),
-      ),
+      appBar: AppBar(title: const Text('Animation Lab')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -203,7 +201,9 @@ class OptimizedParticleGalaxyPainter extends CustomPainter {
       final z2 = rawY * sinX + z1 * cosX;
 
       final perspective = focalLength / (focalLength + z2 + 80.0);
-      offsets.add(Offset(center.dx + x1 * perspective, center.dy + y2 * perspective));
+      offsets.add(
+        Offset(center.dx + x1 * perspective, center.dy + y2 * perspective),
+      );
     }
 
     _paint

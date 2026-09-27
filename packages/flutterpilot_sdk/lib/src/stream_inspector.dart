@@ -7,7 +7,9 @@ import 'diagnostic_payload.dart';
 /// SSE, EventStreams) into a rolling 100-event ring buffer.
 class StreamInspector {
   static const int bufferSize = 100;
-  static final RingBuffer<Map<String, dynamic>> _streamBuffer = RingBuffer(bufferSize);
+  static final RingBuffer<Map<String, dynamic>> _streamBuffer = RingBuffer(
+    bufferSize,
+  );
 
   /// Records an incoming or outgoing stream frame.
   static void recordEvent({

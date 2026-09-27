@@ -528,9 +528,7 @@ void main() {
   });
 
   // ── 10. Connectivity ─────────────────────────────────────────────────────
-  testWidgets('Connectivity: status display, history', (
-    tester,
-  ) async {
+  testWidgets('Connectivity: status display, history', (tester) async {
     await launchApp(tester);
     await _goTo(tester, 'nav_connectivity_button');
     expect(find.text('Connectivity'), findsOneWidget);

@@ -14,23 +14,26 @@ void main() {
       expect(buffer[1], equals(2));
     });
 
-    test('Evicts oldest elements automatically in O(1) time without array copy', () {
-      final buffer = RingBuffer<String>(3);
-      buffer.add('a');
-      buffer.add('b');
-      buffer.add('c');
-      expect(buffer.toList(), equals(['a', 'b', 'c']));
+    test(
+      'Evicts oldest elements automatically in O(1) time without array copy',
+      () {
+        final buffer = RingBuffer<String>(3);
+        buffer.add('a');
+        buffer.add('b');
+        buffer.add('c');
+        expect(buffer.toList(), equals(['a', 'b', 'c']));
 
-      // Adding 4th element evicts 'a'
-      buffer.add('d');
-      expect(buffer.length, equals(3));
-      expect(buffer.toList(), equals(['b', 'c', 'd']));
+        // Adding 4th element evicts 'a'
+        buffer.add('d');
+        expect(buffer.length, equals(3));
+        expect(buffer.toList(), equals(['b', 'c', 'd']));
 
-      // Adding 5th element evicts 'b'
-      buffer.add('e');
-      expect(buffer.length, equals(3));
-      expect(buffer.toList(), equals(['c', 'd', 'e']));
-    });
+        // Adding 5th element evicts 'b'
+        buffer.add('e');
+        expect(buffer.length, equals(3));
+        expect(buffer.toList(), equals(['c', 'd', 'e']));
+      },
+    );
 
     test('Iterates cleanly over elements', () {
       final buffer = RingBuffer<int>(2);

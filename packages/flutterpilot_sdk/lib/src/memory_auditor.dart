@@ -22,10 +22,13 @@ class MemoryAuditor {
             final renderedSize = ro.size;
             // Check if Image specifies an unusually large fixed decode width/height compared to layout
             final width = w.width;
-            if (width != null && renderedSize.width > 0 && width > renderedSize.width * 4) {
+            if (width != null &&
+                renderedSize.width > 0 &&
+                width > renderedSize.width * 4) {
               warnings.add({
                 'type': 'Image',
-                'issue': 'Image decode width ($width) is >4x larger than rendered layout width (${renderedSize.width.round()}). Consider using cacheWidth.',
+                'issue':
+                    'Image decode width ($width) is >4x larger than rendered layout width (${renderedSize.width.round()}). Consider using cacheWidth.',
               });
             }
           }

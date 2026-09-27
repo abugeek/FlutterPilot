@@ -68,13 +68,16 @@ class ErrorInspector {
     for (final line in lines) {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
-      final isFramework = trimmed.contains('package:flutter/') ||
+      final isFramework =
+          trimmed.contains('package:flutter/') ||
           trimmed.contains('dart:async/') ||
           trimmed.contains('dart:ui/') ||
           trimmed.contains('package:stack_trace/');
       if (!isFramework) {
         if (skippedFrameworkFrames > 0) {
-          compacted.add('  ... [$skippedFrameworkFrames framework frames skipped]');
+          compacted.add(
+            '  ... [$skippedFrameworkFrames framework frames skipped]',
+          );
           skippedFrameworkFrames = 0;
         }
         compacted.add(trimmed);

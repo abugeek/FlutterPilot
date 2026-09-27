@@ -93,7 +93,9 @@ class DashboardScreen extends ConsumerWidget {
                     Text(
                       'Autonomous agent is connected and controlling the emulator session in real-time.',
                       key: const Key('pilot_mission_status_text'),
-                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 12.5),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 12.5,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     FilledButton.icon(

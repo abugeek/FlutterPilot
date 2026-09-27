@@ -33,7 +33,9 @@ class FlightEvent {
 /// network calls, and route transitions to enable autonomous bug reproduction.
 class FlightRecorder {
   static const int maxEvents = 100;
-  static final RingBuffer<FlightEvent> _events = RingBuffer<FlightEvent>(maxEvents);
+  static final RingBuffer<FlightEvent> _events = RingBuffer<FlightEvent>(
+    maxEvents,
+  );
   static List<FlightEvent>? _frozenCrashSnapshot;
   static DateTime? _crashTime;
   static String? _lastException;
