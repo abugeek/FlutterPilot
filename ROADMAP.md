@@ -74,7 +74,15 @@ Learned from reviewing agent-made changes:
    new tests means nothing proves the changes work.
 4. **Change both ends.** A server feature that reads a field the SDK never
    sends (e.g. error `severity`) silently does nothing. Verify in the real app.
-5. **Schema first.** A parameter alias only helps if the tool's JSON schema
+5. **Version ranges must include today's release.** Twice an agent capped a
+   plugin below the current major (`flutter_bloc ^8`, then `go_router <16`,
+   `connectivity_plus <7`, Firebase, secure_storage) — every up-to-date app,
+   including `../hn_reader`, failed `pub get`. Upper bound = next major after
+   the latest on pub.dev, and verify with `flutter pub upgrade` + tests.
+6. **Code injected into a user's `main.dart` must compile** on the template,
+   `runApp(const MaterialApp(...))`, and arrow `main() =>` apps; `init`
+   unit tests cover these now.
+7. **Schema first.** A parameter alias only helps if the tool's JSON schema
    accepts the new name — MCP validates arguments before your code runs.
 
 ## 1. Finish the cleanup (small, do first)
@@ -88,11 +96,11 @@ callbacks), Riverpod state accepts plain values and short names without
 `--allow-destructive`, `exec_sql_query` auto-detects, Dio logs bodies,
 plugins have explicit `register()`, crash report 41 KB → ~4.5 KB with the
 failing line, overflows no longer mark the app unstable, keyboard dispatch
-uses one path, post-action state waits for route transitions. **Still open
-from §1:** `init` only prints the text-scale/locale wiring tip instead of
-injecting it (item 12); `wait_for_widget` is kept as a deprecated alias
-instead of removed; one unexplained `tap_widget(target:"Stories")` miss right
-after `jump_to_screen` (not reproducible in 3 retries).
+uses one path, post-action state waits for route transitions. **Follow-up (agent + review):** `init` now injects the
+text-scale/locale wiring (only the parts that can take effect; arrow `main`
+supported; import guaranteed), `wait_for_widget` removed, navigation waits for
+route transitions before the next tap, plugin version ranges bounded to the
+current major. §1 is done.
 
 **New from the review:**
 - Plugin dependency constraints: `flutterpilot_bloc` pinned `flutter_bloc

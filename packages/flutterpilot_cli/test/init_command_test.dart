@@ -167,5 +167,28 @@ void main() {
       expect(wrapped, contains('FlutterPilot.textScaleNotifier'));
       expect(InitCommand.addValueListenableOverrides(wrapped), wrapped);
     });
+
+    test('patchMain handles arrow-bodied main', () {
+      final out = InitCommand.patchMain('void main() => runApp(const App());')!;
+      expect(out, contains('FlutterPilot.initialize();'));
+      expect(out, contains('runApp(const App());'));
+      expect(out, isNot(contains('=>')));
+    });
+
+    test('ensureImport adds the SDK import when injected code needs it', () {
+      expect(
+        InitCommand.ensureImport('x(NavigationTracker())'),
+        startsWith("import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';"),
+      );
+      expect(InitCommand.ensureImport('plain()'), 'plain()');
+    });
+
+    test('overrides skip text scale when the app has its own builder', () {
+      final out = InitCommand.addValueListenableOverrides(
+        'MaterialApp(builder: (c, w) => w!, home: X())',
+      );
+      expect(out, contains('FlutterPilot.localeNotifier'));
+      expect(out, isNot(contains('FlutterPilot.textScaleNotifier')));
+    });
   });
 }

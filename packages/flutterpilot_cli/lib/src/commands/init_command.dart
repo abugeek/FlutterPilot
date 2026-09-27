@@ -212,6 +212,12 @@ class InitCommand extends Command<void> {
       }
     }
 
+    if (mainFile.existsSync()) {
+      final content = await mainFile.readAsString();
+      final withImport = ensureImport(content);
+      if (withImport != content) await mainFile.writeAsString(withImport);
+    }
+
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
@@ -282,13 +288,20 @@ class InitCommand extends Command<void> {
     var appCode = content.substring(match.start, closeParenIndex + 1);
     appCode = appCode.replaceFirst(RegExp(r'^const\s+'), '');
 
-    if (!appCode.contains('locale:')) {
+    // Only wire what will take effect. If the app already sets `locale:` or
+    // has its own `builder:`, leave that override unwired: a listener that
+    // changes nothing would make set_locale/set_text_scale_factor report a
+    // false success.
+    final wireLocale = !appCode.contains('locale:');
+    final wireScale = !appCode.contains('builder:');
+    if (!wireLocale && !wireScale) return content;
+
+    if (wireLocale) {
       final insertIdx = appCode.indexOf('(') + 1;
       appCode =
           '${appCode.substring(0, insertIdx)}\n      locale: pilotLocale,${appCode.substring(insertIdx)}';
     }
-
-    if (!appCode.contains('builder:')) {
+    if (wireScale) {
       final insertIdx = appCode.indexOf('(') + 1;
       appCode = '''${appCode.substring(0, insertIdx)}
       builder: (context, child) {
@@ -304,14 +317,21 @@ class InitCommand extends Command<void> {
       },${appCode.substring(insertIdx)}''';
     }
 
-    final wrapped =
-        '''ValueListenableBuilder<Locale?>(
-  valueListenable: FlutterPilot.localeNotifier,
-  builder: (context, pilotLocale, _) => ValueListenableBuilder<double?>(
+    var wrapped = appCode;
+    if (wireScale) {
+      wrapped =
+          '''ValueListenableBuilder<double?>(
     valueListenable: FlutterPilot.textScaleNotifier,
-    builder: (context, pilotScale, _) => $appCode,
-  ),
+    builder: (context, pilotScale, _) => $wrapped,
+  )''';
+    }
+    if (wireLocale) {
+      wrapped =
+          '''ValueListenableBuilder<Locale?>(
+  valueListenable: FlutterPilot.localeNotifier,
+  builder: (context, pilotLocale, _) => $wrapped,
 )''';
+    }
 
     return content.replaceRange(match.start, closeParenIndex + 1, wrapped);
   }
@@ -388,15 +408,35 @@ class InitCommand extends Command<void> {
   /// the unchanged [content] if already initialized, or null if no main() found.
   static String? patchMain(String content) {
     if (content.contains('FlutterPilot.initialize')) return content;
-    final mainRegex = RegExp(
+    const init =
+        '\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();';
+    final blockMain = RegExp(
       r'((?:Future<void>|void)\s+main\s*\([^)]*\)\s*(?:async\s*)?\{)',
     );
-    if (!mainRegex.hasMatch(content)) return null;
-    return "import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';\n" +
-        content.replaceFirstMapped(
-          mainRegex,
-          (m) =>
-              '${m[1]}\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();',
-        );
+    if (blockMain.hasMatch(content)) {
+      return content.replaceFirstMapped(blockMain, (m) => '${m[1]}$init');
+    }
+    // `void main() => runApp(...);`
+    final arrowMain = RegExp(
+      r'((?:Future<void>|void)\s+main\s*\([^)]*\)\s*(?:async\s*)?)=>\s*([^;]+);',
+    );
+    if (arrowMain.hasMatch(content)) {
+      return content.replaceFirstMapped(
+        arrowMain,
+        (m) => '${m[1]}{$init\n  ${m[2]!.trim()};\n}',
+      );
+    }
+    return null;
+  }
+
+  /// Every injected snippet references the SDK; make sure it's imported.
+  static String ensureImport(String content) {
+    const import = "import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';";
+    if (content.contains(import)) return content;
+    if (!content.contains('FlutterPilot') &&
+        !content.contains('NavigationTracker')) {
+      return content;
+    }
+    return '$import\n$content';
   }
 }
