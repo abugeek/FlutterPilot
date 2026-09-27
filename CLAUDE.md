@@ -55,8 +55,9 @@ When interacting with a Flutter app using FlutterPilot:
 - `get_memory_details` / `get_allocation_profile` — heap usage and top classes.
 
 ### 7. Multi-Device Fleet Testing
-- Use `list_connected_devices` to see all running Flutter instances across iOS, Android, and Web.
-- Use `switch_device(id: "...")` to toggle target device on the fly.
+- FlutterPilot connects to one app by itself (listed as `default`). Add the others with `register_device(id: "iphone", uri: "http://127.0.0.1:PORT/TOKEN=/")` — the URI `flutter run` prints; registering the already-connected app's URI just renames it.
+- `list_connected_devices` shows each device's platform, app, SDK/zero-code, and which ones are no longer running.
+- `switch_device(id: "...")` — every tool then targets that device (tools have no per-call device parameter). If the app restarted on a new port, `register_device` the same id with the new URI.
 
 ### 8. Crash Fix Loop
 1. When a crash occurs, call `get_errors` or `get_latest_crash_report` — they include the exception, your source frame (file:line) and, for layout errors, the culprit widget's location.

@@ -52,5 +52,50 @@ void main() {
       expect(fleet.activeUri, equals('ws://127.0.0.1:9002/new=/ws'));
       expect(fleet.listDevices()['total'], equals(1));
     });
+
+    test('registering a known URI under a new name renames that entry', () {
+      fleet.registerDevice('default', 'ws://127.0.0.1:8001/a=/ws');
+      fleet.registerDevice('web', 'ws://127.0.0.1:8002/b=/ws');
+      expect(
+        fleet.registerDevice('mac', 'ws://127.0.0.1:8001/a=/ws'),
+        'default',
+      );
+      expect(fleet.activeDeviceId, 'mac');
+      expect(fleet.deviceIds, ['web', 'mac']);
+      expect(fleet.idForUri('ws://127.0.0.1:8002/b=/ws'), 'web');
+    });
+
+    test('describe says what runs where, and which device is gone', () {
+      fleet.registerDevice('mac', 'ws://127.0.0.1:8001/secret=/ws');
+      fleet.registerDevice('web', 'ws://127.0.0.1:8002/b=/ws');
+      final text = fleet.describe({
+        'mac': const DeviceInfo(
+          platform: 'macos',
+          app: 'hn_reader',
+          hasSdk: true,
+        ),
+      });
+      expect(
+        text,
+        contains(
+          '- mac (active): macos · hn_reader · flutterpilot_sdk — 127.0.0.1:8001',
+        ),
+      );
+      expect(text, contains('- web: not running'));
+      expect(text, isNot(contains('secret')));
+    });
+  });
+
+  test('normalizeVmServiceUri accepts what flutter run and DevTools print', () {
+    const ws = 'ws://127.0.0.1:49588/0ZnhG9AjJsM=/ws';
+    expect(normalizeVmServiceUri(ws), ws);
+    expect(normalizeVmServiceUri('http://127.0.0.1:49588/0ZnhG9AjJsM=/'), ws);
+    expect(normalizeVmServiceUri(' http://127.0.0.1:49588/0ZnhG9AjJsM= '), ws);
+    expect(
+      normalizeVmServiceUri('http://127.0.0.1:9100/devtools/?uri=$ws'),
+      ws,
+    );
+    expect(normalizeVmServiceUri('pixel_8'), isNull);
+    expect(normalizeVmServiceUri('file:///tmp/x'), isNull);
   });
 }

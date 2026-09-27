@@ -23,7 +23,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final report = await _selfHealManager.getLatestReport((ext) async {
-          final res = await _callExtensionRaw(ext, _withDeviceId(p));
+          final res = await _callExtensionRaw(ext, {});
           return res.isError ? 'N/A' : res.data;
         });
         if (report == null) {
@@ -41,13 +41,11 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'get_flight_log',
       description:
           'Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getFlightLog',
-          _withDeviceId(p),
+          {},
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
@@ -64,13 +62,11 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     _tool(
       'clear_flight_log',
       description: 'Clears the flight recorder event buffer.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.clearFlightLog',
-          _withDeviceId(p),
+          {},
         );
         return res.toCallToolResult();
       },
@@ -83,7 +79,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final report = await _selfHealManager.getLatestReport((ext) async {
-          final res = await _callExtensionRaw(ext, _withDeviceId(p));
+          final res = await _callExtensionRaw(ext, {});
           return res.isError ? 'N/A' : res.data;
         });
         if (report == null) {
@@ -102,9 +98,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       description:
           'Recompile edited .dart files and hot reload them into the running app, keeping state. '
           'CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) => _callFlutterToolsService(
         p,
         'reloadSources',
@@ -117,9 +111,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       description:
           'Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), '
           'initState, global/static initializers, enums, generic type changes.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) => _callFlutterToolsService(
         p,
         'hotRestart',

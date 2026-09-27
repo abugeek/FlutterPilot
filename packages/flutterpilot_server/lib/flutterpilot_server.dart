@@ -34,24 +34,6 @@ part 'src/tools/ui_automation_tools.dart';
 
 final _log = logging.Logger('FlutterPilotServer');
 
-JsonSchema _deviceIdProperty() => JsonSchema.string(
-  description:
-      'Optional target device. Registered devices can be addressed directly; '
-      'when omitted, the active device is used.',
-);
-
-Map<String, dynamic> _withDeviceId(
-  Map<String, dynamic> parameters, [
-  Map<String, dynamic>? values,
-]) {
-  final result = <String, dynamic>{...?values};
-  final deviceId = parameters['deviceId'];
-  if (deviceId != null && deviceId.toString().isNotEmpty) {
-    result['deviceId'] = deviceId;
-  }
-  return result;
-}
-
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
   /// Every registered tool by name, for showing only the usable ones.
@@ -70,6 +52,22 @@ abstract class _FlutterPilotServerBase {
     description: description,
     inputSchema: inputSchema,
     callback: (args, extra) async {
+      // Only some tools used to take a per-call device, and most ignored it:
+      // answering from another device than the one asked for is worse than
+      // refusing.
+      if (args.containsKey('deviceId')) {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  'Tools have no deviceId parameter: call '
+                  'switch_device(id: "${args['deviceId']}") first; every tool '
+                  'then targets that device.',
+            ),
+          ],
+        );
+      }
       try {
         return await callback(args, extra);
       } catch (e) {
@@ -105,6 +103,14 @@ abstract class _FlutterPilotServerBase {
   FleetManager get _fleetManager;
 
   Future<bool> _connectWithUri([String? targetUri]);
+
+  /// The VM service URI of the current connection (unredacted).
+  String? get _connectedUri;
+
+  bool _isAllowedConnectionUri(String rawUri);
+
+  /// A device was registered under a new name: its runtime state follows.
+  Future<void> _renameDeviceContext(String from, String to);
 
   Future<VmService?> _vmServiceForParameters(Map<String, dynamic> parameters);
 
@@ -235,8 +241,20 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   // ---------------------------------------------------------------------------
 
   @override
+  String? get _connectedUri => _vmService == null ? null : _vmServiceUri;
+
+  @override
+  Future<void> _renameDeviceContext(String from, String to) async {
+    final context = _deviceContexts.remove(from);
+    if (context == null) return;
+    await _deviceContexts.remove(to)?.dispose();
+    _deviceContexts[to] = context..deviceId = to;
+  }
+
+  @override
   Future<bool> _connectWithUri([String? targetUri]) async {
     if (targetUri != null && targetUri.isNotEmpty) {
+      targetUri = normalizeVmServiceUri(targetUri) ?? targetUri;
       if (!_isAllowedConnectionUri(targetUri)) {
         _log.warning(
           'Blocked remote VM Service URI; enable allowRemoteConnections to connect.',
@@ -273,19 +291,30 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// Right after launch (notably on web, via DWDS) the app may not have
   /// registered FlutterPilot's extensions yet. Wait for them once per
   /// connection, at most 5 s, instead of misreporting "Zero-Code mode" or
-  /// "not registered" for the first calls. Apps without the SDK pay once.
+  /// "not registered" for the first calls. Only apps without the SDK that
+  /// just started pay the wait: an isolate running for over 10 s has
+  /// registered everything it will.
   /// Returns whether the SDK is installed, or null when the check failed.
   static Future<bool?> _waitForSdkExtensions(VmService vm) async {
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (DateTime.now().isBefore(deadline)) {
       try {
         final isolates = (await vm.getVM()).isolates ?? const <IsolateRef>[];
+        var settled = isolates.isNotEmpty;
         for (final ref in isolates) {
-          final rpcs = (await vm.getIsolate(ref.id!)).extensionRPCs;
-          if (rpcs?.any((e) => e.startsWith('ext.flutterpilot.')) ?? false) {
+          final isolate = await vm.getIsolate(ref.id!);
+          if (isolate.extensionRPCs?.any(
+                (e) => e.startsWith('ext.flutterpilot.'),
+              ) ??
+              false) {
             return true;
           }
+          final started = isolate.startTime;
+          settled &=
+              started != null &&
+              DateTime.now().millisecondsSinceEpoch - started > 10000;
         }
+        if (settled) return false;
       } catch (_) {
         return null; // Connection trouble is reported by the call itself.
       }
@@ -314,6 +343,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         return;
       }
     }
+    // Discovery and CLI flags may yield the http:// form flutter run prints.
+    _vmServiceUri = normalizeVmServiceUri(_vmServiceUri!) ?? _vmServiceUri;
     if (!_isAllowedConnectionUri(_vmServiceUri!)) {
       _log.warning(
         'Blocked remote VM Service URI; enable allowRemoteConnections to connect.',
@@ -329,12 +360,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     } catch (_) {
       // The app was most likely restarted on a new port: rediscover it
       // instead of retrying a dead URI forever.
-      final discovered = await VmDiscoveryService.discover(
+      final found = await VmDiscoveryService.discover(
         projectRoot: _projectRoot,
       );
+      final discovered = found == null ? null : normalizeVmServiceUri(found);
+      final owner = discovered == null
+          ? null
+          : _fleetManager.idForUri(discovered);
       if (discovered == null ||
           discovered == _vmServiceUri ||
-          !_isAllowedConnectionUri(discovered)) {
+          !_isAllowedConnectionUri(discovered) ||
+          // Another registered device's app, not this one restarted.
+          (owner != null && owner != _fleetManager.activeDeviceId)) {
         rethrow;
       }
       _log.info('App restarted; rediscovered VM Service.');
@@ -402,6 +439,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     await _setupEventStreaming(activeContext);
   }
 
+  @override
   bool _isAllowedConnectionUri(String rawUri) {
     final uri = Uri.tryParse(rawUri);
     final host = uri?.host.toLowerCase();
@@ -942,11 +980,6 @@ Use this guide to understand what tools to call, when, and in what order.
         description:
             'Return immediately with an operation ID; poll using get_operation.',
       ),
-      'deviceId': JsonSchema.string(
-        description:
-            'Optional target device. Registered devices can be addressed directly; '
-            'when omitted, the active device is used.',
-      ),
     };
     _tool(
       name,
@@ -998,13 +1031,17 @@ Use this guide to understand what tools to call, when, and in what order.
     if (extension.startsWith('ext.flutterpilot.')) await _sdkExtensionsReady;
     final context = await _deviceContextForParameters(parameters);
     final deviceId =
-        context?.deviceId ??
-        parameters['deviceId']?.toString() ??
-        _fleetManager.activeDeviceId ??
-        'default';
+        context?.deviceId ?? _fleetManager.activeDeviceId ?? 'default';
     if (context == null || context.service == null) {
       return _ExtensionResult.error(
-        'No VM-service connection is available for device "$deviceId".',
+        _fleetManager.deviceIds.length > 1
+            ? 'Device "$deviceId" is not running (app stopped, or restarted '
+                  'on a new port). If it restarted, call register_device(id: '
+                  '"$deviceId", uri: <new URI>); list_connected_devices shows '
+                  'the others.'
+            : 'No running Flutter app found. Start it with "flutter run" '
+                  '(FlutterPilot finds it), or call connect_app(uri: ...) '
+                  'with the VM service URI flutter run prints.',
         ErrorCategory.connectionLost,
       );
     }
@@ -1067,24 +1104,13 @@ Use this guide to understand what tools to call, when, and in what order.
   Future<DeviceRuntimeContext?> _deviceContextForParameters(
     Map<String, dynamic> parameters,
   ) async {
-    final activeDevice = _fleetManager.activeDeviceId ?? 'default';
-    final targetDevice = parameters['deviceId']?.toString();
-    final deviceId = targetDevice == null || targetDevice.isEmpty
-        ? activeDevice
-        : targetDevice;
-    if (deviceId == activeDevice && _vmService == null) {
-      await _connectWithUri();
-    }
-    final context = deviceId == activeDevice && _vmService != null
-        ? (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
-            deviceId: deviceId,
-            uri: _vmServiceUri ?? '',
-          ))
-        : await _ensureDeviceContext(deviceId);
-    if (context != null && deviceId == activeDevice) {
-      context.service ??= _vmService;
-    }
-    return context;
+    final deviceId = _fleetManager.activeDeviceId ?? 'default';
+    if (_vmService == null) await _connectWithUri();
+    if (_vmService == null) return _deviceContexts[deviceId];
+    return (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
+      deviceId: deviceId,
+      uri: _vmServiceUri ?? '',
+    ))..service ??= _vmService;
   }
 
   @override
@@ -1118,8 +1144,7 @@ Use this guide to understand what tools to call, when, and in what order.
         }
         final callParameters = Map<String, dynamic>.from(parameters)
           ..remove('operationDeadlineMs')
-          ..remove('operationId')
-          ..remove('deviceId');
+          ..remove('operationId');
         final result = await _callExtensionImmediate(
           extension,
           callParameters,
@@ -1161,27 +1186,6 @@ Use this guide to understand what tools to call, when, and in what order.
   @override
   _BackgroundOperation? _getBackgroundOperation(String operationId) =>
       _backgroundOperations[operationId];
-
-  Future<DeviceRuntimeContext?> _ensureDeviceContext(String deviceId) async {
-    final uri = _fleetManager.uriFor(deviceId);
-    if (uri == null || uri.isEmpty) return null;
-    if (!_isAllowedConnectionUri(uri)) return null;
-
-    var context = _deviceContexts[deviceId];
-    if (context != null && context.uri != uri) {
-      await context.dispose();
-      _deviceContexts.remove(deviceId);
-      context = null;
-    }
-    context ??= DeviceRuntimeContext(deviceId: deviceId, uri: uri);
-    _deviceContexts[deviceId] = context;
-    if (context.service == null) {
-      context.service = await vmServiceConnectUri(uri);
-      context.connectionGeneration++;
-      await _setupEventStreaming(context);
-    }
-    return context;
-  }
 
   static Duration _operationDeadline(Map<String, dynamic> parameters) {
     final requested = int.tryParse(

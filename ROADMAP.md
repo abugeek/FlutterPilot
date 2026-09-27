@@ -208,7 +208,15 @@ current major. §1 is done.
    `docs/field-test-findings.md`. Left: driving the app (taps, text) would
    need expression evaluation — not attempted; iOS/Android zero-code
    untested.
-4. **Multi-device fleet** (`register_device`/`switch_device`) untested.
+4. **Multi-device fleet:** done — hn_reader on macOS + iPhone simulator and
+   a plain app on Chrome through one server (round 7 of
+   `docs/field-test-findings.md`). `deviceId` on 39 tools was ignored by
+   most of them (answers came from the wrong device) and is gone:
+   `switch_device` is the one way to target a device. Register checks the
+   app is running and accepts the `http://` URI `flutter run` prints; list
+   shows platform / app / SDK / "not running"; a failed switch stays on the
+   current device. e2e checks register/list/switch/refusals. Left: running
+   the same flow on several devices at once (§8 "Parallel devices").
 5. **VS Code extension** (`packages/flutterpilot_vscode`) untested — test or remove.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
    plugin-range check on Linux; `e2e_test.dart` on macOS, iOS simulator and
@@ -319,7 +327,6 @@ Review each the same way as PR #1 — keep, fix, or delete:
   `async:true` / `operationDeadlineMs`** — a lot of machinery added to every
   tool's schema (5 extra params each). Calls take milliseconds; measure whether
   any agent ever needs async/cancel, otherwise delete and shrink every schema.
-- **`fleet_manager.dart` / device contexts** — multi-device routing; untested.
 - **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
   test on long lists, nested scrollables, horizontal lists, lazy lists where
   the target isn't built yet.

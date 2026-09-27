@@ -139,7 +139,8 @@ SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage and
 Supabase. Firebase is not yet (see [ROADMAP.md](ROADMAP.md) §2).
 
 **Devices** — `connect_app`, `list_connected_devices`, `register_device`,
-`switch_device`.
+`switch_device`: one server drives several running apps (e.g. iOS simulator,
+Android emulator, Chrome), one active device at a time.
 
 ---
 

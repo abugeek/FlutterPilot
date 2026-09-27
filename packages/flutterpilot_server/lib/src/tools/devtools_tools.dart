@@ -11,9 +11,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'heap capacity, external (native) memory, and RSS for every Dart isolate. '
           'Use this to detect memory leaks or unexpected growth. '
           'Heap > 200 MB or external > 50 MB usually warrants investigation.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {
@@ -76,7 +74,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'Number of top classes to show, sorted by heap bytes (default: 30).',
           ),
-          'deviceId': _deviceIdProperty(),
         },
       ),
       callback: (params, extra) async {
@@ -151,10 +148,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         final statusFilter = params['status_filter'] as int?;
         // The VM records nothing until profiling is on; it resets on restart.
         final wasOff = await _enableHttpProfiling(params);
-        final res = await _callExtensionRaw(
-          'ext.dart.io.getHttpProfile',
-          _withDeviceId(params),
-        );
+        final res = await _callExtensionRaw('ext.dart.io.getHttpProfile', {});
         if (res.isError) {
           return CallToolResult(
             content: [
@@ -218,15 +212,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       description:
           'Clears the HTTP request history so you get a clean baseline '
           'before triggering a specific API call. Pair with get_http_profile.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
         await _enableHttpProfiling(params);
-        final res = await _callExtensionRaw(
-          'ext.dart.io.clearHttpProfile',
-          _withDeviceId(params),
-        );
+        final res = await _callExtensionRaw('ext.dart.io.clearHttpProfile', {});
         if (res.isError) {
           return CallToolResult(
             content: [TextContent(text: 'Clear failed: ${res.errorMessage}')],
@@ -245,9 +234,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Returns Dart VM version, process ID, all running isolates and their '
           'pause/run state. Use this to confirm which Dart version the app is '
           'running on, or to check isolate health.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (params, extra) async {
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {
@@ -288,16 +275,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to enable the repaint rainbow overlay, false to disable.',
           ),
-          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw(
-          'ext.flutter.repaintRainbow',
-          _withDeviceId(params, {'enabled': enabled.toString()}),
-        );
+        final res = await _callExtensionRaw('ext.flutter.repaintRainbow', {
+          'enabled': enabled.toString(),
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -324,16 +309,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to show debug paint boundaries and padding, false to hide.',
           ),
-          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw(
-          'ext.flutter.debugPaint',
-          _withDeviceId(params, {'enabled': enabled.toString()}),
-        );
+        final res = await _callExtensionRaw('ext.flutter.debugPaint', {
+          'enabled': enabled.toString(),
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -359,17 +342,15 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description:
                 'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.',
           ),
-          'deviceId': _deviceIdProperty(),
         },
         required: ['enabled'],
       ),
       callback: (params, extra) async {
         final enabled = params['enabled'] as bool? ?? true;
         final dilation = enabled ? '5.0' : '1.0';
-        final res = await _callExtensionRaw(
-          'ext.flutter.timeDilation',
-          _withDeviceId(params, {'timeDilation': dilation}),
-        );
+        final res = await _callExtensionRaw('ext.flutter.timeDilation', {
+          'timeDilation': dilation,
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -389,11 +370,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   Future<bool> _enableHttpProfiling(Map<String, dynamic> params) async {
     final state = await _callExtensionRaw(
       'ext.dart.io.httpEnableTimelineLogging',
-      _withDeviceId(params),
+      {},
     );
     if (state.data?['enabled'] == true) return false;
     await _callExtensionRaw('ext.dart.io.httpEnableTimelineLogging', {
-      ..._withDeviceId(params),
       'enabled': 'true',
     });
     return true;

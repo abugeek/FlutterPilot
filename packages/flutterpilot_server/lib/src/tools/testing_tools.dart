@@ -8,9 +8,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'start_recording',
       description:
           'Starts recording manual interactions. User should perform the flow in the app while this is active.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.startRecording',
         p,
@@ -21,13 +19,11 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'stop_and_generate_test',
       description:
           'Stops recording and returns a log of actions. Use your LLM capability to convert this log into a Flutter `testWidgets` block.',
-      inputSchema: ToolInputSchema(
-        properties: {'deviceId': _deviceIdProperty()},
-      ),
+      inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.stopRecording',
-          _withDeviceId(p),
+          {},
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
@@ -116,7 +112,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         };
         return _callExtensionRaw(
           'ext.flutterpilot.assertTextVisible',
-          _withDeviceId(p, args),
+          args,
         ).then((res) => res.toCallToolResult());
       },
     );
@@ -144,7 +140,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         };
         return _callExtensionRaw(
           'ext.flutterpilot.assertWidgetCount',
-          _withDeviceId(p, args),
+          args,
         ).then((res) => res.toCallToolResult());
       },
     );
@@ -169,7 +165,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetEnabled',
-          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
+          {'key': (p['key'] ?? p['target']).toString()},
         );
         return res.toCallToolResult();
       },
@@ -195,7 +191,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.assertWidgetDisabled',
-          _withDeviceId(p, {'key': (p['key'] ?? p['target']).toString()}),
+          {'key': (p['key'] ?? p['target']).toString()},
         );
         return res.toCallToolResult();
       },

@@ -112,10 +112,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final uri = params['uri'] as String?;
         final success = await _connectWithUri(uri);
         if (success) {
+          final connected = _connectedUri!;
+          final info = await probeDevice(
+            connected,
+          ).then<Object>((i) => i, onError: (_) => 'Flutter app');
           return CallToolResult(
             content: [
               TextContent(
-                text: ' Connected successfully to Flutter app at $vmServiceUri',
+                text:
+                    'Connected to $info at ${FleetManager.shortUri(connected)}.',
               ),
             ],
           );
@@ -136,11 +141,29 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'list_connected_devices',
       description:
-          'Lists all registered Flutter devices/instances in the multi-device fleet and which one is active.',
+          'Lists the Flutter apps FlutterPilot knows (one per device: iOS, '
+          'Android, web, desktop): platform, app, whether it runs '
+          'flutterpilot_sdk, and which one is active. Every tool targets the '
+          'active device.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
+        final ids = _fleetManager.deviceIds.toList();
+        final probes = await Future.wait(
+          ids.map(
+            (id) => probeDevice(
+              _fleetManager.uriFor(id)!,
+              timeout: const Duration(seconds: 2),
+            ).then<DeviceInfo?>((info) => info, onError: (_) => null),
+          ),
+        );
         return CallToolResult(
-          content: [TextContent(text: _fleetManager.toJsonString())],
+          content: [
+            TextContent(
+              text: _fleetManager.describe({
+                for (var i = 0; i < ids.length; i++) ids[i]: probes[i],
+              }),
+            ),
+          ],
         );
       },
     );
@@ -148,25 +171,67 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'register_device',
       description:
-          'Registers a new device or instance in the multi-device fleet with its name and VM Service URI.',
+          'Adds a running Flutter app to the fleet under a name, e.g. the same '
+          'app on an iPhone simulator next to the one on Android. Pass the VM '
+          'service URI that flutter run prints ("A Dart VM Service on ... is '
+          'available at: http://127.0.0.1:PORT/TOKEN=/"). Registering an '
+          'existing name again updates its URI after the app restarted.',
       inputSchema: ToolInputSchema(
         properties: {
           'id': JsonSchema.string(
-            description:
-                'A unique identifier or name (e.g. "ios_pro_max", "pixel_8", "web_chrome").',
+            description: 'A short name, e.g. "iphone", "pixel", "web".',
           ),
           'uri': JsonSchema.string(
-            description: 'The VM Service WebSocket URI for that device.',
+            description:
+                'The VM service URI (http://… as flutter run prints it, or ws://…/ws).',
           ),
         },
         required: ['id', 'uri'],
       ),
       callback: (p, e) async {
-        final id = p['id'] as String;
-        final uri = p['uri'] as String;
-        _fleetManager.registerDevice(id, uri);
+        final id = p['id'].toString().trim();
+        final uri = normalizeVmServiceUri(p['uri'].toString());
+        CallToolResult error(String text) =>
+            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        if (id.isEmpty) return error('id must not be empty.');
+        if (uri == null) {
+          return error(
+            '"${p['uri']}" is not a VM service URI. flutter run prints it as '
+            '"A Dart VM Service on <device> is available at: '
+            'http://127.0.0.1:<port>/<token>=/".',
+          );
+        }
+        if (!_isAllowedConnectionUri(uri)) {
+          return error(
+            'Refusing a remote VM service URI; restart FlutterPilot with '
+            '--allow-remote to connect to other hosts.',
+          );
+        }
+        final DeviceInfo info;
+        try {
+          info = await probeDevice(uri);
+        } catch (_) {
+          return error(
+            'No Flutter app answers at ${FleetManager.shortUri(uri)}. Is it '
+            'still running? Nothing was registered.',
+          );
+        }
+        final previous = _fleetManager.registerDevice(id, uri);
+        if (previous != null) await _renameDeviceContext(previous, id);
+        final active = _fleetManager.activeDeviceId;
+        // Connect when this is now the active device (the first one, or the
+        // active one re-registered after a restart).
+        if (active == id && (_vmService == null || _connectedUri != uri)) {
+          await _connectWithUri(uri);
+        }
         return CallToolResult(
-          content: [TextContent(text: 'Registered device "$id" with URI $uri')],
+          content: [
+            TextContent(
+              text:
+                  'Registered "$id": $info.${previous != null ? ' (Was listed as "$previous".)' : ''} '
+                  '${active == id ? 'It is the active device.' : 'Active device: "$active"; call switch_device(id: "$id") to target it.'}',
+            ),
+          ],
         );
       },
     );
@@ -174,39 +239,58 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'switch_device',
       description:
-          'Switches the active device to target for all subsequent inspection and UI automation commands.',
+          'Makes a registered device the active one: every tool call after '
+          'this targets it. See list_connected_devices for the names.',
       inputSchema: ToolInputSchema(
         properties: {
           'id': JsonSchema.string(
-            description:
-                'The ID or name of the registered device to switch to.',
+            description: 'The name of a registered device.',
           ),
         },
         required: ['id'],
       ),
       callback: (p, e) async {
-        final id = p['id'] as String;
-        final success = _fleetManager.switchDevice(id);
-        if (!success) {
-          return CallToolResult(
-            isError: true,
-            content: [
-              TextContent(
-                text:
-                    'Device "$id" not found in fleet. Call list_connected_devices to see available devices.',
-              ),
-            ],
+        final id = p['id'].toString();
+        final active = _fleetManager.activeDeviceId;
+        CallToolResult error(String text) =>
+            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        final uri = _fleetManager.uriFor(id);
+        if (uri == null) {
+          return error(
+            'No device "$id". Registered: '
+            '${_fleetManager.deviceIds.map((d) => '"$d"').join(', ')}.',
           );
         }
-        final targetUri = _fleetManager.activeUri;
-        final connected = await _connectWithUri(targetUri);
+        final DeviceInfo info;
+        try {
+          info = await probeDevice(uri);
+        } catch (_) {
+          return error(
+            'Device "$id" is not running at ${FleetManager.shortUri(uri)} '
+            '(app stopped, or restarted on a new port). Still on "$active". '
+            'If it restarted, call register_device(id: "$id", uri: <new URI>).',
+          );
+        }
+        if (id == active && _vmService != null && _connectedUri == uri) {
+          return CallToolResult(
+            content: [TextContent(text: 'Already on "$id": $info.')],
+          );
+        }
+        _fleetManager.switchDevice(id);
+        if (!await _connectWithUri(uri)) {
+          if (active != null) {
+            _fleetManager.switchDevice(active);
+            await _connectWithUri(_fleetManager.uriFor(active));
+          }
+          return error(
+            'Could not connect to "$id" (${FleetManager.shortUri(uri)}). '
+            'Still on "$active".',
+          );
+        }
         return CallToolResult(
-          isError: !connected,
           content: [
             TextContent(
-              text: connected
-                  ? 'Switched active device to "$id" ($targetUri) ✅'
-                  : 'Switched active device to "$id", but failed to connect to $targetUri ❌',
+              text: 'Switched to "$id": $info. Every tool now targets it.',
             ),
           ],
         );
