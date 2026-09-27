@@ -190,5 +190,42 @@ void main() {
       expect(out, contains('FlutterPilot.localeNotifier'));
       expect(out, isNot(contains('FlutterPilot.textScaleNotifier')));
     });
+
+    test('a nested widget\'s builder: does not block text scale wiring', () {
+      // The notes field-test app: home: BlocBuilder(builder: ...).
+      final out = InitCommand.addValueListenableOverrides(
+        'MaterialApp(title: "N", home: BlocBuilder<A, S>(builder: (c, s) => X()))',
+      );
+      expect(out, contains('FlutterPilot.localeNotifier'));
+      expect(out, contains('FlutterPilot.textScaleNotifier'));
+      expect(InitCommand.wiredOverrides(out), 'locale and text scale');
+    });
+
+    test('an app\'s own locale: is respected', () {
+      final out = InitCommand.addValueListenableOverrides(
+        "MaterialApp(locale: const Locale('en'), home: X())",
+      );
+      expect(InitCommand.wiredOverrides(out), 'text scale');
+    });
+
+    test('patchMain reuses an existing ensureInitialized()', () {
+      final out = InitCommand.patchMain('''
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await setup();
+  runApp(const App());
+}
+''')!;
+      expect(
+        'WidgetsFlutterBinding.ensureInitialized()'.allMatches(out).length,
+        1,
+      );
+      expect(
+        out,
+        contains(
+          'WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();',
+        ),
+      );
+    });
   });
 }
