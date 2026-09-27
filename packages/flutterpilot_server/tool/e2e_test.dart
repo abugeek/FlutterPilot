@@ -339,14 +339,15 @@ Future<void> main(List<String> args) async {
       {'target': 'PIN', 'text': 's3cret-pin'},
       ['s3cret-pin'],
     );
-    await check('back', 'press_back');
+    // press_back waits for the pop transition and reports the new screen.
+    await check('back', 'press_back', {}, ['Route changed', 'Send']);
     await check(
       'home visible again',
       'assert_text_visible',
       {'text': 'Version A'},
       [],
       false,
-      const Duration(seconds: 3),
+      settle, // CI simulators can be slow to dismiss the keyboard and pop
     );
 
     final main = File('$app/lib/main.dart');

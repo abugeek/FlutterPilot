@@ -68,6 +68,7 @@ extension _NavigationExtensions on FlutterPilot {
     // -- ext.flutterpilot.pressBack -------------------------------------------
     registerExtension('ext.flutterpilot.pressBack', (method, parameters) async {
       try {
+        final routeBefore = NavigationTracker.currentRoute;
         bool popped = false;
         if (NavigationTracker.customPopHandler != null) {
           popped = await NavigationTracker.customPopHandler!();
@@ -105,7 +106,15 @@ extension _NavigationExtensions on FlutterPilot {
           FlutterPilot._recordAction('pressBack', {});
         }
         return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', 'popped': popped}),
+          json.encode({
+            'status': 'success',
+            'popped': popped,
+            // Waits out the pop transition, so the agent sees the screen
+            // it landed on, not the one sliding away.
+            'postActionState': await FlutterPilot.getPostActionState(
+              previousRoute: routeBefore,
+            ),
+          }),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(

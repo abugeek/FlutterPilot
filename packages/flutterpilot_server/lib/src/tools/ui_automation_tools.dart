@@ -749,7 +749,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         content: [
           TextContent(
             text: popped
-                ? 'Back pressed — route popped.'
+                ? _formatActionFeedback('Back pressed', const {}, res)
                 : 'Back pressed — already at root (nothing to pop).',
           ),
         ],
