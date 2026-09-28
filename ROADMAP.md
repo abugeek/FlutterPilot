@@ -289,6 +289,17 @@ Highest value first. Each should answer a *why*, not just dump data.
    `getHttpProfileRequest`; works for any dart:io client, not only Dio.
 7. **Accessibility audit:** missing semantics labels on icon buttons, contrast
    ratios, focus order — on top of the (now honest) tap-target check.
+8. **Native crash reason:** when the app dies outside Dart (an Objective-C,
+   Swift or Kotlin exception — e.g. Firebase's iOS SDK aborting on a
+   malformed API key, findings #161), the agent only sees "not running";
+   the reason is in the OS log. `get_native_crash_log` returns the last
+   uncaught native exception and its first frames: iOS simulator via
+   `xcrun simctl spawn <udid> log show` (the server already knows the udid
+   and bundle id, see `native_open_app`), macOS via
+   `~/Library/Logs/DiagnosticReports`, Android via `adb logcat -b crash`,
+   physical iPhone via `devicectl` crash reports. Also: when the connection
+   drops, check for a fresh crash and say so in the error instead of
+   "not running".
 
 ## 6. Test generation done right
 
