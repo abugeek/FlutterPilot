@@ -11,7 +11,7 @@ import 'operation_scheduler.dart';
 class DeviceRuntimeContext {
   DeviceRuntimeContext({required this.deviceId, required this.uri});
 
-  final String deviceId;
+  String deviceId;
   String uri;
   final OperationScheduler scheduler = OperationScheduler();
   VmService? service;

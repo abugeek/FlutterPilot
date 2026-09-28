@@ -173,6 +173,25 @@ the MCP server; then Chrome via `e2e_test.dart --zero-code`.
 Not possible without the SDK (or expression evaluation): taps, text entry,
 navigation, route info, assertions, text scale / locale, plugin state.
 
+## Round 7 — multi-device fleet (§2.4)
+
+One server, three apps: `../hn_reader` on macOS and on the iPhone 17
+simulator, `../plain_app` (no SDK) on Chrome. Registered, switched, quit and
+relaunched through the MCP tools.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 133 | `deviceId` parameter (39 tools) | ❌→removed | most tools rebuilt their arguments and dropped it: `get_app_summary(deviceId: "mac")` answered from the iPhone. Removed from every schema; a stray `deviceId` is refused with "call switch_device first" |
+| 134 | `switch_device` to a dead app | ❌→fixed | marked the dead device active, and every tool then silently answered from the previous app. Now checks the target first and stays on the current device |
+| 135 | `register_device` | ❌→fixed | registered anything (port 1, typos); the `http://…/` URI flutter run prints failed later with "Unsupported URL scheme". Now normalizes http/ws/DevTools URLs, checks the app answers, and reports platform · app · SDK |
+| 136 | `connect_app` with its own example URI | ❌→fixed | `http://…` failed the same way; response said "Connected successfully … %3Credacted%3E" |
+| 137 | auto-connected app + `register_device` | ❌→fixed | registering the first named device dropped "default" and made the new one active while tools still talked to the old app. Registering a known URI now renames that entry |
+| 138 | `list_connected_devices` | ⚠️→fixed | JSON of ids + redacted URIs; didn't say which apps still run. Now one line per device: platform · app · flutterpilot_sdk/zero-code, or "not running (…register_device again)" |
+| 139 | active app quits | ⚠️→fixed | "SocketException … If the app was busy or reloading, retry". Now "Device "iphone" is not running … register_device(id, <new URI>)"; rediscovery no longer jumps to another registered device's app |
+| 140 | switch to a zero-code app | ⚠️→fixed | first call took 4.2 s (waited 5 s for SDK extensions that will never come). The wait is skipped once the isolate has run for 10 s |
+| 141 | tool list per device | ✅ | switching between SDK and zero-code apps shows 124 / 29 tools (tools/list_changed) |
+| 142 | per-device state | ✅ | routes, screenshot baselines (`save`/`compare` keyed by device), hot reload go to the active device |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

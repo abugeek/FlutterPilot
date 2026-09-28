@@ -32,27 +32,27 @@ Connects or reconnects FlutterPilot to a running Flutter application. If uri is 
 
 ## `list_connected_devices`
 
-Lists all registered Flutter devices/instances in the multi-device fleet and which one is active.
+Lists the Flutter apps FlutterPilot knows (one per device: iOS, Android, web, desktop): platform, app, whether it runs flutterpilot_sdk, and which one is active. Every tool targets the active device.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
 ## `register_device`
 
-Registers a new device or instance in the multi-device fleet with its name and VM Service URI.
+Adds a running Flutter app to the fleet under a name, e.g. the same app on an iPhone simulator next to the one on Android. Pass the VM service URI that flutter run prints ("A Dart VM Service on ... is available at: http://127.0.0.1:PORT/TOKEN=/"). Registering an existing name again updates its URI after the app restarted.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | A unique identifier or name (e.g. "ios_pro_max", "pixel_8", "web_chrome"). |
-| `uri` | string | yes | The VM Service WebSocket URI for that device. |
+| `id` | string | yes | A short name, e.g. "iphone", "pixel", "web". |
+| `uri` | string | yes | The VM service URI (http://… as flutter run prints it, or ws://…/ws). |
 
 ## `switch_device`
 
-Switches the active device to target for all subsequent inspection and UI automation commands.
+Makes a registered device the active one: every tool call after this targets it. See list_connected_devices for the names.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `id` | string | yes | The ID or name of the registered device to switch to. |
+| `id` | string | yes | The name of a registered device. |
 
 ## `get_errors`
 
@@ -63,7 +63,6 @@ Retrieve the most recent unhandled exceptions and stack traces with duplicate ag
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_recent_events`
 
@@ -466,7 +465,6 @@ Show the current navigation history (stack). CALL THIS to understand where the u
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `wait_for_route`
 
@@ -618,7 +616,6 @@ Retrieves the chronological 30-60 second rolling flight recorder timeline (user 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `clear_flight_log`
 
@@ -626,7 +623,6 @@ Clears the flight recorder event buffer.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `diagnose_last_error`
 
@@ -641,7 +637,6 @@ Recompile edited .dart files and hot reload them into the running app, keeping s
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `hot_restart`
 
@@ -649,7 +644,6 @@ Recompile and hot restart the app (state is reset). CALL THIS for changes hot re
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_riverpod_state`
 
@@ -660,7 +654,6 @@ Inspect current values of all active Riverpod providers. Returns provider name, 
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `set_riverpod_state`
 
@@ -691,7 +684,6 @@ Inspect the current states of all active Blocs and Cubits. CALL THIS to verify b
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `set_bloc_state`
 
@@ -711,7 +703,6 @@ View recent HTTP requests and responses (bodies truncated and redacted; mock sta
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_hive_contents`
 
@@ -722,7 +713,6 @@ Dump the contents of all registered Hive boxes. CALL THIS to verify local persis
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `list_drift_tables`
 
@@ -734,7 +724,6 @@ List all tables in the SQLite (Drift) database.
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `list_sqflite_databases`
 
@@ -745,7 +734,6 @@ List all sqflite databases registered with FlutterPilot. PREREQUISITES: App must
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `list_sqflite_tables`
 
@@ -757,7 +745,6 @@ List all tables in a sqflite database. PREREQUISITES: App must use flutterpilot_
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `exec_sql_query`
 
@@ -778,7 +765,6 @@ Returns all SharedPreferences keys and their typed values (String, int, double, 
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `set_shared_preference`
 
@@ -832,7 +818,6 @@ Starts recording manual interactions. User should perform the flow in the app wh
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `stop_and_generate_test`
 
@@ -840,7 +825,6 @@ Stops recording and returns a log of actions. Use your LLM capability to convert
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `list_custom_tools`
 
@@ -851,7 +835,6 @@ Discover additional app-specific tools registered by the developer.
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `call_custom_tool`
 
@@ -913,7 +896,6 @@ Returns a detailed memory breakdown of the running app: heap used, heap capacity
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_allocation_profile`
 
@@ -922,7 +904,6 @@ Returns the top Dart classes by current heap allocation (like the DevTools Memor
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `limit` | integer | no | Number of top classes to show, sorted by heap bytes (default: 30). |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_http_profile`
 
@@ -939,7 +920,6 @@ Clears the HTTP request history so you get a clean baseline before triggering a 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_vm_info`
 
@@ -947,7 +927,6 @@ Returns Dart VM version, process ID, all running isolates and their pause/run st
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_repaint_rainbow`
 
@@ -956,7 +935,6 @@ Enables or disables the repaint rainbow overlay (each layer that repaints cycles
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to enable the repaint rainbow overlay, false to disable. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_debug_paint`
 
@@ -965,7 +943,6 @@ Enables or disables debug paint — shows layout padding (blue), widget boundari
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to show debug paint boundaries and padding, false to hide. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `toggle_slow_animations`
 
@@ -974,7 +951,6 @@ Slows all animations to 1/5 speed (timeDilation=5) or restores normal speed (tim
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `enabled` | boolean | yes | true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_supabase_auth`
 
@@ -986,7 +962,6 @@ Inspect current Supabase auth state: user profile, session, JWT expiry, and rece
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_supabase_realtime`
 
@@ -997,7 +972,6 @@ List all active Supabase Realtime channel subscriptions. Shows topic, join statu
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `query_supabase_table`
 
@@ -1011,7 +985,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `supabase_sign_out`
 
@@ -1023,7 +996,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `supabase_refresh_session`
 
@@ -1034,7 +1006,6 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_gorouter_state`
 
@@ -1045,7 +1016,6 @@ Inspect the current GoRouter navigation state: location, path parameters, query 
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_gorouter_config`
 
@@ -1056,7 +1026,6 @@ List all registered GoRouter routes and their configuration (paths, names, child
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_gorouter_history`
 
@@ -1067,7 +1036,6 @@ View the recent navigation history — timestamped list of route changes.
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `gorouter_navigate`
 
@@ -1080,7 +1048,6 @@ Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), "
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_connectivity`
 
@@ -1091,7 +1058,6 @@ Check current network connectivity status: wifi, mobile, ethernet, vpn, none. Al
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_connectivity_history`
 
@@ -1103,7 +1069,6 @@ View timestamped log of connectivity state transitions.
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_firebase_status`
 
@@ -1114,7 +1079,6 @@ Check which Firebase services are registered and their status (Crashlytics, Anal
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `get_fcm_token`
 
@@ -1125,7 +1089,6 @@ Get the Firebase Cloud Messaging token (truncated for security).
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `log_analytics_event`
 
@@ -1146,7 +1109,6 @@ View recent analytics events logged through FlutterPilot.
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `start_performance_trace`
 
@@ -1183,7 +1145,6 @@ List all keys in FlutterSecureStorage. Values are redacted by default. Pass show
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-| `deviceId` | string | no | Optional target device. Registered devices can be addressed directly; when omitted, the active device is used. |
 
 ## `read_secure_storage_key`
 

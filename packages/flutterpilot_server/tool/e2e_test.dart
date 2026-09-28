@@ -507,6 +507,52 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // Fleet: name the app as flutter run prints its URI (http://.../), then
+    // check that listing, switching and bad input are reported honestly.
+    final sdkLabel = zeroCode ? 'zero-code' : 'flutterpilot_sdk';
+    await check(
+      'register_device renames the connected app',
+      'register_device',
+      {
+        'id': 'e2e',
+        'uri': uri
+            .replaceFirst('ws://', 'http://')
+            .replaceFirst(RegExp(r'ws$'), ''),
+      },
+      ['fixture · $sdkLabel', 'Was listed as "default"', 'active device'],
+    );
+    await check('list_connected_devices', 'list_connected_devices', {}, [
+      '- e2e (active): ',
+      'fixture · $sdkLabel',
+    ]);
+    await check(
+      'register_device refuses an app that is not running',
+      'register_device',
+      {'id': 'gone', 'uri': 'ws://127.0.0.1:1/x=/ws'},
+      ['Nothing was registered'],
+      true,
+    );
+    await check(
+      'switch_device to an unknown name',
+      'switch_device',
+      {'id': 'gone'},
+      ['No device "gone"', '"e2e"'],
+      true,
+    );
+    await check(
+      'switch_device to the active device',
+      'switch_device',
+      {'id': 'e2e'},
+      ['Already on "e2e"'],
+    );
+    await check(
+      'a deviceId argument is refused, not ignored',
+      'get_app_summary',
+      {'deviceId': 'e2e'},
+      ['switch_device(id: "e2e")'],
+      true,
+    );
+
     if (appId != null) {
       flutter.stdin.writeln(
         jsonEncode([
