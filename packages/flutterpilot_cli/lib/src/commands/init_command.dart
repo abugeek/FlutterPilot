@@ -20,7 +20,9 @@ const _plugins = {
   'bloc': ('flutterpilot_bloc', 'Bloc.observer = BlocPilotObserver();'),
   'dio': (
     'flutterpilot_dio',
-    'dio.interceptors.add(DioPilotInterceptor());  // on every Dio you create',
+    'DioPilotInterceptor.register();  // in main(), so its tools are listed '
+        'before the first request; and dio.interceptors.add('
+        'DioPilotInterceptor()) on every Dio you create',
   ),
   'drift': (
     'flutterpilot_drift',

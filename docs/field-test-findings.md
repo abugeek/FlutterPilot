@@ -231,6 +231,19 @@ macOS. Both set up with `flutterpilot init --local`.
 | 161 | native crash on launch | ⚠️ gap | Firebase iOS SDK aborts on a malformed API key (NSException). The agent only sees "not running"; the reason is in the simulator log. Candidate tool: native crash/log reader |
 | 162 | generated files in git | ⚠️→fixed | six plugins tracked `.flutter-plugins-dependencies` (with another machine's paths); untracked and ignored |
 
+## Round 10 — only relevant tools (§4.1)
+
+hn_reader (Riverpod, go_router, Dio, sqflite, SharedPreferences,
+connectivity) and hive_app on macOS, one server, switching devices.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 163 | tools/list | ⚠️→fixed | every macOS app got all 119 tools (68 KB of definitions per request; 125 on iOS) whatever plugins it used. Now plugin tools only once the app registers the plugin: hn_reader 104 tools / 57 KB, hive_app 86 / 45 KB |
+| 164 | set/wait state tools | ⚠️→gated | `set_riverpod_state`, `set_bloc_state`, `batch_set_state`, `wait_for_state` go through the SDK's generic extensions but only work with the Riverpod/Bloc plugin: listed with it |
+| 165 | hot restart | ✅ | list stays stable (extensions re-register within the 300 ms debounce); no list_changed churn |
+| 166 | per device | ✅ | switching hn_reader ↔ hive_app changes the list |
+| 167 | lazy plugins | ⚠️→doc | a plugin that registers late (Dio created on first request) lists its tools late; `init` now prints `DioPilotInterceptor.register()` for main() |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

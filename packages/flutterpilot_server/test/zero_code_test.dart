@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutterpilot_server/flutterpilot_server.dart';
+import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 import 'package:image/image.dart' as img;
 import 'package:test/test.dart';
@@ -250,10 +251,31 @@ void main() {
       reason: 'every zero-code tool exists',
     );
 
-    server.updateSdkToolVisibility(hasSdk: false);
+    server.updateToolVisibility(hasSdk: false);
     expect(server.listedToolNames.toSet(), zeroCodeTools);
 
-    server.updateSdkToolVisibility(hasSdk: true);
+    server.updateToolVisibility(hasSdk: null);
     expect(server.listedToolNames.toSet(), all);
+  });
+
+  test('plugin tools are listed only once the app registers the plugin', () {
+    final server = FlutterPilotServer(vmServiceUri: 'ws://localhost:8888');
+    final all = server.listedToolNames.toSet();
+    expect(
+      all,
+      containsAll(pluginToolExtensions.keys),
+      reason: 'every plugin tool exists',
+    );
+
+    server.updateToolVisibility(hasSdk: true);
+    final core = server.listedToolNames.toSet();
+    expect(core.intersection(pluginToolExtensions.keys.toSet()), isEmpty);
+    expect(core, contains('tap_widget'));
+
+    server.updateToolVisibility(
+      hasSdk: true,
+      extensions: {'ext.flutterpilot.querySqflite'},
+    );
+    expect(server.listedToolNames.toSet().difference(core), {'exec_sql_query'});
   });
 }
