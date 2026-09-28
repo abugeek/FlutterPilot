@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 62 MCP tools (164 → 129 → 62, §4.2); an app sees only those that work for it
+- 63 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, §5.1); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -356,11 +356,12 @@ current major. §1 is done.
 
 Highest value first. Each should answer a *why*, not just dump data.
 
-1. **"What code draws this?"** — `inspect_at(x, y)` / `inspect(target)`:
-   returns the widget's creation location (file:line) and its ancestor chain
-   of app widgets. Uses `WidgetInspectorService` creation locations (already
-   used for the summary tree). This is the single most useful tool for an
-   agent fixing UI.
+1. ~~**"What code draws this?"**~~ — done (2026-09-28): `inspect_widget(key |
+   x,y)` returns the creation location (file:line:col) of the widget or, for
+   a framework widget, of the app widget that builds it, plus up to 8 app
+   ancestors with their locations. Debug builds only (says so otherwise);
+   SDK only (zero-code's `get_widget_tree` already carries `loc`). Findings
+   #207–209, e2e check "inspect_widget names the source line".
 2. **CPU profile around an action:** `profile_action(action)` — start
    `getCpuSamples`, run the tap/scroll, stop, return the top functions by
    self time *in app code* (filter framework), with file:line.

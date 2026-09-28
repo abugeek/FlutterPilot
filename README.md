@@ -123,7 +123,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 62 tools, of which an app sees only the ones that can work
+registrations): 63 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
@@ -131,7 +131,7 @@ you'll use most:
 **Orientation** — `get_app_summary` (call first: route, tappable elements,
 errors, logs, window visibility), `get_interactive_elements`,
 `get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
-`capture_screenshot`.
+`inspect_widget` (the file:line that draws a widget), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`

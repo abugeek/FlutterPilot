@@ -15,6 +15,7 @@ part of '../../flutterpilot_sdk.dart';
 /// - `toggleCheckbox` — Toggle a Checkbox/Switch/Radio
 /// - `setSliderValue` — Set a Slider's value
 /// - `getWidgetProperties` — Read semantic properties of a widget
+/// - `inspectWidget` — The app source file:line that creates a widget
 /// - `getWidgetTree` — Capture the full widget tree as JSON
 /// - `assertWidgetVisible` — Assert a widget exists and has layout
 /// - `assertTextVisible` — Assert text is visible on screen
@@ -1234,6 +1235,58 @@ extension _WidgetExtensions on FlutterPilot {
       };
       FlutterPilot._extractWidgetProps(element, props);
       return ServiceExtensionResponse.result(json.encode(props));
+    });
+
+    // -- ext.flutterpilot.inspectWidget ---------------------------------------
+    registerExtension('ext.flutterpilot.inspectWidget', (
+      method,
+      parameters,
+    ) async {
+      if (!SourceLocator.available) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'This build records no source locations: they exist only in debug '
+          'builds with widget creation tracking (the default for '
+          '"flutter run"; not in profile/release or with '
+          '--no-track-widget-creation). Relaunch with "flutter run" in debug '
+          'mode.',
+        );
+      }
+      final target = parameters['key'] ?? parameters['target'];
+      final x = double.tryParse(parameters['x'] ?? '');
+      final y = double.tryParse(parameters['y'] ?? '');
+      final Element? element;
+      if (target != null && target.trim().isNotEmpty) {
+        element = PilotWidgetInspector.findElement(target);
+        if (element == null) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            _makeWidgetNotFoundMessage(target),
+          );
+        }
+      } else if (x != null && y != null) {
+        element = SourceLocator.elementAt(Offset(x, y));
+        if (element == null) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'Nothing is drawn at ($x, $y) (outside the window, or only the '
+            'app background). Coordinates are logical pixels from the top '
+            'left, as in capture_screenshot.',
+          );
+        }
+      } else {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Pass key (a key, selector or visible text) or both x and y.',
+        );
+      }
+      final result = SourceLocator.describe(element);
+      if (result['source'] == null) {
+        result['error'] =
+            'No widget created by the app\'s own code draws this: it and '
+            'everything above it come from the framework or packages.';
+      }
+      return ServiceExtensionResponse.result(json.encode(result));
     });
 
     // -- ext.flutterpilot.getWidgetTree ---------------------------------------

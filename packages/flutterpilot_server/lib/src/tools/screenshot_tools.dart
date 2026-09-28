@@ -523,6 +523,52 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
+      'inspect_widget',
+      description:
+          'Which file:line in the app\'s code creates a widget: pass key '
+          '(key, selector or visible text) or x,y (logical pixels, e.g. from '
+          'a screenshot). Returns the source (for framework widgets, the app '
+          'widget that builds them) and the app widgets above it, each with '
+          'its location. Use before editing code to change what is on screen. '
+          'Debug builds only.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description: 'Key, semantic selector or visible text.',
+          ),
+          'target': JsonSchema.string(
+            description: 'Same as key (either name works).',
+          ),
+          'x': JsonSchema.number(
+            description: 'X in logical pixels (top-left origin), with y.',
+          ),
+          'y': JsonSchema.number(description: 'Y in logical pixels.'),
+        },
+      ),
+      callback: (p, e) async {
+        final target = p['key'] ?? p['target'];
+        final res = await _callExtensionRaw('ext.flutterpilot.inspectWidget', {
+          if (target != null) 'key': target.toString(),
+          if (p['x'] != null) 'x': p['x'].toString(),
+          if (p['y'] != null) 'y': p['y'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final data = Map<String, dynamic>.of(res.data ?? const {});
+        final error = data.remove('error');
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: error == null
+                  ? jsonEncode(data)
+                  : '$error\n${jsonEncode(data)}',
+            ),
+          ],
+          isError: error != null,
+        );
+      },
+    );
+
+    _tool(
       'get_semantics_tree',
       description:
           'What a screen reader (VoiceOver/TalkBack) gets: per node id, '

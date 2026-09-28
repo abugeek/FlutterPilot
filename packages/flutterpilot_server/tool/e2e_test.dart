@@ -412,6 +412,16 @@ Future<void> main(List<String> args) async {
         Duration.zero,
         16384,
       );
+      // ROADMAP §5.1: the Send button is created on line 89 of the fixture.
+      await check(
+        'inspect_widget names the source line',
+        'inspect_widget',
+        {'key': 'Send'},
+        ['lib/main.dart:89:', 'Home lib/main.dart:'],
+        false,
+        Duration.zero,
+        2048,
+      );
       await check('mock /ping', 'mock_http_response', {
         'urlPattern': '/ping',
         'statusCode': 200,

@@ -1,6 +1,6 @@
 # FlutterPilot AI Assistant Guidelines
 
-FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 62 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
+FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 63 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
 
 **Next work:** see `ROADMAP.md` (priorities, field-test method, known gotchas). Drive tools from a shell with `packages/flutterpilot_server/tool/fp_bridge.dart`.
 
@@ -21,6 +21,7 @@ When interacting with a Flutter app using FlutterPilot:
 - **First Step**: Call `get_app_summary` — route, the tappable elements on screen (labels + keys), errors, logs, and whether the app window is visible. `get_interactive_elements` gives the full tappable list.
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
 - **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. PII and passwords are automatically redacted.
+- **Where is this in the code?**: `inspect_widget(key: ...)` or `inspect_widget(x:, y:)` (a point from a screenshot) returns the file:line in the app's code that creates the widget — for a framework widget, the app widget that builds it — plus the app widgets above it. Use it before editing UI code. Debug builds only.
 - **On-screen only**: finders, assertions and trees ignore routes covered by another page and hidden tabs, so `assert_widget(text: ...)` never passes on something the user can't see.
 - **System alerts and backgrounding (iOS simulator, needs idb)**: permission alerts are not in the Flutter tree — `native_describe_screen` lists them with tap points and `native_tap` taps them (points). iOS suspends a backgrounded app; tools then say so at once, and `native_open_app` brings it back with its state.
 - **Background window is fine**: when the OS reports the app hidden (window covered/minimized), FlutterPilot keeps it rendering while you drive it; the summary says so, and frame timings from that period are not profiled.

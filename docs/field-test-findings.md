@@ -335,6 +335,14 @@ keyboard forced on, and in Chrome:
 | 205 | URI file on web | ❌→fixed | discovery probed the URI with HTTP; DWDS doesn't answer 200, so the web app was never found. It now checks that something listens on the port |
 | 206 | fixture "Scale 1.0" on web | test fix | `1.0.toString()` is "1" in JS; the fixture formats with one decimal |
 
+## inspect_widget (ROADMAP §5.1), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 207 | inspect_widget by key | ✅ | `story_…` → `ListTile lib/ui/story_tile.dart:24:14`, then GestureDetector, `StoryTile lib/ui/feed_screen.dart:96:44`, ListView … FeedScreen; every line checked against the source. 16 ms, ~0.8 KB |
+| 208 | inspect_widget at x,y | ✅ | a story title and a filter chip hit the RichText that Text builds inside the framework; the source is the app's `Text` (story_tile.dart:29, feed_screen.dart:31) with a note saying so. 2–3 ms |
+| 209 | inspect_widget errors | ✅ | a point outside the window, no arguments and an unknown key each say why (unknown key lists the visible targets). Ancestors capped at 8 (12 was ~0.9 KB and ran past the screen widget) |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

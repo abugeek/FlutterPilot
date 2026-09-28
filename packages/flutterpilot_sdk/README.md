@@ -60,6 +60,7 @@ All extensions are registered in the `ext.flutterpilot.*` namespace and callable
 | `getSummary` | — | `{currentRoute, errorCount, recordingState, widgetCount}` | App snapshot |
 | `getErrors` | — | `{errors: [...]}` | Buffered runtime errors |
 | `getWidgetTree` | — | `{tree: {...}}` | Full widget hierarchy as JSON |
+| `inspectWidget` | `key` or `x`,`y` | `{widget, source: {type, loc}, ancestors}` | App file:line that creates a widget (debug builds) |
 | `captureScreenshot` | — | `base64-png` | PNG screenshot |
 | `getNavigationStack` | — | `{stack: [...]}` | Route stack (bottom → top) |
 | `getPerfMetrics` | — | `{fps, memory, frameTime}` | Performance metrics |

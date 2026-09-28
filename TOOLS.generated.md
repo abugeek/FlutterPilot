@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 62
+Tool count: 63
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -366,6 +366,17 @@ One widget's state: type, text (Text/TextField content), isEnabled, isChecked (C
 |---|---|---:|---|
 | `key` | string | no | The ValueKey string of the widget to inspect. |
 | `target` | string | no | Same as key (either name works). |
+
+## `inspect_widget`
+
+Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds them) and the app widgets above it, each with its location. Use before editing code to change what is on screen. Debug builds only.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | Key, semantic selector or visible text. |
+| `target` | string | no | Same as key (either name works). |
+| `x` | number | no | X in logical pixels (top-left origin), with y. |
+| `y` | number | no | Y in logical pixels. |
 
 ## `get_semantics_tree`
 

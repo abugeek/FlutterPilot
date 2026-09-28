@@ -24,6 +24,7 @@ import 'src/keyboard_simulator.dart';
 import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
+import 'src/source_locator.dart';
 import 'src/stream_inspector.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';

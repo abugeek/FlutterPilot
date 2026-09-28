@@ -976,6 +976,7 @@ targets the active device (see list_connected_devices / switch_device).
 1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility
 2. `capture_screenshot` — what the user sees
 3. `get_widget_tree` — keys and structure (diff:true: only what changed)
+4. `inspect_widget(key | x,y)` — the file:line in the app's code that draws a widget, and the app widgets above it
 
 ## Acting
 - `tap_widget(key)` — key, `Type['text']` selector, exact visible text, or x/y; gesture: double / long / secondary; waitFor: a widget to wait for after the tap
