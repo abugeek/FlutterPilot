@@ -351,7 +351,17 @@ keyboard forced on, and in Chrome:
 | 211 | planted hotspot | ✅ | a slow `_slowChecksum` in `StoryTile.build`: top app function `_slowChecksum lib/ui/story_tile.dart:91` (5.8 self / 8.8 total ms), `StoryTile.build` 8.8 total, `ListIterator.moveNext ← _slowChecksum` among the hottest. Reverted |
 | 212 | work that lands after the action | ❌→fixed | tap "Top" returns when the spinner shows; the stories (and their builds) arrive later, outside the window. `durationMs` now keeps sampling after the action |
 | 213 | errors and idle | ✅ | a non-action tool is refused with the list of action tools; no tool samples idle time ("no app function was sampled"). A 180 ms tap costs ~1 s to profile (getCpuSamples + line lookups) |
- (debug mode, macOS, HN reader)
+
+## Jank explanation in profile_action (ROADMAP §5.3), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 214 | no frames found | ❌→fixed | a real engine nests `Animator::BeginFrame` inside `VsyncProcessCallback` (the synthetic unit test had it at top level): "none drawn" while the spinner animated. Frames are now found anywhere in the span tree, and an `E` whose `B` predates the window no longer closes an unrelated span |
+| 215 | AI tap overlay in the frames | ❌→fixed | the ripple (AnimatedBuilder/Opacity/Text) rebuilt on every frame, ~1.3 ms each, listed as app rebuilds. `ext.flutterpilot.profiling` switches the overlay off for the window and restores it |
+| 216 | real jank, feed switch | ✅ | the frame the new list appears in: 28.7 ms UI (build 22.8 · layout 3.0), raster 0.5; IconButton ×10 7.0 ms, ListTile ×10 5.7 ms |
+| 217 | planted slow build | ✅ | `_slowChecksum` in `StoryTile.build`: one 81.4 ms frame (build 70.7), `StoryTile ×10 39.2 ms` first; the CPU section named `_slowChecksum lib/ui/story_tile.dart:91`. Reverted |
+
+## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)

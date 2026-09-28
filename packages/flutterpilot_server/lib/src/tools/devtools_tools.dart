@@ -19,6 +19,27 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     'hot_reload',
   };
 
+  /// Reads (or with [set], sets) a boolean framework debug extension such
+  /// as `ext.flutter.profileUserWidgetBuilds`; null when the app doesn't
+  /// have it (profile/release builds).
+  Future<bool?> _serviceFlag(
+    VmService vm,
+    String isolateId,
+    String extension, {
+    bool? set,
+  }) async {
+    try {
+      final res = await vm.callServiceExtension(
+        extension,
+        isolateId: isolateId,
+        args: {if (set != null) 'enabled': '$set'},
+      );
+      return res.json?['enabled'] == 'true' || res.json?['enabled'] == true;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The isolate running the Flutter UI: the one with `ext.flutter.*`.
   Future<String?> _uiIsolateId(VmService vm, String? cached) async {
     if (cached != null) return cached;
@@ -218,14 +239,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'profile_action',
       description:
-          'CPU profile of one action: runs tool (tap_widget, scroll_into_view, '
-          'enter_text, execute_action_chain, ...) with arguments while '
-          'sampling the UI isolate, then lists the app\'s functions by self '
-          'and total time with file:line, and the hottest framework functions '
-          'with the app code that called them. durationMs keeps sampling '
-          'after the action (results that load later); without tool it '
-          'samples whatever the app does. Use to find why an interaction is '
-          'slow.',
+          'Why an interaction is slow: runs tool (tap_widget, '
+          'scroll_into_view, execute_action_chain, ...) with arguments while '
+          'profiling the app, then returns its functions by self/total CPU '
+          'time with file:line, the hottest framework functions with the app '
+          'code that called them, and for frames over budget their '
+          'build/layout/paint/raster times and which app widgets rebuilt. '
+          'durationMs keeps profiling after the action (results that load '
+          'later); without tool it profiles whatever the app does.',
       inputSchema: ToolInputSchema(
         properties: {
           'tool': JsonSchema.string(
@@ -290,7 +311,41 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           finer = true;
         } catch (_) {}
 
+        // Frames: the timeline streams framework phases and engine frame
+        // events go to, per-widget build events for the app's widgets, and
+        // the AI tap overlay off (it animates on every frame). All restored.
+        final streams =
+            (await vm.getVMTimelineFlags()).recordedStreams ?? const <String>[];
+        final wanted = {...streams, 'Dart', 'Embedder', 'GC'}.toList();
+        var tracedStreams = false;
+        try {
+          if (wanted.length != streams.length) {
+            await vm.setVMTimelineFlags(wanted);
+            tracedStreams = true;
+          }
+        } catch (_) {}
+        final buildsBefore = await _serviceFlag(
+          vm,
+          isolateId,
+          'ext.flutter.profileUserWidgetBuilds',
+        );
+        if (buildsBefore == false) {
+          await _serviceFlag(
+            vm,
+            isolateId,
+            'ext.flutter.profileUserWidgetBuilds',
+            set: true,
+          );
+        }
+        final quiet = await _callExtensionRaw('ext.flutterpilot.profiling', {
+          'enabled': 'true',
+        });
+        final budgetMs =
+            (quiet.data?['frameBudgetMs'] as num?)?.toDouble() ?? 1000 / 60;
+
         final CpuSamples cpu;
+        List<Map<String, dynamic>> trace = const [];
+        String? traceError;
         final watch = Stopwatch()..start();
         CallToolResult? actionResult;
         try {
@@ -302,9 +357,37 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           final end = (await vm.getVMTimelineMicros()).timestamp!;
           watch.stop();
           cpu = await vm.getCpuSamples(isolateId, start, end - start);
+          try {
+            final timeline = await vm.getVMTimeline(
+              timeOriginMicros: start,
+              timeExtentMicros: end - start,
+            );
+            trace = [
+              for (final e in timeline.traceEvents ?? const <TimelineEvent>[])
+                if (e.json != null) e.json!,
+            ];
+          } catch (e) {
+            traceError = '$e';
+          }
         } catch (e) {
           return fail('CPU profiling failed: $e');
         } finally {
+          await _callExtensionRaw('ext.flutterpilot.profiling', {
+            'enabled': 'false',
+          });
+          if (buildsBefore == false) {
+            await _serviceFlag(
+              vm,
+              isolateId,
+              'ext.flutter.profileUserWidgetBuilds',
+              set: false,
+            );
+          }
+          if (tracedStreams) {
+            try {
+              await vm.setVMTimelineFlags(streams);
+            } catch (_) {}
+          }
           if (finer && period != null) {
             try {
               await vm.setFlag('profile_period', period);
@@ -369,6 +452,24 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
               '  ${ms(f.self)}  ${f.name} (${f.url == null ? 'native' : classifier.display(f.url!)})$by',
             );
           }
+        }
+        buf.writeln(
+          traceError != null
+              ? 'Frames: the VM timeline could not be read ($traceError).'
+              : explainFrames(framesFromTimeline(trace), budgetMs: budgetMs),
+        );
+        if (quiet.data?['appVisible'] == false) {
+          buf.writeln(
+            'The app window is hidden: FlutterPilot forced these frames, '
+            'the user saw none of them.',
+          );
+        }
+        if (buildsBefore != null) {
+          buf.writeln(
+            'Debug build: times run several times slower than release '
+            '(widget build tracing adds some); confirm jank with '
+            '"flutter run --profile".',
+          );
         }
         if (actionResult != null) {
           final text = actionResult.content

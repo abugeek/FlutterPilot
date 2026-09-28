@@ -157,7 +157,7 @@ culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 (any `dart:io` client).
 
 **Performance** — `profile_frame_budget`, `profile_action` (CPU
-profile of one tap/scroll, app functions with file:line), `get_memory_details`
+profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`
 (`classes: true` for the top classes).
 
 **State & storage (plugins)** — Riverpod and Bloc `get_state` /

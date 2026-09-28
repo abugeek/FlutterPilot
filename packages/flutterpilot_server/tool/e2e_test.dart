@@ -440,11 +440,15 @@ Future<void> main(List<String> args) async {
         {
           'tool': 'tap_widget',
           'arguments': {'key': 'Send'},
+          'durationMs': 500,
         },
         [
           'Profiled tap_widget',
           'running Dart on the UI isolate',
           'tap_widget result: Widget tapped',
+          // ROADMAP §5.3: the frames the tap caused, from the VM timeline.
+          'Frames: ',
+          'App widgets rebuilt in the window:',
         ],
         false,
         Duration.zero,

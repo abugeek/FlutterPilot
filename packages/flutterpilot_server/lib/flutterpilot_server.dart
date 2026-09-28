@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service_io.dart';
 
 import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
+import 'src/frame_timeline.dart';
 import 'src/image_budget.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
@@ -1027,7 +1028,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 
 ## Performance
 - `profile_frame_budget` — p50/p90/p99 build/raster, jank
-- `profile_action(tool, arguments)` — CPU profile of one action: the app functions it ran (self/total ms, file:line)
+- `profile_action(tool, arguments)` — CPU profile of one action: the app functions it ran (self/total ms, file:line), and for janky frames build/layout/paint/raster and the app widgets that rebuilt
 - `get_memory_details` (classes:true: top classes by heap) — compare before/after a screen for leaks
 
 ## Fixing

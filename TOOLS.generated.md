@@ -77,7 +77,7 @@ Server and app setup: connection, which FlutterPilot plugins the app registered,
 
 ## `profile_frame_budget`
 
-Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames.
+Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames. profile_action explains the slow frames of one interaction (phases, rebuilt widgets).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -526,7 +526,7 @@ Heap used/capacity and external (native) memory per isolate. classes:true lists 
 
 ## `profile_action`
 
-CPU profile of one action: runs tool (tap_widget, scroll_into_view, enter_text, execute_action_chain, ...) with arguments while sampling the UI isolate, then lists the app's functions by self and total time with file:line, and the hottest framework functions with the app code that called them. durationMs keeps sampling after the action (results that load later); without tool it samples whatever the app does. Use to find why an interaction is slow.
+Why an interaction is slow: runs tool (tap_widget, scroll_into_view, execute_action_chain, ...) with arguments while profiling the app, then returns its functions by self/total CPU time with file:line, the hottest framework functions with the app code that called them, and for frames over budget their build/layout/paint/raster times and which app widgets rebuilt. durationMs keeps profiling after the action (results that load later); without tool it profiles whatever the app does.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

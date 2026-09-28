@@ -370,8 +370,13 @@ Highest value first. Each should answer a *why*, not just dump data.
    after the action) are left out. Paths map to packages through the
    app's `package_config.json` (the VM reports path deps as file paths).
    Findings #210–213, e2e checks "profile_action …".
-3. **Jank explanation:** for janky frames, which widgets rebuilt and how long
-   build/layout/paint took (timeline events + rebuild tracking readout).
+3. ~~**Jank explanation**~~ — done (2026-09-28), in `profile_action` (no new
+   tool): the VM timeline of the same window gives each frame's UI time
+   (build/layout/paint/compositing/post-frame), its raster time, and the
+   app widgets that rebuilt (`ext.flutter.profileUserWidgetBuilds`, self
+   time per type); frames over the display's budget are explained, the
+   rest summarised. The AI tap overlay is switched off while profiling
+   (it animates every frame). Findings #214–217.
 4. **Layout explorer:** constraints and sizes up the ancestor chain for a
    widget ("why does this Row overflow / why is this Expanded 0 wide").
 5. **Memory leak check:** navigate into/out of a screen N times, compare class
