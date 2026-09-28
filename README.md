@@ -34,10 +34,11 @@ theme and debug-paint toggles, memory and HTTP profiles. Driving the app
 (taps, text entry, navigation, assertions) needs the SDK (Option A); without
 it those tools are not listed.
 ```bash
-# Run any vanilla Flutter app:
-flutter run
+# Run any vanilla Flutter app, writing its VM service URI where FlutterPilot looks:
+flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri
 
-# Start the MCP server (auto-discovers your app on localhost):
+# Start the MCP server (finds the app in the current folder, the MCP client's
+# workspace folders, or -p <app folder>):
 dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
 ```
 
@@ -99,6 +100,7 @@ Use absolute paths; `-p` is your Flutter app's root:
   ```
 - Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../build/flutterpilot_server -p /ABSOLUTE/PATH/your_flutter_app`
 - Run the app with `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` (or `flutterpilot dev`) so the server finds it.
+- `-p` is optional when the client shares its workspace folders (MCP roots) and the app is in one of them, up to 3 levels deep (monorepos); with several apps running, the most recently launched wins. A plain `flutter run` can't be found — pass its URI to `connect_app`.
 - Rebuild the executable after pulling server changes.
 
 ## 📋 What You Get

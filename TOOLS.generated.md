@@ -17,7 +17,7 @@ Result of an operation submitted with async:true: pending, or its result. cancel
 
 ## `connect_app`
 
-Connects to a running Flutter app: the VM service URI flutter run prints, or without uri the one found for this project. Needed only when the app was not found automatically or was restarted.
+Connects to a running Flutter app: the VM service URI flutter run prints, or without uri the one found in the project or the client's workspace folders. Needed only when the app was not found automatically or was restarted.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

@@ -81,8 +81,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       'connect_app',
       description:
           'Connects to a running Flutter app: the VM service URI flutter run '
-          'prints, or without uri the one found for this project. Needed only '
-          'when the app was not found automatically or was restarted.',
+          'prints, or without uri the one found in the project or the '
+          "client's workspace folders. Needed only when the app was not found "
+          'automatically or was restarted.',
       inputSchema: ToolInputSchema(
         properties: {
           'uri': JsonSchema.string(
@@ -112,8 +113,12 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             isError: true,
             content: [
               TextContent(
-                text:
-                    'Could not connect to a running Flutter app. Ensure your Flutter app is running in debug mode ("flutter run") and try again.',
+                text: uri == null
+                    ? 'No running Flutter app found. '
+                          '${VmDiscoveryService.howToStart}'
+                    : 'No Flutter app answers at '
+                          '${FleetManager.shortUri(uri)} (or it is not a local '
+                          'address). Is it still running in debug mode?',
               ),
             ],
           );

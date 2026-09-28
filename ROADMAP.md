@@ -267,10 +267,18 @@ current major. §1 is done.
 
 ## 3. Setup that "just works"
 
-1. **No `-p` needed:** the server should find the app without being started in
-   the app folder: scan `.dart_tool/flutterpilot_vm_uri` under the MCP client's
-   workspace roots (MCP `roots` capability), or discover via the Dart Tooling
-   Daemon (DTD) that `flutter run`/IDEs already run.
+1. **No `-p` needed:** done for clients that share workspace folders. Without
+   `-p` the server asks the client for its roots (`roots/list`, again on
+   `roots/list_changed`) and looks for `.dart_tool/flutterpilot_vm_uri` in the
+   working directory and each root, 3 levels deep (monorepos; skips build,
+   hidden, `node_modules`, a project's platform folders); several live apps →
+   the most recently launched. Removed what never worked: probing fixed ports
+   (8080 etc. — any web server passed for a VM service) and reading temp/json
+   files nothing writes. "No app" errors say how to make the app findable.
+   e2e: a server started in an empty folder finds the app only through roots.
+   **Left:** a plain `flutter run` / IDE launch writes no URI file and can't
+   be found. Next step: the Dart Tooling Daemon (IDEs run one; apps register
+   there via `ConnectedApp`), which needs its URI (VS Code/IntelliJ expose it).
 2. **`flutterpilot mcp install`**: writes the MCP config for Claude Code /
    Cursor / VS Code for the current project (the exact `claude mcp add ...`
    line with `-p`), and `flutterpilot dev` prints it.
