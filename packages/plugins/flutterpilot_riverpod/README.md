@@ -1,25 +1,39 @@
-# FlutterPilot Riverpod Plugin
+# flutterpilot_riverpod
 
-Expose Riverpod provider states to FlutterPilot for AI inspection and state injection.
+[FlutterPilot](https://github.com/abugeek/FlutterPilot) plugin for apps using
+**flutter_riverpod / riverpod**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
+Riverpod state in the running app through the FlutterPilot MCP server.
 
-## Setup
+## Install
 
-```yaml
-dependencies:
-  flutterpilot_riverpod:
-    path: packages/plugins/flutterpilot_riverpod
+In your app folder, `flutterpilot init` detects flutter_riverpod and adds this plugin
+(with `flutterpilot_sdk`). By hand:
+
+```bash
+flutter pub add flutterpilot_sdk flutterpilot_riverpod
 ```
+
+## Wire it
+
+The plugin does nothing until the app registers it, once, at startup:
 
 ```dart
 import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
 
-ProviderScope(
-  observers: [RiverpodPilotObserver()],
-  child: MyApp(),
-)
+ProviderScope(observers: [RiverpodPilotObserver()], child: ...)
 ```
 
-## What It Exposes
+`flutterpilot doctor` checks the wiring — and, while the app runs, that it
+registered.
 
-- **`get_riverpod_states`** — All active provider values with types and timestamps
-- **`set_state(type: 'riverpod', name, value)`** — Inject state into a running provider via the SDK's unified state setter
+## Tools it adds
+
+Listed by the server only once the app has registered the plugin:
+
+- **`get_state`** — current value of every provider the app has read
+- **`set_state`** — set a provider's state in memory (plain values; names match loosely)
+
+The full tool reference is
+[TOOLS.generated.md](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md).
+FlutterPilot works in debug builds; `FlutterPilot.initialize()` does nothing
+in release.

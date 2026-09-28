@@ -1,50 +1,39 @@
-# FlutterPilot SharedPreferences Plugin
+# flutterpilot_shared_preferences
 
-A [FlutterPilot](https://github.com/abugeek/FlutterPilot) plugin that exposes
-[SharedPreferences](https://pub.dev/packages/shared_preferences) data to AI
-agents at runtime via the MCP protocol.
+[FlutterPilot](https://github.com/abugeek/FlutterPilot) plugin for apps using
+**shared_preferences**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
+SharedPreferences state in the running app through the FlutterPilot MCP server.
 
-## Setup
+## Install
 
-Add to your `pubspec.yaml`:
+In your app folder, `flutterpilot init` detects shared_preferences and adds this plugin
+(with `flutterpilot_sdk`). By hand:
 
-```yaml
-dependencies:
-  flutterpilot_shared_preferences: ^0.1.0
+```bash
+flutter pub add flutterpilot_sdk flutterpilot_shared_preferences
 ```
 
-Register after initializing SharedPreferences:
+## Wire it
+
+The plugin does nothing until the app registers it, once, at startup:
 
 ```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  FlutterPilot.initialize();
-  final prefs = await SharedPreferences.getInstance();
-  SharedPrefsPilotInspector.register(prefs);
-  runApp(const MyApp());
-}
+import 'package:flutterpilot_shared_preferences/flutterpilot_shared_preferences.dart';
+
+SharedPrefsPilotInspector.register(await SharedPreferences.getInstance());
 ```
 
-## Available MCP Tools
+`flutterpilot doctor` checks the wiring — and, while the app runs, that it
+registered.
 
-| Tool | Description |
-|------|-------------|
-| `get_shared_preferences` | Returns all keys and values |
-| `set_shared_preference` | Writes a key with a typed value |
-| `set_shared_preference(remove: true)` | Removes one key or clears all |
+## Tools it adds
 
-### `set_shared_preference` Types
+Listed by the server only once the app has registered the plugin:
 
-Pass `type` as one of: `string` (default), `int`, `double`, `bool`, `stringList`.
+- **`get_shared_preferences`** — all stored keys and values
+- **`set_shared_preference`** — write or remove a key (needs --allow-destructive)
 
-```json
-{
-  "key": "user_theme",
-  "value": "dark",
-  "type": "string"
-}
-```
-
-## License
-
-MIT — see [LICENSE](../../LICENSE).
+The full tool reference is
+[TOOLS.generated.md](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md).
+FlutterPilot works in debug builds; `FlutterPilot.initialize()` does nothing
+in release.

@@ -1,16 +1,16 @@
-# flutterpilot_drift
+# flutterpilot_sqflite
 
 [FlutterPilot](https://github.com/abugeek/FlutterPilot) plugin for apps using
-**drift**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
-Drift state in the running app through the FlutterPilot MCP server.
+**sqflite**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
+sqflite state in the running app through the FlutterPilot MCP server.
 
 ## Install
 
-In your app folder, `flutterpilot init` detects drift and adds this plugin
+In your app folder, `flutterpilot init` detects sqflite and adds this plugin
 (with `flutterpilot_sdk`). By hand:
 
 ```bash
-flutter pub add flutterpilot_sdk flutterpilot_drift
+flutter pub add flutterpilot_sdk flutterpilot_sqflite
 ```
 
 ## Wire it
@@ -18,9 +18,9 @@ flutter pub add flutterpilot_sdk flutterpilot_drift
 The plugin does nothing until the app registers it, once, at startup:
 
 ```dart
-import 'package:flutterpilot_drift/flutterpilot_drift.dart';
+import 'package:flutterpilot_sqflite/flutterpilot_sqflite.dart';
 
-DriftPilotInspector.registerDatabase('main', db);
+SqflitePilotInspector.registerDatabase('main', db);
 ```
 
 `flutterpilot doctor` checks the wiring — and, while the app runs, that it

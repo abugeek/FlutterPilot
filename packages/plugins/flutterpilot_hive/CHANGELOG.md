@@ -1,6 +1,3 @@
 ## 0.1.0
 
-- Initial release
-- hive inspector plugin for FlutterPilot
-- Exposes hive state/data to AI agents via MCP
-- Idempotent service extension registration
+- First release: `get_hive_contents` for apps using hive / hive_ce.

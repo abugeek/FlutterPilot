@@ -1,16 +1,16 @@
-# flutterpilot_drift
+# flutterpilot_connectivity
 
 [FlutterPilot](https://github.com/abugeek/FlutterPilot) plugin for apps using
-**drift**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
-Drift state in the running app through the FlutterPilot MCP server.
+**connectivity_plus**: lets an AI agent (Claude Code, Cursor, VS Code…) see and drive
+Connectivity state in the running app through the FlutterPilot MCP server.
 
 ## Install
 
-In your app folder, `flutterpilot init` detects drift and adds this plugin
+In your app folder, `flutterpilot init` detects connectivity_plus and adds this plugin
 (with `flutterpilot_sdk`). By hand:
 
 ```bash
-flutter pub add flutterpilot_sdk flutterpilot_drift
+flutter pub add flutterpilot_sdk flutterpilot_connectivity
 ```
 
 ## Wire it
@@ -18,9 +18,9 @@ flutter pub add flutterpilot_sdk flutterpilot_drift
 The plugin does nothing until the app registers it, once, at startup:
 
 ```dart
-import 'package:flutterpilot_drift/flutterpilot_drift.dart';
+import 'package:flutterpilot_connectivity/flutterpilot_connectivity.dart';
 
-DriftPilotInspector.registerDatabase('main', db);
+ConnectivityPilotInspector.register();
 ```
 
 `flutterpilot doctor` checks the wiring — and, while the app runs, that it
@@ -30,7 +30,7 @@ registered.
 
 Listed by the server only once the app has registered the plugin:
 
-- **`exec_sql_query`** — run SQL against the registered database (reads by default; writes need --allow-destructive)
+- **`get_connectivity`** — current network status and recent changes, as the app sees them
 
 The full tool reference is
 [TOOLS.generated.md](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md).
