@@ -339,8 +339,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" '
           '(closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). '
           '"back" is the system back button: pops the current route, never '
-          'quits the app from the root. The response says which widget '
-          'received it. To change text use enter_text.',
+          'quits the app from the root. In a focused text field, characters, '
+          'backspace, delete, arrows, home/end and meta/ctrl+a edit it as '
+          'typing would, and the response shows the field\'s text and cursor; '
+          'to set a whole value, enter_text is simpler.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -382,14 +384,28 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           callParams,
         );
         if (res.isError) return res.toCallToolResult();
+        final feedback = _formatActionFeedback(
+          'Key "${p['key']}" pressed on',
+          p,
+          res,
+        );
+        // In a text field, say what the field holds now: the diff above only
+        // tracks widgets, and a cursor move changes no widget.
+        final field = res.data?['field'] as Map<String, dynamic>?;
+        if (field == null) {
+          return CallToolResult(content: [TextContent(text: feedback)]);
+        }
+        final start = field['selectionStart'];
+        final end = field['selectionEnd'];
+        final cursor = start == end
+            ? 'cursor at $start'
+            : 'selected $start–$end';
         return CallToolResult(
           content: [
             TextContent(
-              text: _formatActionFeedback(
-                'Key "${p['key']}" pressed on',
-                p,
-                res,
-              ),
+              text:
+                  '$feedback\nField: "${field['text']}" ($cursor)'
+                  '${field['changed'] == true ? '' : ', unchanged'}.',
             ),
           ],
         );

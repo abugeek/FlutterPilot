@@ -481,6 +481,59 @@ Future<void> main(List<String> args) async {
         false,
         react,
       );
+      // Keyboard (ROADMAP §3.11): each key reaches the app once, and in a
+      // text field editing keys edit it (desktop editing normally comes from
+      // the OS input client, which synthesized key events never reach).
+      await check('nothing focused', 'focus_widget', {});
+      await check(
+        'a key arrives once',
+        'press_key',
+        {'key': 'escape'},
+        ['Key: Escape x1'],
+      );
+      await check('field for key editing', 'enter_text', {
+        'key': "TextField['Name']",
+        'text': 'Pilot',
+      });
+      await check(
+        'backspace edits the field',
+        'press_key',
+        {'key': 'backspace'},
+        ['Field: "Pilo" (cursor at 4)', 'Key: Backspace x1'],
+      );
+      await check(
+        'a character is typed',
+        'press_key',
+        {'key': 'x'},
+        ['Field: "Pilox"'],
+      );
+      await check(
+        'arrow moves the cursor',
+        'press_key',
+        {'key': 'arrowLeft'},
+        ['Field: "Pilox" (cursor at 4)'],
+      );
+      await check(
+        'select all',
+        'press_key',
+        {
+          'key': 'a',
+          'modifiers': ['meta'],
+        },
+        ['selected 0–5'],
+      );
+      await check(
+        'typing replaces the selection',
+        'press_key',
+        {'key': 'z'},
+        ['Field: "z" (cursor at 1)'],
+      );
+      await check(
+        'the app saw the edits',
+        'get_widget_properties',
+        {'key': "TextField['Name']"},
+        ['"text":"z"'],
+      );
       await check('secondary tap', 'tap_widget', {
         'key': 'card',
         'gesture': 'secondary',
@@ -772,6 +825,7 @@ class _Mcp {
 const _fixtureMain = r'''
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterpilot_dio/flutterpilot_dio.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
@@ -798,6 +852,31 @@ class _HomeState extends State<Home> {
   String _menu = '';
   String _zoomed = 'zoom 1.0';
   bool _squeeze = false;
+  final _keyDowns = <String, int>{};
+  String _lastKey = '';
+
+  // Counts key-downs as the app sees them: press_key must deliver each once.
+  bool _onKey(KeyEvent e) {
+    if (e is KeyDownEvent) {
+      setState(() {
+        _lastKey = e.logicalKey.keyLabel;
+        _keyDowns[_lastKey] = (_keyDowns[_lastKey] ?? 0) + 1;
+      });
+    }
+    return false;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
 
   Future<void> _send() async {
     final res = await dio.get('https://example.com/ping');
@@ -849,6 +928,7 @@ class _HomeState extends State<Home> {
           onPressed: () => setState(() => _squeeze = !_squeeze),
           child: const Text('Squeeze'),
         ),
+        Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
           const SizedBox(width: 40, child: Row(children: [SizedBox(width: 90, height: 8)])),
       ]),

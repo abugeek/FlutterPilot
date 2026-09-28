@@ -149,14 +149,21 @@ extension _WidgetExtensions on FlutterPilot {
     }
     _lastFieldObscured = state.widget.obscureText;
     state.widget.focusNode.requestFocus();
-    state.updateEditingValue(
-      TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      ),
+    final typed = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
+    state.updateEditingValue(typed);
     WidgetsBinding.instance.scheduleFrame();
     await InteractionManager.pumpAndSettleAdaptive();
+    // On desktop and web a field that gains focus selects all its text, and
+    // that lands after the value above: leave the cursor at the end, as
+    // after typing (a following press_key backspace deletes one character).
+    if (state.mounted && state.textEditingValue.selection != typed.selection) {
+      state.updateEditingValue(
+        state.textEditingValue.copyWith(selection: typed.selection),
+      );
+    }
     if (FlutterPilot._isRecording) {
       FlutterPilot._recordAction('enterText', {
         'key': target ?? 'focused',
@@ -513,7 +520,10 @@ extension _WidgetExtensions on FlutterPilot {
       // Enter often submits: say what that changed, like a tap does.
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       try {
-        await _keyboardSimulator.pressKey(key, modifiers: modifiers);
+        final field = await _keyboardSimulator.pressKey(
+          key,
+          modifiers: modifiers,
+        );
         await InteractionManager.pumpAndSettleAdaptive(
           timeout: InteractionManager.postMutationSettleTimeout,
         );
@@ -536,6 +546,7 @@ extension _WidgetExtensions on FlutterPilot {
                 ? 'no focused widget'
                 : (PilotWidgetInspector.extractCleanKey(focused!.key) ??
                       focused.runtimeType.toString()),
+            'field': ?field,
             'postActionState': postActionState,
             'delta': _buildActionDelta(
               routeBefore: routeBefore,
@@ -1493,7 +1504,12 @@ extension _WidgetExtensions on FlutterPilot {
                   try {
                     final state = e.state as EditableTextState;
                     _lastFieldObscured = state.widget.obscureText;
-                    state.updateEditingValue(TextEditingValue(text: text));
+                    state.updateEditingValue(
+                      TextEditingValue(
+                        text: text,
+                        selection: TextSelection.collapsed(offset: text.length),
+                      ),
+                    );
                     entered = true;
                   } catch (_) {
                     try {

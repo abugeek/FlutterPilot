@@ -277,6 +277,18 @@ toggle (a Row overflow); driven through the MCP tools on macOS.
 | 182 | culprit widget | ⚠️→fixed | "Row Row:file:///private/var/…/lib/main.dart:81:44" → "Row (lib/main.dart:81:44)" |
 | 183 | notifications | ⚠️→fixed | level critical, "Self-Heal sequence initiated", once per distinct exception with only a 2 s debounce of repeats. Now level error, once per exception until hot reload |
 
+## Round 13 — keyboard (§3.11)
+
+The e2e fixture counts key-downs per key with a HardwareKeyboard handler;
+driven through the MCP tools on macOS.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 184 | double dispatch | ✅ | each press_key is one key-down in the app (⌘A: one for Meta, one for A); already fixed in the simulator |
+| 185 | editing keys in a field | ❌→fixed | backspace and "x" reported "pressed on TextField" and left "Pilot" as it was. Now "Field: "Pilo" (cursor at 4)"; arrows, select-all and typing over a selection work, and onChanged fires |
+| 186 | enter_text selection | ❌→fixed | on desktop the focus change after enter_text selected the whole text, so the next backspace would have cleared the field. The cursor is at the end now (also fill_form) |
+| 187 | other platforms | ✅ unit | Android/Linux/Windows edit through Flutter's shortcuts, macOS/iOS through the new fallback: same result, never twice (widget tests on all six platforms; e2e on CI's iOS/Android/web runs) |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

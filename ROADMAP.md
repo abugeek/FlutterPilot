@@ -175,13 +175,18 @@ current major. §1 is done.
     requests — 3.5 KB → 0.4 KB in the e2e fixture. Layout errors name the
     culprit as `Row (lib/main.dart:81:44)`. Proven by the fixture's Crash and
     Squeeze buttons (e2e). Round 12 of `docs/field-test-findings.md`.
-11. **Keyboard simulator** (`keyboard_simulator.dart`) dispatches each key
-    twice — `HardwareKeyboard.handleKeyEvent` *and* the deprecated
-    `keyMessageHandler`. Use one correct path (the platform key-data path
-    `KeyEventManager.handleKeyData` like flutter_test's `KeyEventSimulator`),
-    and decide what "type characters" means per platform (desktop text editing
-    goes through the OS text-input client, so Backspace/characters don't edit
-    fields today — `enter_text` is the supported way).
+11. **Keyboard simulator:** done. It already used one path
+    (`KeyEventManager.handleKeyData`, synthesized); the e2e fixture now
+    counts key-downs per key to keep it that way. What didn't work: editing
+    keys in a text field on macOS/iOS reported success and changed nothing
+    (editing comes from the OS input client). If the key event leaves the
+    focused field unchanged, the SDK applies the edit a key press makes
+    (character, Backspace/Delete, arrows, Home/End, select-all) as user input
+    — on Android/Linux/Windows Flutter's own shortcuts already do, and
+    nothing is applied twice (widget tests on all six platforms). `press_key`
+    reports the field's text and cursor. `enter_text` left the whole text
+    selected on desktop (focus selects all); the cursor now ends up at the
+    end. Round 13 of `docs/field-test-findings.md`.
 12. **Text scale / locale overrides** need the app to wrap MaterialApp in a
     `ValueListenableBuilder` (tools now say so). Let `flutterpilot init` inject
     that wiring, like it injects `NavigationTracker`.

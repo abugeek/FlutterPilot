@@ -114,7 +114,7 @@ Types text into a TextField/TextFormField found by key, selector (e.g. "TextFiel
 
 ## `press_key`
 
-Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). "back" is the system back button: pops the current route, never quits the app from the root. The response says which widget received it. To change text use enter_text.
+Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). "back" is the system back button: pops the current route, never quits the app from the root. In a focused text field, characters, backspace, delete, arrows, home/end and meta/ctrl+a edit it as typing would, and the response shows the field's text and cursor; to set a whole value, enter_text is simpler.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
