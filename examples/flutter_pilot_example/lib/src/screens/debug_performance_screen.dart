@@ -97,7 +97,10 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             const SizedBox(height: 16),
 
             // -- Debug Logs --------------------------------------------------
-            _sectionHeader('Debug Logs', 'get_debug_logs · get_debug_logs(clear: true)'),
+            _sectionHeader(
+              'Debug Logs',
+              'get_debug_logs · get_debug_logs(clear: true)',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -250,7 +253,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                       setState(() => _debugPaint = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('AI: set_app_settings(debugPaint: enabled: $v)'),
+                          content: Text(
+                            'AI: set_app_settings(debugPaint: enabled: $v)',
+                          ),
                         ),
                       );
                     },
