@@ -28,6 +28,7 @@ import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
 import 'src/source_locator.dart';
 import 'src/stream_inspector.dart';
+import 'src/test_recorder.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
@@ -194,11 +195,6 @@ class FlutterPilot {
   static final Map<String, Future<dynamic> Function(String name, dynamic value)>
   _stateSetters = {};
   static final Map<String, String? Function(String name)> _stateReaders = {};
-  static bool _isRecording = false;
-  static const int _maxRecordedActions = 5000;
-  static final RingBuffer<Map<String, dynamic>> _recordedActions = RingBuffer(
-    _maxRecordedActions,
-  );
   // Held to keep the semantics tree alive once enabled.
   static SemanticsHandle? _semanticsHandle;
 
@@ -533,9 +529,6 @@ class FlutterPilot {
         details.exceptionAsString(),
         details.stack?.toString(),
       );
-      if (_isRecording) {
-        _recordAction('error', {'exception': details.exceptionAsString()});
-      }
       final exception = details.exceptionAsString();
       postEvent('ext.flutterpilot.error', {
         'exception': exception,
@@ -553,9 +546,6 @@ class FlutterPilot {
     InteractionManager.initialize();
     InteractionManager.onPointerDown = (info) {
       FlightRecorder.recordGesture('tapAt', info);
-      if (_isRecording) {
-        _recordAction('user_tap', info);
-      }
     };
   }
 
@@ -693,25 +683,7 @@ class FlutterPilot {
   ///
   /// [source] identifies the origin (e.g., `'navigation'`, `'riverpod'`).
   /// [name] is the event name (e.g., `'push'`). [value] is the payload.
-  static void logStateChange(String source, String name, dynamic value) {
-    if (_isRecording) {
-      _recordAction('state_change', {
-        'source': source,
-        'name': name,
-        'value': _safeJsonEncode(value),
-      });
-    }
-  }
-
-  static void _recordAction(String type, Map<String, dynamic> data) {
-    if (!_isRecording) return;
-    _recordedActions.add({
-      'type': type,
-      'timestamp': DateTime.now().toIso8601String(),
-      'data': data,
-    });
-    postEvent('ext.flutterpilot.action', {'type': type, 'data': data});
-  }
+  static void logStateChange(String source, String name, dynamic value) {}
 
   // ---------------------------------------------------------------------------
   // Service extensions
@@ -736,7 +708,7 @@ class FlutterPilot {
           'Invalid coords',
         );
       }
-      if (_isRecording) _recordAction('tapAt', {'x': x, 'y': y});
+      TestRecorder.add('tapAt', data: {'x': x, 'y': y});
       await InteractionManager.tapAt(Offset(x, y));
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success'}),
@@ -771,6 +743,11 @@ class FlutterPilot {
         }),
       );
     }
+    TestRecorder.add(
+      'expectEnabled',
+      element: element,
+      data: {'enabled': isEnabled},
+    );
     return ServiceExtensionResponse.result(
       json.encode({'status': 'passed', 'key': key, 'isEnabled': isEnabled}),
     );

@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 64
+Tool count: 65
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -548,6 +548,16 @@ HTTP requests the app made through any dart:io client (HttpClient, package:http,
 | `status_filter` | integer | no | Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests. |
 | `url` | string | no | Only requests whose URL contains this text. |
 | `id` | integer | no | The #number of a request in the list: its headers, bodies and timing. |
+
+## `generate_test`
+
+Turns what you do in the app into an integration_test. start:true restarts the app (hot restart) and records from there: taps, text, keys, scrolls, drags, back, assert_widget, wait_for and mock_http_response, with the widgets found by key, text or tooltip. name:"checkout" then writes integration_test/checkout_test.dart, runs it on the same device and reports whether it passed (with the failure if not). Obscured text is passed with --dart-define, never written. Takes minutes: the test builds the app again.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `start` | boolean | no | Restart the app and start recording. |
+| `name` | string | no | Test name (letters, digits, _): stop recording, write and run the test. |
+| `run` | boolean | no | Run the written test (default true). |
 
 ## `get_supabase_auth`
 

@@ -23,6 +23,7 @@ import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
 import 'src/self_heal_manager.dart';
+import 'src/test_writer.dart';
 import 'src/vm_discovery.dart';
 import 'src/zero_code.dart';
 
@@ -37,6 +38,7 @@ part 'src/tools/screenshot_tools.dart';
 part 'src/tools/self_heal_tools.dart';
 part 'src/tools/state_management_tools.dart';
 part 'src/tools/testing_tools.dart';
+part 'src/tools/test_generation_tools.dart';
 part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
@@ -56,6 +58,19 @@ abstract class _FlutterPilotServerBase {
 
   /// Started when the connection drops; cleared when an app connects.
   NativeCrashWatch? _nativeCrash;
+
+  /// Between generate_test(start) and generate_test(name): mocks are
+  /// recorded too.
+  bool _recordingTest = false;
+
+  /// Adds a step only the server sees (a mocked response) to the recording.
+  Future<void> _noteTestStep(Map<String, dynamic> step) async {
+    if (!_recordingTest) return;
+    await _callExtensionRaw('ext.flutterpilot.testRecording', {
+      'action': 'note',
+      'step': jsonEncode(step),
+    });
+  }
 
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
@@ -239,6 +254,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _StateManagementToolsMixin,
         _TestingToolsMixin,
         _DevtoolsToolsMixin,
+        _TestGenerationToolsMixin,
         _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
@@ -775,12 +791,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             } else if (event.extensionKind == 'ext.flutterpilot.lifecycle') {
               context.lifecycle = event.extensionData?.data['state']
                   ?.toString();
-            } else if (event.extensionKind == 'ext.flutterpilot.action') {
-              _appendEvent({
-                'type': 'action',
-                'timestamp': timestamp,
-                'data': event.extensionData?.data,
-              }, deviceId: context.deviceId);
             }
           } catch (e) {
             _log.warning('Error processing extension event: $e');
@@ -935,6 +945,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerStateManagementTools();
     _registerTestingTools();
     _registerDevtoolsTools();
+    _registerTestGenerationTools();
     _registerPluginIntegrationTools();
   }
 

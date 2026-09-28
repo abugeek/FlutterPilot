@@ -60,11 +60,12 @@ extension _WidgetExtensions on FlutterPilot {
     int maxAttempts = 8,
   }) async {
     var element = PilotWidgetInspector.findElement(target);
+    var scrolled = false;
     if (element == null || !HitTestUtils.isElementHittable(element)) {
       await FlutterPilot._waitForScreenSettled();
       element = PilotWidgetInspector.findElement(target);
       if (element == null || !HitTestUtils.isElementHittable(element)) {
-        await ScrollSimulator.scrollUntilVisible(
+        scrolled = await ScrollSimulator.scrollUntilVisible(
           target,
           maxAttempts: maxAttempts,
         );
@@ -88,6 +89,7 @@ extension _WidgetExtensions on FlutterPilot {
         );
         await InteractionManager.pumpAndSettleAdaptive();
         ro = element.renderObject;
+        scrolled = true;
       } catch (_) {}
     }
     _tapNote = null;
@@ -119,9 +121,8 @@ extension _WidgetExtensions on FlutterPilot {
     if (!HitTestUtils.isElementHittable(element)) {
       return (status: 'covered', error: _coveredMessage(target));
     }
-    if (FlutterPilot._isRecording) {
-      FlutterPilot._recordAction('tapWidget', {'key': target});
-    }
+    if (scrolled) TestRecorder.addScroll(element);
+    TestRecorder.add('tap', element: element, data: {'target': target});
     await InteractionManager.tapAt(
       ro.localToGlobal(ro.size.center(Offset.zero)),
       label: target,
@@ -196,12 +197,13 @@ extension _WidgetExtensions on FlutterPilot {
         state.textEditingValue.copyWith(selection: typed.selection),
       );
     }
-    if (FlutterPilot._isRecording) {
-      FlutterPilot._recordAction('enterText', {
-        'key': target ?? 'focused',
-        'text': _echoText(text),
-        if (_lastFieldObscured) 'obscured': true,
-      });
+    if (TestRecorder.active && state.mounted) {
+      TestRecorder.add(
+        'enterText',
+        element: state.context as Element,
+        field: true,
+        data: TestRecorder.typed(text, obscured: _lastFieldObscured),
+      );
     }
     return (status: 'ok', error: null);
   }
@@ -304,9 +306,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (xVal != null && yVal != null) {
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('tapAt', {'x': xVal, 'y': yVal});
-        }
+        TestRecorder.addTapAt(Offset(xVal, yVal));
         await InteractionManager.tapAt(
           Offset(xVal, yVal),
           label: '(${xVal.round()}, ${yVal.round()})',
@@ -387,11 +387,7 @@ extension _WidgetExtensions on FlutterPilot {
           final center = globalRect.center;
           final routeBefore = NavigationTracker.currentRoute;
           final treeBefore = PilotWidgetInspector.captureWidgetTree();
-          if (FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('tapWidget', {
-              'semanticsId': semanticsId,
-            });
-          }
+          TestRecorder.addTapAt(center);
           await InteractionManager.tapAt(
             center,
             label: 'Semantics #$semanticsId',
@@ -501,6 +497,7 @@ extension _WidgetExtensions on FlutterPilot {
         if (covered != null) return covered;
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
+        TestRecorder.add('secondaryTap', element: element);
         await InteractionManager.secondaryTapAt(
           pos,
           label: 'Right Click: $target',
@@ -594,12 +591,14 @@ extension _WidgetExtensions on FlutterPilot {
         await InteractionManager.pumpAndSettleAdaptive(
           timeout: InteractionManager.postMutationSettleTimeout,
         );
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('pressKey', {
+        TestRecorder.add(
+          'pressKey',
+          data: {
             'key': key,
             'modifiers': modifiers.toList(),
-          });
-        }
+            'inField': field != null,
+          },
+        );
         // Enter often submits, and a submit may navigate after a request:
         // watch a quiet Enter a little longer. Tab and arrows stay fast.
         final lower = key.toLowerCase();
@@ -735,6 +734,8 @@ extension _WidgetExtensions on FlutterPilot {
           'Could not scroll "$target" into visible view',
         );
       }
+      final shown = PilotWidgetInspector.findElement(target);
+      if (shown != null) TestRecorder.addScroll(shown);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', 'target': target}),
       );
@@ -762,9 +763,7 @@ extension _WidgetExtensions on FlutterPilot {
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('doubleTapWidget', {'key': target});
-        }
+        TestRecorder.add('doubleTap', element: element);
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         final covered = _refuseIfCovered(element, target);
@@ -807,12 +806,7 @@ extension _WidgetExtensions on FlutterPilot {
       final ro = element.renderObject;
       if (ro is RenderBox && ro.hasSize) {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('longPressWidget', {
-            'key': target,
-            'durationMs': ms,
-          });
-        }
+        TestRecorder.add('longPress', element: element);
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         final covered = _refuseIfCovered(element, target);
@@ -882,13 +876,11 @@ extension _WidgetExtensions on FlutterPilot {
             'direction must be up|down|left|right',
           );
       }
-      if (FlutterPilot._isRecording) {
-        FlutterPilot._recordAction('swipeWidget', {
-          'key': target,
-          'direction': direction,
-          'distance': distance,
-        });
-      }
+      TestRecorder.add(
+        'drag',
+        element: element,
+        data: {'dx': end.dx - start.dx, 'dy': end.dy - start.dy},
+      );
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.swipeFromTo(start, end);
@@ -942,12 +934,11 @@ extension _WidgetExtensions on FlutterPilot {
       }
       final from = fromRo.localToGlobal(fromRo.size.center(Offset.zero));
       final to = toRo.localToGlobal(toRo.size.center(Offset.zero));
-      if (FlutterPilot._isRecording) {
-        FlutterPilot._recordAction('dragWidget', {
-          'fromKey': fromTarget,
-          'toKey': toTarget,
-        });
-      }
+      TestRecorder.add(
+        'drag',
+        element: fromEl,
+        data: {'dx': to.dx - from.dx, 'dy': to.dy - from.dy},
+      );
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.dragFromTo(from, to);
@@ -996,8 +987,13 @@ extension _WidgetExtensions on FlutterPilot {
               found = true;
             } catch (_) {}
           }
-          if (found && FlutterPilot._isRecording) {
-            FlutterPilot._recordAction('clearTextField', {'key': target});
+          if (found) {
+            TestRecorder.add(
+              'enterText',
+              element: e,
+              field: true,
+              data: {'text': ''},
+            );
           }
           return;
         }
@@ -1102,14 +1098,15 @@ extension _WidgetExtensions on FlutterPilot {
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       final covered = _refuseIfCovered(element, target);
       if (covered != null) return covered;
+      final toggle = box.debugCreator is DebugCreator
+          ? (box.debugCreator as DebugCreator).element
+          : element;
+      TestRecorder.add('tap', element: toggle, data: {'target': target});
       await InteractionManager.tapAt(center, label: target);
       final after = await _afterAction(
         routeBefore: routeBefore,
         treeBefore: treeBefore,
       );
-      if (FlutterPilot._isRecording) {
-        FlutterPilot._recordAction('toggleCheckbox', {'key': target});
-      }
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', ...after}),
       );
@@ -1196,12 +1193,10 @@ extension _WidgetExtensions on FlutterPilot {
       final tapX = globalOffset.dx + trackPadding + fraction * trackWidth;
       final tapY = globalOffset.dy + renderBox.size.height / 2;
       await InteractionManager.tapAt(Offset(tapX, tapY), label: target);
-      if (FlutterPilot._isRecording) {
-        FlutterPilot._recordAction('setSliderValue', {
-          'key': target,
-          'value': clamped,
-        });
-      }
+      TestRecorder.add(
+        'skipped',
+        data: {'what': 'set_slider_value $target to $clamped'},
+      );
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
@@ -1371,6 +1366,7 @@ extension _WidgetExtensions on FlutterPilot {
           'ASSERTION FAILED: widget "$target" found but has no layout (off-screen?)',
         );
       }
+      TestRecorder.add('expectVisible', element: element);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'passed', 'target': target}),
       );
@@ -1405,6 +1401,7 @@ extension _WidgetExtensions on FlutterPilot {
       final root = WidgetsBinding.instance.rootElement;
       if (root != null) findText(root);
       if (found) {
+        TestRecorder.add('expectText', data: {'text': text, 'exact': exact});
         return ServiceExtensionResponse.result(
           json.encode({'status': 'passed', 'text': text}),
         );
@@ -1444,6 +1441,10 @@ extension _WidgetExtensions on FlutterPilot {
       final root = WidgetsBinding.instance.rootElement;
       if (root != null) countWidgets(root);
       if (actual == expected) {
+        TestRecorder.add(
+          'expectCount',
+          data: {'widgetType': type, 'count': actual},
+        );
         return ServiceExtensionResponse.result(
           json.encode({'status': 'passed', 'type': type, 'count': actual}),
         );
@@ -1621,12 +1622,16 @@ extension _WidgetExtensions on FlutterPilot {
                       entered = true;
                     } catch (_) {}
                   }
-                  if (entered && FlutterPilot._isRecording) {
-                    FlutterPilot._recordAction('enterText', {
-                      'key': target,
-                      'text': _echoText(text),
-                      if (_lastFieldObscured) 'obscured': true,
-                    });
+                  if (entered) {
+                    TestRecorder.add(
+                      'enterText',
+                      element: e,
+                      field: true,
+                      data: TestRecorder.typed(
+                        text,
+                        obscured: _lastFieldObscured,
+                      ),
+                    );
                   }
                   return;
                 }
@@ -1657,9 +1662,11 @@ extension _WidgetExtensions on FlutterPilot {
             }
             if (ro is RenderBox && ro.hasSize && ro.attached) {
               final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-              if (FlutterPilot._isRecording) {
-                FlutterPilot._recordAction('tapWidget', {'key': submitWith});
-              }
+              TestRecorder.add(
+                'tap',
+                element: submitElem,
+                data: {'target': submitWith},
+              );
               await InteractionManager.tapAt(pos, label: submitWith);
               submitted = true;
             }

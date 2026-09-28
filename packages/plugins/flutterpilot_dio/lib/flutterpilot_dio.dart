@@ -53,6 +53,31 @@ class DioPilotInterceptor extends Interceptor {
   }
 
   /// Explicitly registers Dio capabilities with FlutterPilot.
+  /// Answers requests whose URL contains [urlPattern] with [statusCode] and
+  /// [body] (JSON is decoded) instead of the network. What
+  /// `mock_http_response` sets, and what tests generated from it call.
+  static void mock(
+    String urlPattern, {
+    required int statusCode,
+    required String body,
+    int delayMs = 0,
+  }) {
+    _mocks[urlPattern] = {
+      'statusCode': statusCode,
+      'body': body,
+      'delayMs': delayMs.clamp(0, _maxDelayMs),
+    };
+  }
+
+  /// Removes the mock for [urlPattern], or all of them.
+  static void clearMocks([String? urlPattern]) {
+    if (urlPattern != null) {
+      _mocks.remove(urlPattern);
+    } else {
+      _mocks.clear();
+    }
+  }
+
   static void register() {
     if (!_initialized) {
       _initialized = true;
@@ -172,11 +197,7 @@ class DioPilotInterceptor extends Interceptor {
         0,
         _maxDelayMs,
       );
-      _mocks[urlPattern] = {
-        'statusCode': statusCode,
-        'body': body,
-        'delayMs': delayMs,
-      };
+      mock(urlPattern, statusCode: statusCode, body: body, delayMs: delayMs);
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
@@ -191,12 +212,7 @@ class DioPilotInterceptor extends Interceptor {
       method,
       parameters,
     ) async {
-      final urlPattern = parameters['urlPattern'];
-      if (urlPattern != null) {
-        _mocks.remove(urlPattern);
-      } else {
-        _mocks.clear();
-      }
+      clearMocks(parameters['urlPattern']);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', 'remaining': _mocks.length}),
       );

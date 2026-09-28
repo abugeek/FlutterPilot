@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 64 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2); an app sees only those that work for it
+- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -422,17 +422,25 @@ Highest value first. Each should answer a *why*, not just dump data.
    an app that dies before FlutterPilot connected (no pid to match).
    Findings #232–235.
 
-## 6. Test generation done right
+## 6. ~~Test generation done right~~ — done (2026-09-29)
 
-The old generators were deleted because the output couldn't run. Rebuild only
-with a verification loop:
-
-1. Record semantic actions (targets by key/text, not coordinates) plus the
-   assertions an agent made.
-2. Emit an `integration_test` using the app's real entrypoint (`main.dart`),
-   with `find.byKey` / `find.text` finders and the same postconditions.
-3. **Run it** (`flutter test integration_test/...`) and only report success
-   if it passes. Mocked network responses become test fixtures with bodies.
+`generate_test` (one tool): `start: true` hot-restarts the app and records
+from there, as the test starts from `main()`. The SDK records each action at
+the point it resolves its widget, with a `flutter_test` finder for that
+widget alone on screen (key, also on an ancestor drawn in the same box →
+unique text → tooltip → type with text → the same inside the nearest
+uniquely keyed ancestor → by type and position, flagged as fragile); a tap
+that had to scroll records `scrollUntilVisible` on the same Scrollable;
+coordinate taps become taps on the control drawn there. Assertions
+(`assert_widget`, `wait_for`) become waits and expects; mocked responses
+become `DioPilotInterceptor.mock` calls (new public API) in order;
+obscured text becomes `--dart-define` values, never written.
+`name: "x"` writes `integration_test/x_test.dart`, formats it, adds
+`integration_test` to dev_dependencies if missing, **runs it** on the same
+device (`flutter test -d`) and reports passed, or the step it failed at with
+the framework's message. Not replayed (listed in the response):
+`navigate_to`, `set_slider_value`, keys without a test equivalent. Not
+recorded: taps by the user's own hand. Findings #236–239.
 
 ## 7. State time travel done right
 

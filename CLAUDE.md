@@ -1,6 +1,6 @@
 # FlutterPilot AI Assistant Guidelines
 
-FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 64 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
+FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 65 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
 
 **Next work:** see `ROADMAP.md` (priorities, field-test method, known gotchas). Drive tools from a shell with `packages/flutterpilot_server/tool/fp_bridge.dart`.
 
@@ -42,6 +42,8 @@ When interacting with a Flutter app using FlutterPilot:
 - For "did my change actually work" checks, use `assert_widget` against the *already-running* app: `assert_widget(text: ...)`, `assert_widget(key: ...)`, `assert_widget(key: ..., enabled: true|false)`, `assert_widget(type: ..., count: N)`. These run in milliseconds — no new process, no cold VM boot.
 - For async results, use `wait_for(key | route | animations | state | frames)` or `tap_widget(key, waitFor: ...)` instead of sleeping.
 - `audit_screen_health` is for layout/accessibility sweeps (combine with `set_app_settings(textScale: 2)` to catch overflows, or `theme: "dark"` for contrast), not for confirming a single interaction. It reports overflows, small tap targets, controls a screen reader can't name (with the widget and file:line that adds the tap), text below WCAG contrast (measured from the rendered pixels), and the screen reader order with any jumps back up the screen.
+
+- **Regression test from a flow**: `generate_test(start: true)` restarts the app and records; do the flow with tap_widget/enter_text/press_key/assert_widget/wait_for/mock_http_response as usual; `generate_test(name: "checkout")` writes `integration_test/checkout_test.dart` (the app's `main()`, `find.byKey`/`find.text`/`find.byTooltip` finders, mocks as `DioPilotInterceptor.mock`, obscured text via `--dart-define`), runs it on the same device and reports pass, or the step it failed at. Minutes, not milliseconds: use it to keep a flow working, not to check one change.
 
 ### 4. Visual Regression Diff Engine
 - Establish golden baselines with `compare_screenshot(name: "...", save: true)`.

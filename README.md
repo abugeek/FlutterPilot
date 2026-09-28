@@ -123,7 +123,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 64 tools, of which an app sees only the ones that can work
+registrations): 65 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:

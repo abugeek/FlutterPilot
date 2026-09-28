@@ -1097,6 +1097,53 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // ROADMAP §6: record a flow, write it as an integration_test, run it.
+    if (isDesktop && !zeroCode) {
+      await check(
+        'generate_test starts recording from a restart',
+        'generate_test',
+        {'start': true},
+        ['Recording from a fresh start'],
+      );
+      await check('recorded: mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 201,
+        'body': '{"ok":true}',
+      });
+      await check('recorded: enter a name', 'enter_text', {
+        'target': 'Name',
+        'text': 'Recorded',
+      });
+      await check('recorded: send', 'tap_widget', {'key': 'Send'});
+      await check(
+        'recorded: the mocked greeting shows',
+        'assert_widget',
+        {'text': 'Hello, Recorded (201)'},
+        const [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check(
+        'generate_test writes the test and it passes',
+        'generate_test',
+        {'name': 'send_greeting'},
+        ['Wrote integration_test/send_greeting_test.dart', 'passed'],
+      );
+      final written = File('$app/integration_test/send_greeting_test.dart');
+      final source = written.existsSync() ? written.readAsStringSync() : '';
+      final idiomatic = [
+        "import 'package:fixture/main.dart' as app;",
+        "DioPilotInterceptor.mock('/ping', statusCode: 201",
+        "find.widgetWithText(TextField, 'Name')",
+        "find.text('Send')",
+      ].every(source.contains);
+      if (!idiomatic) failed++;
+      print(
+        '${idiomatic ? '✅' : '❌'} the test uses the app, the mock and '
+        'plain finders${idiomatic ? '' : '\n   $source'}',
+      );
+    }
+
     // ROADMAP §5.8: a native crash is reported with its reason, not just
     // "not running" (macOS files a report for a SIGABRT from outside too).
     final pgrep = device == 'macos'
@@ -1189,8 +1236,9 @@ class _Mcp {
         'params': params,
       }),
     );
+    // generate_test builds and runs an integration test: minutes.
     return c.future.timeout(
-      const Duration(minutes: 3),
+      const Duration(minutes: 10),
       onTimeout: () => {'error': 'timeout'},
     );
   }

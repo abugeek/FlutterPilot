@@ -393,21 +393,29 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) {
+      callback: (p, e) async {
         if (p['clear'] == true) {
-          return _callExtensionRaw('ext.flutterpilot.clearHttpMocks', {
-            if (p['urlPattern'] != null)
-              'urlPattern': p['urlPattern'].toString(),
-          }).then((res) => res.toCallToolResult());
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.clearHttpMocks',
+            {
+              if (p['urlPattern'] != null)
+                'urlPattern': p['urlPattern'].toString(),
+            },
+          );
+          if (!res.isError) {
+            await _noteTestStep({
+              'type': 'clearMocks',
+              'urlPattern': ?p['urlPattern']?.toString(),
+            });
+          }
+          return res.toCallToolResult();
         }
         if (p['urlPattern'] == null || p['statusCode'] == null) {
-          return Future.value(
-            CallToolResult(
-              isError: true,
-              content: [
-                TextContent(text: 'Pass urlPattern and statusCode (and body).'),
-              ],
-            ),
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'Pass urlPattern and statusCode (and body).'),
+            ],
           );
         }
         final mapped = {
@@ -416,10 +424,20 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'body': p['body']?.toString() ?? '',
           if (p['delayMs'] != null) 'delayMs': p['delayMs'].toString(),
         };
-        return _callExtensionRaw(
+        final res = await _callExtensionRaw(
           'ext.flutterpilot.addHttpMock',
           mapped,
-        ).then((res) => res.toCallToolResult());
+        );
+        if (!res.isError) {
+          await _noteTestStep({
+            'type': 'mock',
+            'urlPattern': mapped['urlPattern'],
+            'statusCode': int.tryParse('${p['statusCode']}') ?? 200,
+            'body': mapped['body'],
+            'delayMs': int.tryParse('${p['delayMs'] ?? 0}') ?? 0,
+          });
+        }
+        return res.toCallToolResult();
       },
     );
   }

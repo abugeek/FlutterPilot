@@ -404,6 +404,15 @@ keyboard forced on, and in Chrome:
 | 234 | lost before onDone | ❌→fixed | in e2e a tool call hit the dead socket before the connection's `onDone`, which then skipped (not the live connection any more): no crash note. The watch now starts in `_scheduleReconnect`, however the loss was noticed |
 | 235 | not covered | ⚠️ gap | Android (`adb logcat -b crash`) unit-tested only: no emulator or adb here. A physical iPhone keeps its reports (`devicectl`). An app that crashes before FlutterPilot connected (Firebase in `main()` can be that fast) has no pid to match |
 
+## Test generation (ROADMAP §6), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 236 | hn_reader flow | ✅ | `generate_test(start)`, then Settings → Dark → assert "Theme" → System → Saved → Stories → filter "zzzz-no-match" → assert "No stories match"; `generate_test(name: "settings_and_filter")`: 8 steps, `find.text('Settings')`, `find.widgetWithText(TextField, 'Filter stories')`, passed on the first run in 22 s. The dev app (flutter run) kept running during the test run. The test file and the added `integration_test` dependency were then removed from hn_reader |
+| 237 | a failing test fails | ✅ | a copy expecting "No stories matchX" failed after the 10 s wait, at the step's line. The response first gave the last 30 lines of output; now "Failed at step 8, expect text (line 43)" and the framework's Expected/Actual |
+| 238 | e2e: mock + field + button | ✅ | recorded `mock_http_response(/ping, 201)`, `enter_text(Name)`, tap Send, `assert_widget("Hello, Recorded (201)")`: the test calls `DioPilotInterceptor.mock('/ping', statusCode: 201, …)` and passes on a fresh app (`package:fixture/main.dart`) |
+| 239 | generated source | ❌→fixed | unformatted (one 110-char line): the tool now runs `dart format` on it. Not field-tested: Android/iOS runs (the test reinstalls the app there; the response says to start it again), obscured fields (unit-tested: `--dart-define`, never written). Tests over live data (hn_reader's `story_<id>` keys, today's titles) fail tomorrow: the flow above avoids them |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
