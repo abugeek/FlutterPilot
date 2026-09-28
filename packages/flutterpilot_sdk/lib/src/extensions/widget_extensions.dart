@@ -510,6 +510,8 @@ extension _WidgetExtensions on FlutterPilot {
         });
       }
       final routeBefore = NavigationTracker.currentRoute;
+      // Enter often submits: say what that changed, like a tap does.
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       try {
         await _keyboardSimulator.pressKey(key, modifiers: modifiers);
         await InteractionManager.pumpAndSettleAdaptive(
@@ -535,6 +537,12 @@ extension _WidgetExtensions on FlutterPilot {
                 : (PilotWidgetInspector.extractCleanKey(focused!.key) ??
                       focused.runtimeType.toString()),
             'postActionState': postActionState,
+            'delta': _buildActionDelta(
+              routeBefore: routeBefore,
+              routeAfter: NavigationTracker.currentRoute,
+              treeBefore: treeBefore,
+              treeAfter: PilotWidgetInspector.captureWidgetTree(),
+            ),
           }),
         );
       } catch (e) {

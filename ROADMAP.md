@@ -197,9 +197,11 @@ current major. §1 is done.
    Android emulator and Chrome (tap, text, keys, secondary tap, pinch,
    rotation, chains, hot reload + restart; web via DWDS). The `native_*`
    tools are listed only when the app runs on iOS and `idb`/`xcrun` exist
-   (`tools/list_changed`). Left: `native_tap/text/button/describe_screen`
-   are untested (idb not installed here); field-test a real app on a phone
-   (IME, permissions dialogs, lifecycle/backgrounding).
+   (`tools/list_changed`). Native tools field-tested on the iOS simulator
+   with idb (`../native_app`: location permission alert, text input,
+   backgrounding; round 8 of `docs/field-test-findings.md`), e2e checks
+   them when idb is present. Left: a real app on a physical phone
+   (`../native_app` is ready; needs Xcode signed in to an Apple ID).
 3. **Zero-code mode:** done — plain app on macOS + Chrome (`e2e_test.dart
    --zero-code`, in CI for macOS and web). Without the SDK only the 29 tools
    that work are listed (`zeroCodeTools` in `src/zero_code.dart`): tree,

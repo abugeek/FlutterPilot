@@ -310,6 +310,36 @@ Future<void> main(List<String> args) async {
         '${nativeOk ? '✅' : '❌'} native tools '
         '${isIos ? 'listed on iOS' : 'hidden off iOS'} (${listed.length} tools)',
       );
+      // Simulator with idb (not on CI runners): native screen, backgrounding
+      // and bringing the app back.
+      if (listed.contains('native_open_app') &&
+          listed.contains('native_describe_screen')) {
+        await check('native_describe_screen', 'native_describe_screen', {}, [
+          'Send',
+          '→ tap (',
+        ]);
+        await check('native_screenshot is in points', 'native_screenshot', {}, [
+          'in points',
+        ]);
+        await check('native_button HOME', 'native_button', {'button': 'HOME'});
+        await check(
+          'a backgrounded app is reported, not waited on',
+          'get_app_summary',
+          {},
+          ['in the background', 'native_open_app'],
+          true,
+          const Duration(seconds: 5),
+        );
+        await check('native_open_app', 'native_open_app', {}, ['foreground']);
+        await check(
+          'app answers again after native_open_app',
+          'assert_widget_visible',
+          {'target': 'Send'},
+          [],
+          false,
+          settle,
+        );
+      }
       await check(
         'list_connected_devices shows auto-discovered default',
         'list_connected_devices',

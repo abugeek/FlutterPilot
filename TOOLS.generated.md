@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 129
+Tool count: 130
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -405,12 +405,12 @@ Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` —
 
 ## `native_tap`
 
-Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, alerts, and other OS chrome that tap_widget/tap_at cannot see because they are not part of the Flutter widget tree. Use native_screenshot first to find coordinates. Requires idb (brew install idb-companion && pip3 install fb-idb). macOS + iOS Simulator only.
+Taps the iOS simulator screen via `idb ui tap` — reaches system permission alerts and other OS chrome that tap_widget cannot, because they are not part of the Flutter widget tree. Coordinates are points: take them from native_describe_screen (or native_screenshot, which is in points too).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `x` | number | yes | X coordinate in the native screenshot's pixel space. |
-| `y` | number | yes | Y coordinate in the native screenshot's pixel space. |
+| `x` | number | yes | X in points. |
+| `y` | number | yes | Y in points. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_text`
@@ -438,6 +438,13 @@ Returns the native accessibility tree (labels, frames, roles) for whatever is on
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
+
+## `native_open_app`
+
+Brings the connected app back to the foreground on the iOS simulator (after native_button HOME, or when another app is in front), keeping its state. iOS suspends a backgrounded app, so every other tool fails until then.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
 
 ## `navigate_to`
 

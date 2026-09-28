@@ -62,7 +62,7 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
 
 /// Tools for tapping, typing, scrolling, swiping, and other UI interactions.
 mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
-  static String _formatActionFeedback(
+  String _formatActionFeedback(
     String actionName,
     Map<String, dynamic> params,
     _ExtensionResult res,
@@ -103,6 +103,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     final newErrors = postState?['newErrorCount'];
     if (newErrors is int && newErrors > 0) {
       buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
+    }
+    // A permission alert is not part of the Flutter tree (and doesn't even
+    // change the app's lifecycle on iOS): an action that "did nothing" may
+    // have opened one.
+    final diff = delta?['widgetDiff'] as Map<String, dynamic>?;
+    if (actionName.toLowerCase().contains('tap') &&
+        !changed &&
+        diff != null &&
+        _widgetDiffSummary(diff).isEmpty &&
+        _allTools['native_describe_screen']?.enabled == true) {
+      buffer.write(
+        '\nNothing changed in the app. If this opens a system alert '
+        '(permissions, sign-in), native_describe_screen shows it.',
+      );
     }
     return buffer.toString().trim();
   }

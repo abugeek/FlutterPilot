@@ -272,7 +272,14 @@ class FlutterPilot {
     final primaryFocus = FocusManager.instance.primaryFocus;
     if (primaryFocus != null && primaryFocus.context is Element) {
       final element = primaryFocus.context! as Element;
-      final widget = element.widget;
+      // Name it by the app's own widget (the TextField), not the Focus
+      // wrapper that holds focus.
+      var widget = element.widget;
+      element.visitAncestorElements((a) {
+        if (!debugIsWidgetLocalCreation(a.widget)) return true;
+        widget = a.widget;
+        return false;
+      });
       final key = PilotWidgetInspector.extractCleanKey(widget.key);
       String? textValue;
       if (element is StatefulElement && element.state is EditableTextState) {
@@ -435,7 +442,18 @@ class FlutterPilot {
     _setupFpsCounter();
     _setupDebugPrintCapture();
     FrameBudgetProfiler.initialize();
+    _setupLifecycleEvents();
     debugPrint('FlutterPilot initialized 🚀');
+  }
+
+  /// Tells the server when the app goes to the background or comes back:
+  /// iOS suspends a backgrounded app, and calls to it would hang until then.
+  static void _setupLifecycleEvents() {
+    WidgetsFlutterBinding.ensureInitialized();
+    AppLifecycleListener(
+      onStateChange: (state) =>
+          postEvent('ext.flutterpilot.lifecycle', {'state': state.name}),
+    );
   }
 
   static void _setupModules() {

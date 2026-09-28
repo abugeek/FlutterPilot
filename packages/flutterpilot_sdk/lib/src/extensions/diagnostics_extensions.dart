@@ -49,7 +49,17 @@ extension _DiagnosticsExtensions on FlutterPilot {
     // -- ext.flutterpilot.ping ------------------------------------------------
     registerExtension('ext.flutterpilot.ping', (method, parameters) async {
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'ok', 'version': '0.0.1'}),
+        json.encode({
+          'status': 'ok',
+          'version': '0.0.1',
+          // Native (idb) coordinates are points: physical pixels / this.
+          'devicePixelRatio': WidgetsBinding
+              .instance
+              .platformDispatcher
+              .views
+              .firstOrNull
+              ?.devicePixelRatio,
+        }),
       );
     });
 

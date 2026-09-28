@@ -38,6 +38,12 @@ class DeviceRuntimeContext {
   /// with the SDK installed it reports errors itself.
   final List<Map<String, dynamic>> zeroCodeErrors = [];
 
+  /// The VM's `operatingSystem` (`ios`, `android`, `macos`, ...).
+  String? operatingSystem;
+
+  /// The app's last reported `AppLifecycleState` name (SDK apps only).
+  String? lifecycle;
+
   bool get connected => service != null;
 
   Future<void> dispose() async {
@@ -54,6 +60,7 @@ class DeviceRuntimeContext {
     registeredServices.clear();
     hasSdk = null;
     zeroCodeErrors.clear();
+    lifecycle = null;
     await service?.dispose();
     service = null;
     cachedMainIsolateId = null;

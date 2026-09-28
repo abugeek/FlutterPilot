@@ -20,6 +20,7 @@ When interacting with a Flutter app using FlutterPilot:
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
 - **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. PII and passwords are automatically redacted.
 - **On-screen only**: finders, assertions and trees ignore routes covered by another page and hidden tabs, so `assert_text_visible` never passes on something the user can't see.
+- **System alerts and backgrounding (iOS simulator, needs idb)**: permission alerts are not in the Flutter tree — `native_describe_screen` lists them with tap points and `native_tap` taps them (points). iOS suspends a backgrounded app; tools then say so at once, and `native_open_app` brings it back with its state.
 - **Background window is fine**: when the OS reports the app hidden (window covered/minimized), FlutterPilot keeps it rendering while you drive it; the summary says so, and frame timings from that period are not profiled.
 
 ### 2. UI Interaction & Virtual Semantic Keys
