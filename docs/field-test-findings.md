@@ -386,6 +386,15 @@ keyboard forced on, and in Chrome:
 | 226 | request in full | ✅ | `get_http_profile(id: 1)` on the Show feed: `#1 GET …/showstories.json → 200 OK in 545 ms`, timeline "Connection established +317 ms … Waiting (TTFB) +544 ms" (connecting was most of it), both header sets and the JSON body. `url` filters; a filter matching nothing now says how many were recorded instead of "none recorded yet" |
 | 227 | e2e, unmocked request | ✅ | the fixture's Send through Dio without a mock appears as `#1 [404] GET https://example.com/ping` and in full with `id: 1`. The fixture doesn't catch Dio's 404, so the check runs just before the hot reload that clears the exception flag. Redaction of credentials (headers, JSON, form fields) is covered by unit tests only: no field-test app sends credentials |
 
+## Accessibility audit in audit_screen_health (ROADMAP §5.7), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 228 | unlabeled stop per story | ✅ found | `GestureDetector(onSecondaryTapUp)` in `lib/ui/story_tile.dart:22` adds a tap action with no label over each ListTile: `Tappable ×6 at (0, 162), (0, 227), … 800×64 has no label … Code: GestureDetector lib/ui/story_tile.dart:22:12. It covers "1 World Labs…" (same box)`. Adding `excludeFromSemantics: true` (tried, then reverted) clears it (excludeFromSemantics leaves the gesture itself working) |
+| 229 | first versions of that line | ❌→fixed | positions were physical pixels (semantics transforms carry the device pixel ratio); the source was the title Text (hit test), then StoryTile (nearest app widget); the same node was listed 6 times. Now logical points, the render object that owns the node and adds the tap, grouped per source |
+| 230 | contrast missed after a theme switch | ❌→fixed | with a grey 400 subtitle (tried, then reverted), `audit_screen_health` 90 ms after `set_app_settings(theme: "light")` reported nothing: `AnimatedTheme` fades for 200 ms and the pixels were still dark. The audit now waits up to 1 s for animations, then reports `"74 pts · …" contrast 1.79:1 (#bdbdbd on #fff8f6) … Code: Text lib/ui/story_tile.dart:33:13`. The real app's colors pass in light and dark |
+| 231 | contrast lines per row | ❌→fixed | one line per list row; now one per code and colors (`… and 4 more like it`); the row over the tinted bar stays separate (1.61:1 on #fceae5). Reading order: 27 controls top to bottom, no jumps |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

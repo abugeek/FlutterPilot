@@ -41,7 +41,7 @@ When interacting with a Flutter app using FlutterPilot:
 ### 3. Fast Verification — assert_* over flutter test
 - For "did my change actually work" checks, use `assert_widget` against the *already-running* app: `assert_widget(text: ...)`, `assert_widget(key: ...)`, `assert_widget(key: ..., enabled: true|false)`, `assert_widget(type: ..., count: N)`. These run in milliseconds — no new process, no cold VM boot.
 - For async results, use `wait_for(key | route | animations | state | frames)` or `tap_widget(key, waitFor: ...)` instead of sleeping.
-- `audit_screen_health` is for layout/accessibility sweeps (combine with `set_app_settings(textScale: 2)` to catch overflows), not for confirming a single interaction.
+- `audit_screen_health` is for layout/accessibility sweeps (combine with `set_app_settings(textScale: 2)` to catch overflows, or `theme: "dark"` for contrast), not for confirming a single interaction. It reports overflows, small tap targets, controls a screen reader can't name (with the widget and file:line that adds the tap), text below WCAG contrast (measured from the rendered pixels), and the screen reader order with any jumps back up the screen.
 
 ### 4. Visual Regression Diff Engine
 - Establish golden baselines with `compare_screenshot(name: "...", save: true)`.

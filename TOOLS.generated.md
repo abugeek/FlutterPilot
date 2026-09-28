@@ -215,7 +215,7 @@ Waits (polling, never a blind sleep) for one condition: key — a widget/selecto
 
 ## `audit_screen_health`
 
-Lists layout overflows (the yellow-black stripes) and tap targets smaller than the platform minimum (48dp on phones, 24px on desktop/web) on the current screen, with their positions. Use after set_app_settings(textScale/locale) or a layout change.
+Layout and accessibility check of the current screen: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. Use after set_app_settings(textScale/locale/theme) or a UI change.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

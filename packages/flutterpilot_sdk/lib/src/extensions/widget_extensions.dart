@@ -1694,6 +1694,13 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       final auditReport = UiHealthAuditor.audit();
+      final a11y = await AccessibilityAuditor.audit();
+      auditReport.addAll(a11y);
+      auditReport['isHealthy'] =
+          auditReport['isHealthy'] == true &&
+          (a11y['unlabeled'] as List).isEmpty &&
+          (a11y['lowContrast'] as List).isEmpty &&
+          (a11y['readingOrderJumps'] as List).isEmpty;
       return ServiceExtensionResponse.result(json.encode(auditReport));
     });
 

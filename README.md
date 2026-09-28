@@ -144,7 +144,8 @@ now, new errors — so you rarely need a follow-up read.
 
 **Verifying** — `assert_widget` (text, key, enabled, type + count),
 `wait_for` (widget, route, animations, state, frames), `compare_screenshot`
-(`save: true` for the baseline), `audit_screen_health`.
+(`save: true` for the baseline), `audit_screen_health` (overflows, tap
+targets, unlabeled controls, text contrast, screen reader order).
 
 **Navigation & environment** — `navigate_to` (deep links, go_router
 push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,

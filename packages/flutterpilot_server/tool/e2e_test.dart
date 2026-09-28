@@ -422,6 +422,13 @@ Future<void> main(List<String> args) async {
         Duration.zero,
         2048,
       );
+      // ROADMAP §5.7: the audit reads the semantics tree (labels, order).
+      await check(
+        'audit_screen_health lists the screen reader order',
+        'audit_screen_health',
+        {},
+        ['Screen reader order', '"Send"'],
+      );
       await check('mock /ping', 'mock_http_response', {
         'urlPattern': '/ping',
         'statusCode': 200,

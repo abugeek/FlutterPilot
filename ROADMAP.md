@@ -400,8 +400,14 @@ Highest value first. Each should answer a *why*, not just dump data.
    secret-looking JSON/form fields are masked. The listed duration was the
    time to *send* the request; it now runs to the end of the response.
    Findings #225–227.
-7. **Accessibility audit:** missing semantics labels on icon buttons, contrast
-   ratios, focus order — on top of the (now honest) tap-target check.
+7. ~~**Accessibility audit**~~ — done (2026-09-29), in `audit_screen_health`
+   (no new tool): from the semantics tree, tappable nodes with no
+   label/tooltip (grouped per source, attributed to the widget that adds
+   the tap action, with a hint when it covers a labeled control with the
+   same box); WCAG contrast of every on-screen text from the rendered
+   pixels (text color from its style when opaque; 4.5:1, large 3:1); the
+   screen reader order of the controls and where it jumps back up.
+   Findings #228–231.
 8. **Native crash reason:** when the app dies outside Dart (an Objective-C,
    Swift or Kotlin exception — e.g. Firebase's iOS SDK aborting on a
    malformed API key, findings #161), the agent only sees "not running";

@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'src/accessibility_auditor.dart';
 import 'src/ai_overlay_manager.dart';
 import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
