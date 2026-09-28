@@ -32,7 +32,7 @@ void main(List<String> args) async {
       abbr: 'p',
       help:
           'Path to the Flutter project root (where pubspec.yaml lives). '
-          'Used by read_dart_file, list_dart_files, and get_build_config. '
+          'Used to find the app flutter run started there. '
           'Defaults to the current working directory.',
     )
     ..addOption(

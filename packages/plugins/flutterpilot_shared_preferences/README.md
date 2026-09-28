@@ -31,7 +31,7 @@ void main() async {
 |------|-------------|
 | `get_shared_preferences` | Returns all keys and values |
 | `set_shared_preference` | Writes a key with a typed value |
-| `clear_shared_preferences` | Removes one key or clears all |
+| `set_shared_preference(remove: true)` | Removes one key or clears all |
 
 ### `set_shared_preference` Types
 

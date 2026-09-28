@@ -168,34 +168,42 @@ extension _StateExtensions on FlutterPilot {
           'Missing locale',
         );
       }
-      // ignore: invalid_use_of_protected_member
-      if (!FlutterPilot.localeNotifier.hasListeners) {
+      final reset = code == 'system' || code == 'default';
+      final requested = reset ? null : AppSettingsOverride.parseLocale(code);
+      if (!reset && requested == null) {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Locale override is not wired in this app, so it would have no effect. '
-          'Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
-          'FlutterPilot.localeNotifier, builder: (_, locale, _) => '
-          'MaterialApp(locale: locale, ...))',
+          ServiceExtensionResponse.invalidParams,
+          'Not a locale: "$code". Use a tag like "fr", "en-GB" or "zh-Hans-CN", '
+          'or "system".',
         );
       }
-      try {
-        if (code == 'default') {
-          FlutterPilot.localeNotifier.value = null;
-        } else {
-          final parts = code.split('_');
-          FlutterPilot.localeNotifier.value = parts.length > 1
-              ? ui.Locale(parts[0], parts[1])
-              : ui.Locale(parts[0]);
-        }
-        return ServiceExtensionResponse.result(
-          json.encode({'status': 'success'}),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Error: $e',
-        );
+      final r = await AppSettingsOverride.instance.setLocale(requested);
+      final shown = r['locale'] as String?;
+      final supported = (r['supported'] as List?)?.join(', ');
+      final String status;
+      final String? note;
+      if (shown == null) {
+        status = 'success';
+        note =
+            'no MaterialApp/CupertinoApp/WidgetsApp found; only code that '
+            'listens for device locale changes sees it';
+      } else if (requested == null) {
+        status = 'success';
+        note = 'device locale; the app shows $shown';
+      } else if (shown.split('_').first != requested.languageCode) {
+        status = 'no_effect';
+        note = r['appSetsLocale'] != null
+            ? 'the app sets MaterialApp(locale: ${r['appSetsLocale']}) '
+                  'itself, so the device locale does not change it'
+            : 'the app does not support ${requested.languageCode} '
+                  '(supportedLocales: $supported); it shows $shown';
+      } else {
+        status = 'success';
+        note = shown == requested.toString() ? null : 'the app shows $shown';
       }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': status, 'locale': shown, 'note': ?note}),
+      );
     });
 
     // -- ext.flutterpilot.setTextScaleFactor ----------------------------------
@@ -217,23 +225,29 @@ extension _StateExtensions on FlutterPilot {
           'scale must be a numeric value',
         );
       }
-      // ignore: invalid_use_of_protected_member
-      if (!FlutterPilot.textScaleNotifier.hasListeners) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Text scale override is not wired in this app, so it would have no '
-          'effect. Wrap MaterialApp: ValueListenableBuilder(valueListenable: '
-          'FlutterPilot.textScaleNotifier, builder: (_, scale, _) => MaterialApp('
-          'builder: (c, child) => scale == null ? child! : MediaQuery.withClampedTextScaling('
-          'minScaleFactor: scale, maxScaleFactor: scale, child: child!), ...))',
-        );
+      final requested = scale <= 0 ? null : scale;
+      final r = await AppSettingsOverride.instance.setTextScale(requested);
+      final shown = r['scale'] as double?;
+      final String status;
+      final String? note;
+      if (shown == null) {
+        status = 'success';
+        note = null;
+      } else if (requested == null) {
+        status = 'success';
+        note = 'device scale; the app gets ${shown}x';
+      } else if ((shown - requested).abs() > 0.01) {
+        status = shown == 1 ? 'no_effect' : 'limited';
+        note =
+            'the app limits text scaling above its Navigator (e.g. '
+            'MediaQuery.withClampedTextScaling in MaterialApp.builder): its '
+            'screens get ${shown}x';
+      } else {
+        status = 'success';
+        note = null;
       }
-      FlutterPilot.textScaleNotifier.value = scale <= 0 ? null : scale;
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'scale': FlutterPilot.textScaleNotifier.value ?? 'default',
-        }),
+        json.encode({'status': status, 'scale': shown, 'note': ?note}),
       );
     });
   }

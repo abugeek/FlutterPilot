@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Autonomous Flutter UI inspection, state verification, virtual semantic key selectors, composite macros, state injection, crash flight recorder, visual regression diffing, network mocking and performance profiling via FlutterPilot MCP tools.
+description: Inspect, drive and debug a running Flutter app through FlutterPilot's MCP tools — widget tree and screenshots, taps and text by key/selector/visible text, assertions, state injection, crash reports and flight log, visual regression, network mocking, performance profiling.
 ---
 
 # FlutterPilot Agent Skill
@@ -9,12 +9,12 @@ This skill guides AI coding agents (Antigravity, Claude, Cursor, Copilot, Cline,
 
 ## When to Use
 - **Autonomous UI Driving**: Filling forms, tapping buttons, and navigating complex user journeys without requiring manual `ValueKey`s.
-- **High-Speed Composite Macros**: Using `tap_and_wait` and `enter_text_and_submit` to execute multi-step user actions in 1 fast LLM turn.
-- **Subtree Scoping & Token Savings**: Using `get_widget_tree(rootKey: "form_id")` to inspect specific dialogs or forms with 90% fewer tokens.
-- **State Injection**: Seeding Riverpod/Bloc state directly (`set_riverpod_state`, `batch_set_state`).
-- **Crash Flight Recording**: Rolling crash timelines (`get_flight_log`) and crash reports with the failing source location (`get_latest_crash_report`).
-- **Memory & Allocation Inspections**: Checking heap capacity, used bytes, and top Dart classes (`get_memory_details`, `get_allocation_profile`).
-- **Visual Regression Engine**: Word-aligned 32-bit pixel diff detection with magenta highlighting (`compare_screenshot`).
+- **One call instead of several**: `tap_widget(waitFor: ...)`, `fill_form(submitWith: ...)` and `execute_action_chain` run multi-step actions in one turn.
+- **Subtree scoping**: `get_widget_tree(rootKey: "form_id")` returns only one dialog or form.
+- **State Injection**: Seeding Riverpod/Bloc state directly (`set_state`).
+- **Crash Flight Recording**: Rolling crash timelines (`get_flight_log`) and crash reports with the failing source location (`get_errors(report: true)`).
+- **Memory & Allocation Inspections**: Checking heap capacity, used bytes, and top Dart classes (`get_memory_details`, `classes: true`).
+- **Visual regression**: `compare_screenshot(name, save: true)`, then `compare_screenshot(name)` — changed % and a diff image with changes in magenta.
 
 ---
 
@@ -26,11 +26,11 @@ flowchart TD
     B --> C[get_widget_tree / Scoped Tree]
     C --> D{Perform Action}
     D -->|Single Action| E[tap_widget / enter_text]
-    D -->|Composite Action| F[tap_and_wait / enter_text_and_submit]
+    D -->|Tap then wait / form| F[tap_widget waitFor / fill_form]
     D -->|Batch Sequence| G[execute_action_chain]
     E & F & G --> I[Verify UI / State / Diff]
     I --> J{Error or Crash?}
-    J -- Yes --> K[get_latest_crash_report -> Fix Code -> hot_reload -> assert_*]
+    J -- Yes --> K[get_errors -> Fix Code -> hot_reload -> assert_widget]
     J -- No --> L[Complete Task]
 ```
 
@@ -40,10 +40,10 @@ flowchart TD
 
 ### 1. Fast UI Reconnaissance (Minimal Tokens)
 ```json
-// Inspect full compacted widget hierarchy (75-85% token reduction)
+// The app's own widgets, layout wrappers pruned
 call_tool("get_widget_tree", {"compact": true})
 
-// Scope inspection to only an active dialog, form, or bottom sheet (90% extra savings)
+// Only one dialog, form, or bottom sheet
 call_tool("get_widget_tree", {"rootKey": "login_form", "compact": true})
 
 // Quick visual screenshot
@@ -52,25 +52,24 @@ call_tool("capture_screenshot", {})
 
 ### 2. High-Speed UI Driving & Composite Macros
 ```json
-// 1-Turn Macro: Tap button and wait until next screen/widget appears
-call_tool("tap_and_wait", {
-  "target": "Button['Log In']",
-  "expect": "home_dashboard",
-  "timeout": 5000
+// Tap, then wait until the next screen's widget appears
+call_tool("tap_widget", {
+  "key": "Button['Log In']",
+  "waitFor": "home_dashboard",
+  "timeoutMs": 5000
 })
 
-// 1-Turn Macro: Enter text into input and immediately submit
-call_tool("enter_text_and_submit", {
-  "target": "TextField['Email']",
-  "text": "alice@example.com",
-  "submitTarget": "Button['Continue']"
+// Fill fields and submit in one call
+call_tool("fill_form", {
+  "fields": {"TextField['Email']": "alice@example.com"},
+  "submitWith": "Button['Continue']"
 })
 
-// High-speed native action batch (executes inside Flutter engine in 2ms)
+// A known sequence of steps, run inside the app in one call
 call_tool("execute_action_chain", {
   "actions": [
-    {"action": "enterText", "target": "TextField['Username']", "text": "alice"},
-    {"action": "enterText", "target": "TextField['Password']", "text": "secret123"},
+    {"action": "enter_text", "target": "TextField['Username']", "text": "alice"},
+    {"action": "enter_text", "target": "TextField['Password']", "text": "secret123"},
     {"action": "tap", "target": "Button['Sign In']"}
   ]
 })
@@ -78,9 +77,8 @@ call_tool("execute_action_chain", {
 
 ### 3. State Management & Atomic Seeding
 ```json
-// Atomic multi-variable state update in 1ms pass (Riverpod / Bloc)
-call_tool("batch_set_state", {
-  "type": "riverpod",
+// Several Riverpod / Bloc states at once (names from get_state)
+call_tool("set_state", {
   "states": {
     "themeProvider": "dark",
     "isLoggedIn": true,

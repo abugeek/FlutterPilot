@@ -9,9 +9,10 @@ tools that always work beat many tools that sometimes work.
 
 ---
 
-## 0. State as of 2026-09-27 (PR #1 merged)
+## 0. State as of 2026-09-28
 
-- 129 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
+- 62 MCP tools (164 → 129 → 62, §4.2); an app sees only those that work for it
+  (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
@@ -164,26 +165,54 @@ current major. §1 is done.
    and drifts — delete it or generate it. README still advertises old
    category counts.
 
-10. **Self-heal is alarmist and heavy:** a 38px layout overflow is logged as
-    "🚨 CRITICAL APP CRASH", marks the app UNSTABLE, and every captured error
-    fires 6 extension calls (including a full widget tree) from the server
-    (`SelfHealManager.handleCrash`). Classify by severity (layout vs uncaught
-    exception), debounce repeated errors, and fetch diagnostics lazily when
-    `get_latest_crash_report` is actually called.
-11. **Keyboard simulator** (`keyboard_simulator.dart`) dispatches each key
-    twice — `HardwareKeyboard.handleKeyEvent` *and* the deprecated
-    `keyMessageHandler`. Use one correct path (the platform key-data path
-    `KeyEventManager.handleKeyData` like flutter_test's `KeyEventSimulator`),
-    and decide what "type characters" means per platform (desktop text editing
-    goes through the OS text-input client, so Backspace/characters don't edit
-    fields today — `enter_text` is the supported way).
-12. **Text scale / locale overrides** need the app to wrap MaterialApp in a
-    `ValueListenableBuilder` (tools now say so). Let `flutterpilot init` inject
-    that wiring, like it injects `NavigationTracker`.
-13. **Settle timing:** post-action state is read ~150 ms after an action, so
-    during page/menu transitions (~300 ms) it can list the previous screen's
-    elements. Wait for route animations (`ModalRoute.animation` status) and
-    popup menus before snapshotting.
+10. **Self-heal is alarmist and heavy:** done. Layout overflows are
+    warnings (SDK `severity`), not uncaught exceptions: no flag, no
+    notification. An uncaught exception notifies the client once per distinct
+    exception until the next hot reload (MCP log level `error`, no
+    "CRITICAL"). `get_errors(report: true)` is built on demand from 5 calls
+    (no widget tree): exception, the app's frames only (FlutterPilot and
+    `dart:` frames are counted, not shown), route, clipped state, last 6
+    requests — 3.5 KB → 0.4 KB in the e2e fixture. Layout errors name the
+    culprit as `Row (lib/main.dart:81:44)`. Proven by the fixture's Crash and
+    Squeeze buttons (e2e). Round 12 of `docs/field-test-findings.md`.
+11. **Keyboard simulator:** done. It already used one path
+    (`KeyEventManager.handleKeyData`, synthesized); the e2e fixture now
+    counts key-downs per key to keep it that way. What didn't work: editing
+    keys in a text field on macOS/iOS reported success and changed nothing
+    (editing comes from the OS input client). If the key event leaves the
+    focused field unchanged, the SDK applies the edit a key press makes
+    (character, Backspace/Delete, arrows, Home/End, select-all) as user input
+    — on Android/Linux/Windows Flutter's own shortcuts already do, and
+    nothing is applied twice (widget tests on all six platforms). `press_key`
+    reports the field's text and cursor. `enter_text` left the whole text
+    selected on desktop (focus selects all); the cursor now ends up at the
+    end. Round 13 of `docs/field-test-findings.md`.
+12. **Text scale / locale overrides:** done, with no wiring at all instead
+    of `init` wrapping MaterialApp (which missed apps whose MaterialApp is
+    not in main.dart, has its own `builder:`/`locale:`, or is Cupertino).
+    The locale goes to the app as a device locale change
+    (`dispatchLocalesChanged`) and resolves through its `supportedLocales`;
+    the text scale is put into the root MediaQuery (the one `View` builds
+    from the device), rebuilt first and patched before anything below builds
+    when a device change (keyboard, rotation, resize) refreshes it, and
+    re-patched after hot reload. The response says what the app shows: an
+    unsupported locale or an app that pins `locale:` or clamps text scaling
+    is reported ("had no effect" / "partly applied"), not faked. `init` no
+    longer rewrites MaterialApp; the notifiers are deprecated and old wiring
+    keeps working. Round 14 of `docs/field-test-findings.md`.
+13. **Settle timing:** done. Measured on a scratch go_router app and
+    hn_reader: page, dialog, sheet and popup transitions were already
+    waited out, but long-press, double-tap, fill_form(submitWith), swipe,
+    drag, toggle and x/y taps weren't; drawers and tab switches (no route)
+    answered mid-slide; navigation 250 ms after a tap read as "nothing
+    changed"; tools failed as "not registered" right after a hot restart.
+    Every mutating tool now reads the screen once routes are still and the
+    on-screen text holds still between frames (text that keeps moving past
+    600 ms is a loop — marquee, pulsing badge — and is ignored, and
+    remembered); an action that changed nothing is watched 0.5 s more and
+    says so; a progress indicator on screen is reported ("may still be
+    loading"). Hot restart answers once the new isolate drew its first frame
+    and registered FlutterPilot. Round 15 of `docs/field-test-findings.md`.
 
 ## 2. Coverage the product claims but hasn't proven
 
@@ -261,14 +290,29 @@ current major. §1 is done.
    a Hive-only app 86 / 45 KB, the e2e fixture (Dio) 88.
    Native tools only on iOS; zero-code apps 29. Round 10 of
    `docs/field-test-findings.md`.
-2. **Shrink further:** candidates to merge/remove after field-testing —
-   `navigate_to` / `jump_to_screen` / `simulate_deep_link` / `gorouter_navigate`
-   (one navigation tool), the `wait_*` family (one), `read_dart_file` /
-   `list_dart_files` / `get_build_config` (coding agents already read files),
-   `start_recording` / `stop_and_generate_test`. Realistic target: 60–80 tools.
-3. **Tool descriptions:** remove marketing language ("360-degree", "<5ms",
-   "Superpowers"); state what it returns and when to use it. Agents choose
-   tools from descriptions.
+2. **Shrink further:** done — 125 → 62 tools (58 → 34 KB of definitions with
+   every plugin; the e2e fixture 88 → 42 tools, hn_reader 104 → 48).
+   Families became one tool with a parameter: `tap_widget` (`gesture`
+   double/long/secondary, `waitFor`), `wait_for` (key/route/animations/state/
+   frames), `navigate_to` (deep links, go_router push/replace),
+   `get_navigation_stack` (go_router routes/history), `set_app_settings`
+   (theme, locale, textScale, orientation, debug overlays), `assert_widget`,
+   `get_state` / `set_state` (Riverpod + Bloc), `hot_reload` (`restart`),
+   `get_errors` (`report`), `compare_screenshot` (`save`), `get_widget_tree`
+   (`diff`), and `clear`/`delete` flags on the log, profile, mock and storage
+   tools. Deleted: `read_dart_file` / `list_dart_files` / `get_build_config`,
+   `start_recording` / `stop_and_generate_test` (recorded only the agent's
+   own actions), `get_stream_logs` (nothing fed it), `get_recent_events`,
+   the sqflite/drift table listers (`exec_sql_query` on sqlite_master).
+   `tool_registration_test` fails above 80. Round 11 of
+   `docs/field-test-findings.md`.
+3. **Tool descriptions:** done — every description says what the tool
+   returns and when to use it (or what to use instead); no "CALL THIS",
+   "PREREQUISITES", speed claims or emoji, no "needs the X plugin" (plugin
+   tools are only listed when the plugin is there), no implementation
+   details (idb commands, pointer maths). `tool_registration_test` rejects
+   selling phrases and descriptions over 600 chars. Responses lost their
+   emoji banners too (audit, action chain, compare, connect).
 
 ## 5. DevTools parity — what developers actually open DevTools for
 
@@ -357,13 +401,13 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
   test on long lists, nested scrollables, horizontal lists, lazy lists where
   the target isn't built yet.
-- **`stream_inspector.dart`** (`get_stream_logs`) — WebSocket/stream capture;
-  what wires it? Probably nothing in a normal app.
-- **`flight_recorder.dart`**, `get_flight_log`, `start_recording` /
-  `stop_and_generate_test` — useful only if §6 is built on top.
+- **`stream_inspector.dart`** — nothing wires it; its tool is gone (§4.2),
+  the SDK code can go too.
+- **`flight_recorder.dart`**, `get_flight_log` — useful only if §6 is built
+  on top. (The recording tools were deleted in §4.2.)
 - **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS
   simulator only) — test on a simulator or hide on other platforms.
-- **Plugin write tools** that make real network calls (`supabase_sign_out`,
+- **Plugin write tools** that make real network calls (`supabase_session`,
   `log_analytics_event`, `record_crashlytics_error`, ...) — keep behind
   `--allow-destructive` and verify they're labeled as such.
 - **Example app** (`examples/flutter_pilot_example`) — 12 demo screens incl.

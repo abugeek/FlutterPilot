@@ -172,7 +172,7 @@ class SecureStoragePilotInspector {
           ServiceExtensionResponse.extensionError,
           'Could not list secure storage keys: this platform/keychain setup '
           'does not support readAll() ($e). Read a key you know with '
-          'read_secure_storage_key instead.',
+          'get_secure_storage(key: ...) instead.',
         );
       }
     });

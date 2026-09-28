@@ -11,17 +11,21 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 /// Usage (from packages/flutterpilot_server):
 ///   dart run tool/e2e_test.dart [-d <device>]   # default device: macos
 ///   dart run tool/e2e_test.dart --zero-code [-d <device>]
+///   add --verbose to print every response
 ///
 /// --zero-code runs a plain `flutter create` app without flutterpilot_sdk
 /// and checks what an agent gets from Flutter's own inspector instead.
 ///
-/// Covers: init wiring, widget tree, enter_text, press_key, secondary_tap,
+/// Covers: init wiring, widget tree, enter_text, press_key, secondary tap,
+/// text scale and locale on an unwired MaterialApp,
 /// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
-/// hot_reload applying an edited source file with state kept, hot_restart.
+/// hot_reload applying an edited source file with state kept, hot restart.
 Future<void> main(List<String> args) async {
   final d = args.indexOf('-d');
   final device = d >= 0 && d + 1 < args.length ? args[d + 1] : 'macos';
   final zeroCode = args.contains('--zero-code');
+  // Prints every response in full, not only failures.
+  final verbose = args.contains('--verbose');
   final isDesktop = const {'macos', 'linux', 'windows'}.contains(device);
   final isWeb = device == 'chrome' || device == 'web-server';
   final isMobile = !isDesktop && !isWeb;
@@ -153,9 +157,12 @@ Future<void> main(List<String> args) async {
         }
       } while (!ok && DateTime.now().isBefore(deadline));
       if (!ok) failed++;
-      final shown = text.length > 300 ? '${text.substring(0, 300)}…' : text;
+      final shown = verbose || text.length <= 300
+          ? text
+          : '${text.substring(0, 300)}…';
       print(
-        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $shown'}',
+        '${ok ? '✅' : '❌'} $label (${text.length}b)'
+        '${ok && !verbose ? '' : '\n   $shown'}',
       );
     }
 
@@ -265,6 +272,12 @@ Future<void> main(List<String> args) async {
         true,
       );
       await check('hot_reload', 'hot_reload');
+      await checkAbsent(
+        'hot reload clears the exception flag',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
       await check(
         'print output captured',
         'get_debug_logs',
@@ -314,7 +327,7 @@ Future<void> main(List<String> args) async {
       final pluginsOk =
           listed.contains('mock_http_response') &&
           !listed.contains('query_supabase_table') &&
-          !listed.contains('get_riverpod_state');
+          !listed.contains('get_state');
       if (!pluginsOk) failed++;
       print(
         '${pluginsOk ? '✅' : '❌'} plugin tools only for registered plugins',
@@ -342,7 +355,7 @@ Future<void> main(List<String> args) async {
         await check('native_open_app', 'native_open_app', {}, ['foreground']);
         await check(
           'app answers again after native_open_app',
-          'assert_widget_visible',
+          'assert_widget',
           {'target': 'Send'},
           [],
           false,
@@ -357,17 +370,17 @@ Future<void> main(List<String> args) async {
       );
       if (isDesktop) {
         await check(
-          'set_device_rotation honest on desktop',
-          'set_device_rotation',
+          'rotation honest on desktop',
+          'set_app_settings',
           {'orientation': 'landscape'},
           ['Not applicable on desktop', 'skipped'],
         );
       } else if (isMobile) {
-        await check('rotate to landscape', 'set_device_rotation', {
+        await check('rotate to landscape', 'set_app_settings', {
           'orientation': 'landscape',
         });
         await expectViewport('viewport is landscape', landscape: true);
-        await check('rotate back to portrait', 'set_device_rotation', {
+        await check('rotate back to portrait', 'set_app_settings', {
           'orientation': 'portrait',
         });
         await expectViewport('viewport is portrait again', landscape: false);
@@ -400,7 +413,7 @@ Future<void> main(List<String> args) async {
       await check('tap Send', 'tap_widget', {'key': 'Send'});
       await check(
         'mocked response reached UI',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Hello, Pilot (200)'},
         [],
         false,
@@ -410,6 +423,84 @@ Future<void> main(List<String> args) async {
         '/ping',
         '200',
       ]);
+
+      // Merged tools (ROADMAP §4.2): one tool, the mode chosen by a parameter.
+      await check(
+        'wait_for a widget',
+        'wait_for',
+        {'key': 'Send'},
+        ['on screen'],
+      );
+      await check('wait_for needs a condition', 'wait_for', {}, [
+        'Say what to wait for',
+      ], true);
+      await check(
+        'enter_text "" clears the field',
+        'enter_text',
+        {'target': 'Name', 'text': ''},
+        ['Cleared'],
+      );
+      await check(
+        'dark theme',
+        'set_app_settings',
+        {'theme': 'dark'},
+        ['✓ theme dark'],
+      );
+      await check('light theme', 'set_app_settings', {'theme': 'light'});
+      // Text scale and locale act like the device settings: no wiring in the
+      // fixture's plain MaterialApp (ROADMAP §3.12).
+      await check(
+        'text scale reaches an unwired app',
+        'set_app_settings',
+        {'textScale': 1.5},
+        ['✓ text scale 1.5'],
+      );
+      await check('app shows scale 1.5', 'assert_widget', {
+        'text': 'Scale 1.5',
+      });
+      await check(
+        'text scale resets',
+        'set_app_settings',
+        {'textScale': 0},
+        ['✓ text scale 0'],
+      );
+      await check('app shows scale 1.0', 'assert_widget', {
+        'text': 'Scale 1.0',
+      });
+      await check(
+        'locale reaches an unwired app',
+        'set_app_settings',
+        {'locale': 'en-GB'},
+        ['✓ locale en-GB'],
+      );
+      await check('app shows en_GB', 'assert_widget', {'text': 'Locale en_GB'});
+      await check(
+        'unsupported locale is reported, not faked',
+        'set_app_settings',
+        {'locale': 'fr'},
+        ['had no effect', 'does not support fr', 'en_US, en_GB'],
+      );
+      await check(
+        'locale back to the device',
+        'set_app_settings',
+        {'locale': 'system'},
+        ['✓ locale system'],
+      );
+      await check(
+        'save baseline',
+        'compare_screenshot',
+        {'name': 'home', 'save': true},
+        ['saved'],
+      );
+      await check(
+        'compare with baseline',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 5},
+        ['PASSED'],
+      );
+      await check('assert_widget needs a check', 'assert_widget', {}, [
+        'Say what to check',
+      ], true);
 
       // Keyboard, context menu, pinch, discovery, and on-screen-only assertions.
       // enter_text focuses the field (the tap on Send above moved focus away).
@@ -424,16 +515,72 @@ Future<void> main(List<String> args) async {
       const react = Duration(seconds: 5);
       await check(
         'submit handled',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Submitted: Pilot'},
         [],
         false,
         react,
       );
-      await check('secondary_tap', 'secondary_tap', {'key': 'card'});
+      // Keyboard (ROADMAP §3.11): each key reaches the app once, and in a
+      // text field editing keys edit it (desktop editing normally comes from
+      // the OS input client, which synthesized key events never reach).
+      await check('nothing focused', 'focus_widget', {});
+      await check(
+        'a key arrives once',
+        'press_key',
+        {'key': 'escape'},
+        ['Key: Escape x1'],
+      );
+      await check('field for key editing', 'enter_text', {
+        'key': "TextField['Name']",
+        'text': 'Pilot',
+      });
+      await check(
+        'backspace edits the field',
+        'press_key',
+        {'key': 'backspace'},
+        ['Field: "Pilo" (cursor at 4)', 'Key: Backspace x1'],
+      );
+      await check(
+        'a character is typed',
+        'press_key',
+        {'key': 'x'},
+        ['Field: "Pilox"'],
+      );
+      await check(
+        'arrow moves the cursor',
+        'press_key',
+        {'key': 'arrowLeft'},
+        ['Field: "Pilox" (cursor at 4)'],
+      );
+      await check(
+        'select all',
+        'press_key',
+        {
+          'key': 'a',
+          'modifiers': ['meta'],
+        },
+        ['selected 0–5'],
+      );
+      await check(
+        'typing replaces the selection',
+        'press_key',
+        {'key': 'z'},
+        ['Field: "z" (cursor at 1)'],
+      );
+      await check(
+        'the app saw the edits',
+        'get_widget_properties',
+        {'key': "TextField['Name']"},
+        ['"text":"z"'],
+      );
+      await check('secondary tap', 'tap_widget', {
+        'key': 'card',
+        'gesture': 'secondary',
+      });
       await check(
         'context handler ran',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Context menu opened'},
         [],
         false,
@@ -445,7 +592,7 @@ Future<void> main(List<String> args) async {
       });
       await check(
         'zoom applied',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'zoom 1.0'},
         [],
         true,
@@ -476,8 +623,52 @@ Future<void> main(List<String> args) async {
         'Send',
         'card',
       ]);
+      // Errors (ROADMAP §3.10): a layout overflow is a bug to fix, not a
+      // crash; an uncaught exception is flagged, with a small report that
+      // points at the source line.
+      await check('overflow the layout', 'tap_widget', {'key': 'Squeeze'});
+      await check(
+        'overflow is listed with its widget and line',
+        'get_errors',
+        {},
+        ['overflowed', 'Row (lib/main.dart:'],
+        false,
+        react,
+      );
+      await checkAbsent(
+        'an overflow is not an uncaught exception',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
+      await check('undo the overflow', 'tap_widget', {'key': 'Squeeze'});
+      await check('throw from a button', 'tap_widget', {'key': 'Crash'});
+      await check(
+        'uncaught exception is flagged',
+        'get_errors',
+        {},
+        ['Boom from the Crash button', 'since the last hot reload'],
+        false,
+        react,
+      );
+      await check(
+        'crash report is small and names the source line',
+        'get_errors',
+        {'report': true},
+        ['Boom from the Crash button', 'main.dart:', '## Route'],
+        false,
+        Duration.zero,
+        2048,
+      );
+      await checkAbsent(
+        'the stack is the app\'s, not FlutterPilot\'s',
+        'get_errors',
+        {},
+        ['flutterpilot_sdk', 'asynchronous suspension', 'Widget Tree'],
+      );
+
       // `target` works wherever `key` does.
-      await check('target alias', 'assert_widget_visible', {'target': 'Send'});
+      await check('target alias', 'assert_widget', {'target': 'Send'});
       // Post-action state waits for the page transition: it lists the new
       // page's back button, not the previous screen.
       await check(
@@ -488,7 +679,7 @@ Future<void> main(List<String> args) async {
       );
       await check(
         'covered route is not "visible"',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version A'},
         [],
         true,
@@ -500,15 +691,52 @@ Future<void> main(List<String> args) async {
         {'target': 'PIN', 'text': 's3cret-pin'},
         ['s3cret-pin'],
       );
-      // press_back waits for the pop transition and reports the new screen.
-      await check('back', 'press_back', {}, ['Route changed', 'Send']);
+      // Back waits for the pop transition and reports the new screen.
+      await check(
+        'back',
+        'press_key',
+        {'key': 'back'},
+        ['Route changed', 'Send'],
+      );
       await check(
         'home visible again',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version A'},
         [],
         false,
         settle, // CI simulators can be slow to dismiss the keyboard and pop
+      );
+      // Settle timing (ROADMAP §3.13): each response describes the screen
+      // the action led to, not the one mid-animation or before a late push.
+      await check(
+        'navigation after a delay is in the tap response',
+        'tap_widget',
+        {'key': 'Later'},
+        ['Route changed', 'DetailsPage', 'Back'],
+      );
+      await check(
+        'back from the delayed page',
+        'press_key',
+        {'key': 'back'},
+        ['Route changed', 'Send'],
+      );
+      await check(
+        'a drawer is read once it is open',
+        'tap_widget',
+        {'key': 'Drawer'},
+        ['Tappable now', 'Drawer item'],
+      );
+      await check(
+        'and once it is closed',
+        'tap_widget',
+        {'key': 'Drawer item'},
+        ['Tappable now', 'Send'],
+      );
+      await check(
+        'a tap that does nothing says so',
+        'tap_widget',
+        {'key': 'card'},
+        ['Nothing changed in the 0.5 s after it'],
       );
 
       final main = File('$app/lib/main.dart');
@@ -516,22 +744,28 @@ Future<void> main(List<String> args) async {
         main.readAsStringSync().replaceFirst('Version A', 'Version B'),
       );
       await check('hot_reload', 'hot_reload');
+      await checkAbsent(
+        'hot reload clears the exception flag',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
       await check(
         'reload applied edited source',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version B'},
         [],
         false,
         const Duration(seconds: 5),
       );
-      await check('reload kept state', 'assert_text_visible', {
+      await check('reload kept state', 'assert_widget', {
         'text': 'Hello, Pilot (200)',
       });
 
-      await check('hot_restart', 'hot_restart');
+      await check('hot restart', 'hot_reload', {'restart': true});
       await check(
         'app back after restart',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version B'},
         [],
         false,
@@ -539,7 +773,7 @@ Future<void> main(List<String> args) async {
       );
       await check(
         'restart reset state',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Hello, Pilot'},
         [],
         true,
@@ -663,6 +897,7 @@ class _Mcp {
 const _fixtureMain = r'''
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterpilot_dio/flutterpilot_dio.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
@@ -672,7 +907,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
   dio = Dio()..interceptors.add(DioPilotInterceptor());
-  runApp(MaterialApp(navigatorObservers: [NavigationTracker()], home: const Home()));
+  runApp(MaterialApp(
+    navigatorObservers: [NavigationTracker()],
+    supportedLocales: const [Locale('en', 'US'), Locale('en', 'GB')],
+    home: const Home(),
+  ));
 }
 
 class Home extends StatefulWidget {
@@ -688,16 +927,56 @@ class _HomeState extends State<Home> {
   String _submitted = '';
   String _menu = '';
   String _zoomed = 'zoom 1.0';
+  bool _squeeze = false;
+  final _keyDowns = <String, int>{};
+  String _lastKey = '';
+
+  // Counts key-downs as the app sees them: press_key must deliver each once.
+  bool _onKey(KeyEvent e) {
+    if (e is KeyDownEvent) {
+      setState(() {
+        _lastKey = e.logicalKey.keyLabel;
+        _keyDowns[_lastKey] = (_keyDowns[_lastKey] ?? 0) + 1;
+      });
+    }
+    return false;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
 
   Future<void> _send() async {
     final res = await dio.get('https://example.com/ping');
     setState(() => _greeting = 'Hello, ${_name.text} (${res.statusCode})');
   }
 
+  final _scaffold = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) => Scaffold(
+    key: _scaffold,
+    drawer: Drawer(
+      child: SafeArea(
+        child: TextButton(
+          onPressed: () => _scaffold.currentState!.closeDrawer(),
+          child: const Text('Drawer item'),
+        ),
+      ),
+    ),
     body: Column(children: [
       const Text('Version A'),
+      // What set_app_settings(textScale/locale) reached, with no wiring above.
+      Text('Scale ${MediaQuery.textScalerOf(context).scale(10) / 10}'),
+      Text('Locale ${Localizations.localeOf(context)}'),
       TextField(
         controller: _name,
         decoration: const InputDecoration(labelText: 'Name'),
@@ -730,6 +1009,35 @@ class _HomeState extends State<Home> {
         ),
         child: const Text('Details'),
       ),
+      Wrap(children: [
+        // Navigates after a short "request": the tap's response should
+        // still show the page it led to.
+        TextButton(
+          onPressed: () async {
+            await Future<void>.delayed(const Duration(milliseconds: 300));
+            if (!context.mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const DetailsPage()),
+            );
+          },
+          child: const Text('Later'),
+        ),
+        TextButton(
+          onPressed: () => _scaffold.currentState!.openDrawer(),
+          child: const Text('Drawer'),
+        ),
+        TextButton(
+          onPressed: () => throw StateError('Boom from the Crash button'),
+          child: const Text('Crash'),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _squeeze = !_squeeze),
+          child: const Text('Squeeze'),
+        ),
+        Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
+        if (_squeeze)
+          const SizedBox(width: 40, child: Row(children: [SizedBox(width: 90, height: 8)])),
+      ]),
     ]),
   );
 }

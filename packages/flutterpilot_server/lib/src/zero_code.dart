@@ -18,33 +18,20 @@ const Set<String> zeroCodeTools = {
   'switch_device',
   'get_capabilities',
   'get_operation',
-  'cancel_operation',
   // Inspection (answered from the Flutter inspector).
   'get_app_summary',
   'get_widget_tree',
   'capture_screenshot',
-  'save_screenshot_baseline',
   'compare_screenshot',
   'get_errors',
   'get_debug_logs',
-  'clear_debug_logs',
-  // Source files.
-  'get_build_config',
-  'read_dart_file',
-  'list_dart_files',
-  // flutter_tools services and framework debug extensions.
+  // flutter_tools services and framework debug extensions (theme and the
+  // debug overlays; the other settings need the SDK and say so).
   'hot_reload',
-  'hot_restart',
-  'set_theme',
-  'toggle_debug_paint',
-  'toggle_repaint_rainbow',
-  'toggle_slow_animations',
+  'set_app_settings',
   // VM service.
   'get_memory_details',
-  'get_allocation_profile',
   'get_http_profile',
-  'clear_http_profile',
-  'get_vm_info',
 };
 
 /// The message for an SDK-only tool called against an app without the SDK.

@@ -259,7 +259,7 @@ void main() {
       reason: 'Recording status should reset after stop',
     );
 
-    // Scroll to pump_frames section
+    // Scroll to wait_for(frames) section
     await _scroll(tester, -300);
     await tester.ensureVisible(
       find.byKey(const Key('increment_counter_button')),
@@ -282,7 +282,7 @@ void main() {
       reason: 'Counter should show 5 after 5 taps',
     );
 
-    // Tap pump_frames button
+    // Tap wait_for(frames) button
     await _tap(
       tester,
       'pump_frames_button',

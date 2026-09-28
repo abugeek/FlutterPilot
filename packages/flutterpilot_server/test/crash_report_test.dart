@@ -3,35 +3,78 @@ import 'package:test/test.dart';
 
 void main() {
   group('CrashReport', () {
-    test('formats Markdown correctly', () {
-      final report = CrashReport(
-        timestamp: '2026-04-06T12:00:00',
-        exception: 'TestException: something went wrong',
-        errorData: {'count': 1},
-        navigationData: ['/home', '/settings'],
-      );
+    final report = CrashReport(
+      timestamp: '2026-09-28T11:06:50',
+      exception: 'Bad state: Boom',
+      errorData: {
+        'errors': [
+          {
+            'exception': 'Other',
+            'stackTrace': '#0 other (package:app/a.dart:1:1)',
+          },
+          {
+            'exception': 'Bad state: Boom',
+            'stackTrace':
+                '#0 _HomeState.build (package:app/main.dart:73:28)\n'
+                '  ... [8 framework frames skipped]',
+          },
+        ],
+      },
+      riverpodData: {
+        'states': {
+          'counterProvider': {'value': 3, 'type': 'int'},
+          'itemsProvider': {'value': 'x' * 500, 'type': 'List'},
+        },
+      },
+      blocData: 'N/A',
+      networkData: {
+        'logs': [
+          for (var i = 0; i < 10; i++)
+            {'type': 'response', 'uri': 'https://api/$i', 'statusCode': 200},
+        ],
+      },
+      navigationData: {
+        'stack': ['/', '/cart'],
+      },
+    );
+    final md = report.toMarkdown();
 
-      final markdown = report.toMarkdown();
-
-      expect(markdown, contains('# 🚨 Critical App Crash Report'));
-      expect(markdown, contains('**Timestamp:** 2026-04-06T12:00:00'));
-      expect(markdown, contains('TestException: something went wrong'));
-      expect(markdown, contains('Recent Errors'));
-      expect(markdown, contains('Navigation Stack'));
-      expect(markdown, contains('DIRECTIVE FOR AI'));
+    test('says what happened, without alarm or directives', () {
+      expect(md, startsWith('# Uncaught exception\n\nBad state: Boom'));
+      expect(md, isNot(contains('CRITICAL')));
+      expect(md, isNot(contains('DIRECTIVE')));
     });
 
-    test('truncates large widget trees', () {
-      final largeTree = 'A' * 5000;
-      final report = CrashReport(
-        timestamp: 'now',
-        exception: 'Error',
-        widgetTreeData: largeTree,
-      );
+    test('shows the crashing error\'s app frame, not other errors', () {
+      expect(md, contains('package:app/main.dart:73:28'));
+      expect(md, isNot(contains('a.dart')));
+    });
 
-      final markdown = report.toMarkdown();
-      expect(markdown.length, lessThan(5000));
-      expect(markdown, contains('[Truncated]'));
+    test('route, clipped state and the last 6 requests', () {
+      expect(md, contains('/ -> /cart'));
+      expect(md, contains('counterProvider: 3'));
+      expect(md, isNot(contains('x' * 150)));
+      expect(md, contains('https://api/9'));
+      expect(md, contains('https://api/4'));
+      expect(md, isNot(contains('https://api/3 ')));
+    });
+
+    test('leaves out sections without data', () {
+      final bare = CrashReport(
+        timestamp: 't',
+        exception: 'E',
+        errorData: 'N/A',
+        riverpodData: 'N/A',
+        blocData: null,
+        networkData: 'N/A',
+        navigationData: 'N/A',
+      ).toMarkdown();
+      expect(bare, isNot(contains('##')));
+      expect(bare, contains('hot_reload'));
+    });
+
+    test('stays small', () {
+      expect(md.length, lessThan(1500));
     });
   });
 }

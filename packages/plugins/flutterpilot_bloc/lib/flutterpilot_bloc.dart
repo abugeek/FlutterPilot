@@ -86,7 +86,7 @@ class BlocPilotObserver extends BlocObserver {
     } on TypeError {
       throw StateError(
         '$name holds a ${current.runtimeType}; a JSON value '
-        '(${next.runtimeType}) can\'t be converted to it. set_bloc_state '
+        '(${next.runtimeType}) can\'t be converted to it. set_state '
         'works for bool/num/String/List/Map states — for class states, drive '
         'the UI or dispatch the event that produces the state.',
       );

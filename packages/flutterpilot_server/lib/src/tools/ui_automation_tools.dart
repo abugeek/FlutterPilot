@@ -31,6 +31,55 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
 /// needing a follow-up get_widget_tree/capture_screenshot round-trip.
 /// Only falls back to suggesting a screenshot when truly nothing
 /// observable changed — no route change and no widget-tree diff.
+/// " Route unchanged (/home)." — but never claims "unchanged" for a route
+/// the app can't name (no page in a Navigator): a navigation may have
+/// happened unseen.
+String _unchangedRoute(Object? route) => route == null || route == 'Unknown'
+    ? ' Route unknown (no page in a Navigator), so a navigation would not '
+          'show here: read the widget diff.'
+    : ' Route unchanged ($route).';
+
+/// What the screen shows once the action settled: the tappable elements,
+/// new errors, and whether it was still moving when read.
+String _screenNow(Map<String, dynamic>? data) {
+  final post = data?['postActionState'] as Map<String, dynamic>?;
+  final buffer = StringBuffer();
+  final elements = post?['visibleInteractiveElements'] as List?;
+  if (elements != null && elements.isNotEmpty) {
+    buffer.write(
+      '\nTappable now (${post!['interactiveElementsCount']}): '
+      '${elements.map((e) => '"$e"').join(', ')}',
+    );
+  }
+  if (post?['stillMoving'] == true) {
+    buffer.write(
+      '\nThe screen was still moving 2 s after the action (a looping '
+      'animation?), so the above may be mid-motion.',
+    );
+  }
+  if (post?['loading'] == true) {
+    buffer.write(
+      '\nA progress indicator is showing: results may still be loading; '
+      'wait_for them.',
+    );
+  }
+  final newErrors = post?['newErrorCount'];
+  if (newErrors is int && newErrors > 0) {
+    buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
+  }
+  return buffer.toString();
+}
+
+/// Said when an action changed nothing, even after being watched for a
+/// late effect ([delta] `quietMs`); empty otherwise.
+String _quietNote(Map<String, dynamic>? delta) {
+  final ms = delta?['quietMs'];
+  if (ms is! int) return '';
+  return ' Nothing changed in the ${(ms / 1000).toStringAsFixed(1)} s after '
+      'it either. If it starts slow work (a request), wait_for the result '
+      '(or pass waitFor).';
+}
+
 String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
   final delta = data?['delta'] as Map<String, dynamic>?;
   if (delta == null) return '$verb.';
@@ -45,18 +94,18 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
       '. Route changed: ${delta['fromRoute']} → ${delta['toRoute']}.',
     );
   } else {
-    buffer.write(
-      '. Route unchanged (${delta['toRoute'] ?? delta['fromRoute'] ?? 'unknown'}).',
-    );
+    buffer.write('.${_unchangedRoute(delta['toRoute'] ?? delta['fromRoute'])}');
   }
   buffer.write(diffText);
-  if (!navigated && diffText.isEmpty) {
+  buffer.write(_quietNote(delta));
+  if (!navigated && diffText.isEmpty && delta['quietMs'] == null) {
     buffer.write(
       ' No widget-tree changes detected either. HINT: If you expected a purely '
       'visual-only change (color, animation frame, pixel-level effect with no '
       'structural diff), call capture_screenshot to confirm.',
     );
   }
+  buffer.write(_screenNow(data));
   return buffer.toString();
 }
 
@@ -86,24 +135,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       buffer.write(
         changed
             ? ' Route changed: ${delta?['fromRoute'] ?? postState?['previousRoute'] ?? '?'} → $route.'
-            : ' Route unchanged ($route).',
+            : _unchangedRoute(route),
       );
     }
     // What appeared/disappeared, so the agent rarely needs a follow-up read.
     buffer.write(
       _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
     );
-    final elements = postState?['visibleInteractiveElements'] as List?;
-    if (elements != null && elements.isNotEmpty) {
-      buffer.write(
-        '\nTappable now (${postState!['interactiveElementsCount']}): '
-        '${elements.map((e) => '"$e"').join(', ')}',
-      );
-    }
-    final newErrors = postState?['newErrorCount'];
-    if (newErrors is int && newErrors > 0) {
-      buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
-    }
+    buffer.write(_quietNote(delta));
+    buffer.write(_screenNow(res.data));
     // A permission alert is not part of the Flutter tree (and doesn't even
     // change the app's lifecycle on iOS): an action that "did nothing" may
     // have opened one.
@@ -123,43 +163,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
   void _registerUiAutomationTools() {
     _tool(
-      'tap_at',
-      description:
-          'Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if you have a Key.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'x': JsonSchema.number(
-            description:
-                'X screen coordinate in logical pixels. Screen origin is top-left.',
-          ),
-          'y': JsonSchema.number(
-            description:
-                'Y screen coordinate in logical pixels. Screen origin is top-left.',
-          ),
-        },
-        required: ['x', 'y'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.tapAt', p);
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Tap successful. HINT: Use get_navigation_stack or get_riverpod_state to see if the app responded.',
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
       'tap_widget',
       description:
-          'Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton[\'Log In\']"), semantics identifier, visible text, or coordinates, and taps it. '
-          'Works reliably across all screen sizes and device types without needing hardcoded coordinates. '
-          'PREREQUISITES: Call get_interactive_elements or get_widget_tree to discover available widgets. '
-          'The response reports whether the route changed, post-action state, and widget-tree diff.',
+          'Taps a widget found by key, selector (e.g. "ElevatedButton[\'Log In\']"), '
+          'semantics identifier or visible text — or at x/y. Exact text wins; '
+          'text several widgets merely contain is refused with the candidates. '
+          'gesture: "double", "long" (durationMs) or "secondary" (right-click, '
+          'context menus). waitFor: a widget to wait for after the tap '
+          '(replaces a separate wait_for call). The response reports the '
+          'route change, a widget-tree diff and what is tappable now.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -167,12 +179,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'ValueKey string, semantic selector (e.g. "ElevatedButton[\'Sign In\']"), visible button text, or icon name (e.g. "IconButton[\'settings\']").',
           ),
           'identifier': JsonSchema.string(
-            description:
-                'Semantics identifier property (Flutter 3.19+) for robust AI targeting.',
+            description: 'Semantics identifier (Flutter 3.19+).',
           ),
           'semanticsId': JsonSchema.integer(
-            description:
-                'Numeric SemanticsNode ID from get_semantics_tree for accessibility-first interaction.',
+            description: 'SemanticsNode id from get_semantics_tree.',
           ),
           'text': JsonSchema.string(
             description: 'Visible text content within the widget to tap.',
@@ -181,53 +191,147 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton".',
           ),
+          'x': JsonSchema.number(
+            description: 'X in logical pixels (top-left origin), with y.',
+          ),
+          'y': JsonSchema.number(description: 'Y in logical pixels.'),
+          'gesture': JsonSchema.string(
+            enumValues: ['tap', 'double', 'long', 'secondary'],
+            description: 'Default "tap".',
+          ),
+          'durationMs': JsonSchema.integer(
+            description: 'Long-press duration (default 600).',
+          ),
           'maxAttempts': JsonSchema.integer(
             description:
                 'Max scroll attempts if widget is off-screen (default: 8).',
           ),
-          'x': JsonSchema.number(
-            description: 'Optional direct X screen coordinate.',
+          'waitFor': JsonSchema.string(
+            description:
+                'Key, selector or text of a widget expected to appear after the tap.',
           ),
-          'y': JsonSchema.number(
-            description: 'Optional direct Y screen coordinate.',
+          'timeoutMs': JsonSchema.integer(
+            description: 'How long to wait for waitFor (default 5000).',
           ),
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.tapWidget', p);
+        final gesture = p['gesture']?.toString() ?? 'tap';
+        final target = p['target'] ?? p['key'];
+        final String extension;
+        final Map<String, dynamic> args;
+        final String verb;
+        switch (gesture) {
+          case 'tap':
+            extension = 'ext.flutterpilot.tapWidget';
+            args = Map.of(p)
+              ..remove('gesture')
+              ..remove('waitFor')
+              ..remove('timeoutMs');
+            verb = 'Widget tapped';
+          case 'secondary':
+            extension = 'ext.flutterpilot.secondaryTapWidget';
+            args = Map.of(p)
+              ..remove('gesture')
+              ..remove('waitFor')
+              ..remove('timeoutMs');
+            verb = 'Secondary tap';
+          case 'double' || 'long':
+            if (target == null) {
+              return CallToolResult(
+                isError: true,
+                content: [
+                  TextContent(
+                    text:
+                        'A $gesture tap needs a key (key, selector or text), not coordinates.',
+                  ),
+                ],
+              );
+            }
+            extension = gesture == 'double'
+                ? 'ext.flutterpilot.doubleTapWidget'
+                : 'ext.flutterpilot.longPressWidget';
+            args = {
+              'key': target.toString(),
+              if (gesture == 'long' && p['durationMs'] != null)
+                'durationMs': p['durationMs'].toString(),
+            };
+            verb = gesture == 'double' ? 'Double-tapped' : 'Long-pressed';
+          default:
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'Unknown gesture "$gesture": use tap, double, long or secondary.',
+                ),
+              ],
+            );
+        }
+        final res = await _callExtensionRaw(extension, args);
         if (res.isError) return res.toCallToolResult();
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor == null || waitFor.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: _formatActionFeedback(verb, p, res))],
+          );
+        }
+        final fromRoute =
+            (res.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+        final waitRes = await _callExtensionRaw(
+          'ext.flutterpilot.waitForWidget',
+          {
+            'key': waitFor,
+            'timeoutMs': ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString(),
+            'previousRoute': ?fromRoute?.toString(),
+          },
+        );
+        if (waitRes.isError) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    '${_formatActionFeedback(verb, p, res)}\nBut "$waitFor" '
+                    'did not appear: ${waitRes.errorMessage}',
+              ),
+            ],
+          );
+        }
+        // Report the screen after the wait, not the one right after the tap.
         return CallToolResult(
           content: [
-            TextContent(text: _formatActionFeedback('Widget tapped', p, res)),
+            TextContent(
+              text: _formatActionFeedback(
+                '$verb${target != null ? ' "$target"' : ''}; then appeared',
+                const {},
+                waitRes,
+              ),
+            ),
           ],
         );
       },
     );
 
-    // Convenience alias matching standard MCP patterns
-
     _tool(
       'enter_text',
       description:
-          'Types text into a TextField, TextFormField, or editable widget. '
-          'Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. '
-          'Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. '
-          'AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").',
+          'Types text into a TextField/TextFormField found by key, selector '
+          '(e.g. "TextField[\'Email\']") or label, or into the focused field '
+          'when no key is given. Replaces the existing text unless '
+          'clear_first is false; text "" clears the field. Fires '
+          'onChanged; press_key("enter") afterwards submits.',
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(
-            description: 'The text to enter into the text field.',
+            description: 'The text to enter ("" clears the field).',
           ),
           'key': JsonSchema.string(
             description:
-                'Optional ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the text field to type into.',
+                'ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the field. Omit for the focused field.',
           ),
           'identifier': JsonSchema.string(
-            description: 'Optional semantics identifier of the text field.',
-          ),
-          'focused_element': JsonSchema.boolean(
-            description:
-                'If true, enters text into the currently focused text field without requiring a key.',
+            description: 'Semantics identifier of the text field.',
           ),
           'clear_first': JsonSchema.boolean(
             description:
@@ -237,7 +341,22 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['text'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.enterText', p);
+        final target = p['target'] ?? p['key'];
+        if (p['text']?.toString() == '' && target != null) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.clearTextField',
+            {'key': target.toString()},
+          );
+          return res.isError
+              ? res.toCallToolResult()
+              : CallToolResult(
+                  content: [TextContent(text: 'Cleared "$target".')],
+                );
+        }
+        final res = await _callExtensionRaw('ext.flutterpilot.enterText', {
+          ...p,
+          if (target == null) 'focused_element': true,
+        });
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
           content: [
@@ -245,7 +364,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               // Echo the SDK's copy of the text: it masks password fields.
               text: _formatActionFeedback(
                 'Typed "${res.data?['text'] ?? ''}" into',
-                {'key': p['target'] ?? p['key'] ?? 'the focused field'},
+                {'key': target ?? 'the focused field'},
                 res,
               ),
             ),
@@ -259,13 +378,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       description:
           'Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" '
           '(closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). '
-          'The response says which widget received it. To change text use enter_text / '
-          'clear_text_field — editing keys like backspace are handled by the OS on desktop.',
+          '"back" is the system back button: pops the current route, never '
+          'quits the app from the root. In a focused text field, characters, '
+          'backspace, delete, arrows, home/end and meta/ctrl+a edit it as '
+          'typing would, and the response shows the field\'s text and cursor; '
+          'to set a whole value, enter_text is simpler.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'Key name to press, e.g. "enter", "tab", "escape", "backspace", "arrowDown", "arrowUp", "space", or single characters.',
+                'Key name, e.g. "enter", "tab", "escape", "back", "arrowDown", "space", or a single character.',
           ),
           'modifiers': JsonSchema.array(
             items: JsonSchema.string(),
@@ -276,6 +398,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['key'],
       ),
       callback: (p, e) async {
+        if (p['key']?.toString().toLowerCase() == 'back') {
+          final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+          if (res.isError) return res.toCallToolResult();
+          final popped = res.data?['popped'] as bool? ?? false;
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: popped
+                    ? _formatActionFeedback('Back pressed', const {}, res)
+                    : 'Back pressed — already at root (nothing to pop).',
+              ),
+            ],
+          );
+        }
         final callParams = <String, dynamic>{'key': p['key']};
         if (p['modifiers'] != null) {
           final mods = p['modifiers'];
@@ -288,48 +424,29 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           callParams,
         );
         if (res.isError) return res.toCallToolResult();
+        final feedback = _formatActionFeedback(
+          'Key "${p['key']}" pressed on',
+          p,
+          res,
+        );
+        // In a text field, say what the field holds now: the diff above only
+        // tracks widgets, and a cursor move changes no widget.
+        final field = res.data?['field'] as Map<String, dynamic>?;
+        if (field == null) {
+          return CallToolResult(content: [TextContent(text: feedback)]);
+        }
+        final start = field['selectionStart'];
+        final end = field['selectionEnd'];
+        final cursor = start == end
+            ? 'cursor at $start'
+            : 'selected $start–$end';
         return CallToolResult(
           content: [
             TextContent(
-              text: _formatActionFeedback(
-                'Key "${p['key']}" pressed on',
-                p,
-                res,
-              ),
+              text:
+                  '$feedback\nField: "${field['text']}" ($cursor)'
+                  '${field['changed'] == true ? '' : ', unchanged'}.',
             ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'secondary_tap',
-      description:
-          'Performs a secondary tap (right-click / context tap) on a widget or coordinates. '
-          'Useful for triggering desktop/web context menus.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'The ValueKey or selector of the widget.',
-          ),
-          'identifier': JsonSchema.string(
-            description: 'Semantics identifier of the widget.',
-          ),
-          'text': JsonSchema.string(description: 'Visible text of the widget.'),
-          'type': JsonSchema.string(description: 'Widget runtime type.'),
-          'x': JsonSchema.number(description: 'Optional direct X coordinate.'),
-          'y': JsonSchema.number(description: 'Optional direct Y coordinate.'),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.secondaryTapWidget',
-          p,
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(text: _formatActionFeedback('Secondary tap', p, res)),
           ],
         );
       },
@@ -338,8 +455,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'pinch_zoom',
       description:
-          'Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. '
-          'Scale > 1 zooms in, scale < 1 zooms out.',
+          'Two-finger pinch on a widget or at x/y: scale > 1 zooms in, < 1 '
+          'zooms out. Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'scale': JsonSchema.number(
@@ -378,7 +495,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'scroll_into_view',
       description:
-          'Ensures a widget is visible by scrolling its parent list. Works with Keys, semantic selectors, or text labels.',
+          'Scrolls the enclosing list until the widget (key, selector or '
+          'text) is on screen. tap_widget already does this before tapping.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -401,78 +519,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'double_tap_widget',
-      description:
-          'Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description:
-                'The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.doubleTapWidget',
-          p,
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionDelta(res.data, verb: 'Double-tapped'),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'long_press_widget',
-      description:
-          'Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'The ValueKey string of the widget to long-press.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-          'durationMs': JsonSchema.integer(
-            description:
-                'Duration of the long press in milliseconds (default: 600ms).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final args = {
-          'key': (p['key'] ?? p['target']).toString(),
-          if (p['durationMs'] != null) 'durationMs': p['durationMs'].toString(),
-        };
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.longPressWidget',
-          args,
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionDelta(res.data, verb: 'Long press complete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
       'swipe_widget',
       description:
-          'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
+          'Swipes on a widget up/down/left/right: scroll a list, dismiss a '
+          'card, open a drawer. Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -515,7 +565,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'drag_widget',
       description:
-          'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
+          'Drags one widget onto another (drag-and-drop, reordering). Reports '
+          'what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'fromKey': JsonSchema.string(
@@ -543,109 +594,50 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'clear_text_field',
-      description:
-          'Clears the text of a TextField / TextFormField identified by its '
-          'widget key. Equivalent to select-all then delete. '
-          'Use enter_text to type new content afterwards.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'The ValueKey string of the text field to clear.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.clearTextField', {
-          'key': (p['key'] ?? p['target']).toString(),
-        });
-        return res.isError
-            ? res.toCallToolResult()
-            : CallToolResult(
-                content: [TextContent(text: 'Text field cleared.')],
-              );
-      },
-    );
-
-    _tool(
       'focus_widget',
       description:
-          'Taps the centre of the widget identified by key to request focus '
-          '(opens the software keyboard for a TextField). '
-          'Use unfocus_all to close the keyboard afterwards.',
+          'Focuses the widget found by key (opens the software keyboard for a '
+          'TextField). Without a key, removes focus from everything and '
+          'dismisses the keyboard.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'The ValueKey string of the widget to focus.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+            description:
+                'The ValueKey string or selector of the widget. Omit to unfocus all.',
           ),
         },
       ),
       callback: (p, e) async {
+        final target = p['target'] ?? p['key'];
+        if (target == null) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.unfocusAll',
+            {},
+          );
+          return res.isError
+              ? res.toCallToolResult()
+              : CallToolResult(
+                  content: [
+                    TextContent(text: 'Focus removed; keyboard dismissed.'),
+                  ],
+                );
+        }
         final res = await _callExtensionRaw('ext.flutterpilot.focusWidget', {
-          'key': (p['key'] ?? p['target']).toString(),
+          'key': target.toString(),
         });
         return res.isError
             ? res.toCallToolResult()
-            : CallToolResult(content: [TextContent(text: 'Widget focused.')]);
-      },
-    );
-
-    _tool(
-      'unfocus_all',
-      description:
-          'Removes focus from all widgets and dismisses the software keyboard. '
-          'Call this after finishing text input to close the keyboard before '
-          'taking screenshots or tapping other elements.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.unfocusAll', {});
-        return res.isError
-            ? res.toCallToolResult()
             : CallToolResult(
-                content: [TextContent(text: 'Keyboard dismissed.')],
+                content: [TextContent(text: 'Focused "$target".')],
               );
-      },
-    );
-
-    _tool(
-      'set_text_scale_factor',
-      description:
-          'Overrides the app-wide text scale factor for accessibility testing. '
-          'Common values: 1.0 (default), 1.5 (large), 2.0 (extra-large), '
-          '3.0 (maximum). Pass 0 to reset to system default. '
-          'Requires the app to wrap MaterialApp with a MediaQuery that '
-          'listens to FlutterPilot.textScaleNotifier.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'scale': JsonSchema.number(
-            description:
-                'Text scale factor (1.0 = normal, 2.0 = double size, 0.5 = half size). Test accessibility at 2.0.',
-          ),
-        },
-        required: ['scale'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.setTextScaleFactor',
-          {'scale': p['scale'].toString()},
-        );
-        return res.toCallToolResult();
       },
     );
 
     _tool(
       'set_slider_value',
       description:
-          'Sets the value of a Slider widget identified by key. Computes '
-          'the correct tap position for the target value based on the '
-          'slider\'s min/max range and dispatches a pointer event. '
-          'The value is clamped to [min, max].',
+          'Moves a Slider to a value (clamped to its min/max) the way a user '
+          'would, so onChanged fires.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -673,9 +665,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'toggle_checkbox',
       description:
-          'Taps the centre of the first Checkbox, Switch, or Radio widget '
-          'found under the given key to toggle its state. '
-          'Use get_widget_properties to read the resulting isChecked value.',
+          'Toggles the Checkbox, Switch or Radio under the key; the response '
+          'shows its new value (= true/false).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -704,104 +695,29 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'pump_frames',
-      description:
-          'Waits for a specified number of vsync animation frames to complete. '
-          'Use this to let animations, timers, or async widget builds settle '
-          'without needing a full wait_for_animation call. '
-          'Max 120 frames.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'count': JsonSchema.integer(
-            description:
-                'Number of frames to pump. Use 1–5 for immediate animations, 60 for ~1 second of wall time.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final count = ((p['count'] as int?) ?? 1).clamp(1, 120);
-        final res = await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
-          'count': count.toString(),
-        });
-        return res.toCallToolResult();
-      },
-    );
-
-    _tool(
-      'simulate_deep_link',
-      description:
-          'Simulates opening a deep link URL, triggering the same routing '
-          'path as an OS-level deep link (e.g., "myapp://product/123" or '
-          '"/product/123"). Use this to test deep link handlers, share links, '
-          'and notification tap flows.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'url': JsonSchema.string(
-            description:
-                'The URL pattern to intercept (exact match or prefix).',
-          ),
-        },
-        required: ['url'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.simulateDeepLink',
-          {'url': p['url'].toString()},
-        );
-        return res.toCallToolResult();
-      },
-    );
-
-    Future<CallToolResult> backCallback(
-      Map<String, dynamic> p,
-      dynamic e,
-    ) async {
-      final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
-      if (res.isError) return res.toCallToolResult();
-      final popped = res.data?['popped'] as bool? ?? false;
-      return CallToolResult(
-        content: [
-          TextContent(
-            text: popped
-                ? _formatActionFeedback('Back pressed', const {}, res)
-                : 'Back pressed — already at root (nothing to pop).',
-          ),
-        ],
-      );
-    }
-
-    _tool(
-      'press_back',
-      description:
-          'Simulates pressing the hardware/system back button. Pops the '
-          'current route from the Navigator. Reports whether a route was '
-          'actually popped (false if already at root).',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: backCallback,
-    );
-
-    _tool(
       'fill_form',
       description:
-          'Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, '
-          'with optional one-shot form submission. Eliminates multiple turn delays when testing forms.',
+          'Fills several fields in one call and optionally taps a submit '
+          'button: text for text fields, true/false for checkboxes and '
+          'switches. Reports the route change and widget-tree diff.',
       inputSchema: ToolInputSchema(
         properties: {
           'fields': JsonSchema.object(
             description:
-                'Map of field selectors to text values (e.g. {"TextField[\'Email\']": "test@flutterpilot.dev", "TextField[\'Password\']": "secret"}).',
+                'Map of field key/selector to value, e.g. {"TextField[\'Email\']": "a@b.dev", "Checkbox[\'Terms\']": true}.',
           ),
           'submitWith': JsonSchema.string(
             description:
-                'Optional selector or key of the submit button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
+                'Optional key/selector of the button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
           ),
         },
         required: ['fields'],
       ),
       callback: (p, e) async {
+        final submit = p['submitWith'] ?? p['submitTarget'];
         final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
           'fields': json.encode(p['fields']),
-          if (p['submitWith'] != null) 'submitWith': p['submitWith'].toString(),
+          if (submit != null) 'submitWith': submit.toString(),
         });
         if (res.isError) return res.toCallToolResult();
         final filled = res.data?['fieldsFilled'] ?? 0;
@@ -812,7 +728,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final routeNote = navigated
             ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
             : submitted
-            ? ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).'
+            ? _unchangedRoute(delta?['toRoute'])
             : '';
         final diffNote = _widgetDiffSummary(
           delta?['widgetDiff'] as Map<String, dynamic>?,
@@ -821,7 +737,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  '✅ Filled $filled/$total form fields successfully${submitted ? ' and tapped submit.' : '.'}$routeNote$diffNote',
+                  'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
+                  '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data)}',
             ),
           ],
         );
@@ -829,41 +746,91 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'wait_for_condition',
+      'wait_for',
       description:
-          'Reliably polls until a target element or semantic selector is visible on screen, or until timeout. '
-          'Prevents flaky test timing during async loading spinners or page transitions.',
+          'Waits (polling, never a blind sleep) for one condition: key — a '
+          'widget/selector/text is on screen; route — the current route is '
+          'this one; animations: true — animations and frame callbacks '
+          'settled; state — a Riverpod provider or Bloc whose value contains '
+          'expectedValue (needs the plugin); frames — pump N frames (1–120). '
+          'Fails with the reason on timeout.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'Same as selector.'),
-          'target': JsonSchema.string(description: 'Same as selector.'),
-
-          'selector': JsonSchema.string(
+          'key': JsonSchema.string(
             description:
-                'Semantic selector or key to wait for (e.g. "Text[\'Dashboard\']" or "order_confirmed_icon").',
+                'Selector or key to wait for (e.g. "Text[\'Dashboard\']").',
+          ),
+          'route': JsonSchema.string(
+            description: 'Route to wait for (e.g. "/dashboard").',
+          ),
+          'animations': JsonSchema.boolean(
+            description: 'Wait until animations have settled.',
+          ),
+          'state': JsonSchema.string(
+            description:
+                'Provider/bloc name from get_state (e.g. "CounterCubit"); needs expectedValue.',
+          ),
+          'expectedValue': JsonSchema.string(
+            description: 'Substring expected in the state\'s value.',
+          ),
+          'frames': JsonSchema.integer(
+            description: 'Number of frames to pump (1–120).',
           ),
           'timeoutMs': JsonSchema.integer(
-            description:
-                'Maximum milliseconds to wait before failing (default: 3000).',
+            description: 'Default 5000 (3000 for key).',
           ),
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.waitForCondition',
-          {
-            'selector': (p['selector'] ?? p['key'] ?? p['target']).toString(),
-            if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-          },
-        );
-        if (res.isError) return res.toCallToolResult();
-        final elapsed = res.data?['elapsedMs'] ?? 0;
-        final targetName = p['selector'] ?? p['target'] ?? p['key'];
+        final timeout = p['timeoutMs']?.toString();
+        final selector = p['selector'] ?? p['target'] ?? p['key'];
+        if (selector != null) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.waitForCondition',
+            {'selector': selector.toString(), 'timeoutMs': ?timeout},
+          );
+          if (res.isError) return res.toCallToolResult();
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
+              ),
+            ],
+          );
+        }
+        if (p['route'] != null) {
+          return (await _callExtensionRaw('ext.flutterpilot.waitForRoute', {
+            'route': p['route'].toString(),
+            'timeoutMs': ?timeout,
+          })).toCallToolResult();
+        }
+        if (p['state'] != null) {
+          return (await _callExtensionRaw('ext.flutterpilot.waitForState', {
+            'type': await _stateTypeOf(p['state'].toString()),
+            'name': p['state'].toString(),
+            'expectedValue': p['expectedValue']?.toString() ?? '',
+            'timeoutMs': ?timeout,
+          })).toCallToolResult();
+        }
+        if (p['frames'] != null) {
+          final count = ((p['frames'] as num).toInt()).clamp(1, 120);
+          return (await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
+            'count': count.toString(),
+          })).toCallToolResult();
+        }
+        if (p['animations'] == true) {
+          return (await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+            'timeoutMs': ?timeout,
+          })).toCallToolResult();
+        }
         return CallToolResult(
+          isError: true,
           content: [
             TextContent(
               text:
-                  '🎯 Condition satisfied: "$targetName" is now visible on screen (${elapsed}ms).',
+                  'Say what to wait for: key, route, animations: true, state '
+                  '(with expectedValue) or frames.',
             ),
           ],
         );
@@ -873,8 +840,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex '
-          'overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).',
+          'Lists layout overflows (the yellow-black stripes) and tap targets '
+          'smaller than the platform minimum (48dp on phones, 24px on '
+          'desktop/web) on the current screen, with their positions. Use '
+          'after set_app_settings(textScale/locale) or a layout change.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -892,38 +861,39 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text:
-                    '🎉 **Screen Health Audit Passed!**\n- 0 Layout Overflows\n- 0 Accessibility Violations',
+                text: 'No layout overflows or undersized tap targets.',
               ),
             ],
           );
         }
 
-        final buffer = StringBuffer('⚠️ **Screen Health Issues Detected:**\n');
+        final buffer = StringBuffer();
         if (overflowCount > 0) {
-          buffer.writeln('\n### 🚨 Layout Overflows ($overflowCount):');
+          buffer.writeln('Layout overflows ($overflowCount):');
           for (final o in overflows) {
-            buffer.writeln('- **${o['type']}**: ${o['details']}');
+            buffer.writeln('- ${o['type']}: ${o['details']}');
           }
         }
         if (a11yCount > 0) {
-          buffer.writeln(
-            '\n### ♿ Accessibility / Tap Target Issues ($a11yCount):',
-          );
+          buffer.writeln('Tap target issues ($a11yCount):');
           for (final a in a11y) {
             buffer.writeln('- `${a['target']}` (${a['type']}): ${a['issue']}');
           }
         }
 
-        return CallToolResult(content: [TextContent(text: buffer.toString())]);
+        return CallToolResult(
+          content: [TextContent(text: buffer.toString().trim())],
+        );
       },
     );
 
     _tool(
       'execute_action_chain',
       description:
-          'Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed. '
-          'Eliminates multi-turn LLM latency when the sequence of steps is already known.',
+          'Runs a known sequence of taps and text entries in one call, '
+          'stopping at the first step that fails. Returns how many steps ran, '
+          'the failure if any, and the screen afterwards (route, diff, '
+          'tappable elements).',
       inputSchema: ToolInputSchema(
         properties: {
           'actions': JsonSchema.array(
@@ -948,164 +918,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final failure = res.data?['failure'] as String?;
         final buffer = StringBuffer(
           failure == null
-              ? '⚡ Action chain: $executed/$total steps done.\n'
-              : '❌ Action chain stopped after $executed/$total steps. '
+              ? 'Action chain: $executed/$total steps done.\n'
+              : 'Action chain stopped after $executed/$total steps. '
                     '$failure\nRemaining steps were skipped. State now:\n',
         );
         buffer.write(_formatActionFeedback('Chain finished', const {}, res));
         return CallToolResult(
           isError: failure != null,
           content: [TextContent(text: buffer.toString())],
-        );
-      },
-    );
-
-    _tool(
-      'tap_and_wait',
-      description:
-          'Macro composite tool: Taps a target widget and immediately waits for an expected widget '
-          'to appear. Replaces 2 separate round-trip tool calls with 1 fast step.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(description: 'Same as target.'),
-
-          'target': JsonSchema.string(
-            description:
-                'Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button[\'Submit\']").',
-          ),
-          'expect': JsonSchema.string(
-            description:
-                'Key, semantic selector, or text of the widget expected to appear (e.g. "home_dashboard", "Text[\'Welcome\']").',
-          ),
-          'timeout': JsonSchema.integer(
-            description:
-                'Timeout in milliseconds to wait for the expected widget (default: 5000ms).',
-          ),
-        },
-        required: ['expect'],
-      ),
-      callback: (p, e) async {
-        final target = (p['target'] ?? p['key']).toString();
-        final expectKey = p['expect'].toString();
-        final timeoutMs = (p['timeout'] as num?)?.toInt() ?? 5000;
-
-        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {
-          'key': target,
-        });
-        if (tapRes.isError) return tapRes.toCallToolResult();
-
-        final fromRoute =
-            (tapRes.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
-        final waitRes =
-            await _callExtensionRaw('ext.flutterpilot.waitForWidget', {
-              'key': expectKey,
-              'timeoutMs': timeoutMs.toString(),
-              'previousRoute': ?fromRoute?.toString(),
-            });
-        if (waitRes.isError) return waitRes.toCallToolResult();
-        // Report the screen after the wait, not the one right after the tap.
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionFeedback(
-                '⚡ Tapped "$target", waited for',
-                const {},
-                waitRes,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'enter_text_and_submit',
-      description:
-          'Macro composite tool: Enters text into an input field and immediately taps a submit button. '
-          'Executes both steps in a single tool call.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(description: 'Same as target.'),
-
-          'target': JsonSchema.string(
-            description:
-                'Key or semantic selector of the text field (e.g. "email_input", "TextField[\'Email\']").',
-          ),
-          'text': JsonSchema.string(
-            description: 'Text string to enter into the field.',
-          ),
-          'submitTarget': JsonSchema.string(
-            description:
-                'Key or semantic selector of the submit button to tap after entering text (e.g. "submit_btn", "Button[\'Continue\']").',
-          ),
-        },
-        required: ['text', 'submitTarget'],
-      ),
-      callback: (p, e) async {
-        final target = (p['target'] ?? p['key']).toString();
-        final text = p['text'].toString();
-        final submitTarget = p['submitTarget'].toString();
-
-        final enterRes = await _callExtensionRaw('ext.flutterpilot.enterText', {
-          'key': target,
-          'text': text,
-        });
-        if (enterRes.isError) return enterRes.toCallToolResult();
-
-        final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {
-          'target': submitTarget,
-        });
-        if (tapRes.isError) return tapRes.toCallToolResult();
-
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionFeedback(
-                '⚡ Entered text into "$target" and tapped',
-                {'key': submitTarget},
-                tapRes,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'fill_form_batch',
-      description:
-          'Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxes/switches '
-          'in a single frame pass (<5ms) and optionally submits. Reduces 5+ agent turns to 1.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'fields': JsonSchema.object(
-            description:
-                'Map of field targets (keys/selectors) to values (string for TextFields, bool for Checkboxes/Switches). '
-                'Example: {"TextField[\'Email\']": "alice@test.com", "Checkbox[\'Terms\']": true}',
-          ),
-          'submitTarget': JsonSchema.string(
-            description:
-                'Optional key or selector of the submit button to tap after filling all fields.',
-          ),
-        },
-        required: ['fields'],
-      ),
-      callback: (p, e) async {
-        final fields = p['fields'];
-        final submitTarget = p['submitTarget']?.toString();
-
-        final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
-          'fields': jsonEncode(fields),
-          'submitWith': ?submitTarget,
-        });
-
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '⚡ Form filled successfully: ${jsonEncode(res.data)}',
-            ),
-          ],
         );
       },
     );

@@ -58,8 +58,15 @@ class NavigationTracker extends NavigatorObserver {
   ///
   /// The list is ordered from bottom to top — the last element is the
   /// currently visible route.
-  static List<String?> get stack =>
-      List.unmodifiable(stackProvider?.call() ?? _stack.map(describe));
+  ///
+  /// Without an observer or router plugin (e.g. `MaterialApp.router`, whose
+  /// navigators take no observers from the app), it is read from the pages
+  /// in the widget tree: go_router names each page after its route's name
+  /// or path.
+  static List<String?> get stack => List.unmodifiable(
+    stackProvider?.call() ??
+        (_stack.isNotEmpty ? _stack.map(describe) : _pagesInTree()),
+  );
 
   /// Set by router plugins (e.g. flutterpilot_gorouter) whose navigation is
   /// not visible to a [NavigatorObserver]. Returns the stack, bottom to top.
@@ -67,10 +74,42 @@ class NavigationTracker extends NavigatorObserver {
 
   /// The name of the currently active (top-most) route.
   ///
-  /// Returns `'Unknown'` if the stack is empty or the route has no name.
+  /// Returns [unknown] when there is no route at all (no Navigator).
   static String get currentRoute {
     final s = stack;
-    return s.isNotEmpty ? (s.last ?? 'Unknown') : 'Unknown';
+    return s.isNotEmpty ? (s.last ?? unknown) : unknown;
+  }
+
+  /// [currentRoute] when there is no route to name.
+  static const unknown = 'Unknown';
+
+  /// The routes in the widget tree, bottom to top: every navigator's pages
+  /// in tree order, so a nested navigator's pages (a go_router shell) come
+  /// after the page holding them. Hidden branches (IndexedStack tabs sit
+  /// behind an Offstage) are skipped; pages covered by another are not.
+  static List<String> _pagesInTree() {
+    Element? root;
+    try {
+      root = WidgetsBinding.instance.rootElement;
+    } catch (_) {
+      return const []; // no binding yet (plain unit tests, before runApp)
+    }
+    if (root == null) return const [];
+    final routes = <String>[];
+    void visit(Element e) {
+      final w = e.widget;
+      if (w is Offstage && w.offstage) return;
+      // Every route builds a private _ModalScope whose `route` field is
+      // the ModalRoute.
+      if (w.runtimeType.toString().startsWith('_ModalScope<')) {
+        final route = (w as dynamic).route;
+        if (route is ModalRoute && route.isActive) routes.add(describe(route));
+      }
+      e.visitChildren(visit);
+    }
+
+    visit(root);
+    return routes;
   }
 
   /// A readable name for [route]: its settings name, else what it is —

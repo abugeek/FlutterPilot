@@ -4,7 +4,10 @@ import 'package:mcp_dart/mcp_dart.dart';
 
 final _log = logging.Logger('SelfHealManager');
 
-/// Represents a structured diagnostic report of an application crash.
+/// What the app looked like when an uncaught exception happened: the
+/// exception, its app frames, and the state around it. Kept under ~4 KB:
+/// only sections with data, clipped; the widget tree is one
+/// get_widget_tree away.
 class CrashReport {
   final String timestamp;
   final String exception;
@@ -13,7 +16,6 @@ class CrashReport {
   final dynamic blocData;
   final dynamic networkData;
   final dynamic navigationData;
-  final dynamic widgetTreeData;
 
   CrashReport({
     required this.timestamp,
@@ -23,12 +25,9 @@ class CrashReport {
     this.blocData,
     this.networkData,
     this.navigationData,
-    this.widgetTreeData,
   });
 
-  /// Formats the report as a compact Markdown string (<4KB budget) for AI agents.
-  /// Only the crashing error's compacted stack — the full error list and
-  /// raw stacks made reports ~40 KB. Other errors are one get_errors away.
+  /// The crashing error's compacted stack (the SDK keeps app frames only).
   String? _crashStack(dynamic data) {
     final errors = data is Map ? data['errors'] : null;
     if (errors is! List || errors.isEmpty) return null;
@@ -44,51 +43,75 @@ class CrashReport {
     return [
       if (match['widget'] != null) 'Widget: ${match['widget']}',
       ...lines.take(12),
-    ].join('\n');
+    ].join('\n').trim();
+  }
+
+  static String _clip(Object? value, [int max = 200]) {
+    final text = '$value';
+    return text.length <= max ? text : '${text.substring(0, max)}…';
+  }
+
+  /// "name: value" lines from a plugin's {'states': {name: {key: …}}}.
+  static List<String> _states(dynamic data, String valueKey) {
+    final states = data is Map ? data['states'] : null;
+    if (states is! Map) return const [];
+    return [
+      for (final MapEntry(:key, :value) in states.entries)
+        '$key: ${_clip(value is Map ? value[valueKey] : value, 120)}',
+    ];
+  }
+
+  /// The last requests, one line each: "GET url → 200".
+  static List<String> _network(dynamic data) {
+    final logs = data is Map ? data['logs'] : null;
+    if (logs is! List) return const [];
+    return [
+      for (final l
+          in logs.whereType<Map>().toList().reversed.take(6).toList().reversed)
+        [
+          l['type'],
+          l['method'],
+          _clip(l['uri'], 120),
+          l['statusCode'],
+          if (l['mocked'] == true) '(mocked)',
+          if (l['message'] != null) _clip(l['message'], 120),
+        ].whereType<Object>().join(' '),
+    ];
   }
 
   String toMarkdown() {
-    final buffer = StringBuffer()..writeln('# 🚨 Critical App Crash Report');
-    buffer.writeln('\n**Timestamp:** $timestamp');
-    buffer.writeln('\n## Exception\n$exception');
-
-    _addSection(buffer, 'Recent Errors', _crashStack(errorData) ?? errorData);
-    _addSection(buffer, 'Riverpod State', riverpodData);
-    _addSection(buffer, 'Bloc State', blocData);
-    _addSection(buffer, 'Network Logs', networkData);
-    _addSection(buffer, 'Navigation Stack', navigationData);
-    _addSection(buffer, 'Widget Tree Snippet', _truncateTree(widgetTreeData));
-
-    buffer.writeln('\n\n---');
-    buffer.writeln(
-      '\n**DIRECTIVE FOR AI:** Analyze the stack trace and states above. Propose a code fix, apply it using your filesystem tools, and call the `hot_reload` tool to verify.',
-    );
-
-    return buffer.toString();
-  }
-
-  void _addSection(StringBuffer buffer, String title, dynamic data) {
-    buffer.writeln('\n## $title');
-    if (data == null || (data is String && (data == 'N/A' || data.isEmpty))) {
-      buffer.writeln('No data available.');
-    } else {
-      final str = data.toString();
-      final clipped = str.length > 2000
-          ? '${str.substring(0, 2000)}... [Truncated]'
-          : str;
-      buffer.writeln('```json\n$clipped\n```');
+    final buffer = StringBuffer('# Uncaught exception\n\n$exception\n');
+    buffer.writeln('\nAt: $timestamp');
+    final stack = _crashStack(errorData);
+    if (stack != null && stack.isNotEmpty) {
+      buffer.writeln('\n## Stack (app frames)\n$stack');
     }
-  }
-
-  dynamic _truncateTree(dynamic tree) {
-    if (tree == null) return null;
-    final str = tree.toString();
-    if (str.length > 2000) return '${str.substring(0, 2000)}... [Truncated]';
-    return str;
+    final route = navigationData is Map ? navigationData['stack'] : null;
+    if (route is List && route.isNotEmpty) {
+      buffer.writeln('\n## Route\n${route.join(' -> ')}');
+    }
+    final state = [
+      ..._states(riverpodData, 'value'),
+      ..._states(blocData, 'state'),
+    ];
+    if (state.isNotEmpty) {
+      buffer.writeln('\n## State\n${state.take(15).join('\n')}');
+    }
+    final network = _network(networkData);
+    if (network.isNotEmpty) {
+      buffer.writeln('\n## Last requests\n${network.join('\n')}');
+    }
+    buffer.writeln(
+      '\nFix the app frame above, hot_reload, and repeat the steps '
+      '(get_flight_log shows them).',
+    );
+    return buffer.toString();
   }
 }
 
-/// Manages the Self-Heal lifecycle and proactive diagnostic reporting.
+/// Tracks uncaught exceptions (not layout warnings) since the last hot
+/// reload, tells the client once per distinct exception, and builds the
+/// report on demand.
 class SelfHealManager {
   final McpServer server;
   bool isUnstable = false;
@@ -100,10 +123,17 @@ class SelfHealManager {
   DateTime? _lastCrashTime;
   String? _lastDebouncedException;
 
+  /// Exceptions the client was already told about since the last reset.
+  final Set<String> _notified = {};
+
   CrashReport? _cachedReport;
   DateTime? _cachedReportTime;
 
-  SelfHealManager({required this.server});
+  /// [clock] lets tests step past the debounce.
+  SelfHealManager({required this.server, DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+
+  final DateTime Function() _clock;
 
   /// Handles an error event from the app.
   /// Debounces repeated identical errors within 2s, classifies severity,
@@ -115,7 +145,7 @@ class SelfHealManager {
     String? deviceId,
     Future<dynamic> Function(String extension)? callExtension,
   }) async {
-    final now = DateTime.now();
+    final now = _clock();
     if (_lastDebouncedException == exception &&
         _lastCrashTime != null &&
         now.difference(_lastCrashTime!) < const Duration(seconds: 2)) {
@@ -125,7 +155,7 @@ class SelfHealManager {
     _lastCrashTime = now;
 
     if (severity == 'warning') {
-      _log.warning('⚠️ Layout overflow / warning detected: $exception');
+      _log.fine('Layout warning (not an uncaught exception): $exception');
       return;
     }
 
@@ -136,7 +166,8 @@ class SelfHealManager {
     _cachedReport = null;
     _cachedReportTime = null;
 
-    _sendProactiveAlert(exception);
+    // A handler that throws on every frame or tap would flood the client.
+    if (_notified.add(exception)) _sendProactiveAlert(exception);
 
     if (callExtension != null) {
       await getLatestReport(callExtension);
@@ -172,7 +203,6 @@ class SelfHealManager {
       callExtension(
         'ext.flutterpilot.getNavigationStack',
       ).catchError((_) => 'N/A'),
-      callExtension('ext.flutterpilot.getWidgetTree').catchError((_) => 'N/A'),
     ]);
 
     final report = CrashReport(
@@ -183,7 +213,6 @@ class SelfHealManager {
       blocData: results[2],
       networkData: results[3],
       navigationData: results[4],
-      widgetTreeData: results[5],
     );
 
     _cachedReport = report;
@@ -193,32 +222,30 @@ class SelfHealManager {
   }
 
   void _sendProactiveAlert(String exception) {
-    // Log crash alert so terminal/agent sees it immediately.
-    _log.severe(
-      '🚨 CRITICAL APP CRASH — call `get_latest_crash_report` for diagnostics. Exception: $exception',
-    );
-
+    _log.warning('Uncaught exception in the app: $exception');
     try {
       server.sendLoggingMessage(
         LoggingMessageNotification(
-          level: LoggingLevel.critical,
-          logger: 'FlutterPilot.SelfHeal',
+          level: LoggingLevel.error,
+          logger: 'FlutterPilot',
           data:
-              'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_latest_crash_report` for full context.',
+              'Uncaught exception in the app: $exception. '
+              'get_errors(report: true) has its stack and the app state.',
         ),
       );
     } catch (e) {
-      // Notification delivery is best-effort; crash data is still available via get_latest_crash_report.
-      _log.warning('Failed to send crash notification: $e');
+      // Best-effort; get_errors has it either way.
+      _log.warning('Failed to send the exception notification: $e');
     }
   }
 
-  /// Resets the unstable flag (usually after a hot reload).
+  /// Clears the exception flag (after a hot reload or restart).
   ///
   /// Preserves [lastCrashReport] for post-mortem inspection by default,
   /// unless [clearReport] is set to true.
   void reset({bool clearReport = false}) {
     isUnstable = false;
+    _notified.clear();
     _lastCrashException = null;
     _lastCrashTimestamp = null;
     _lastCrashDeviceId = null;

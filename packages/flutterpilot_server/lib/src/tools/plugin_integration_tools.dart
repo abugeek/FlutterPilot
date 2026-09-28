@@ -1,6 +1,6 @@
 part of '../../flutterpilot_server.dart';
 
-/// Tools for Supabase, GoRouter, Connectivity, Firebase, and Secure Storage
+/// Tools for Supabase, Connectivity, Firebase, and Secure Storage
 /// plugin integrations.
 mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
   void _registerPluginIntegrationTools() {
@@ -8,70 +8,78 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     // Supabase
     // =========================================================================
 
-    _registerAppTool(
-      name: 'get_supabase_auth',
-      description:
-          'Inspect current Supabase auth state: user profile, session, JWT expiry, '
-          'and recent auth events. Pass showSensitive=true to reveal email/phone. '
-          'PREREQUISITES: App must use flutterpilot_supabase plugin.',
-      extension: 'ext.flutterpilot.getSupabaseAuth',
-      properties: {
-        'showSensitive': JsonSchema.string(
-          description:
-              'Set to "true" to reveal email/phone/user_id. Default: redacted.',
-        ),
-      },
-      formatResult: (json) {
-        final isAuth = json['isAuthenticated'] == true;
-        if (!isAuth) return 'Not authenticated. No active session.';
-        final user = json['user'] as Map?;
-        final session = json['session'] as Map?;
-        final events = json['authEvents'] as List? ?? [];
-        final buf = StringBuffer('Authenticated\n');
-        if (user != null) {
-          buf.writeln('  Role: ${user['role']}');
-          buf.writeln('  Email: ${user['email']}');
-          buf.writeln('  Created: ${user['createdAt']}');
+    String formatSupabaseAuth(Map<String, dynamic> json) {
+      final isAuth = json['isAuthenticated'] == true;
+      if (!isAuth) return 'Not authenticated. No active session.';
+      final user = json['user'] as Map?;
+      final session = json['session'] as Map?;
+      final events = json['authEvents'] as List? ?? [];
+      final buf = StringBuffer('Authenticated\n');
+      if (user != null) {
+        buf.writeln('  Role: ${user['role']}');
+        buf.writeln('  Email: ${user['email']}');
+        buf.writeln('  Created: ${user['createdAt']}');
+      }
+      if (session != null) {
+        buf.writeln('  Token expired: ${session['isExpired']}');
+        buf.writeln('  Expires at: ${session['expiresAt']}');
+      }
+      if (events.isNotEmpty) {
+        buf.writeln('  Last ${events.length} auth events:');
+        for (final e in events.reversed.take(5)) {
+          buf.writeln('    [${e['timestamp']}] ${e['event']}');
         }
-        if (session != null) {
-          buf.writeln('  Token expired: ${session['isExpired']}');
-          buf.writeln('  Expires at: ${session['expiresAt']}');
-        }
-        if (events.isNotEmpty) {
-          buf.writeln('  Last ${events.length} auth events:');
-          for (final e in events.reversed.take(5)) {
-            buf.writeln('    [${e['timestamp']}] ${e['event']}');
-          }
-        }
-        return buf.toString();
-      },
-    );
+      }
+      return buf.toString();
+    }
 
-    _registerAppTool(
-      name: 'get_supabase_realtime',
+    _tool(
+      'get_supabase_auth',
       description:
-          'List all active Supabase Realtime channel subscriptions. '
-          'Shows topic, join status, and close status.',
-      extension: 'ext.flutterpilot.getSupabaseRealtime',
-      formatResult: (json) {
-        final channels = json['channels'] as List? ?? [];
-        if (channels.isEmpty) return 'No active Realtime channels.';
-        return channels
-            .map(
-              (c) =>
-                  '${c['topic']} — joined: ${c['isJoined']}, closed: ${c['isClosed']}',
-            )
-            .join('\n');
+          'Supabase auth state: user, session and JWT expiry, recent auth '
+          'events; realtime:true adds the Realtime channels (topic, joined, '
+          'closed). Email/phone are redacted unless showSensitive is true.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'showSensitive': JsonSchema.boolean(
+            description: 'Reveal email/phone/user_id.',
+          ),
+          'realtime': JsonSchema.boolean(
+            description: 'Include Realtime channel subscriptions.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getSupabaseAuth',
+          {if (p['showSensitive'] == true) 'showSensitive': 'true'},
+        );
+        if (res.isError) return res.toCallToolResult();
+        final buf = StringBuffer(formatSupabaseAuth(res.data!));
+        if (p['realtime'] == true) {
+          final rt = await _callExtensionRaw(
+            'ext.flutterpilot.getSupabaseRealtime',
+            {},
+          );
+          final channels = rt.data?['channels'] as List? ?? const [];
+          buf.write(
+            rt.isError
+                ? '\nRealtime: ${rt.errorMessage}'
+                : channels.isEmpty
+                ? '\nNo active Realtime channels.'
+                : '\nRealtime channels:\n${channels.map((c) => '  ${c['topic']} — joined: ${c['isJoined']}, closed: ${c['isClosed']}').join('\n')}',
+          );
+        }
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
       },
     );
 
     _registerAppTool(
       name: 'query_supabase_table',
       description:
-          'Query rows from a Supabase table using the project\'s own credentials. '
-          'Returns up to `limit` rows (default 20, max 200). Optionally filter '
-          'with "column=value" equality. Useful for inspecting data during debug. '
-          'PREREQUISITES: App must use flutterpilot_supabase plugin.',
+          'Rows of a Supabase table read with the app\'s own client (its '
+          'session, so row-level security applies): up to limit (default 20, '
+          'max 200), optional "column=value" filter.',
       extension: 'ext.flutterpilot.querySupabaseTable',
       properties: {
         'table': JsonSchema.string(
@@ -99,92 +107,34 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _registerAppTool(
-      name: 'supabase_sign_out',
+    _tool(
+      'supabase_session',
       description:
-          '⚠ MAKES REAL NETWORK CALL — signs out the current Supabase user '
-          'via the Supabase Auth API. This affects the real session. '
-          'Scope: "local" (default, this device only), "global" (all devices), '
-          '"others" (other sessions only). Only use in dev/test environments.',
-      extension: 'ext.flutterpilot.supabaseSignOut',
-      destructive: true,
-      properties: {
-        'scope': JsonSchema.string(
-          description:
-              'Sign-out scope: "local" (this device), "global" (all devices), "others".',
-          enumValues: ['local', 'global', 'others'],
-        ),
-      },
-    );
-
-    _registerAppTool(
-      name: 'supabase_refresh_session',
-      description:
-          '⚠ MAKES REAL NETWORK CALL — force-refreshes the current Supabase '
-          'session token via the Supabase Auth API. Use when testing token '
-          'expiry flows. Only use in dev/test environments.',
-      extension: 'ext.flutterpilot.supabaseRefreshSession',
-      destructive: true,
-    );
-
-    // =========================================================================
-    // GoRouter
-    // =========================================================================
-
-    _registerAppTool(
-      name: 'get_gorouter_state',
-      description:
-          'Inspect the current GoRouter navigation state: location, path parameters, '
-          'query parameters, matched routes, and whether pop is available.',
-      extension: 'ext.flutterpilot.getGoRouterState',
-      formatResult: (json) {
-        final buf = StringBuffer('Location: ${json['currentLocation']}\n');
-        final pathParams = json['pathParameters'] as Map? ?? {};
-        if (pathParams.isNotEmpty) {
-          buf.writeln('Path params: $pathParams');
-        }
-        final queryParams = json['queryParameters'] as Map? ?? {};
-        if (queryParams.isNotEmpty) {
-          buf.writeln('Query params: $queryParams');
-        }
-        buf.writeln('Can pop: ${json['canPop']}');
-        final matched = json['matchedRoutes'] as List? ?? [];
-        for (final m in matched) {
-          buf.writeln('  Matched: ${m['matchedLocation']} → ${m['route']}');
-        }
-        return buf.toString();
-      },
-    );
-
-    _registerAppTool(
-      name: 'get_gorouter_config',
-      description:
-          'List all registered GoRouter routes and their configuration (paths, names, children).',
-      extension: 'ext.flutterpilot.getGoRouterConfig',
-    );
-
-    _registerAppTool(
-      name: 'get_gorouter_history',
-      description:
-          'View the recent navigation history — timestamped list of route changes.',
-      extension: 'ext.flutterpilot.getGoRouterHistory',
-    );
-
-    _registerAppTool(
-      name: 'gorouter_navigate',
-      description:
-          'Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), '
-          '"replace" (replace current), "pop" (go back). Requires location for go/push/replace.',
-      extension: 'ext.flutterpilot.goRouterNavigate',
-      properties: {
-        'location': JsonSchema.string(
-          description:
-              'The route path to navigate to (e.g. "/home", "/user/123").',
-        ),
-        'action': JsonSchema.string(
-          description: 'Navigation action.',
-          enumValues: ['go', 'push', 'replace', 'pop'],
-        ),
+          'Real Supabase Auth API call on the app\'s session (dev/test '
+          'projects only): action "refresh" force-refreshes the token (test '
+          'expiry flows); "sign_out" signs out with scope local (default), '
+          'global or others. Needs --allow-destructive.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'action': JsonSchema.string(enumValues: ['refresh', 'sign_out']),
+          'scope': JsonSchema.string(
+            enumValues: ['local', 'global', 'others'],
+            description: 'For sign_out.',
+          ),
+        },
+        required: ['action'],
+      ),
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        final res = p['action'] == 'sign_out'
+            ? await _callExtensionRaw('ext.flutterpilot.supabaseSignOut', {
+                if (p['scope'] != null) 'scope': p['scope'].toString(),
+              })
+            : await _callExtensionRaw(
+                'ext.flutterpilot.supabaseRefreshSession',
+                {},
+              );
+        return res.toCallToolResult();
       },
     );
 
@@ -192,34 +142,58 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     // Connectivity
     // =========================================================================
 
-    _registerAppTool(
-      name: 'get_connectivity',
-      description:
-          'Check current network connectivity status: wifi, mobile, ethernet, vpn, none. '
-          'Also shows whether simulated-offline mode is active.',
-      extension: 'ext.flutterpilot.getConnectivity',
-      formatResult: (json) {
-        final connectivity = json['connectivity'] as List? ?? [];
-        final isOnline = json['isOnline'] == true;
-        final buf = StringBuffer();
-        buf.writeln('Online: $isOnline');
-        buf.writeln('Connectivity: ${connectivity.join(', ')}');
-        if (json['hasWifi'] == true) buf.writeln('  ✓ WiFi');
-        if (json['hasMobile'] == true) buf.writeln('  ✓ Mobile');
-        if (json['hasEthernet'] == true) buf.writeln('  ✓ Ethernet');
-        if (json['hasVpn'] == true) buf.writeln('  ✓ VPN');
-        return buf.toString();
-      },
-    );
+    String formatConnectivity(Map<String, dynamic> json) {
+      final connectivity = json['connectivity'] as List? ?? [];
+      final isOnline = json['isOnline'] == true;
+      final buf = StringBuffer();
+      buf.writeln('Online: $isOnline');
+      buf.writeln('Connectivity: ${connectivity.join(', ')}');
+      if (json['hasWifi'] == true) buf.writeln('  ✓ WiFi');
+      if (json['hasMobile'] == true) buf.writeln('  ✓ Mobile');
+      if (json['hasEthernet'] == true) buf.writeln('  ✓ Ethernet');
+      if (json['hasVpn'] == true) buf.writeln('  ✓ VPN');
+      return buf.toString();
+    }
 
-    _registerAppTool(
-      name: 'get_connectivity_history',
-      description: 'View timestamped log of connectivity state transitions.',
-      extension: 'ext.flutterpilot.getConnectivityHistory',
-      properties: {
-        'limit': JsonSchema.string(
-          description: 'Max number of entries to return (default: 100).',
-        ),
+    _tool(
+      'get_connectivity',
+      description:
+          'Network connectivity as the app sees it (wifi, mobile, ethernet, '
+          'vpn, none) and whether it is online. history:true adds the '
+          'timestamped transitions.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'history': JsonSchema.boolean(
+            description: 'Include the connectivity changes.',
+          ),
+          'limit': JsonSchema.integer(
+            description: 'Max history entries (default 100).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getConnectivity',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        final buf = StringBuffer(formatConnectivity(res.data!));
+        if (p['history'] == true) {
+          final h = await _callExtensionRaw(
+            'ext.flutterpilot.getConnectivityHistory',
+            {if (p['limit'] != null) 'limit': p['limit'].toString()},
+          );
+          buf.write(
+            'History: ${h.isError ? h.errorMessage : jsonEncode(h.data)}',
+          );
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: FlutterPilotServer._boundToolText(buf.toString()),
+            ),
+          ],
+        );
       },
     );
 
@@ -234,7 +208,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'paths like users/{uid}/...), providers, anonymous/verified, token '
           'expiry and custom claims, recent sign-in/out events, and the '
           'Firebase project. Email/name/phone are redacted unless '
-          'showSensitive=true. Needs the flutterpilot_firebase plugin.',
+          'showSensitive=true.',
       extension: 'ext.flutterpilot.getFirebaseAuth',
       properties: {
         'showSensitive': JsonSchema.boolean(
@@ -289,8 +263,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           '("users/UID/notes") or a document ("users/UID"). Optional where '
           '("done == false", ops == != < <= > >= array-contains), orderBy '
           '("createdAt desc"), limit (default 20, max 100), source "cache" to '
-          'see what the app has locally instead of the server. Needs the '
-          'flutterpilot_firebase plugin.',
+          'see what the app has locally instead of the server.',
       extension: 'ext.flutterpilot.queryFirestore',
       properties: {
         'path': JsonSchema.string(description: 'Collection or document path.'),
@@ -330,98 +303,93 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     // Secure Storage
     // =========================================================================
 
-    _registerAppTool(
-      name: 'get_secure_storage_keys',
-      description:
-          'List all keys in FlutterSecureStorage. Values are redacted by default. '
-          'Pass showValues=true to reveal (sensitive keys like passwords are always redacted).',
-      extension: 'ext.flutterpilot.getSecureStorageKeys',
-      properties: {
-        'showValues': JsonSchema.string(
-          description: '"true" to reveal values (except always-redacted keys).',
-        ),
-      },
-      formatResult: (json) {
-        final keys = json['keys'] as Map? ?? {};
-        if (keys.isEmpty) return 'Secure storage is empty.';
-        final count = json['count'];
-        final buf = StringBuffer('$count key(s) in secure storage:\n');
-        for (final entry in keys.entries) {
-          final info = entry.value as Map;
-          if (info['redacted'] == true) {
-            buf.writeln('  ${entry.key}: [${info['length']} chars, redacted]');
-          } else {
-            buf.writeln('  ${entry.key}: ${info['value']}');
-          }
+    String formatSecureStorage(Map<String, dynamic> json) {
+      final keys = json['keys'] as Map? ?? {};
+      if (keys.isEmpty) return 'Secure storage is empty.';
+      final count = json['count'];
+      final buf = StringBuffer('$count key(s) in secure storage:\n');
+      for (final entry in keys.entries) {
+        final info = entry.value as Map;
+        if (info['redacted'] == true) {
+          buf.writeln('  ${entry.key}: [${info['length']} chars, redacted]');
+        } else {
+          buf.writeln('  ${entry.key}: ${info['value']}');
         }
-        return buf.toString();
-      },
-    );
+      }
+      return buf.toString();
+    }
 
     _tool(
-      'read_secure_storage_key',
+      'get_secure_storage',
       description:
-          'Read a specific key from FlutterSecureStorage. '
-          'Keys matching password/secret/api_key patterns are always redacted.',
+          'FlutterSecureStorage keys, values redacted unless showValues is '
+          'true; key reads one. Keys like password/secret/api_key are always '
+          'redacted.',
       inputSchema: ToolInputSchema(
-        properties: {'key': JsonSchema.string(description: 'The key to read.')},
-        required: ['key'],
+        properties: {
+          'key': JsonSchema.string(description: 'Read only this key.'),
+          'showValues': JsonSchema.boolean(
+            description: 'Reveal values (except always-redacted keys).',
+          ),
+        },
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.readSecureStorageKey',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        if (p['key'] != null) {
+          return (await _callExtensionRaw(
+            'ext.flutterpilot.readSecureStorageKey',
+            {'key': p['key'].toString()},
+          )).toCallToolResult();
+        }
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getSecureStorageKeys',
+          {if (p['showValues'] == true) 'showValues': 'true'},
+        );
+        if (res.isError) return res.toCallToolResult();
+        return CallToolResult(
+          content: [TextContent(text: formatSecureStorage(res.data!))],
+        );
+      },
     );
 
     _tool(
       'set_secure_storage_key',
       description:
-          'Write a key-value pair to FlutterSecureStorage. Use for test data injection.',
+          'Writes a FlutterSecureStorage key (test data). delete:true removes '
+          'it; no key with delete:true and confirm "DELETE_ALL" wipes all '
+          'keys. Needs --allow-destructive.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(description: 'The key to set.'),
+          'key': JsonSchema.string(description: 'The key.'),
           'value': JsonSchema.string(description: 'The value to store.'),
-        },
-        required: ['key', 'value'],
-      ),
-      callback: (p, e) {
-        if (!allowDestructive) {
-          return Future.value(_destructiveOperationDenied());
-        }
-        return _callExtensionRaw(
-          'ext.flutterpilot.setSecureStorageKey',
-          p,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    _tool(
-      'delete_secure_storage_key',
-      description:
-          '⚠ DESTRUCTIVE — Delete a specific key from FlutterSecureStorage. '
-          'To wipe ALL keys, omit "key" and pass confirm="DELETE_ALL". '
-          'Deletion cannot be undone.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description:
-                'Key to delete. Omit to clear ALL secure storage (requires confirm).',
-          ),
+          'delete': JsonSchema.boolean(description: 'Delete instead of write.'),
           'confirm': JsonSchema.string(
-            description:
-                'Required when wiping all keys (no "key" given). '
-                'Must be exactly "DELETE_ALL" to proceed.',
+            description: '"DELETE_ALL" to wipe every key (no key given).',
           ),
         },
       ),
-      callback: (p, e) {
-        if (!allowDestructive) {
-          return Future.value(_destructiveOperationDenied());
+      callback: (p, e) async {
+        if (!allowDestructive) return _destructiveOperationDenied();
+        if (p['delete'] == true) {
+          return (await _callExtensionRaw(
+            'ext.flutterpilot.deleteSecureStorageKey',
+            {
+              if (p['key'] != null) 'key': p['key'].toString(),
+              if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
+            },
+          )).toCallToolResult();
         }
-        return _callExtensionRaw('ext.flutterpilot.deleteSecureStorageKey', {
-          if (p['key'] != null) 'key': p['key'].toString(),
-          if (p['confirm'] != null) 'confirm': p['confirm'].toString(),
-        }).then((res) => res.toCallToolResult());
+        if (p['key'] == null || p['value'] == null) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'Pass key and value (or delete: true).'),
+            ],
+          );
+        }
+        return (await _callExtensionRaw(
+          'ext.flutterpilot.setSecureStorageKey',
+          {'key': p['key'].toString(), 'value': p['value'].toString()},
+        )).toCallToolResult();
       },
     );
   }

@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 /// | Tool                    | Demonstrated By                          |
 /// |-------------------------|------------------------------------------|
 /// | get_semantics_tree      | hint + annotated widget tree             |
-/// | set_text_scale_factor   | live text scale slider                   |
-/// | assert_widget_enabled   | enabled button assertion hint            |
-/// | assert_widget_disabled  | disabled button assertion hint           |
+/// | set_app_settings(textScale)   | live text scale slider                   |
+/// | assert_widget(enabled: true)   | enabled button assertion hint            |
+/// | assert_widget(enabled: false)  | disabled button assertion hint           |
 class AccessibilityScreen extends StatefulWidget {
   const AccessibilityScreen({super.key});
 
@@ -36,14 +36,17 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
               _aiHint(
                 'AI Agent tools on this screen:\n'
                 '  get_semantics_tree            // accessibility layer\n'
-                '  set_text_scale_factor(1.5)    // simulate large text\n'
-                '  assert_widget_enabled("submit_button")\n'
-                '  assert_widget_disabled("locked_button")',
+                '  set_app_settings(textScale: 1.5)    // simulate large text\n'
+                '  assert_widget("submit_button", enabled: true)\n'
+                '  assert_widget("locked_button", enabled: false)',
               ),
               const SizedBox(height: 16),
 
               // -- Text Scale -----------------------------------------------
-              _sectionHeader('Text Scale Factor', 'set_text_scale_factor'),
+              _sectionHeader(
+                'Text Scale Factor',
+                'set_app_settings(textScale)',
+              ),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -67,7 +70,7 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                       const SizedBox(height: 4),
                       Text(
                         'This paragraph scales with the slider above. '
-                        'AI can call set_text_scale_factor(2.0) to simulate '
+                        'AI can call set_app_settings(textScale: 2.0) to simulate '
                         'users who prefer larger system fonts.',
                         style: TextStyle(
                           fontSize: 14 * _textScale.clamp(0.8, 1.5),
@@ -176,7 +179,7 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
               // -- Widget Assertions ----------------------------------------
               _sectionHeader(
                 'Widget Assertions',
-                'assert_widget_enabled · assert_widget_disabled',
+                'assert_widget(enabled: true) · assert_widget(enabled: false)',
               ),
               Card(
                 child: Padding(
@@ -216,11 +219,11 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                       const SizedBox(height: 8),
                       _codeBox(
                         '// When form enabled:\n'
-                        'assert_widget_enabled("submit_button")  // passes\n'
-                        'assert_widget_disabled("locked_button") // passes\n\n'
+                        'assert_widget("submit_button", enabled: true)  // passes\n'
+                        'assert_widget("locked_button", enabled: false) // passes\n\n'
                         '// When form disabled:\n'
-                        'assert_widget_disabled("submit_button") // passes\n'
-                        'assert_widget_enabled("locked_button")  // passes',
+                        'assert_widget("submit_button", enabled: false) // passes\n'
+                        'assert_widget("locked_button", enabled: true)  // passes',
                       ),
                     ],
                   ),
@@ -244,10 +247,10 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
                       const SizedBox(height: 8),
                       _codeBox(
                         '1. get_semantics_tree       // check all nodes have labels\n'
-                        '2. set_text_scale_factor(2.0)  // test large text overflow\n'
+                        '2. set_app_settings(textScale: 2.0)  // test large text overflow\n'
                         '3. capture_screenshot          // verify layout at 2x\n'
-                        '4. set_text_scale_factor(1.0)  // restore\n'
-                        '5. assert_widget_enabled("submit_btn")  // check state\n'
+                        '4. set_app_settings(textScale: 1.0)  // restore\n'
+                        '5. assert_widget("submit_btn", enabled: true)  // check state\n'
                         '6. get_widget_properties("submit_btn")  // read details',
                       ),
                     ],

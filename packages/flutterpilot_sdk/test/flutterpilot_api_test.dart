@@ -1,6 +1,3 @@
-import 'dart:ui' as ui;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
@@ -105,24 +102,6 @@ void main() {
         () => FlutterPilot.logStateChange('source6', 'name6', true),
         returnsNormally,
       );
-    });
-
-    test('localeNotifier is a ValueNotifier<Locale?>', () {
-      FlutterPilot.initialize();
-      expect(FlutterPilot.localeNotifier, isA<ValueNotifier<ui.Locale?>>());
-      expect(FlutterPilot.localeNotifier.value, isNull);
-    });
-
-    test('localeNotifier can be set to a Locale', () {
-      FlutterPilot.initialize();
-      FlutterPilot.localeNotifier.value = const ui.Locale('en', 'US');
-      expect(FlutterPilot.localeNotifier.value, const ui.Locale('en', 'US'));
-
-      FlutterPilot.localeNotifier.value = const ui.Locale('de', 'DE');
-      expect(FlutterPilot.localeNotifier.value, const ui.Locale('de', 'DE'));
-
-      // Reset
-      FlutterPilot.localeNotifier.value = null;
     });
   });
 }

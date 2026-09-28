@@ -1,65 +1,40 @@
 part of '../../flutterpilot_server.dart';
 
-/// Tools for recording interactions, generating tests, invoking custom tools,
-/// and making assertions about widget state.
+/// Tools for app-specific custom tools and assertions about what is on
+/// screen.
 mixin _TestingToolsMixin on _FlutterPilotServerBase {
   void _registerTestingTools() {
     _tool(
-      'start_recording',
-      description:
-          'Starts recording manual interactions. User should perform the flow in the app while this is active.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.startRecording',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'stop_and_generate_test',
-      description:
-          'Stops recording and returns a log of actions. Use your LLM capability to convert this log into a Flutter `testWidgets` block.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.stopRecording',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Recorded Actions (Convert to Test):\n${jsonEncode(res.data?['actions'])}\n\nHINT: Create a new file in the test/ directory and paste this as a testWidgets block.',
-            ),
-          ],
-          isError: false,
-        );
-      },
-    );
-
-    _registerAppTool(
-      name: 'list_custom_tools',
-      description:
-          'Discover additional app-specific tools registered by the developer.',
-      extension: 'ext.flutterpilot.listCustomTools',
-    );
-
-    _tool(
       'call_custom_tool',
       description:
-          'Executes an app-specific tool defined by the developer. CALL THIS if you see a relevant tool listed in `list_custom_tools`.',
+          'Runs a tool the app registered with '
+          'FlutterPilot.registerCustomTool(). Without name, lists them.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
-            description:
-                'The custom tool name as registered via FlutterPilot.registerCustomTool().',
+            description: 'The custom tool name. Omit to list the tools.',
           ),
           'params': JsonSchema.object(),
         },
-        required: ['name'],
       ),
       callback: (p, e) async {
+        if (p['name'] == null) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.listCustomTools',
+            {},
+          );
+          if (res.isError) return res.toCallToolResult();
+          final tools = res.data?['tools'] as List? ?? const [];
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: tools.isEmpty
+                    ? 'The app registers no custom tools.'
+                    : 'Custom tools: ${tools.join(', ')}',
+              ),
+            ],
+          );
+        }
         final res = await _callExtensionRaw(
           'ext.flutterpilot.callCustomTool',
           p,
@@ -69,130 +44,71 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'assert_widget_visible',
+      'assert_widget',
       description:
-          'Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.',
+          'Checks the screen in the running app in milliseconds; an error '
+          'result is a failed assertion. One check per call: text — that text '
+          'is visible (substring unless exact); key — that widget is on '
+          'screen, or with enabled true/false that it is enabled/disabled; '
+          'type + count — exactly that many widgets of the type. Only what '
+          'the user can see counts (not covered routes or hidden tabs).',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description:
-                'The ValueKey string of the widget to assert is visible.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-        },
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.assertWidgetVisible',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'assert_text_visible',
-      description:
-          'Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'text': JsonSchema.string(
-            description: 'The text string to assert is visible on screen.',
-          ),
+          'text': JsonSchema.string(description: 'Text expected on screen.'),
           'exact': JsonSchema.boolean(
-            description:
-                'If true, requires an exact text match. If false (default), a substring match is used.',
+            description: 'Require an exact text match (default substring).',
           ),
-        },
-        required: ['text'],
-      ),
-      callback: (p, e) async {
-        final args = {
-          'text': p['text'] as String,
-          if (p['exact'] != null) 'exact': p['exact'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.assertTextVisible',
-          args,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    _tool(
-      'assert_widget_count',
-      description:
-          'Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.',
-      inputSchema: ToolInputSchema(
-        properties: {
+          'key': JsonSchema.string(
+            description: 'Key, selector or label of the widget.',
+          ),
+          'enabled': JsonSchema.boolean(
+            description:
+                'With key: expect enabled (true) or disabled (false), i.e. '
+                'onPressed/onTap/onChanged set or null.',
+          ),
           'type': JsonSchema.string(
-            description:
-                'Widget type name to count (e.g. "ElevatedButton", "Text", "ListTile").',
+            description: 'Widget type to count (e.g. "ListTile").',
           ),
-          'count': JsonSchema.integer(
-            description: 'Expected number of widgets of the given type.',
-          ),
-        },
-        required: ['type', 'count'],
-      ),
-      callback: (p, e) async {
-        final args = {
-          'type': p['type'] as String,
-          'count': p['count'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.assertWidgetCount',
-          args,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    _tool(
-      'assert_widget_enabled',
-      description:
-          'Asserts that the widget identified by key is ENABLED '
-          '(has a non-null onPressed / onTap / onChanged callback). '
-          'Returns error if the widget is disabled or not found.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description:
-                'The ValueKey string of the widget to assert is enabled.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
+          'count': JsonSchema.integer(description: 'Expected count of type.'),
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.assertWidgetEnabled',
-          {'key': (p['key'] ?? p['target']).toString()},
-        );
-        return res.toCallToolResult();
-      },
-    );
-
-    _tool(
-      'assert_widget_disabled',
-      description:
-          'Asserts that the widget identified by key is DISABLED '
-          '(onPressed / onTap / onChanged is null). '
-          'Returns error if the widget is enabled or not found.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description:
-                'The ValueKey string of the widget to assert is disabled.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.assertWidgetDisabled',
-          {'key': (p['key'] ?? p['target']).toString()},
-        );
+        final target = p['target'] ?? p['key'];
+        final _ExtensionResult res;
+        if (p['text'] != null) {
+          res = await _callExtensionRaw('ext.flutterpilot.assertTextVisible', {
+            'text': p['text'].toString(),
+            if (p['exact'] != null) 'exact': p['exact'].toString(),
+          });
+        } else if (p['type'] != null && p['count'] != null) {
+          res = await _callExtensionRaw('ext.flutterpilot.assertWidgetCount', {
+            'type': p['type'].toString(),
+            'count': p['count'].toString(),
+          });
+        } else if (target != null && p['enabled'] != null) {
+          res = await _callExtensionRaw(
+            p['enabled'] == true
+                ? 'ext.flutterpilot.assertWidgetEnabled'
+                : 'ext.flutterpilot.assertWidgetDisabled',
+            {'key': target.toString()},
+          );
+        } else if (target != null) {
+          res = await _callExtensionRaw(
+            'ext.flutterpilot.assertWidgetVisible',
+            {'key': target.toString()},
+          );
+        } else {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'Say what to check: text, key (optionally with enabled), '
+                    'or type with count.',
+              ),
+            ],
+          );
+        }
         return res.toCallToolResult();
       },
     );

@@ -195,7 +195,7 @@ await _callExtensionRaw('ext.flutterpilot.getBlocStates', {})
 ### Example: Check app state
 
 ```
-1. AI Agent calls: get_riverpod_state()
+1. AI Agent calls: get_state()
    ↓
 2. Server invokes _callExtensionRaw("ext.flutterpilot.getRiverpodStates", {})
    ↓

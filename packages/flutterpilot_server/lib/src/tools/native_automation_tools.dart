@@ -226,9 +226,10 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_screenshot'] = _tool(
       'native_screenshot',
       description:
-          'Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — '
-          'unlike capture_screenshot, this sees native dialogs, the system keyboard, and any '
-          'OS chrome layered above the Flutter view. macOS + iOS Simulator only.',
+          'Screenshot of the whole simulator screen, in points: unlike '
+          'capture_screenshot it includes system alerts, the keyboard and '
+          'other apps. Use when the Flutter screenshot does not show what is '
+          'on top.',
       inputSchema: ToolInputSchema(
         properties: {
           'simulatorUdid': JsonSchema.string(
@@ -306,11 +307,10 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_tap'] = _tool(
       'native_tap',
       description:
-          'Taps the iOS simulator screen via `idb ui tap` — reaches system '
-          'permission alerts and other OS chrome that tap_widget cannot, '
-          'because they are not part of the Flutter widget tree. Coordinates '
-          'are points: take them from native_describe_screen (or '
-          'native_screenshot, which is in points too).',
+          'Taps the simulator screen at x/y in points, e.g. a permission '
+          'alert\'s "Allow", which is not in the Flutter tree. Take the '
+          'point from native_describe_screen. For the app\'s own widgets use '
+          'tap_widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'x': JsonSchema.number(description: 'X in points.'),
@@ -365,10 +365,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_text'] = _tool(
       'native_text',
       description:
-          'Types text into the currently-focused native field via `idb ui text` — for native '
-          'alert text fields, Safari, or anything outside the Flutter engine. For text fields '
-          'inside the Flutter app itself, use enter_text instead (it is faster and semantic). '
-          'Requires idb. macOS + iOS Simulator only.',
+          'Types text into whatever has focus on the simulator, through the '
+          'real iOS keyboard path: native alert fields, other apps. For the '
+          'app\'s own text fields use enter_text.',
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(description: 'Text to type.'),
@@ -418,8 +417,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_button'] = _tool(
       'native_button',
       description:
-          'Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or '
-          'APPLE_PAY. Requires idb. macOS + iOS Simulator only.',
+          'Presses a simulator hardware button. HOME backgrounds the app '
+          '(iOS then suspends it; native_open_app brings it back).',
       inputSchema: ToolInputSchema(
         properties: {
           'button': JsonSchema.string(
@@ -471,12 +470,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_describe_screen'] = _tool(
       'native_describe_screen',
       description:
-          'Returns the native accessibility tree (labels, frames, roles) for whatever is on '
-          'screen right now via `idb ui describe-all` — including system dialogs and alerts '
-          'that are invisible to get_widget_tree. Use this instead of guessing pixel '
-          'coordinates from a screenshot before calling native_tap: it gives you the actual '
-          'button labels and frames for "Allow"/"Don\'t Allow"-style native alerts. '
-          'Requires idb. macOS + iOS Simulator only.',
+          'What iOS shows on the simulator right now, one line per element '
+          'with its role, label and tap point (points), including system '
+          'alerts the Flutter tree does not have. Use before native_tap.',
       inputSchema: ToolInputSchema(
         properties: {
           'simulatorUdid': JsonSchema.string(

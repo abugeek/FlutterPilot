@@ -4,91 +4,37 @@ part of '../../flutterpilot_server.dart';
 mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   void _registerSelfHealTools() {
     _tool(
-      'get_self_heal_status',
-      description:
-          'Check if the application is currently in an unstable/crash state. Use this to verify if your last fix worked or if a new crash was intercepted.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final status = _selfHealManager.isUnstable ? '🚨 UNSTABLE' : '✅ STABLE';
-        return CallToolResult(
-          content: [TextContent(text: 'Current App Status: $status')],
-        );
-      },
-    );
-
-    _tool(
-      'get_latest_crash_report',
-      description:
-          'Retrieve the most recent structured crash report. CALL THIS immediately if you receive a Self-Heal notification or if `get_self_heal_status` returns UNSTABLE.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final report = await _selfHealManager.getLatestReport((ext) async {
-          final res = await _callExtensionRaw(ext, {});
-          return res.isError ? 'N/A' : res.data;
-        });
-        if (report == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No crash reports available.')],
-          );
-        }
-        return CallToolResult(
-          content: [TextContent(text: report.toMarkdown())],
-        );
-      },
-    );
-
-    _tool(
       'get_flight_log',
       description:
-          'Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.',
-      inputSchema: ToolInputSchema(properties: {}),
+          'Timeline of the last 30-60 s: taps, route changes, state changes '
+          'and network requests, oldest first. Use to see what led up to an '
+          'error. clear:true empties it instead.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'clear': JsonSchema.boolean(
+            description: 'Clear the timeline instead of reading it.',
+          ),
+        },
+      ),
       callback: (p, e) async {
+        if (p['clear'] == true) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.clearFlightLog',
+            {},
+          );
+          return res.isError
+              ? res.toCallToolResult()
+              : CallToolResult(
+                  content: [TextContent(text: 'Flight log cleared.')],
+                );
+        }
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getFlightLog',
           {},
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '### 🛫 Continuous Flight Recorder Log\n```json\n${json.encode(res.data)}\n```',
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'clear_flight_log',
-      description: 'Clears the flight recorder event buffer.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.clearFlightLog',
-          {},
-        );
-        return res.toCallToolResult();
-      },
-    );
-
-    _tool(
-      'diagnose_last_error',
-      description:
-          'Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) async {
-        final report = await _selfHealManager.getLatestReport((ext) async {
-          final res = await _callExtensionRaw(ext, {});
-          return res.isError ? 'N/A' : res.data;
-        });
-        if (report == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No crash reports available.')],
-          );
-        }
-        return CallToolResult(
-          content: [TextContent(text: report.toMarkdown())],
+          content: [TextContent(text: 'Flight log: ${json.encode(res.data)}')],
         );
       },
     );
@@ -96,27 +42,30 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     _tool(
       'hot_reload',
       description:
-          'Recompile edited .dart files and hot reload them into the running app, keeping state. '
-          'CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) => _callFlutterToolsService(
-        p,
-        'reloadSources',
-        'Hot reload applied. HINT: call get_errors to confirm the error is gone.',
+          'Recompiles edited .dart files and hot reloads them into the running '
+          'app, keeping state. restart:true does a hot restart instead (state '
+          'is reset) — needed for main(), initState, global/static '
+          'initializers, enums, generic type changes and provider '
+          'definitions. Needs an app started by `flutter run` or an IDE '
+          'debug session.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'restart': JsonSchema.boolean(
+            description: 'Hot restart instead of hot reload.',
+          ),
+        },
       ),
-    );
-
-    _tool(
-      'hot_restart',
-      description:
-          'Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), '
-          'initState, global/static initializers, enums, generic type changes.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (p, e) => _callFlutterToolsService(
-        p,
-        'hotRestart',
-        'Hot restart complete. App state is reset; use get_app_summary to re-orient.',
-      ),
+      callback: (p, e) => p['restart'] == true
+          ? _callFlutterToolsService(
+              p,
+              'hotRestart',
+              'Hot restart complete. App state is reset; use get_app_summary to re-orient.',
+            )
+          : _callFlutterToolsService(
+              p,
+              'reloadSources',
+              'Hot reload applied. HINT: call get_errors to confirm the error is gone.',
+            ),
     );
   }
 
@@ -160,10 +109,26 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     }
     try {
       final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
+      final hadSdk =
+          service == 'hotRestart' && await _hasSdkExtensions(vmService);
       await vmService
           .callMethod(method, isolateId: isolateId)
           .timeout(const Duration(minutes: 2));
       _selfHealManager.reset();
+      if (service == 'hotRestart' &&
+          !await _waitForRestartedApp(vmService, sdk: hadSdk)) {
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '$successText\nBut the restarted app had not drawn its first '
+                  'frame${hadSdk ? ' or registered FlutterPilot' : ''} after '
+                  '10 s: main() may be stuck (awaiting something before '
+                  'runApp). Check get_logs.',
+            ),
+          ],
+        );
+      }
       return CallToolResult(content: [TextContent(text: successText)]);
     } catch (err) {
       final details = err is RPCError
@@ -174,11 +139,56 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           TextContent(
             text:
                 '$service failed: $details\nHINT: usually a compile error — run `dart analyze` on the edited files, '
-                'fix, and retry. Some changes (main(), static initializers) need hot_restart.',
+                'fix, and retry. Some changes (main(), static initializers) need hot_reload(restart: true).',
           ),
         ],
         isError: true,
       );
     }
+  }
+
+  static Future<bool> _hasSdkExtensions(VmService vm) async {
+    for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+      final isolate = await vm.getIsolate(ref.id!);
+      if (isolate.extensionRPCs?.any(
+            (e) => e.startsWith('ext.flutterpilot.'),
+          ) ??
+          false) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// A hot restart returns before the new isolate has run main(): until it
+  /// has drawn its first frame (and, with the SDK, registered FlutterPilot's
+  /// extensions), every tool would fail as "not registered". Waits up to
+  /// 10 s; false if it never got there.
+  static Future<bool> _waitForRestartedApp(
+    VmService vm, {
+    required bool sdk,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+          final isolate = await vm.getIsolate(ref.id!);
+          final rpcs = isolate.extensionRPCs ?? const <String>[];
+          if (sdk && !rpcs.any((e) => e.startsWith('ext.flutterpilot.'))) {
+            continue;
+          }
+          if (!rpcs.contains('ext.flutter.didSendFirstFrameEvent')) continue;
+          final res = await vm.callServiceExtension(
+            'ext.flutter.didSendFirstFrameEvent',
+            isolateId: ref.id,
+          );
+          if (res.json?['enabled'] == 'true') return true;
+        }
+      } catch (_) {
+        // The old isolate may vanish mid-poll; try again.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    return false;
   }
 }

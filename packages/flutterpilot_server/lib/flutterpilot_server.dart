@@ -8,7 +8,6 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
-import 'package:path/path.dart' as path;
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
@@ -109,7 +108,6 @@ abstract class _FlutterPilotServerBase {
   bool get allowDestructive;
   bool get allowRemoteConnections;
   String? get remoteAccessToken;
-  Directory get _projectRoot;
   VmService? get _vmService;
   bool get _isReconnecting;
   Queue<Map<String, dynamic>> get _eventBuffer;
@@ -154,9 +152,24 @@ abstract class _FlutterPilotServerBase {
     required String extension,
     Map<String, JsonSchema>? properties,
     String Function(Map<String, dynamic> json)? formatResult,
-    String? nudge,
-    bool destructive = false,
   });
+
+  /// Whether [name] is a Riverpod provider or a Bloc/Cubit ("riverpod" or
+  /// "bloc"): the one whose plugin lists it, else the plugin the app has.
+  Future<String> _stateTypeOf(String name) async {
+    String? available;
+    for (final (type, ext) in [
+      ('riverpod', 'ext.flutterpilot.getRiverpodStates'),
+      ('bloc', 'ext.flutterpilot.getBlocStates'),
+    ]) {
+      final res = await _callExtensionRaw(ext, {});
+      if (res.isError) continue;
+      available ??= type;
+      final states = res.data?['states'];
+      if (states is Map && states.containsKey(name)) return type;
+    }
+    return available ?? 'riverpod';
+  }
 
   /// Returns an MCP error for an operation that mutates app data when the
   /// server was not explicitly started with --allow-destructive.
@@ -188,7 +201,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   final bool allowRemoteConnections;
   @override
   final String? remoteAccessToken;
-  @override
   final Directory _projectRoot;
   @override
   VmService? _vmService;
@@ -809,6 +821,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerPluginIntegrationTools();
   }
 
+  /// Names of every registered tool, listed or not.
+  Iterable<String> get registeredToolNames => _allTools.keys;
+
+  /// Every registered tool's description, by name.
+  Map<String, String> get toolDescriptions => {
+    for (final MapEntry(key: name, value: tool) in _allTools.entries)
+      name: tool.description ?? '',
+  };
+
   /// Names of the tools currently listed to MCP clients.
   Iterable<String> get listedToolNames =>
       _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
@@ -895,123 +916,49 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               content: TextContent(
                 text: '''# FlutterPilot — AI Agent Guide
 
-You are connected to a live Flutter app via FlutterPilot.
-Use this guide to understand what tools to call, when, and in what order.
+You are connected to a live Flutter app via FlutterPilot. Every tool
+targets the active device (see list_connected_devices / switch_device).
 
-## First Steps (always start here)
-1. `get_app_summary` — Route, tappable elements (labels + keys), errors, logs, window visibility
-2. `capture_screenshot` — See what the user sees right now
-3. `get_widget_tree` — Discover widget keys and structure for interactions
+## First steps
+1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility
+2. `capture_screenshot` — what the user sees
+3. `get_widget_tree` — keys and structure (diff:true: only what changed)
 
-## Interaction Tools
-- `tap_widget(key)` — Tap by key, `Type['text']` selector, or exact visible text. Ambiguous text is refused; covered widgets are never tapped
-- `get_interactive_elements` — Everything tappable on screen right now
-- `tap_at(x, y)` — Tap at pixel coordinates (use screenshot to determine coords)
-- `enter_text(key, text)` — Type into a text field
-- `swipe_widget(key, direction, durationMs)` — Swipe gesture
-- `long_press_widget(key)` — Long press
-- `double_tap_widget(key)` — Double tap
-- `set_slider_value(key, value)` — Move a slider
-- `toggle_checkbox(key)` — Toggle checkbox/switch/radio
-- `press_back` — Back navigation (never quits the app unless allowExit=true)
-- `press_key(key, modifiers)` — Enter/Tab/Escape/arrows/shortcuts on the focused widget
-- `secondary_tap(key)` — Right-click / context menu
-- `pinch_zoom(key, scale)` — Two-finger zoom
+## Acting
+- `tap_widget(key)` — key, `Type['text']` selector, exact visible text, or x/y; gesture: double / long / secondary; waitFor: a widget to wait for after the tap
+- `enter_text(key, text)` — type into a field ("" clears it); `press_key("enter")` submits
+- `press_key(key)` — enter/tab/escape/arrows/shortcuts; "back" = system back (never quits from the root)
+- `fill_form(fields, submitWith)` — several fields (+ checkboxes) in one call
+- `execute_action_chain(actions)` — a known sequence of taps/text in one call
+- `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`
+- `navigate_to(route)` — jump to a route (action push/replace with go_router; deepLink:true)
+Every action reports whether the route changed, a widget-tree diff and what is tappable now: read it before re-checking.
 
-## Navigation
-- `navigate_to(route)` — Go to a named route (e.g. "/home")
-- `get_navigation_stack` — See current route stack
-- `wait_for_route(route, timeoutMs)` — Wait for navigation to complete
+## Waiting and checking
+- `wait_for(key | route | animations | state+expectedValue | frames)` — poll, never sleep
+- `assert_widget(text | key [+enabled] | type+count)` — milliseconds, against the running app
+- `compare_screenshot(name, save:true)` then `compare_screenshot(name)` — visual regression
+- `audit_screen_health` — overflows and small tap targets (with `set_app_settings(textScale: 2)`)
 
-## Waiting & Synchronization
-- `wait_for_condition(selector, timeoutMs)` — Wait for a widget to appear
-- `wait_for_animation(timeoutMs)` — Wait for all animations to settle
-- `wait_for_state(condition, timeoutMs)` — Wait for custom condition
-- `pump_frames(count)` — Advance N animation frames manually
+## Reading state
+- `get_errors` (report:true: full crash report), `get_flight_log`, `get_debug_logs` (clear:true)
+- `get_navigation_stack` — routes (go_router: params, routes:true, history:true)
+- `get_state` / `set_state` — Riverpod and Bloc (plugins)
+- `get_network_logs`, `mock_http_response`, `simulate_network` — Dio plugin
+- `get_http_profile` — any dart:io client (clear:true for a baseline)
+- storage: `exec_sql_query`, `get_shared_preferences`, `get_hive_contents`, `get_secure_storage`
 
-## Reading App State
-- `get_errors` — Runtime errors caught by the app
-- `get_riverpod_state(provider)` — Read a Riverpod provider value
-- `get_bloc_state(cubit)` — Read a Bloc/Cubit state
-- `get_shared_preferences` — Read all SharedPreferences
-- `get_hive_contents` — Read Hive box data
-- `get_network_logs` — Dio HTTP request/response history (requires Dio plugin)
-- `get_semantics_tree` — Accessibility tree (for a11y testing)
+## Changing how the app renders
+- `set_app_settings` — theme, locale, textScale, orientation, debugPaint, repaintRainbow, slowAnimations
 
-## Debug Console (replaces manual VS Code copy-paste)
-- `get_debug_logs(level, logger, limit)` — See print()/debugPrint()/developer.log() output
-- `clear_debug_logs` — Clear server + in-app log buffers before a test
-- `get_http_profile(limit, status_filter)` — ALL HTTP requests (not just Dio)
-- `clear_http_profile` — Reset before testing a specific API call
-- `get_vm_info` — Dart VM version, all isolates
-- `toggle_repaint_rainbow(enabled)` — Highlight layers that repaint (perf debugging)
-- `toggle_debug_paint(enabled)` — Show layout bounds and padding
-- `toggle_slow_animations(enabled)` — 5x slow motion for animation inspection
+## Performance
+- `profile_frame_budget` — p50/p90/p99 build/raster, jank
+- `get_memory_details` (classes:true: top classes by heap) — compare before/after a screen for leaks
 
-## Visual Testing
-- `capture_screenshot` — Get current screen as image
-- `save_screenshot_baseline(filename)` — Save reference image
-- `compare_screenshot(filename)` — Pixel-diff against reference
-- `get_widget_properties(key)` — Read widget text, enabled state, bounds
-
-## Assertions
-- `assert_widget_visible(key)` — Assert widget is on screen
-- `assert_widget_enabled(key)` — Assert widget is tappable
-- `assert_widget_disabled(key)` — Assert widget is disabled
-- `assert_text_visible(text, exact)` — Assert text appears on screen
-- `assert_widget_count(type, count)` — Assert N widgets of given type
-
-## Performance & Overlays
-- `profile_frame_budget` — Per-frame budget + jank
-- `get_memory_details` — Heap used/capacity/external
-- `hot_reload` — Apply code changes without restarting
-- `hot_restart` — Full app restart
-
-## State Management Tools
-- `set_riverpod_state(provider, value)` — Inject Riverpod state
-- `set_bloc_state(cubit, state)` — Inject Bloc state
-- `set_locale(locale)` — Switch language (e.g. "ar", "fr", "en")
-- `set_theme(theme)` — Switch light/dark mode
-- `set_text_scale_factor(scale)` — Test accessibility (try 2.0)
-
-## Custom / App-Specific Tools
-- `list_custom_tools` — Discover tools the developer registered
-- `call_custom_tool(name, ...params)` — Execute an app-specific tool
-
-## Recommended Workflows
-
-### Debugging an issue
-1. get_app_summary → get_errors → get_debug_logs(level:"error")
-2. capture_screenshot → get_widget_tree
-3. Reproduce the issue → get_debug_logs → get_http_profile
-
-### Testing a user flow
-1. clear_debug_logs → clear_http_profile (clean baseline)
-2. Perform interactions with tap_widget / enter_text
-3. wait_for_animation or wait_for_condition after each step
-4. assert_widget_visible / assert_text_visible to verify outcome
-5. capture_screenshot for visual record
-
-### Memory leak investigation
-1. get_memory_details (record baseline)
-2. Navigate through the suspected screen
-3. press_back to return
-4. get_memory_details (compare — heap should not grow)
-5. get_allocation_profile (find which class is accumulating)
-
-### Performance debugging
-1. profile_frame_budget
-2. toggle_repaint_rainbow(true)
-3. Interact with the app
-4. get_memory_details
-5. toggle_slow_animations(true) to inspect animations visually
-
-## Key Rules
-- Always call get_widget_tree BEFORE tap_widget to discover correct keys
-- Widget keys are ValueKey strings — they look like "loginButton", "emailField"
-- After any navigation, call wait_for_animation before the next interaction
-- Use get_debug_logs after any complex operation to see what the app printed
-- Use get_http_profile to verify API calls actually happened
+## Fixing
+1. `get_errors` → your source frame (file:line)
+2. edit the Dart source → `hot_reload` (restart:true for main()/static initializers/provider definitions)
+3. repeat the steps; `assert_widget` / `get_errors` to confirm
 ''',
               ),
             ),
@@ -1032,8 +979,6 @@ Use this guide to understand what tools to call, when, and in what order.
     required String extension,
     Map<String, JsonSchema>? properties,
     String Function(Map<String, dynamic> json)? formatResult,
-    String? nudge,
-    bool destructive = false,
   }) {
     final toolProperties = <String, JsonSchema>{
       ...?properties,
@@ -1054,20 +999,13 @@ Use this guide to understand what tools to call, when, and in what order.
       description: description,
       inputSchema: ToolInputSchema(properties: toolProperties),
       callback: (p, e) async {
-        if (destructive && !allowDestructive) {
-          return _destructiveOperationDenied();
-        }
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();
         final text = formatResult != null
             ? formatResult(res.data!)
             : jsonEncode(res.data);
         return CallToolResult(
-          content: [
-            TextContent(
-              text: _boundToolText(nudge != null ? '$text\n\n$nudge' : text),
-            ),
-          ],
+          content: [TextContent(text: _boundToolText(text))],
         );
       },
     );

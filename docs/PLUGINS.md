@@ -42,7 +42,7 @@ A plugin is a Dart package that:
 ┌──────────────────────────────────────────────────────┐
 │ FlutterPilot Server                                  │
 ├──────────────────────────────────────────────────────┤
-│ AI Agent calls: get_bloc_state()                     │
+│ AI Agent calls: get_state()                     │
 │             ↓                                        │
 │ Server calls: _callExtensionRaw(                     │
 │   'ext.flutterpilot.getBlocStates', {}              │
@@ -312,7 +312,7 @@ void main() {
 }
 ```
 
-**Server Tool**: `get_bloc_state`, `set_bloc_state`
+**Server Tool**: `get_state`, `set_state`
 
 **Capabilities**: Full state read/write
 
@@ -336,7 +336,7 @@ void main() {
 }
 ```
 
-**Server Tools**: `get_riverpod_state`, `set_riverpod_state`
+**Server Tools**: `get_state`, `set_state`
 
 **Capabilities**: Full state read/write, container tracking
 
@@ -362,7 +362,7 @@ void main() {
 - `get_network_logs` — HTTP request/response log
 - `simulate_network` — offline, slow 3G, fast 4G
 - `add_http_mock` — Mock endpoint with status/body
-- `clear_http_mocks` — Remove mocks
+- `mock_http_response(clear: true)` — Remove mocks
 
 **Capabilities**: Log inspection, condition simulation, response mocking
 
@@ -384,7 +384,7 @@ void main() {
 
 **Server Tools**: 
 - `exec_sql_query` — Read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH); rows as JSON, real SQLite errors
-- `list_drift_tables` — Enumerate tables
+- `exec_sql_query` — Enumerate tables
 
 **Capabilities**: Read-only SQL with injection prevention
 
@@ -408,8 +408,8 @@ void main() async {
 ```
 
 **Server Tools**:
-- `list_sqflite_databases` — List all registered sqflite databases
-- `list_sqflite_tables` — Enumerate tables in a named database
+- `exec_sql_query` — List all registered sqflite databases
+- `exec_sql_query` — Enumerate tables in a named database
 - `exec_sql_query` — Read-only SQL (SELECT/EXPLAIN/PRAGMA/WITH), shared with Drift
 
 **Capabilities**: Read-only SQL with the same injection prevention as Drift. Supports multiple databases registered by name.
@@ -458,7 +458,7 @@ void main() async {
 **Server Tools**: 
 - `get_shared_preferences` — All preferences
 - `set_shared_preference` — Write key/value
-- `clear_shared_preferences` — Delete key or all
+- `set_shared_preference(remove: true)` — Delete key or all
 
 **Capabilities**: Full read/write
 

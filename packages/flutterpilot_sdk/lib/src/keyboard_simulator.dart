@@ -61,7 +61,14 @@ class KeyboardSimulator {
   };
 
   /// Presses [keyName] once (down then up), optionally with [modifiers] held.
-  Future<void> pressKey(
+  ///
+  /// When a text field has focus, returns its text and selection afterwards
+  /// (text masked for obscured fields). Desktop text editing goes through the
+  /// OS text-input client, which synthesized key events never reach: if the
+  /// key event left the field unchanged, the edit a user's key press would
+  /// make (character, Backspace, Delete, arrows, Home/End, select-all) is
+  /// applied as user input, so onChanged and input formatters run.
+  Future<Map<String, Object?>?> pressKey(
     String keyName, {
     Set<String> modifiers = const {},
   }) async {
@@ -99,6 +106,9 @@ class KeyboardSimulator {
       character = hasShift ? keyDef.character!.toUpperCase() : keyDef.character;
     }
 
+    final field = _focusedEditable();
+    final before = field?.textEditingValue;
+
     for (final modifier in modifierDefs) {
       _dispatchDown(modifier);
     }
@@ -110,6 +120,135 @@ class KeyboardSimulator {
 
     _performTextInputActionForEnter(keyDef, modifiers);
     WidgetsBinding.instance.scheduleFrame();
+
+    if (field == null || !field.mounted) return null;
+    var editedBy = 'app';
+    if (field.textEditingValue == before && !field.widget.readOnly) {
+      final edited = _edit(
+        before!,
+        keyDef,
+        character: character,
+        shift: hasShift,
+        shortcut: hasNonShiftModifier,
+      );
+      if (edited != null && edited != before) {
+        field.userUpdateTextEditingValue(
+          edited,
+          SelectionChangedCause.keyboard,
+        );
+        editedBy = 'flutterpilot';
+      } else {
+        editedBy = 'none';
+      }
+    }
+    final value = field.textEditingValue;
+    return {
+      'text': field.widget.obscureText
+          ? '•' * value.text.characters.length
+          : value.text,
+      'selectionStart': value.selection.start,
+      'selectionEnd': value.selection.end,
+      'changed': value != before,
+      'editedBy': editedBy,
+    };
+  }
+
+  /// The edit a key press makes to [v] in a text field, or null for keys
+  /// that don't edit (Enter, Tab, Escape, …).
+  static TextEditingValue? _edit(
+    TextEditingValue v,
+    _KeyDef key, {
+    String? character,
+    required bool shift,
+    required bool shortcut,
+  }) {
+    final text = v.text;
+    // No selection yet: the cursor is at the end, as after a tap.
+    final sel = v.selection.isValid
+        ? v.selection
+        : TextSelection.collapsed(offset: text.length);
+    TextEditingValue collapsed(String t, int at) => TextEditingValue(
+      text: t,
+      selection: TextSelection.collapsed(offset: at),
+    );
+    // Offsets are UTF-16; step by whole characters (emoji, accents).
+    int prev(int i) =>
+        i <= 0 ? 0 : i - text.substring(0, i).characters.last.length;
+    int next(int i) => i >= text.length
+        ? text.length
+        : i + text.substring(i).characters.first.length;
+    TextEditingValue move(int to) => TextEditingValue(
+      text: text,
+      selection: shift
+          ? TextSelection(baseOffset: sel.baseOffset, extentOffset: to)
+          : TextSelection.collapsed(offset: to),
+    );
+
+    if (shortcut) {
+      return key.logical == LogicalKeyboardKey.keyA
+          ? v.copyWith(
+              selection: TextSelection(
+                baseOffset: 0,
+                extentOffset: text.length,
+              ),
+            )
+          : null;
+    }
+    if (character != null &&
+        key.logical != LogicalKeyboardKey.enter &&
+        key.logical != LogicalKeyboardKey.tab) {
+      return collapsed(
+        sel.textBefore(text) + character + sel.textAfter(text),
+        sel.start + character.length,
+      );
+    }
+    if (key.logical == LogicalKeyboardKey.backspace) {
+      if (!sel.isCollapsed) {
+        return collapsed(sel.textBefore(text) + sel.textAfter(text), sel.start);
+      }
+      final from = prev(sel.start);
+      return collapsed(text.replaceRange(from, sel.start, ''), from);
+    }
+    if (key.logical == LogicalKeyboardKey.delete) {
+      if (!sel.isCollapsed) {
+        return collapsed(sel.textBefore(text) + sel.textAfter(text), sel.start);
+      }
+      return collapsed(
+        text.replaceRange(sel.start, next(sel.start), ''),
+        sel.start,
+      );
+    }
+    if (key.logical == LogicalKeyboardKey.arrowLeft) {
+      return move(
+        !shift && !sel.isCollapsed ? sel.start : prev(sel.extentOffset),
+      );
+    }
+    if (key.logical == LogicalKeyboardKey.arrowRight) {
+      return move(
+        !shift && !sel.isCollapsed ? sel.end : next(sel.extentOffset),
+      );
+    }
+    if (key.logical == LogicalKeyboardKey.home) return move(0);
+    if (key.logical == LogicalKeyboardKey.end) return move(text.length);
+    return null;
+  }
+
+  /// The text field that has focus, if any.
+  static EditableTextState? _focusedEditable() {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return null;
+    if (context is StatefulElement && context.state is EditableTextState) {
+      return context.state as EditableTextState;
+    }
+    EditableTextState? found;
+    context.visitAncestorElements((element) {
+      if (element is StatefulElement && element.state is EditableTextState) {
+        found = element.state as EditableTextState;
+        return false;
+      }
+      return true;
+    });
+    return found;
   }
 
   void _dispatchDown(_KeyDef def, {String? character}) {
@@ -145,29 +284,17 @@ class KeyboardSimulator {
       return;
     }
 
-    final focusNode = FocusManager.instance.primaryFocus;
-    final context = focusNode?.context;
-    if (context == null) return;
-
-    EditableTextState? editableTextState;
-    context.visitAncestorElements((element) {
-      if (element is StatefulElement && element.state is EditableTextState) {
-        editableTextState = element.state as EditableTextState;
-        return false;
-      }
-      return true;
-    });
-
+    final editableTextState = _focusedEditable();
     if (editableTextState == null) return;
 
-    final widget = editableTextState!.widget;
+    final widget = editableTextState.widget;
     final action =
         widget.textInputAction ??
         (widget.keyboardType == TextInputType.multiline
             ? TextInputAction.newline
             : TextInputAction.done);
 
-    editableTextState!.performAction(action);
+    editableTextState.performAction(action);
   }
 
   _KeyDef? _resolveKey(String name) {

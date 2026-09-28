@@ -12,7 +12,7 @@ part 'app_database.g.dart';
 // ---------------------------------------------------------------------------
 
 /// A simple notes table so AI agents can demo `exec_sql_query` and
-/// `list_drift_tables` against a real Drift database.
+/// list its tables (`sqlite_master`) against a real Drift database.
 class Notes extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text().withLength(min: 1, max: 200)();

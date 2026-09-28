@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,5 +60,95 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(submitted, equals('Hello World'));
+  });
+
+  // Desktop text editing goes through the OS input client, which synthesized
+  // key events never reach; where the framework itself handles a key (its
+  // editing shortcuts), the edit must not happen twice. Same result on every
+  // platform.
+  testWidgets('edits the focused field once, as typing would', (tester) async {
+    final changes = <String>[];
+    final controller = TextEditingController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TextField(
+            controller: controller,
+            autofocus: true,
+            onChanged: changes.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Pilot');
+    final simulator = KeyboardSimulator();
+
+    var field = await simulator.pressKey('backspace');
+    expect(controller.text, 'Pilo');
+    expect(field!['text'], 'Pilo');
+    expect(field['changed'], isTrue);
+
+    await simulator.pressKey('x');
+    expect(controller.text, 'Pilox');
+
+    await simulator.pressKey('arrowLeft');
+    field = await simulator.pressKey('arrowLeft');
+    expect(field!['selectionStart'], 3);
+    await simulator.pressKey('delete');
+    expect(controller.text, 'Pilx');
+
+    final selectAll =
+        defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.iOS
+        ? 'meta'
+        : 'control';
+    field = await simulator.pressKey('a', modifiers: {selectAll});
+    expect((field!['selectionStart'], field['selectionEnd']), (0, 4));
+    await simulator.pressKey('z');
+    expect(controller.text, 'z');
+    expect(changes.last, 'z');
+  }, variant: TargetPlatformVariant.all());
+
+  testWidgets('leaves a read-only field alone and masks obscured text', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              TextField(
+                key: const ValueKey('ro'),
+                readOnly: true,
+                controller: TextEditingController(text: 'fixed'),
+              ),
+              TextField(
+                key: const ValueKey('pin'),
+                obscureText: true,
+                controller: TextEditingController(text: '1234'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    final simulator = KeyboardSimulator();
+
+    await tester.tap(find.byKey(const ValueKey('ro')));
+    await tester.pumpAndSettle();
+    var field = await simulator.pressKey('x');
+    expect(field!['text'], 'fixed');
+    expect(field['changed'], isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('pin')));
+    await tester.pumpAndSettle();
+    field = await simulator.pressKey('5');
+    expect(field!['text'], '•••••');
+  });
+
+  testWidgets('reports nothing when no text field has focus', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    expect(await KeyboardSimulator().pressKey('escape'), isNull);
   });
 }

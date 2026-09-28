@@ -37,7 +37,7 @@ void main() {
           if (ext == 'ext.flutterpilot.getRiverpodStates') {
             return Future<dynamic>.error(Exception('Riverpod not available'));
           }
-          if (ext == 'ext.flutterpilot.getWidgetTree') {
+          if (ext == 'ext.flutterpilot.getNetworkLogs') {
             return Future<dynamic>.error(TimeoutException('Timed out'));
           }
           return Future<dynamic>.value({'data': 'ok'});
@@ -51,7 +51,7 @@ void main() {
         'errors': ['real error'],
       });
       expect(manager.lastCrashReport!.riverpodData, 'N/A');
-      expect(manager.lastCrashReport!.widgetTreeData, 'N/A');
+      expect(manager.lastCrashReport!.networkData, 'N/A');
     });
 
     test('handles all extensions failing', () async {
@@ -69,7 +69,6 @@ void main() {
       expect(manager.lastCrashReport!.blocData, 'N/A');
       expect(manager.lastCrashReport!.networkData, 'N/A');
       expect(manager.lastCrashReport!.navigationData, 'N/A');
-      expect(manager.lastCrashReport!.widgetTreeData, 'N/A');
     });
 
     test('multiple crashes overwrite lastCrashReport', () async {
@@ -132,6 +131,32 @@ void main() {
 
       final md = manager.lastCrashReport!.toMarkdown();
       expect(md, contains('RangeError: index out of range'));
+    });
+
+    test('layout warnings do not flag the app or notify', () async {
+      await manager.handleCrash(
+        exception: 'A RenderFlex overflowed by 38 pixels on the right.',
+        severity: 'warning',
+      );
+      expect(manager.isUnstable, isFalse);
+      verifyNever(() => mockServer.sendLoggingMessage(any()));
+    });
+
+    test('notifies once per distinct exception until reset', () async {
+      var now = DateTime(2026);
+      manager = SelfHealManager(server: mockServer, clock: () => now);
+      Future<void> crash(String e) async {
+        await manager.handleCrash(exception: e);
+        now = now.add(const Duration(seconds: 3)); // past the debounce
+      }
+
+      await crash('A');
+      await crash('A');
+      await crash('B');
+      verify(() => mockServer.sendLoggingMessage(any())).called(2);
+      manager.reset();
+      await crash('A');
+      verify(() => mockServer.sendLoggingMessage(any())).called(1);
     });
 
     test('sendProactiveAlert catches notification errors', () async {

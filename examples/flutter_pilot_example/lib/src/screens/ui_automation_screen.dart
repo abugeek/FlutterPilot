@@ -5,19 +5,19 @@ import 'package:flutter/material.dart';
 /// | Tool                    | Widget demonstrated               |
 /// |-------------------------|-----------------------------------|
 /// | tap_widget              | all buttons                       |
-/// | double_tap_widget       | Double-Tap Me card                |
-/// | long_press_widget       | Long-Press Me card                |
+/// | tap_widget(gesture: double)       | Double-Tap Me card                |
+/// | tap_widget(gesture: long)       | Long-Press Me card                |
 /// | enter_text              | text fields                       |
-/// | clear_text_field        | any text field                    |
+/// | enter_text(text: "")        | any text field                    |
 /// | set_slider_value        | brightness / volume sliders       |
 /// | toggle_checkbox         | checkboxes + switches             |
 /// | scroll_by               | long item list                    |
 /// | scroll_into_view        | "Find Me" tile at bottom          |
 /// | focus_widget            | any text field                    |
-/// | unfocus_all             | dismiss keyboard button           |
-/// | set_text_scale_factor   | scale slider (on Accessibility)   |
-/// | pump_frames             | animations                        |
-/// | tap_at                  | coordinates shown in hint         |
+/// | focus_widget()             | dismiss keyboard button           |
+/// | set_app_settings(textScale)   | scale slider (on Accessibility)   |
+/// | wait_for(frames)             | animations                        |
+/// | tap_widget(x, y)                  | coordinates shown in hint         |
 class UiAutomationScreen extends StatefulWidget {
   const UiAutomationScreen({super.key});
 
@@ -59,14 +59,14 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _aiHint(
-              'AI Agent: This screen demos tap_widget, enter_text, set_slider_value, toggle_checkbox, scroll_by, scroll_into_view, double_tap_widget, long_press_widget, and more.',
+              'AI Agent: This screen demos tap_widget, enter_text, set_slider_value, toggle_checkbox, scroll_by, scroll_into_view, tap_widget(gesture: double), tap_widget(gesture: long), and more.',
             ),
             const SizedBox(height: 16),
 
             // ── Text Fields ──────────────────────────────────────────────────
             _sectionHeader(
               'Text Fields',
-              'enter_text · clear_text_field · focus_widget · unfocus_all',
+              'enter_text · enter_text(text: "") · focus_widget · focus_widget()',
             ),
             Card(
               child: Padding(
@@ -209,7 +209,7 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
             // ── Tap Variants ─────────────────────────────────────────────────
             _sectionHeader(
               'Tap Variants',
-              'tap_widget · double_tap_widget · long_press_widget',
+              'tap_widget · tap_widget(gesture: double) · tap_widget(gesture: long)',
             ),
             Row(
               children: [
@@ -323,7 +323,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
             const SizedBox(height: 16),
 
             // ── Tip ─────────────────────────────────────────────────────────
-            _sectionHeader('tap_at by Coordinates', 'tap_at'),
+            _sectionHeader(
+              'tap_widget(x, y) by Coordinates',
+              'tap_widget(x, y)',
+            ),
             Card(
               color: Colors.amber.shade50,
               child: const Padding(
@@ -332,12 +335,12 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'tap_at sends a tap to raw screen coordinates.',
+                      'tap_widget(x, y) sends a tap to raw screen coordinates.',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'First use capture_screenshot to see the screen, then get_widget_properties to find widget bounds, then call tap_at(x, y) to tap a specific pixel.',
+                      'First use capture_screenshot to see the screen, then get_widget_properties to find widget bounds, then call tap_widget(x, y) to tap a specific pixel.',
                       style: TextStyle(fontSize: 13),
                     ),
                   ],

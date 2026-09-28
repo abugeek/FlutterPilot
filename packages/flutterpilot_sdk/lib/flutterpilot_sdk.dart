@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/ai_overlay_manager.dart';
+import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
@@ -21,10 +22,12 @@ import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/scroll_simulator.dart';
+import 'src/settle_tracker.dart';
 import 'src/stream_inspector.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
+export 'src/app_settings_override.dart';
 export 'src/error_inspector.dart';
 export 'src/flight_recorder.dart';
 export 'src/frame_budget_profiler.dart';
@@ -35,6 +38,7 @@ export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
+export 'src/settle_tracker.dart';
 export 'src/stream_inspector.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
@@ -193,45 +197,20 @@ class FlutterPilot {
   // Held to keep the semantics tree alive once enabled.
   static SemanticsHandle? _semanticsHandle;
 
-  /// A [ValueNotifier] that broadcasts locale overrides to the widget tree.
-  ///
-  /// When a non-null [ui.Locale] is set via the `ext.flutterpilot.setLocale`
-  /// service extension, widgets listening to this notifier can rebuild with
-  /// the new locale. Setting the value back to `null` restores the
-  /// platform default.
-  ///
-  /// ```dart
-  /// ValueListenableBuilder<Locale?>(
-  ///   valueListenable: FlutterPilot.localeNotifier,
-  ///   builder: (context, locale, child) {
-  ///     // Use locale override or fall back to platform locale.
-  ///     return MaterialApp(locale: locale);
-  ///   },
-  /// )
-  /// ```
+  /// No longer used: `set_app_settings(locale:)` changes the device locale
+  /// the app sees, with no wiring. Nothing sets this any more.
+  @Deprecated(
+    'set_app_settings(locale:) needs no wiring now. Remove the '
+    'ValueListenableBuilder and the locale: it passes to MaterialApp.',
+  )
   static final ValueNotifier<ui.Locale?> localeNotifier = ValueNotifier(null);
 
-  /// A [ValueNotifier] that broadcasts text-scale overrides.
-  ///
-  /// Wrap your `MaterialApp` (or any widget) with a [MediaQuery] that reads
-  /// this notifier to support accessibility testing via `set_text_scale_factor`:
-  ///
-  /// ```dart
-  /// ValueListenableBuilder<double?>(
-  ///   valueListenable: FlutterPilot.textScaleNotifier,
-  ///   builder: (ctx, scale, child) {
-  ///     return MediaQuery(
-  ///       data: MediaQuery.of(ctx).copyWith(
-  ///         textScaler: scale != null
-  ///             ? TextScaler.linear(scale)
-  ///             : MediaQuery.of(ctx).textScaler,
-  ///       ),
-  ///       child: child!,
-  ///     );
-  ///   },
-  ///   child: MaterialApp(...),
-  /// )
-  /// ```
+  /// No longer used: `set_app_settings(textScale:)` changes the device text
+  /// scale the app sees, with no wiring. Nothing sets this any more.
+  @Deprecated(
+    'set_app_settings(textScale:) needs no wiring now. Remove the '
+    'ValueListenableBuilder and the MaterialApp builder: that reads it.',
+  )
   static final ValueNotifier<double?> textScaleNotifier = ValueNotifier(null);
 
   static double _lastFps = 0;
@@ -344,7 +323,7 @@ class FlutterPilot {
   static Future<Map<String, dynamic>> getPostActionState({
     String? previousRoute,
   }) async {
-    await _waitForRouteSettled();
+    final settled = await _waitForScreenSettled();
     final currentRoute = NavigationTracker.currentRoute;
     String? focusedKey;
     final primaryFocus = FocusManager.instance.primaryFocus;
@@ -372,21 +351,89 @@ class FlutterPilot {
               : (e['text'] ?? e['key'] ?? e['type']),
       ],
       'newErrorCount': newErrors,
+      if (!settled) 'stillMoving': true,
+      if (_progressShowing()) 'loading': true,
     };
   }
 
-  /// Waits (up to [timeout]) until no on-screen route — page, dialog, popup
-  /// menu, in any navigator incl. go_router's — is mid-transition, so the
-  /// post-action state describes the screen the action led to.
-  static Future<void> _waitForRouteSettled({
-    // Returns as soon as transitions end (~300 ms normally); the cap only
-    // matters on slow machines, where 500 ms left pops mid-animation.
+  /// Whether a progress indicator is on screen: the action started work
+  /// (a request) whose result isn't there yet.
+  static bool _progressShowing() {
+    final root = WidgetsBinding.instance.rootElement;
+    if (root == null) return false;
+    var found = false;
+    void visit(Element e) {
+      if (found) return;
+      final type = e.widget.runtimeType.toString();
+      if (type.endsWith('ProgressIndicator') ||
+          type == 'CupertinoActivityIndicator') {
+        found = true;
+        return;
+      }
+      e.debugVisitOnstageChildren(visit);
+    }
+
+    visit(root);
+    return found;
+  }
+
+  /// Waits (up to [timeout]) until the screen an action led to has settled:
+  /// no on-screen route (page, dialog, popup menu, in any navigator incl.
+  /// go_router's) is mid-transition, and the on-screen text holds still
+  /// from one frame to the next — which also covers what isn't a route: a
+  /// drawer sliding in, a tab switch, an expanding tile. Text, not the
+  /// tappable elements: those leave the list while they slide (a scrolling
+  /// tab view ignores pointers, a drawer starts off-screen); spinners carry
+  /// no text, and looping text is ignored ([SettleTracker]). Returns false
+  /// when the screen was still moving at [timeout].
+  static final _loopingText = Expando<bool>();
+
+  static Future<bool> _waitForScreenSettled({
     Duration timeout = const Duration(seconds: 2),
   }) async {
-    final deadline = DateTime.now().add(timeout);
-    while (!_routesSettled() && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      return true;
     }
+    final deadline = DateTime.now().add(timeout);
+    final tracker = SettleTracker(looping: _loopingText);
+    while (DateTime.now().isBefore(deadline)) {
+      if (!_routesSettled()) {
+        tracker.reset();
+      } else if (tracker.add(debugTextPositions(), DateTime.now())) {
+        return true;
+      }
+      await SchedulerBinding.instance.endOfFrame.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () {},
+      );
+    }
+    return false;
+  }
+
+  /// Where each piece of on-screen text is (its render object → global
+  /// position): pages covered by an opaque one are not on screen.
+  @visibleForTesting
+  static Map<Object, Offset> debugTextPositions() {
+    final out = <Object, Offset>{};
+    void visit(RenderObject o) {
+      if (out.length > 400) return;
+      if (o is RenderOffstage && o.offstage) return;
+      if (o is RenderParagraph && o.attached && o.hasSize) {
+        out[o] = o.localToGlobal(Offset.zero);
+      }
+      // An Overlay keeps the pages under an opaque one laid out but not
+      // painted; only its onstage children are on screen.
+      if (o.runtimeType.toString().startsWith('_RenderThea')) {
+        o.visitChildrenForSemantics(visit);
+      } else {
+        o.visitChildren(visit);
+      }
+    }
+
+    for (final view in RendererBinding.instance.renderViews) {
+      visit(view);
+    }
+    return out;
   }
 
   static bool _routesSettled() {

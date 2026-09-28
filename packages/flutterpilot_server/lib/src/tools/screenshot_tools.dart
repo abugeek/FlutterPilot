@@ -6,23 +6,85 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
   String _baselineKey(String name) =>
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
+  Future<CallToolResult> _saveBaseline(Map<String, dynamic> p) async {
+    final name = p['name']?.toString();
+    if (name == null || name.isEmpty) {
+      return CallToolResult(
+        content: [TextContent(text: 'name is required')],
+        isError: true,
+      );
+    }
+    final res = await _callExtensionRaw(
+      'ext.flutterpilot.captureScreenshot',
+      {},
+    );
+    if (res.isError) return res.toCallToolResult();
+    final base64Str = res.data?['data'] as String?;
+    if (base64Str == null) {
+      return CallToolResult(
+        content: [TextContent(text: 'Screenshot returned no data')],
+        isError: true,
+      );
+    }
+    final Uint8List decoded;
+    try {
+      decoded = base64Decode(base64Str);
+    } on FormatException {
+      return CallToolResult(
+        content: [TextContent(text: 'Invalid base64 screenshot data')],
+        isError: true,
+      );
+    }
+    if (decoded.length > _Constants.maxScreenshotBaselineBytes) {
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                'Screenshot baseline is too large (${decoded.length} bytes). '
+                'Maximum is ${_Constants.maxScreenshotBaselineBytes} bytes.',
+          ),
+        ],
+        isError: true,
+      );
+    }
+    final baselineKey = _baselineKey(name);
+    final previous = _screenshotBaselines.remove(baselineKey);
+    _screenshotBaselineBytes -= previous?.length ?? 0;
+    // Evict oldest baselines until both count and total byte budgets fit.
+    while (_screenshotBaselines.length >= _Constants.maxScreenshotBaselines ||
+        _screenshotBaselineBytes + decoded.length >
+            _Constants.maxScreenshotBaselineBytes) {
+      final firstKey = _screenshotBaselines.keys.firstOrNull;
+      if (firstKey == null) break;
+      final removed = _screenshotBaselines.remove(firstKey);
+      _screenshotBaselineBytes -= removed?.length ?? 0;
+    }
+    _screenshotBaselines[baselineKey] = decoded;
+    _screenshotBaselineBytes += decoded.length;
+    return CallToolResult(
+      content: [
+        TextContent(
+          text:
+              'Baseline "$name" saved for device "${_fleetManager.activeDeviceId ?? 'default'}" '
+              '(${_screenshotBaselines[baselineKey]!.length} bytes). '
+              'Compare against it later with compare_screenshot(name).',
+        ),
+      ],
+    );
+  }
+
   void _registerScreenshotTools() {
     _tool(
       'capture_screenshot',
       description:
-          'Capture an image of the current screen for visual analysis. Defaults to a scaled-down '
-          'PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full '
-          'resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or '
-          'format: "jpeg" with a quality if you specifically want lossy compression '
-          '(jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, '
-          'so it is opt-in, not the default).',
+          'Image of the app\'s screen, PNG at half size by default; scale 1.0 '
+          'for full resolution, format "jpeg" for a smaller file. Use when you '
+          'need to see layout, color or images — for text and structure '
+          'get_app_summary or get_widget_tree are cheaper.',
       inputSchema: ToolInputSchema(
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
-          'scale': JsonSchema.number(
-            description:
-                'Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution.',
-          ),
+          'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
           'quality': JsonSchema.integer(
             description:
                 'JPEG compression quality 10-100 (default: 80 for jpeg).',
@@ -76,98 +138,19 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'save_screenshot_baseline',
-      description:
-          'Captures the current screen and stores it as a named baseline image for future '
-          'visual regression comparisons. Call this once to establish a golden image, then '
-          'use compare_screenshot after code changes.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description:
-                'A unique name for this baseline image (e.g. "home_screen", "login_dark"). Used to reference it in compare_screenshot.',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        final name = p['name']?.toString();
-        if (name == null || name.isEmpty) {
-          return CallToolResult(
-            content: [TextContent(text: 'name is required')],
-            isError: true,
-          );
-        }
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.captureScreenshot',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        final base64Str = res.data?['data'] as String?;
-        if (base64Str == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'Screenshot returned no data')],
-            isError: true,
-          );
-        }
-        final Uint8List decoded;
-        try {
-          decoded = base64Decode(base64Str);
-        } on FormatException {
-          return CallToolResult(
-            content: [TextContent(text: 'Invalid base64 screenshot data')],
-            isError: true,
-          );
-        }
-        if (decoded.length > _Constants.maxScreenshotBaselineBytes) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'Screenshot baseline is too large (${decoded.length} bytes). '
-                    'Maximum is ${_Constants.maxScreenshotBaselineBytes} bytes.',
-              ),
-            ],
-            isError: true,
-          );
-        }
-        final baselineKey = _baselineKey(name);
-        final previous = _screenshotBaselines.remove(baselineKey);
-        _screenshotBaselineBytes -= previous?.length ?? 0;
-        // Evict oldest baselines until both count and total byte budgets fit.
-        while (_screenshotBaselines.length >=
-                _Constants.maxScreenshotBaselines ||
-            _screenshotBaselineBytes + decoded.length >
-                _Constants.maxScreenshotBaselineBytes) {
-          final firstKey = _screenshotBaselines.keys.firstOrNull;
-          if (firstKey == null) break;
-          final removed = _screenshotBaselines.remove(firstKey);
-          _screenshotBaselineBytes -= removed?.length ?? 0;
-        }
-        _screenshotBaselines[baselineKey] = decoded;
-        _screenshotBaselineBytes += decoded.length;
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Baseline "$name" saved for device "${_fleetManager.activeDeviceId ?? 'default'}" '
-                  '(${_screenshotBaselines[baselineKey]!.length} bytes). '
-                  'HINT: Run compare_screenshot after making visual changes.',
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
       'compare_screenshot',
       description:
-          'Captures the current screen and compares it pixel-by-pixel with a previously saved '
-          'baseline. Returns the percentage of changed pixels. Use for visual regression testing.',
+          'Visual regression: save:true stores the current screen as the '
+          'named baseline (per device); without it, compares the screen with '
+          'that baseline pixel by pixel and returns the changed %, plus a diff '
+          'image (changes in magenta) when over threshold.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
-            description: 'Baseline name set by save_screenshot_baseline',
+            description: 'Baseline name, e.g. "home_screen", "login_dark".',
+          ),
+          'save': JsonSchema.boolean(
+            description: 'Save (or replace) the baseline instead of comparing.',
           ),
           'threshold': JsonSchema.number(
             description: 'Allowed diff % before test fails (default 1.0 = 1%)',
@@ -183,6 +166,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
+        if (p['save'] == true) return _saveBaseline(p);
         final baseline = _screenshotBaselines[_baselineKey(name)];
         if (baseline == null) {
           return CallToolResult(
@@ -190,7 +174,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               TextContent(
                 text:
                     'No baseline named "$name". '
-                    'Call save_screenshot_baseline first.',
+                    'Save one first with compare_screenshot(name, save: true).',
               ),
             ],
             isError: true,
@@ -286,8 +270,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final contentList = <Content>[
           TextContent(
             text: passed
-                ? 'Visual regression PASSED ✅ — diff: $diffStr% (threshold: $threshold%)'
-                : 'Visual regression FAILED ❌ — diff: $diffStr% exceeds threshold $threshold%',
+                ? 'Visual regression PASSED — diff: $diffStr% (threshold: $threshold%)'
+                : 'Visual regression FAILED — diff: $diffStr% exceeds threshold $threshold%',
           ),
         ];
 
@@ -309,28 +293,46 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_tree',
       description:
-          'Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and '
-          'semantic selectors. Automatically performs Semantic Compaction (prunes non-actionable layout wrappers) '
-          'to save 80% token costs. Pass rootKey/rootSelector to scope capture to a specific dialog/form/sheet (90% extra savings).',
+          'The app\'s own widgets on screen (DevTools summary tree) with keys, '
+          'text, selectors and bounds; layout wrappers are pruned unless '
+          'compact is false. rootKey scopes it to one subtree (a dialog, a '
+          'form). diff:true returns only what changed since the previous call.',
       inputSchema: ToolInputSchema(
         properties: {
+          'diff': JsonSchema.boolean(
+            description:
+                'Only widgets added/removed/changed since the last call.',
+          ),
           'rootKey': JsonSchema.string(
             description:
                 'Optional widget key or semantic selector (e.g. "checkout_form", "Button[\'Save\']") to scope the tree capture to only that subtree.',
           ),
           'maxDepth': JsonSchema.integer(
-            description:
-                'Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs.',
+            description: 'Maximum tree depth (default 50).',
           ),
           'compact': JsonSchema.boolean(
             description:
-                'Whether to prune intermediate unkeyed layout containers (default: true). Reduces tokens by 80%.',
+                'Whether to prune intermediate unkeyed layout containers (default: true).',
           ),
         },
       ),
       callback: (p, e) async {
         final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
         final compact = p['compact'] != false;
+        if (p['diff'] == true) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.getWidgetTreeDiff',
+            {'maxDepth': maxDepth.toString(), 'compact': compact.toString()},
+          );
+          if (res.isError) return res.toCallToolResult();
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'Tree diff: ${jsonEncode(res.data?['diff'] ?? {})}',
+              ),
+            ],
+          );
+        }
         final rootKey = p['rootKey'] as String?;
         final params = <String, String>{
           'maxDepth': maxDepth.toString(),
@@ -359,10 +361,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_interactive_elements',
       description:
-          'Discovers all actionable, interactive widgets currently visible and hittable on screen '
-          '(buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). '
-          'Filters out offstage, occluded, or covered widgets using Flutter hit testing. '
-          'Returns a clean, compact list with bounds, keys, identifiers, and visible labels.',
+          'Every widget the user can tap or type into right now (buttons, '
+          'fields, checkboxes, switches, sliders, tappable tiles) with type, '
+          'label, key and bounds; covered or off-screen ones are left out. '
+          'get_app_summary shows the first 15.',
       inputSchema: ToolInputSchema(
         properties: {
           'types': JsonSchema.array(
@@ -387,10 +389,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_app_summary',
       description:
-          'CALL THIS FIRST. One-call overview of the running app: current route, '
-          'the tappable elements on screen (labels + keys), focused widget, recent '
-          'errors and logs, frame timing, viewport. Use get_widget_tree for layout '
-          'structure and capture_screenshot for visuals.',
+          'Start here. The running app in a few lines: route, viewport, '
+          'focused widget, the tappable elements (labels + keys), uncaught '
+          'errors, recent logs, jank, and whether the window is visible or '
+          'covered by a system alert.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -496,47 +498,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'get_widget_tree_diff',
-      description:
-          'Delta Widget Tree Inspector: Compares current screen with the previously captured tree '
-          'and returns only added, removed, or updated elements. Saves 95% token consumption.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'maxDepth': JsonSchema.integer(
-            description: 'Maximum depth to inspect (default: 50).',
-          ),
-          'compact': JsonSchema.boolean(
-            description:
-                'Whether to prune intermediate layout wrappers (default: true).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
-        final compact = p['compact'] != false;
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getWidgetTreeDiff',
-          {'maxDepth': maxDepth.toString(), 'compact': compact.toString()},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: 'Delta Tree Diff:\n${jsonEncode(res.data?['diff'] ?? {})}',
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
       'get_widget_properties',
       description:
-          'Reads the semantic properties of a widget identified by its key. '
-          'Returns: type, text (Text/TextField content), isEnabled '
-          '(onPressed/onTap/onChanged non-null), isChecked (Checkbox/Switch), '
-          'value/min/max (Slider), isFocused, and screen-space bounds. '
-          'Use this instead of screenshots to verify widget state.',
+          'One widget\'s state: type, text (Text/TextField content), '
+          'isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), '
+          'isFocused and bounds.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -559,17 +525,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_semantics_tree',
       description:
-          'Returns the full accessibility semantics tree as seen by screen '
-          'readers (VoiceOver/TalkBack). Each node has: id, label, value, '
-          'hint, tooltip, role flags (isButton/isTextField/isSlider/isImage/'
-          'isLink/isLiveRegion), isChecked, isEnabled, isFocused, and '
-          'screen-space rect. Use this for accessibility audits. '
-          'Use maxDepth to limit tree size (default: 50).',
+          'What a screen reader (VoiceOver/TalkBack) gets: per node id, '
+          'label, value, hint, role flags, checked/enabled/focused and rect. '
+          'Use to check labels for accessibility; semanticsId works in '
+          'tap_widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'maxDepth': JsonSchema.integer(
-            description:
-                'Maximum tree depth to traverse (default: 50). Lower values for faster results.',
+            description: 'Maximum tree depth (default 50).',
           ),
         },
       ),

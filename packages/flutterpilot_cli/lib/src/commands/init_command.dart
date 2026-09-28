@@ -182,6 +182,9 @@ class InitCommand extends Command<void> {
 
     final mainFile = File(p.join(rootPath, 'lib', 'main.dart'));
     var trackerAdded = false;
+    final trackedBefore =
+        mainFile.existsSync() &&
+        mainFile.readAsStringSync().contains('NavigationTracker');
     if (mainFile.existsSync()) {
       final content = await mainFile.readAsString();
       final patched = patchMain(content);
@@ -211,33 +214,6 @@ class InitCommand extends Command<void> {
       }
     }
 
-    var overridesAdded = false;
-    if (mainFile.existsSync()) {
-      final content = await mainFile.readAsString();
-      final withOverrides = addValueListenableOverrides(content);
-      if (withOverrides != content) {
-        await mainFile.writeAsString(withOverrides);
-        overridesAdded = true;
-        final wired = wiredOverrides(withOverrides);
-        stdout.writeln(
-          '✅ Wired MaterialApp for $wired overrides '
-          '(set_locale / set_text_scale_factor).',
-        );
-        if (!wired.contains('locale')) {
-          stdout.writeln(
-            '   Skipped locale: MaterialApp already sets locale:, so set_locale '
-            'would change nothing.',
-          );
-        }
-        if (!wired.contains('text scale')) {
-          stdout.writeln(
-            '   Skipped text scale: MaterialApp has its own builder:. Apply '
-            'FlutterPilot.textScaleNotifier inside it to use set_text_scale_factor.',
-          );
-        }
-      }
-    }
-
     if (mainFile.existsSync()) {
       final content = await mainFile.readAsString();
       final withImport = ensureImport(content);
@@ -247,9 +223,12 @@ class InitCommand extends Command<void> {
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
-      trackerAdded
-          ? '  2. (route tracking already wired)'
-          : '  2. Add `navigatorObservers: [NavigationTracker()]` to your MaterialApp (skip if using go_router).',
+      routeTrackingStep(
+        mainFile.existsSync() ? mainFile.readAsStringSync() : '',
+        trackerAdded: trackerAdded,
+        trackedBefore: trackedBefore,
+        goRouter: detected.containsKey('flutterpilot_gorouter'),
+      ),
     );
     if (detected.isNotEmpty) {
       stdout.writeln(
@@ -262,15 +241,35 @@ class InitCommand extends Command<void> {
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
     );
-    if (!overridesAdded && mainFile.existsSync()) {
-      final content = await mainFile.readAsString();
-      if (!content.contains('FlutterPilot.localeNotifier')) {
-        stdout.writeln(
-          '\nTip: To enable runtime locale and text scale overrides (set_locale / set_text_scale), '
-          'wrap MaterialApp in ValueListenableBuilder with FlutterPilot.localeNotifier and FlutterPilot.textScaleNotifier.',
-        );
-      }
+  }
+
+  /// Next step 2: what init did about route tracking, and what's left.
+  /// Without any tracking, the SDK names routes after the on-screen page.
+  static String routeTrackingStep(
+    String main, {
+    required bool trackerAdded,
+    required bool trackedBefore,
+    required bool goRouter,
+  }) {
+    if (goRouter) {
+      return '  2. Route tracking (go_router): wire flutterpilot_gorouter '
+          '(step 3) for full locations like /story/42; until then routes are '
+          "named after the on-screen page's path pattern.";
     }
+    if (trackerAdded) {
+      return '  2. Route tracking: added NavigationTracker() to MaterialApp.';
+    }
+    if (trackedBefore) {
+      return '  2. Route tracking: already wired (NavigationTracker).';
+    }
+    if (RegExp(r'App\.router\s*\(').hasMatch(main)) {
+      return "  2. Route tracking: MaterialApp.router can't take "
+          "NavigationTracker; routes are named after the on-screen page's "
+          "name. Your router's FlutterPilot plugin gives full locations.";
+    }
+    return '  2. Add `navigatorObservers: [NavigationTracker()]` to your '
+        'MaterialApp (not found in lib/main.dart). Until then routes are '
+        "named after the on-screen page's name.";
   }
 
   /// Adds `NavigationTracker()` to a plain `MaterialApp(` (not `.router`),
@@ -295,167 +294,6 @@ class InitCommand extends Command<void> {
       match.end,
       'MaterialApp(\n      navigatorObservers: [NavigationTracker()],',
     );
-  }
-
-  /// Wraps `MaterialApp` in `ValueListenableBuilder`s for locale and text scale overrides.
-  static String addValueListenableOverrides(String content) {
-    if (content.contains('FlutterPilot.localeNotifier') ||
-        content.contains('FlutterPilot.textScaleNotifier')) {
-      return content;
-    }
-    final app = RegExp(r'(?:const\s+)?(MaterialApp(?:\.router)?\s*\()');
-    final match = app.firstMatch(content);
-    if (match == null) return content;
-
-    final openParenIndex = match.end - 1;
-    final closeParenIndex = _findMatchingClosingParen(content, openParenIndex);
-    if (closeParenIndex == -1) return content;
-
-    var appCode = content.substring(match.start, closeParenIndex + 1);
-    appCode = appCode.replaceFirst(RegExp(r'^const\s+'), '');
-
-    // Only wire what will take effect. If the app already sets `locale:` or
-    // has its own `builder:`, leave that override unwired: a listener that
-    // changes nothing would make set_locale/set_text_scale_factor report a
-    // false success.
-    final wireLocale = !_hasTopLevelArg(appCode, 'locale');
-    final wireScale = !_hasTopLevelArg(appCode, 'builder');
-    if (!wireLocale && !wireScale) return content;
-
-    if (wireLocale) {
-      final insertIdx = appCode.indexOf('(') + 1;
-      appCode =
-          '${appCode.substring(0, insertIdx)}\n      locale: pilotLocale,${appCode.substring(insertIdx)}';
-    }
-    if (wireScale) {
-      final insertIdx = appCode.indexOf('(') + 1;
-      appCode = '''${appCode.substring(0, insertIdx)}
-      builder: (context, child) {
-        final media = MediaQuery.of(context);
-        return MediaQuery(
-          data: media.copyWith(
-            textScaler: pilotScale != null
-                ? TextScaler.linear(pilotScale)
-                : media.textScaler,
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },${appCode.substring(insertIdx)}''';
-    }
-
-    var wrapped = appCode;
-    if (wireScale) {
-      wrapped =
-          '''ValueListenableBuilder<double?>(
-    valueListenable: FlutterPilot.textScaleNotifier,
-    builder: (context, pilotScale, _) => $wrapped,
-  )''';
-    }
-    if (wireLocale) {
-      wrapped =
-          '''ValueListenableBuilder<Locale?>(
-  valueListenable: FlutterPilot.localeNotifier,
-  builder: (context, pilotLocale, _) => $wrapped,
-)''';
-    }
-
-    return content.replaceRange(match.start, closeParenIndex + 1, wrapped);
-  }
-
-  /// Whether the call [code] (e.g. `MaterialApp(...)`) passes [name] as one
-  /// of its own arguments — not a nested widget's (`home: X(builder: ...)`).
-  static bool _hasTopLevelArg(String code, String name) {
-    final arg = RegExp('^\\s*$name\\s*:');
-    var depth = 0;
-    for (var i = 0; i < code.length; i++) {
-      final ch = code[i];
-      if ('([{'.contains(ch)) {
-        depth++;
-        if (depth == 1 && arg.hasMatch(code.substring(i + 1))) return true;
-      } else if (')]}'.contains(ch)) {
-        depth--;
-      } else if (ch == ',' &&
-          depth == 1 &&
-          arg.hasMatch(code.substring(i + 1))) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /// What [addValueListenableOverrides] wired into [content], for the
-  /// summary line: 'locale and text scale', 'locale', 'text scale' or ''.
-  static String wiredOverrides(String content) => [
-    if (content.contains('FlutterPilot.localeNotifier')) 'locale',
-    if (content.contains('FlutterPilot.textScaleNotifier')) 'text scale',
-  ].join(' and ');
-
-  static int _findMatchingClosingParen(String text, int openParenIndex) {
-    var depth = 0;
-    var inSingleQuote = false;
-    var inDoubleQuote = false;
-    var inLineComment = false;
-    var inBlockComment = false;
-
-    for (var i = openParenIndex; i < text.length; i++) {
-      final ch = text[i];
-      final next = i + 1 < text.length ? text[i + 1] : '';
-
-      if (inLineComment) {
-        if (ch == '\n') inLineComment = false;
-        continue;
-      }
-      if (inBlockComment) {
-        if (ch == '*' && next == '/') {
-          inBlockComment = false;
-          i++;
-        }
-        continue;
-      }
-      if (inSingleQuote) {
-        if (ch == '\\') {
-          i++;
-        } else if (ch == "'") {
-          inSingleQuote = false;
-        }
-        continue;
-      }
-      if (inDoubleQuote) {
-        if (ch == '\\') {
-          i++;
-        } else if (ch == '"') {
-          inDoubleQuote = false;
-        }
-        continue;
-      }
-
-      if (ch == '/' && next == '/') {
-        inLineComment = true;
-        i++;
-        continue;
-      }
-      if (ch == '/' && next == '*') {
-        inBlockComment = true;
-        i++;
-        continue;
-      }
-      if (ch == "'") {
-        inSingleQuote = true;
-        continue;
-      }
-      if (ch == '"') {
-        inDoubleQuote = true;
-        continue;
-      }
-
-      if (ch == '(') {
-        depth++;
-      } else if (ch == ')') {
-        depth--;
-        if (depth == 0) return i;
-      }
-    }
-    return -1;
   }
 
   /// Returns [content] with the import and `FlutterPilot.initialize()` added,

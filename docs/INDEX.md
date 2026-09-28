@@ -189,7 +189,7 @@ For capturing visuals and understanding UI structure
 - `get_widget_tree` — Widget hierarchy
 - `get_widget_properties` — Read widget state
 - `compare_screenshots` — Visual regression
-- `save_screenshot_baseline` — Save for regression
+- `compare_screenshot(save: true)` — Save for regression
 
 ### **UI Automation** (15 tools)
 For programmatically interacting with the UI
@@ -203,13 +203,13 @@ For programmatically interacting with the UI
 For controlling navigation flow
 - `navigate_to` — Go to route
 - `get_navigation_stack` — View route history
-- `press_back` — Go back
+- `press_key(back)` — Go back
 - (+ 5 more navigation tools)
 
 ### **State Inspection** (19 tools)
 For inspecting state managers
-- `get_bloc_state` — Bloc inspection
-- `get_riverpod_state` — Riverpod inspection
+- `get_state` — Bloc inspection
+- `get_state` — Riverpod inspection
 - `get_app_summary` — Current route + errors
 - (+ 16 more state tools)
 

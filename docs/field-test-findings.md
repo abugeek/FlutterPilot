@@ -244,6 +244,83 @@ connectivity) and hive_app on macOS, one server, switching devices.
 | 166 | per device | ✅ | switching hn_reader ↔ hive_app changes the list |
 | 167 | lazy plugins | ⚠️→doc | a plugin that registers late (Dio created on first request) lists its tools late; `init` now prints `DioPilotInterceptor.register()` for main() |
 
+## Round 11 — fewer tools (§4.2)
+
+125 tools merged into 62 (families → one tool with a parameter). e2e on
+macOS (SDK and zero-code) and hn_reader on macOS, driven through every
+merged path.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 168 | tools/list | ✅ | e2e fixture (Dio) 88 → 42 tools; zero-code 29 → 16; all plugins + iOS 125 → 62 (34 KB of definitions, was 58) |
+| 169 | `tap_widget` gestures | ✅ | double/long/secondary report the same postcondition as a tap (before: double/long only a bare diff); double/long at x/y refused with the reason |
+| 170 | `tap_widget(waitFor)` | ✅ | one call for tap + wait; a missing widget is an error that still reports the tap |
+| 171 | `wait_for` | ✅ | route, animations, frames, state (type inferred from the plugins); no condition → error, not a silent pass |
+| 172 | `navigate_to` | ✅ | go_router `go` by default, `push` builds a stack (`/search -> /story/1`); response shows the stack |
+| 173 | `press_key("back")` | ✅ | pops and reports the new route |
+| 174 | `set_app_settings` | ✅ | one line per setting; locale not wired in hn_reader → ✗ with the fix, text scale ✓, both in one call; orientation on desktop "skipped", not ✓ |
+| 175 | `get_state` | ⚠️→fixed | a FutureProvider<List> printed every element; values are clipped to 200 chars |
+| 176 | `exec_sql_query` | ❌→fixed | with several databases, "Multiple databases registered (a, b)" was taken for "plugin absent" → "No database registered". Only "No … databases registered" counts as absent now |
+| 177 | recording, stream logs | ❌→deleted | `start_recording` described recording the user's manual taps but recorded only FlutterPilot-driven actions; nothing ever fed `get_stream_logs` |
+| 178 | enum states | ⚠️ known | `set_state` on a Notifier holding an enum (ThemeMode) is refused honestly ("String is not a subtype of ThemeMode") |
+
+## Round 12 — errors vs crashes (§3.10)
+
+The e2e fixture got a Crash button (throws in onPressed) and a Squeeze
+toggle (a Row overflow); driven through the MCP tools on macOS.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 179 | overflow vs exception | ✅ | already split by the SDK's severity: the overflow is listed, the app is not flagged; the throw is flagged until hot reload |
+| 180 | crash report | ❌→fixed | 3.5 KB, 2 KB of it a widget-tree dump fetched with a full tree walk for every report, "No data available" sections for absent plugins, "🚨 Critical App Crash Report" and a "DIRECTIVE FOR AI". Now 0.4 KB: exception, app frames, route, state, last requests |
+| 181 | stacks | ❌→fixed | an error from an agent's tap listed FlutterPilot's own frames (interaction_manager, widget_extensions) and `dart:developer` with async markers. Only the app's frames are shown now |
+| 182 | culprit widget | ⚠️→fixed | "Row Row:file:///private/var/…/lib/main.dart:81:44" → "Row (lib/main.dart:81:44)" |
+| 183 | notifications | ⚠️→fixed | level critical, "Self-Heal sequence initiated", once per distinct exception with only a 2 s debounce of repeats. Now level error, once per exception until hot reload |
+
+## Round 13 — keyboard (§3.11)
+
+The e2e fixture counts key-downs per key with a HardwareKeyboard handler;
+driven through the MCP tools on macOS.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 184 | double dispatch | ✅ | each press_key is one key-down in the app (⌘A: one for Meta, one for A); already fixed in the simulator |
+| 185 | editing keys in a field | ❌→fixed | backspace and "x" reported "pressed on TextField" and left "Pilot" as it was. Now "Field: "Pilo" (cursor at 4)"; arrows, select-all and typing over a selection work, and onChanged fires |
+| 186 | enter_text selection | ❌→fixed | on desktop the focus change after enter_text selected the whole text, so the next backspace would have cleared the field. The cursor is at the end now (also fill_form) |
+| 187 | other platforms | ✅ unit | Android/Linux/Windows edit through Flutter's shortcuts, macOS/iOS through the new fallback: same result, never twice (widget tests on all six platforms; e2e on CI's iOS/Android/web runs) |
+
+## Round 14 — locale and text scale without wiring (§3.12)
+
+e2e fixture: a plain `MaterialApp` (supportedLocales en_US, en_GB) showing
+the scale and locale its screen gets. hn_reader (go_router,
+`MaterialApp.router`) driven on macOS, with its old wiring and without it.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 188 | unwired app | ❌→fixed | set_app_settings refused both ("not wired in this app"); `init` only wired a MaterialApp in main.dart without its own builder:/locale:. Now both work with no app code: fixture shows "Scale 1.5" and "Locale en_GB"; hn_reader with its wiring removed renders at 1.5x |
+| 189 | unsupported locale | ✅ | "locale de had no effect: the app does not support de (supportedLocales: en_US); it shows en_US" — the device locale was set, the app ignores it, as on a phone |
+| 190 | "system" and "zh-CN" | ❌→fixed | the SDK split tags on "_" only and parsed "system" as a language code. Tags with "-"/"_", scripts (zh-Hans-CN) and regions (es-419) parse; "system" restores the device locale |
+| 191 | keeps applying | ✅ | a hot reload on hn_reader kept 2x (screenshot); window resize and MaterialApp rebuilt with a new supportedLocales list are covered by widget tests, each failing when its fix is removed |
+| 192 | real bug found | ✅ | at 2x hn_reader's story row overflows by 65–212 px: get_errors names `Row (lib/ui/story_tile.dart:30:19)` |
+| 193 | old wiring | ✅ | hn_reader's ValueListenableBuilder + withClampedTextScaling still passes the scale through; the notifiers are deprecated, nothing sets them |
+
+## Round 15 — settle timing (§3.13)
+
+A scratch go_router app with each kind of motion (push, go, delayed go,
+dialog, sheet, popup menu, drawer, tabs, long-press, Enter-submit, a looping
+marquee), then hn_reader, driven on macOS. Before → after:
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 194 | push / go / dialog / sheet / popup / Enter / chain | ✅ | already waited for route transitions |
+| 195 | long-press, double-tap, fill_form(submitWith) | ❌→fixed | answered mid-transition (+7/-0: new page in, old not out) with no tappable list; all mutating extensions now share one after-action step (also swipe, drag, toggle, x/y and secondary taps, pinch) |
+| 196 | drawer, tab switch | ❌→fixed | not routes: answered at ~130 ms with the drawer/tab mid-slide ("Drawer item", "In Two" missing). Now waits until on-screen text holds still between frames (~400 ms). Tappable elements alone weren't enough: they drop out of the list while sliding |
+| 197 | navigation 250 ms after the tap | ❌→fixed | showed the old screen, "Route unchanged". An action that changed nothing is watched 0.5 s more; it now shows the new page. A tap that really does nothing says "Nothing changed in the 0.5 s after it either" |
+| 198 | looping text (marquee) | ✅ | ignored after moving 600 ms, remembered for later actions: no-op tap 1.3 s the first time, then ~0.75 s; navigation unaffected (the marquee is covered) |
+| 199 | hot restart | ❌→fixed | tools failed "not registered" for a moment after hot_reload(restart) returned; it now waits for the new isolate's first frame and FlutterPilot's extensions (~600 ms) |
+| 200 | request in flight | ✅ new | hn_reader's chips and story page answer while a spinner shows; the response now says "A progress indicator is showing: results may still be loading" |
+| 201 | seen in passing | → tasks | `Tooltip['Menu']` picked "Open navigation menu" (fixed: selector exact values beat substrings, an icon's name ranks below real labels, IconButtonTheme is not a button; on every platform but Android plain "Menu" hit the drawer's menu icon); go_router app without the plugin reports route "Unknown" (fixed: without an observer or router plugin the route is read from the pages in the widget tree — `/ → /details`, `/ → (dialog)`, hidden shell branches skipped — and a route the app can't name is reported as unknown, never "unchanged"; init's step 2 says what it wired and points go_router apps to flutterpilot_gorouter); drawer scrim listed as one element with all screen text; not-found hints list `_ScaffoldSlot.body` |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

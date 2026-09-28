@@ -6,20 +6,20 @@ import 'package:flutter/material.dart';
 /// | Tool                          | Demonstrated By                   |
 /// |-------------------------------|-----------------------------------|
 /// | get_debug_logs                | emit-logs button                  |
-/// | clear_debug_logs              | hint code box                     |
-/// | clear_debug_logs              | hint code box                     |
+/// | get_debug_logs(clear: true)              | hint code box                     |
+/// | get_debug_logs(clear: true)              | hint code box                     |
 /// | get_errors                    | report-error button               |
-/// | diagnose_last_error           | hint code box                     |
+/// | get_errors(report: true)           | hint code box                     |
 /// | get_perf_metrics              | perf metrics card                 |
 /// | show_performance_overlay      | toggle switch                     |
-/// | toggle_repaint_rainbow        | toggle switch                     |
-/// | toggle_debug_paint            | toggle switch                     |
-/// | toggle_slow_animations        | toggle switch                     |
+/// | set_app_settings(repaintRainbow)        | toggle switch                     |
+/// | set_app_settings(debugPaint)            | toggle switch                     |
+/// | set_app_settings(slowAnimations)        | toggle switch                     |
 /// | enable_widget_rebuild_tracking| toggle switch                     |
 /// | get_memory_details            | memory card hint                  |
 /// | get_gc_stats                  | gc card hint                      |
-/// | get_vm_info                   | devtools card hint                |
-/// | get_allocation_profile        | devtools card hint                |
+/// | get_capabilities                   | devtools card hint                |
+/// | get_memory_details(classes: true)        | devtools card hint                |
 /// | get_http_profile              | devtools card hint                |
 class DebugPerformanceScreen extends StatefulWidget {
   const DebugPerformanceScreen({super.key});
@@ -55,7 +55,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
 
   void _triggerError() {
     try {
-      throw StateError('Intentional error for diagnose_last_error demo');
+      throw StateError('Intentional error for get_errors(report: true) demo');
     } catch (e, st) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -69,7 +69,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Error captured. Call get_errors or diagnose_last_error.',
+          'Error captured. Call get_errors or get_errors(report: true).',
         ),
       ),
     );
@@ -86,18 +86,21 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
           children: [
             _aiHint(
               'Tools on this screen:\n'
-              '  get_debug_logs  clear_debug_logs\n'
-              '  get_errors  diagnose_last_error  get_perf_metrics\n'
-              '  show_performance_overlay  toggle_repaint_rainbow\n'
-              '  toggle_debug_paint  toggle_slow_animations\n'
+              '  get_debug_logs  get_debug_logs(clear: true)\n'
+              '  get_errors  get_errors(report: true)  get_perf_metrics\n'
+              '  show_performance_overlay  set_app_settings(repaintRainbow)\n'
+              '  set_app_settings(debugPaint)  set_app_settings(slowAnimations)\n'
               '  enable_widget_rebuild_tracking\n'
-              '  get_memory_details  get_gc_stats  get_vm_info\n'
-              '  get_allocation_profile  profile_frame_budget',
+              '  get_memory_details  get_gc_stats  get_capabilities\n'
+              '  get_memory_details(classes: true)  profile_frame_budget',
             ),
             const SizedBox(height: 16),
 
             // -- Debug Logs --------------------------------------------------
-            _sectionHeader('Debug Logs', 'get_debug_logs · clear_debug_logs'),
+            _sectionHeader(
+              'Debug Logs',
+              'get_debug_logs · get_debug_logs(clear: true)',
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -119,7 +122,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     const SizedBox(height: 8),
                     _codeBox(
                       'get_debug_logs(lines: 20)\n'
-                      'clear_debug_logs',
+                      'get_debug_logs(clear: true)',
                     ),
                   ],
                 ),
@@ -130,7 +133,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- Error Detection ---------------------------------------------
             _sectionHeader(
               'Error Detection',
-              'get_errors · diagnose_last_error',
+              'get_errors · get_errors(report: true)',
             ),
             Card(
               child: Padding(
@@ -140,7 +143,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                   children: [
                     const Text(
                       'get_errors returns errors captured by FlutterError.onError.\n'
-                      'diagnose_last_error returns an AI-friendly root-cause analysis.',
+                      'get_errors(report: true) returns an AI-friendly root-cause analysis.',
                       style: TextStyle(fontSize: 13),
                     ),
                     const SizedBox(height: 8),
@@ -157,7 +160,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     _codeBox(
                       '// After tapping:\n'
                       'get_errors              // list captured errors\n'
-                      'diagnose_last_error     // AI analysis',
+                      'get_errors(report: true)     // AI analysis',
                     ),
                   ],
                 ),
@@ -215,8 +218,8 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- DevTools Toggles -------------------------------------------
             _sectionHeader(
               'DevTools Visual Toggles',
-              'toggle_repaint_rainbow · toggle_debug_paint · '
-                  'toggle_slow_animations · enable_widget_rebuild_tracking',
+              'set_app_settings(repaintRainbow) · set_app_settings(debugPaint) · '
+                  'set_app_settings(slowAnimations) · enable_widget_rebuild_tracking',
             ),
             Card(
               child: Column(
@@ -233,7 +236,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'AI: toggle_repaint_rainbow(enabled: $v)',
+                            'AI: set_app_settings(repaintRainbow: enabled: $v)',
                           ),
                         ),
                       );
@@ -250,7 +253,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                       setState(() => _debugPaint = v);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('AI: toggle_debug_paint(enabled: $v)'),
+                          content: Text(
+                            'AI: set_app_settings(debugPaint: enabled: $v)',
+                          ),
                         ),
                       );
                     },
@@ -267,7 +272,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'AI: toggle_slow_animations(enabled: $v)',
+                            'AI: set_app_settings(slowAnimations: enabled: $v)',
                           ),
                         ),
                       );
@@ -299,7 +304,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- Memory & GC ------------------------------------------------
             _sectionHeader(
               'Memory & GC',
-              'get_memory_details · get_gc_stats · get_allocation_profile',
+              'get_memory_details · get_gc_stats · get_memory_details(classes: true)',
             ),
             Card(
               color: Colors.green.shade50,
@@ -317,7 +322,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     _codeBox(
                       'get_memory_details      // heap usage, external, RSS\n'
                       'get_gc_stats            // full/partial GC counts + time\n'
-                      'get_allocation_profile  // per-class allocation counts',
+                      'get_memory_details(classes: true)  // per-class allocation counts',
                     ),
                   ],
                 ),
@@ -328,7 +333,7 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
             // -- Deep DevTools -----------------------------------------------
             _sectionHeader(
               'Deep DevTools Inspection',
-              'profile_frame_budget · get_vm_info · get_http_profile',
+              'profile_frame_budget · get_capabilities · get_http_profile',
             ),
             Card(
               color: Colors.indigo.shade50,
@@ -344,9 +349,9 @@ class _DebugPerformanceScreenState extends State<DebugPerformanceScreen> {
                     const SizedBox(height: 8),
                     _codeBox(
                       'profile_frame_budget   // p50/p90/p99, build vs raster\n'
-                      'get_vm_info            // Dart VM version + isolates\n'
+                      'get_capabilities            // Dart VM version + isolates\n'
                       'get_http_profile        // timeline of dart:io requests\n'
-                      'clear_http_profile      // reset request timeline',
+                      'get_http_profile(clear: true)      // reset request timeline',
                     ),
                     const SizedBox(height: 8),
                     const Text(

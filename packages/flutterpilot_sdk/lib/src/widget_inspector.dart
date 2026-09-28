@@ -294,15 +294,28 @@ class PilotWidgetInspector {
         }
       }
 
-      // Priority 90: Structured Semantic Selector (e.g. ElevatedButton['Sign In'])
+      // Priority 96 / 90: Structured Semantic Selector (e.g.
+      // ElevatedButton['Sign In']): the exact value beats a substring even
+      // when the substring match is the visible one (+5).
       if (typeTarget != null &&
-          (targetIndex != null || bestPriority < 90 + 5)) {
+          (targetIndex != null || bestPriority < 96 + 5)) {
         if (_isMatchingType(typeName, typeTarget)) {
           if (valueTarget == null || valueTarget.isEmpty) {
             consider(90);
           } else {
-            final text = _extractDescendantText(element);
-            if (text.toLowerCase().contains(valueTarget.toLowerCase())) {
+            final label = _describeDescendants(element);
+            final text = label.text.toLowerCase();
+            final value = valueTarget.toLowerCase();
+            final ownLabel = widget is Tooltip
+                ? widget.message?.toLowerCase()
+                : null;
+            if (ownLabel == value || (text == value && !label.glyphOnly)) {
+              consider(96);
+            } else if (text == value) {
+              // Only an icon's name: IconButton['settings'] on a button
+              // without a tooltip, beaten by a real label.
+              consider(93);
+            } else if (text.contains(value)) {
               consider(90);
             }
           }
@@ -312,10 +325,16 @@ class PilotWidgetInspector {
       // Priority 80: Clickable Button Text Match
       if (_isButtonOrClickable(typeName) &&
           (targetIndex != null || bestPriority < 80 + 5)) {
-        final text = _extractDescendantText(element);
-        if (text.toLowerCase() == queryToSearch.toLowerCase()) {
+        final label = _describeDescendants(element);
+        final text = label.text.toLowerCase();
+        final q = queryToSearch.toLowerCase();
+        if (label.glyphOnly) {
+          // Only an icon's name ("menu" for Icons.menu): a weak label, so
+          // any real text or tooltip that matches wins over it.
+          if (text == q) consider(67);
+        } else if (text == q) {
           consider(80);
-        } else if (text.toLowerCase().contains(queryToSearch.toLowerCase())) {
+        } else if (text.contains(q)) {
           consider(69);
         }
       }
@@ -364,11 +383,13 @@ class PilotWidgetInspector {
       }
 
       // Priority 50: Tooltip / Semantics
-      if ((targetIndex != null || bestPriority < 50 + 5) && widget is Tooltip) {
-        if (widget.message?.toLowerCase().contains(
-              queryToSearch.toLowerCase(),
-            ) ??
-            false) {
+      if ((targetIndex != null || bestPriority < 57 + 5) && widget is Tooltip) {
+        final message = widget.message?.toLowerCase();
+        final q = queryToSearch.toLowerCase();
+        if (message == q) {
+          consider(57);
+        } else if ((targetIndex != null || bestPriority < 50 + 5) &&
+            (message?.contains(q) ?? false)) {
           consider(50);
         }
       }
@@ -394,7 +415,8 @@ class PilotWidgetInspector {
       return null;
     }
 
-    // Substring-only tiers (69 button text, 60 text, 50 tooltip, ±5 boost):
+    // Substring-only tiers (90 Type['value'], 69 button text, 60 text,
+    // 50 tooltip, ±5 boost):
     // several different texts contain the query, so any pick is a guess.
     final raw =
         bestPriority >= 5 &&
@@ -403,8 +425,8 @@ class PilotWidgetInspector {
         ? bestPriority - 5
         : bestPriority;
     lastAmbiguity = null;
-    final bestTexts = (raw == 69 || raw == 60 || raw == 50)
-        ? {for (final e in bestElements) _extractDescendantText(e)}
+    final bestTexts = (raw == 90 || raw == 69 || raw == 60 || raw == 50)
+        ? {for (final e in bestElements) _labelOf(e)}
         : const <String>{};
     if (bestTexts.length > 1) {
       lastAmbiguity =
@@ -524,6 +546,8 @@ class PilotWidgetInspector {
   }
 
   static bool _isButtonOrClickable(String typeName) {
+    // IconButtonTheme, ElevatedButtonTheme… only style their buttons.
+    if (typeName.endsWith('Theme')) return false;
     return typeName.contains('Button') ||
         typeName == 'InkWell' ||
         typeName == 'GestureDetector' ||
@@ -590,7 +614,19 @@ class PilotWidgetInspector {
     return 'Icon#${icon.codePoint.toRadixString(16)}';
   }
 
-  static String _extractDescendantText(Element element) {
+  static String _extractDescendantText(Element element) =>
+      _describeDescendants(element).text;
+
+  /// A widget's own label for ambiguity messages: a Tooltip's message,
+  /// otherwise the text under it.
+  static String _labelOf(Element element) {
+    final w = element.widget;
+    if (w is Tooltip && w.message != null) return w.message!;
+    return _extractDescendantText(element);
+  }
+
+  /// The text under [element]; `glyphOnly` when it is only icon names.
+  static ({String text, bool glyphOnly}) _describeDescendants(Element element) {
     // Ordered and de-duplicated: widgets like NavigationDestination render
     // their label twice (text + tooltip).
     final parts = <String>{};
@@ -628,7 +664,9 @@ class PilotWidgetInspector {
     }
 
     extract(element);
-    return (parts.isEmpty ? iconNames : parts).join(' ');
+    return parts.isEmpty
+        ? (text: iconNames.join(' '), glyphOnly: iconNames.isNotEmpty)
+        : (text: parts.join(' '), glyphOnly: false);
   }
 
   static String? _computeSemanticSelector(Element element) {
