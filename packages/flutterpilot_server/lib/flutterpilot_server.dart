@@ -999,11 +999,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
             ? formatResult(res.data!)
             : jsonEncode(res.data);
         return CallToolResult(
-          content: [
-            TextContent(
-              text: _boundToolText(text),
-            ),
-          ],
+          content: [TextContent(text: _boundToolText(text))],
         );
       },
     );
