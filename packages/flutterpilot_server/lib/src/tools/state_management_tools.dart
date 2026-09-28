@@ -158,7 +158,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_network_logs',
       description:
-          'View recent HTTP requests and responses (bodies truncated and redacted; mock status shown). CALL THIS if an API call failed or to verify network payload accuracy.',
+          'Recent Dio requests and responses: method, URL, status, error, '
+          'body (truncated, secrets redacted), and whether a mock answered. '
+          'Use when an API call failed or to check what was sent.',
       extension: 'ext.flutterpilot.getNetworkLogs',
       formatResult: (json) {
         final logs = json['logs'] as List?;
@@ -185,7 +187,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_hive_contents',
       description:
-          'Dump the contents of all registered Hive boxes. CALL THIS to verify local persistent storage.',
+          'Keys and values of the Hive boxes the app registered with '
+          'HivePilotInspector.registerBox, e.g. to check the UI saved '
+          'something.',
       extension: 'ext.flutterpilot.getHiveContents',
     );
 
@@ -278,8 +282,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'Returns all SharedPreferences keys and their typed values '
           '(String, int, double, bool, List<String>). Values matching '
           'sensitive key patterns (token, password, secret, auth, etc.) are '
-          'redacted by default — pass showSensitive=true to reveal them. '
-          'Requires the flutterpilot_shared_preferences plugin.',
+          'redacted by default — pass showSensitive=true to reveal them.',
       extension: 'ext.flutterpilot.getSharedPreferences',
       properties: {
         'showSensitive': JsonSchema.string(
@@ -345,7 +348,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_network',
       description:
-          'Simulates a network condition for all Dio HTTP requests. Use to test offline states, loading skeletons, and slow-connection UX. Conditions: normal | slow_3g | fast_4g | offline.',
+          'Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or '
+          'normal again, to test loading and offline states.',
       inputSchema: ToolInputSchema(
         properties: {
           'condition': JsonSchema.string(

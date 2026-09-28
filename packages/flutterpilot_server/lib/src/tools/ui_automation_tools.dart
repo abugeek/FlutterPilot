@@ -399,8 +399,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'pinch_zoom',
       description:
-          'Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. '
-          'Scale > 1 zooms in, scale < 1 zooms out.',
+          'Two-finger pinch on a widget or at x/y: scale > 1 zooms in, < 1 '
+          'zooms out. Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'scale': JsonSchema.number(
@@ -439,7 +439,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'scroll_into_view',
       description:
-          'Ensures a widget is visible by scrolling its parent list. Works with Keys, semantic selectors, or text labels.',
+          'Scrolls the enclosing list until the widget (key, selector or '
+          'text) is on screen. tap_widget already does this before tapping.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -464,7 +465,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'swipe_widget',
       description:
-          'Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.',
+          'Swipes on a widget up/down/left/right: scroll a list, dismiss a '
+          'card, open a drawer. Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -507,7 +509,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'drag_widget',
       description:
-          'Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.',
+          'Drags one widget onto another (drag-and-drop, reordering). Reports '
+          'what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'fromKey': JsonSchema.string(
@@ -577,10 +580,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_slider_value',
       description:
-          'Sets the value of a Slider widget identified by key. Computes '
-          'the correct tap position for the target value based on the '
-          'slider\'s min/max range and dispatches a pointer event. '
-          'The value is clamped to [min, max].',
+          'Moves a Slider to a value (clamped to its min/max) the way a user '
+          'would, so onChanged fires.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -608,9 +609,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'toggle_checkbox',
       description:
-          'Taps the centre of the first Checkbox, Switch, or Radio widget '
-          'found under the given key to toggle its state. '
-          'Use get_widget_properties to read the resulting isChecked value.',
+          'Toggles the Checkbox, Switch or Radio under the key; the response '
+          'shows its new value (= true/false).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -783,8 +783,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex '
-          'overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).',
+          'Lists layout overflows (the yellow-black stripes) and tap targets '
+          'smaller than the platform minimum (48dp on phones, 24px on '
+          'desktop/web) on the current screen, with their positions. Use '
+          'after set_app_settings(textScale/locale) or a layout change.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -802,38 +804,39 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           return CallToolResult(
             content: [
               TextContent(
-                text:
-                    '🎉 **Screen Health Audit Passed!**\n- 0 Layout Overflows\n- 0 Accessibility Violations',
+                text: 'No layout overflows or undersized tap targets.',
               ),
             ],
           );
         }
 
-        final buffer = StringBuffer('⚠️ **Screen Health Issues Detected:**\n');
+        final buffer = StringBuffer();
         if (overflowCount > 0) {
-          buffer.writeln('\n### 🚨 Layout Overflows ($overflowCount):');
+          buffer.writeln('Layout overflows ($overflowCount):');
           for (final o in overflows) {
-            buffer.writeln('- **${o['type']}**: ${o['details']}');
+            buffer.writeln('- ${o['type']}: ${o['details']}');
           }
         }
         if (a11yCount > 0) {
-          buffer.writeln(
-            '\n### ♿ Accessibility / Tap Target Issues ($a11yCount):',
-          );
+          buffer.writeln('Tap target issues ($a11yCount):');
           for (final a in a11y) {
             buffer.writeln('- `${a['target']}` (${a['type']}): ${a['issue']}');
           }
         }
 
-        return CallToolResult(content: [TextContent(text: buffer.toString())]);
+        return CallToolResult(
+          content: [TextContent(text: buffer.toString().trim())],
+        );
       },
     );
 
     _tool(
       'execute_action_chain',
       description:
-          'Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed. '
-          'Eliminates multi-turn LLM latency when the sequence of steps is already known.',
+          'Runs a known sequence of taps and text entries in one call, '
+          'stopping at the first step that fails. Returns how many steps ran, '
+          'the failure if any, and the screen afterwards (route, diff, '
+          'tappable elements).',
       inputSchema: ToolInputSchema(
         properties: {
           'actions': JsonSchema.array(
@@ -858,8 +861,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final failure = res.data?['failure'] as String?;
         final buffer = StringBuffer(
           failure == null
-              ? '⚡ Action chain: $executed/$total steps done.\n'
-              : '❌ Action chain stopped after $executed/$total steps. '
+              ? 'Action chain: $executed/$total steps done.\n'
+              : 'Action chain stopped after $executed/$total steps. '
                     '$failure\nRemaining steps were skipped. State now:\n',
         );
         buffer.write(_formatActionFeedback('Chain finished', const {}, res));

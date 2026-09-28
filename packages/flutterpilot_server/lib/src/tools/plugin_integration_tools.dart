@@ -77,10 +77,9 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'query_supabase_table',
       description:
-          'Query rows from a Supabase table using the project\'s own credentials. '
-          'Returns up to `limit` rows (default 20, max 200). Optionally filter '
-          'with "column=value" equality. Useful for inspecting data during debug. '
-          'PREREQUISITES: App must use flutterpilot_supabase plugin.',
+          'Rows of a Supabase table read with the app\'s own client (its '
+          'session, so row-level security applies): up to limit (default 20, '
+          'max 200), optional "column=value" filter.',
       extension: 'ext.flutterpilot.querySupabaseTable',
       properties: {
         'table': JsonSchema.string(
@@ -209,7 +208,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'paths like users/{uid}/...), providers, anonymous/verified, token '
           'expiry and custom claims, recent sign-in/out events, and the '
           'Firebase project. Email/name/phone are redacted unless '
-          'showSensitive=true. Needs the flutterpilot_firebase plugin.',
+          'showSensitive=true.',
       extension: 'ext.flutterpilot.getFirebaseAuth',
       properties: {
         'showSensitive': JsonSchema.boolean(
@@ -264,8 +263,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           '("users/UID/notes") or a document ("users/UID"). Optional where '
           '("done == false", ops == != < <= > >= array-contains), orderBy '
           '("createdAt desc"), limit (default 20, max 100), source "cache" to '
-          'see what the app has locally instead of the server. Needs the '
-          'flutterpilot_firebase plugin.',
+          'see what the app has locally instead of the server.',
       extension: 'ext.flutterpilot.queryFirestore',
       properties: {
         'path': JsonSchema.string(description: 'Collection or document path.'),

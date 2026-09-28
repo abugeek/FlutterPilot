@@ -278,9 +278,13 @@ current major. §1 is done.
    the sqflite/drift table listers (`exec_sql_query` on sqlite_master).
    `tool_registration_test` fails above 80. Round 11 of
    `docs/field-test-findings.md`.
-3. **Tool descriptions:** remove marketing language ("360-degree", "<5ms",
-   "Superpowers"); state what it returns and when to use it. Agents choose
-   tools from descriptions.
+3. **Tool descriptions:** done — every description says what the tool
+   returns and when to use it (or what to use instead); no "CALL THIS",
+   "PREREQUISITES", speed claims or emoji, no "needs the X plugin" (plugin
+   tools are only listed when the plugin is there), no implementation
+   details (idb commands, pointer maths). `tool_registration_test` rejects
+   selling phrases and descriptions over 600 chars. Responses lost their
+   emoji banners too (audit, action chain, compare, connect).
 
 ## 5. DevTools parity — what developers actually open DevTools for
 

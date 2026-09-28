@@ -17,7 +17,7 @@ Result of an operation submitted with async:true: pending, or its result. cancel
 
 ## `connect_app`
 
-Connects or reconnects FlutterPilot to a running Flutter application. If uri is omitted, it automatically scans localhost for an active Flutter debug session.
+Connects to a running Flutter app: the VM service URI flutter run prints, or without uri the one found for this project. Needed only when the app was not found automatically or was restarted.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -123,7 +123,7 @@ Presses a key on the focused widget: "enter" (submits a text field), "tab", "esc
 
 ## `pinch_zoom`
 
-Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. Scale > 1 zooms in, scale < 1 zooms out.
+Two-finger pinch on a widget or at x/y: scale > 1 zooms in, < 1 zooms out. Reports what changed.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -135,7 +135,7 @@ Simulates a two-finger pinch-to-zoom gesture on a widget or at coordinates. Scal
 
 ## `scroll_into_view`
 
-Ensures a widget is visible by scrolling its parent list. Works with Keys, semantic selectors, or text labels.
+Scrolls the enclosing list until the widget (key, selector or text) is on screen. tap_widget already does this before tapping.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -145,7 +145,7 @@ Ensures a widget is visible by scrolling its parent list. Works with Keys, seman
 
 ## `swipe_widget`
 
-Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.
+Swipes on a widget up/down/left/right: scroll a list, dismiss a card, open a drawer. Reports what changed.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -156,7 +156,7 @@ Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dis
 
 ## `drag_widget`
 
-Drags one widget onto another by Key. Use for drag-and-drop reordering, drag targets, or drop zones.
+Drags one widget onto another (drag-and-drop, reordering). Reports what changed.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -173,7 +173,7 @@ Focuses the widget found by key (opens the software keyboard for a TextField). W
 
 ## `set_slider_value`
 
-Sets the value of a Slider widget identified by key. Computes the correct tap position for the target value based on the slider's min/max range and dispatches a pointer event. The value is clamped to [min, max].
+Moves a Slider to a value (clamped to its min/max) the way a user would, so onChanged fires.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -183,7 +183,7 @@ Sets the value of a Slider widget identified by key. Computes the correct tap po
 
 ## `toggle_checkbox`
 
-Taps the centre of the first Checkbox, Switch, or Radio widget found under the given key to toggle its state. Use get_widget_properties to read the resulting isChecked value.
+Toggles the Checkbox, Switch or Radio under the key; the response shows its new value (= true/false).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -215,14 +215,14 @@ Waits (polling, never a blind sleep) for one condition: key — a widget/selecto
 
 ## `audit_screen_health`
 
-Performs an autonomous UI & layout audit on the active screen. Detects yellow-black striped RenderFlex overflows and tap targets below the platform minimum (48dp on phones, 24px on desktop/web).
+Lists layout overflows (the yellow-black stripes) and tap targets smaller than the platform minimum (48dp on phones, 24px on desktop/web) on the current screen, with their positions. Use after set_app_settings(textScale/locale) or a layout change.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
 ## `execute_action_chain`
 
-Executes a batch sequence of UI actions (taps, text entries) inside the Flutter engine at native speed. Eliminates multi-turn LLM latency when the sequence of steps is already known.
+Runs a known sequence of taps and text entries in one call, stopping at the first step that fails. Returns how many steps ran, the failure if any, and the screen afterwards (route, diff, tappable elements).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -230,7 +230,7 @@ Executes a batch sequence of UI actions (taps, text entries) inside the Flutter 
 
 ## `native_screenshot`
 
-Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` — unlike capture_screenshot, this sees native dialogs, the system keyboard, and any OS chrome layered above the Flutter view. macOS + iOS Simulator only.
+Screenshot of the whole simulator screen, in points: unlike capture_screenshot it includes system alerts, the keyboard and other apps. Use when the Flutter screenshot does not show what is on top.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -238,7 +238,7 @@ Captures the simulator screen at the OS/framebuffer level via `xcrun simctl` —
 
 ## `native_tap`
 
-Taps the iOS simulator screen via `idb ui tap` — reaches system permission alerts and other OS chrome that tap_widget cannot, because they are not part of the Flutter widget tree. Coordinates are points: take them from native_describe_screen (or native_screenshot, which is in points too).
+Taps the simulator screen at x/y in points, e.g. a permission alert's "Allow", which is not in the Flutter tree. Take the point from native_describe_screen. For the app's own widgets use tap_widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -248,7 +248,7 @@ Taps the iOS simulator screen via `idb ui tap` — reaches system permission ale
 
 ## `native_text`
 
-Types text into the currently-focused native field via `idb ui text` — for native alert text fields, Safari, or anything outside the Flutter engine. For text fields inside the Flutter app itself, use enter_text instead (it is faster and semantic). Requires idb. macOS + iOS Simulator only.
+Types text into whatever has focus on the simulator, through the real iOS keyboard path: native alert fields, other apps. For the app's own text fields use enter_text.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -257,7 +257,7 @@ Types text into the currently-focused native field via `idb ui text` — for nat
 
 ## `native_button`
 
-Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI, or APPLE_PAY. Requires idb. macOS + iOS Simulator only.
+Presses a simulator hardware button. HOME backgrounds the app (iOS then suspends it; native_open_app brings it back).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -266,7 +266,7 @@ Presses a hardware button via `idb ui button` — HOME, LOCK, SIDE_BUTTON, SIRI,
 
 ## `native_describe_screen`
 
-Returns the native accessibility tree (labels, frames, roles) for whatever is on screen right now via `idb ui describe-all` — including system dialogs and alerts that are invisible to get_widget_tree. Use this instead of guessing pixel coordinates from a screenshot before calling native_tap: it gives you the actual button labels and frames for "Allow"/"Don't Allow"-style native alerts. Requires idb. macOS + iOS Simulator only.
+What iOS shows on the simulator right now, one line per element with its role, label and tap point (points), including system alerts the Flutter tree does not have. Use before native_tap.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -314,12 +314,12 @@ Changes how the app renders, one or more at once: theme (light/dark), locale ("f
 
 ## `capture_screenshot`
 
-Capture an image of the current screen for visual analysis. Defaults to a scaled-down PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or format: "jpeg" with a quality if you specifically want lossy compression (jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, so it is opt-in, not the default).
+Image of the app's screen, PNG at half size by default; scale 1.0 for full resolution, format "jpeg" for a smaller file. Use when you need to see layout, color or images — for text and structure get_app_summary or get_widget_tree are cheaper.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `format` | string | no |  |
-| `scale` | number | no | Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution. |
+| `scale` | number | no | 0.2–1.0 (default 0.5). |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
 
 ## `compare_screenshot`
@@ -340,12 +340,12 @@ The app's own widgets on screen (DevTools summary tree) with keys, text, selecto
 |---|---|---:|---|
 | `diff` | boolean | no | Only widgets added/removed/changed since the last call. |
 | `rootKey` | string | no | Optional widget key or semantic selector (e.g. "checkout_form", "Button['Save']") to scope the tree capture to only that subtree. |
-| `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs. |
+| `maxDepth` | integer | no | Maximum tree depth (default 50). |
 | `compact` | boolean | no | Whether to prune intermediate unkeyed layout containers (default: true). |
 
 ## `get_interactive_elements`
 
-Discovers all actionable, interactive widgets currently visible and hittable on screen (buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). Filters out offstage, occluded, or covered widgets using Flutter hit testing. Returns a clean, compact list with bounds, keys, identifiers, and visible labels.
+Every widget the user can tap or type into right now (buttons, fields, checkboxes, switches, sliders, tappable tiles) with type, label, key and bounds; covered or off-screen ones are left out. get_app_summary shows the first 15.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -353,14 +353,14 @@ Discovers all actionable, interactive widgets currently visible and hittable on 
 
 ## `get_app_summary`
 
-CALL THIS FIRST. One-call overview of the running app: current route, the tappable elements on screen (labels + keys), focused widget, recent errors and logs, frame timing, viewport. Use get_widget_tree for layout structure and capture_screenshot for visuals.
+Start here. The running app in a few lines: route, viewport, focused widget, the tappable elements (labels + keys), uncaught errors, recent logs, jank, and whether the window is visible or covered by a system alert.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
 ## `get_widget_properties`
 
-Reads the semantic properties of a widget identified by its key. Returns: type, text (Text/TextField content), isEnabled (onPressed/onTap/onChanged non-null), isChecked (Checkbox/Switch), value/min/max (Slider), isFocused, and screen-space bounds. Use this instead of screenshots to verify widget state.
+One widget's state: type, text (Text/TextField content), isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), isFocused and bounds.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -369,11 +369,11 @@ Reads the semantic properties of a widget identified by its key. Returns: type, 
 
 ## `get_semantics_tree`
 
-Returns the full accessibility semantics tree as seen by screen readers (VoiceOver/TalkBack). Each node has: id, label, value, hint, tooltip, role flags (isButton/isTextField/isSlider/isImage/isLink/isLiveRegion), isChecked, isEnabled, isFocused, and screen-space rect. Use this for accessibility audits. Use maxDepth to limit tree size (default: 50).
+What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint, role flags, checked/enabled/focused and rect. Use to check labels for accessibility; semanticsId works in tap_widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values for faster results. |
+| `maxDepth` | integer | no | Maximum tree depth (default 50). |
 
 ## `get_flight_log`
 
@@ -412,7 +412,7 @@ Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several
 
 ## `get_network_logs`
 
-View recent HTTP requests and responses (bodies truncated and redacted; mock status shown). CALL THIS if an API call failed or to verify network payload accuracy.
+Recent Dio requests and responses: method, URL, status, error, body (truncated, secrets redacted), and whether a mock answered. Use when an API call failed or to check what was sent.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -422,7 +422,7 @@ View recent HTTP requests and responses (bodies truncated and redacted; mock sta
 
 ## `get_hive_contents`
 
-Dump the contents of all registered Hive boxes. CALL THIS to verify local persistent storage.
+Keys and values of the Hive boxes the app registered with HivePilotInspector.registerBox, e.g. to check the UI saved something.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -441,7 +441,7 @@ Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local dat
 
 ## `get_shared_preferences`
 
-Returns all SharedPreferences keys and their typed values (String, int, double, bool, List<String>). Values matching sensitive key patterns (token, password, secret, auth, etc.) are redacted by default — pass showSensitive=true to reveal them. Requires the flutterpilot_shared_preferences plugin.
+Returns all SharedPreferences keys and their typed values (String, int, double, bool, List<String>). Values matching sensitive key patterns (token, password, secret, auth, etc.) are redacted by default — pass showSensitive=true to reveal them.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -464,7 +464,7 @@ Writes a SharedPreferences key (type: string (default), int, double, bool, strin
 
 ## `simulate_network`
 
-Simulates a network condition for all Dio HTTP requests. Use to test offline states, loading skeletons, and slow-connection UX. Conditions: normal | slow_3g | fast_4g | offline.
+Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or normal again, to test loading and offline states.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -534,7 +534,7 @@ Supabase auth state: user, session and JWT expiry, recent auth events; realtime:
 
 ## `query_supabase_table`
 
-Query rows from a Supabase table using the project's own credentials. Returns up to `limit` rows (default 20, max 200). Optionally filter with "column=value" equality. Useful for inspecting data during debug. PREREQUISITES: App must use flutterpilot_supabase plugin.
+Rows of a Supabase table read with the app's own client (its session, so row-level security applies): up to limit (default 20, max 200), optional "column=value" filter.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -565,7 +565,7 @@ Network connectivity as the app sees it (wifi, mobile, ethernet, vpn, none) and 
 
 ## `get_firebase_auth`
 
-Who is signed in to Firebase Auth in the app: uid (for Firestore paths like users/{uid}/...), providers, anonymous/verified, token expiry and custom claims, recent sign-in/out events, and the Firebase project. Email/name/phone are redacted unless showSensitive=true. Needs the flutterpilot_firebase plugin.
+Who is signed in to Firebase Auth in the app: uid (for Firestore paths like users/{uid}/...), providers, anonymous/verified, token expiry and custom claims, recent sign-in/out events, and the Firebase project. Email/name/phone are redacted unless showSensitive=true.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -576,7 +576,7 @@ Who is signed in to Firebase Auth in the app: uid (for Firestore paths like user
 
 ## `query_firestore`
 
-Read Firestore with the app's own connection and signed-in user (so security rules apply as in the app). path is a collection ("users/UID/notes") or a document ("users/UID"). Optional where ("done == false", ops == != < <= > >= array-contains), orderBy ("createdAt desc"), limit (default 20, max 100), source "cache" to see what the app has locally instead of the server. Needs the flutterpilot_firebase plugin.
+Read Firestore with the app's own connection and signed-in user (so security rules apply as in the app). path is a collection ("users/UID/notes") or a document ("users/UID"). Optional where ("done == false", ops == != < <= > >= array-contains), orderBy ("createdAt desc"), limit (default 20, max 100), source "cache" to see what the app has locally instead of the server.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

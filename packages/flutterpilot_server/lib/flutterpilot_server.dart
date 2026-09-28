@@ -824,6 +824,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// Names of every registered tool, listed or not.
   Iterable<String> get registeredToolNames => _allTools.keys;
 
+  /// Every registered tool's description, by name.
+  Map<String, String> get toolDescriptions => {
+    for (final MapEntry(key: name, value: tool) in _allTools.entries)
+      name: tool.description ?? '',
+  };
+
   /// Names of the tools currently listed to MCP clients.
   Iterable<String> get listedToolNames =>
       _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
@@ -999,11 +1005,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
             ? formatResult(res.data!)
             : jsonEncode(res.data);
         return CallToolResult(
-          content: [
-            TextContent(
-              text: _boundToolText(text),
-            ),
-          ],
+          content: [TextContent(text: _boundToolText(text))],
         );
       },
     );

@@ -77,19 +77,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'capture_screenshot',
       description:
-          'Capture an image of the current screen for visual analysis. Defaults to a scaled-down '
-          'PNG (0.5x) for fast, token-efficient AI vision — measured ~56ms vs ~456ms at full '
-          'resolution on a real device. Pass scale: 1.0 for a full-resolution capture, or '
-          'format: "jpeg" with a quality if you specifically want lossy compression '
-          '(jpeg re-encoding is server-side pure-Dart and costs more than PNG at the same scale, '
-          'so it is opt-in, not the default).',
+          'Image of the app\'s screen, PNG at half size by default; scale 1.0 '
+          'for full resolution, format "jpeg" for a smaller file. Use when you '
+          'need to see layout, color or images — for text and structure '
+          'get_app_summary or get_widget_tree are cheaper.',
       inputSchema: ToolInputSchema(
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
-          'scale': JsonSchema.number(
-            description:
-                'Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution.',
-          ),
+          'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
           'quality': JsonSchema.integer(
             description:
                 'JPEG compression quality 10-100 (default: 80 for jpeg).',
@@ -275,8 +270,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final contentList = <Content>[
           TextContent(
             text: passed
-                ? 'Visual regression PASSED ✅ — diff: $diffStr% (threshold: $threshold%)'
-                : 'Visual regression FAILED ❌ — diff: $diffStr% exceeds threshold $threshold%',
+                ? 'Visual regression PASSED — diff: $diffStr% (threshold: $threshold%)'
+                : 'Visual regression FAILED — diff: $diffStr% exceeds threshold $threshold%',
           ),
         ];
 
@@ -313,8 +308,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
                 'Optional widget key or semantic selector (e.g. "checkout_form", "Button[\'Save\']") to scope the tree capture to only that subtree.',
           ),
           'maxDepth': JsonSchema.integer(
-            description:
-                'Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs.',
+            description: 'Maximum tree depth (default 50).',
           ),
           'compact': JsonSchema.boolean(
             description:
@@ -367,10 +361,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_interactive_elements',
       description:
-          'Discovers all actionable, interactive widgets currently visible and hittable on screen '
-          '(buttons, text fields, checkboxes, switches, sliders, clickable cards, list tiles). '
-          'Filters out offstage, occluded, or covered widgets using Flutter hit testing. '
-          'Returns a clean, compact list with bounds, keys, identifiers, and visible labels.',
+          'Every widget the user can tap or type into right now (buttons, '
+          'fields, checkboxes, switches, sliders, tappable tiles) with type, '
+          'label, key and bounds; covered or off-screen ones are left out. '
+          'get_app_summary shows the first 15.',
       inputSchema: ToolInputSchema(
         properties: {
           'types': JsonSchema.array(
@@ -395,10 +389,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_app_summary',
       description:
-          'CALL THIS FIRST. One-call overview of the running app: current route, '
-          'the tappable elements on screen (labels + keys), focused widget, recent '
-          'errors and logs, frame timing, viewport. Use get_widget_tree for layout '
-          'structure and capture_screenshot for visuals.',
+          'Start here. The running app in a few lines: route, viewport, '
+          'focused widget, the tappable elements (labels + keys), uncaught '
+          'errors, recent logs, jank, and whether the window is visible or '
+          'covered by a system alert.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -506,11 +500,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_properties',
       description:
-          'Reads the semantic properties of a widget identified by its key. '
-          'Returns: type, text (Text/TextField content), isEnabled '
-          '(onPressed/onTap/onChanged non-null), isChecked (Checkbox/Switch), '
-          'value/min/max (Slider), isFocused, and screen-space bounds. '
-          'Use this instead of screenshots to verify widget state.',
+          'One widget\'s state: type, text (Text/TextField content), '
+          'isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), '
+          'isFocused and bounds.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -533,17 +525,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_semantics_tree',
       description:
-          'Returns the full accessibility semantics tree as seen by screen '
-          'readers (VoiceOver/TalkBack). Each node has: id, label, value, '
-          'hint, tooltip, role flags (isButton/isTextField/isSlider/isImage/'
-          'isLink/isLiveRegion), isChecked, isEnabled, isFocused, and '
-          'screen-space rect. Use this for accessibility audits. '
-          'Use maxDepth to limit tree size (default: 50).',
+          'What a screen reader (VoiceOver/TalkBack) gets: per node id, '
+          'label, value, hint, role flags, checked/enabled/focused and rect. '
+          'Use to check labels for accessibility; semanticsId works in '
+          'tap_widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'maxDepth': JsonSchema.integer(
-            description:
-                'Maximum tree depth to traverse (default: 50). Lower values for faster results.',
+            description: 'Maximum tree depth (default 50).',
           ),
         },
       ),

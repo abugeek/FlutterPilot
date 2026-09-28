@@ -80,8 +80,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'connect_app',
       description:
-          'Connects or reconnects FlutterPilot to a running Flutter application. '
-          'If uri is omitted, it automatically scans localhost for an active Flutter debug session.',
+          'Connects to a running Flutter app: the VM service URI flutter run '
+          'prints, or without uri the one found for this project. Needed only '
+          'when the app was not found automatically or was restarted.',
       inputSchema: ToolInputSchema(
         properties: {
           'uri': JsonSchema.string(
@@ -112,7 +113,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             content: [
               TextContent(
                 text:
-                    '❌ Could not connect to a running Flutter app. Ensure your Flutter app is running in debug mode ("flutter run") and try again.',
+                    'Could not connect to a running Flutter app. Ensure your Flutter app is running in debug mode ("flutter run") and try again.',
               ),
             ],
           );
