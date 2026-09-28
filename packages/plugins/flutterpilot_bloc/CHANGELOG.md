@@ -1,6 +1,3 @@
 ## 0.1.0
 
-- Initial release
-- bloc inspector plugin for FlutterPilot
-- Exposes bloc state/data to AI agents via MCP
-- Idempotent service extension registration
+- First release: `get_state`, `set_state` for apps using flutter_bloc / bloc.
