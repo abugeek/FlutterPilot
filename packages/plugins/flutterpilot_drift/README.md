@@ -19,5 +19,5 @@ DriftPilotInspector.registerDatabase('mydb', database);
 
 ## What It Exposes
 
-- **`list_drift_tables`** — Lists all table names in the registered database
+- **`exec_sql_query`** — Lists all table names in the registered database
 - **`exec_sql_query`** — Run read-only SQL (SELECT, WITH, EXPLAIN, PRAGMA); rows come back as JSON and failures carry SQLite's own message

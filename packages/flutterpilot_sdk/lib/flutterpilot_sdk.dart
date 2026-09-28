@@ -214,7 +214,7 @@ class FlutterPilot {
   /// A [ValueNotifier] that broadcasts text-scale overrides.
   ///
   /// Wrap your `MaterialApp` (or any widget) with a [MediaQuery] that reads
-  /// this notifier to support accessibility testing via `set_text_scale_factor`:
+  /// this notifier to support accessibility testing via `set_app_settings(textScale: ...)`:
   ///
   /// ```dart
   /// ValueListenableBuilder<double?>(

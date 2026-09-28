@@ -244,6 +244,26 @@ connectivity) and hive_app on macOS, one server, switching devices.
 | 166 | per device | ✅ | switching hn_reader ↔ hive_app changes the list |
 | 167 | lazy plugins | ⚠️→doc | a plugin that registers late (Dio created on first request) lists its tools late; `init` now prints `DioPilotInterceptor.register()` for main() |
 
+## Round 11 — fewer tools (§4.2)
+
+125 tools merged into 62 (families → one tool with a parameter). e2e on
+macOS (SDK and zero-code) and hn_reader on macOS, driven through every
+merged path.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 168 | tools/list | ✅ | e2e fixture (Dio) 88 → 42 tools; zero-code 29 → 16; all plugins + iOS 125 → 62 (34 KB of definitions, was 58) |
+| 169 | `tap_widget` gestures | ✅ | double/long/secondary report the same postcondition as a tap (before: double/long only a bare diff); double/long at x/y refused with the reason |
+| 170 | `tap_widget(waitFor)` | ✅ | one call for tap + wait; a missing widget is an error that still reports the tap |
+| 171 | `wait_for` | ✅ | route, animations, frames, state (type inferred from the plugins); no condition → error, not a silent pass |
+| 172 | `navigate_to` | ✅ | go_router `go` by default, `push` builds a stack (`/search -> /story/1`); response shows the stack |
+| 173 | `press_key("back")` | ✅ | pops and reports the new route |
+| 174 | `set_app_settings` | ✅ | one line per setting; locale not wired in hn_reader → ✗ with the fix, text scale ✓, both in one call; orientation on desktop "skipped", not ✓ |
+| 175 | `get_state` | ⚠️→fixed | a FutureProvider<List> printed every element; values are clipped to 200 chars |
+| 176 | `exec_sql_query` | ❌→fixed | with several databases, "Multiple databases registered (a, b)" was taken for "plugin absent" → "No database registered". Only "No … databases registered" counts as absent now |
+| 177 | recording, stream logs | ❌→deleted | `start_recording` described recording the user's manual taps but recorded only FlutterPilot-driven actions; nothing ever fed `get_stream_logs` |
+| 178 | enum states | ⚠️ known | `set_state` on a Notifier holding an enum (ThemeMode) is refused honestly ("String is not a subtype of ThemeMode") |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

@@ -41,7 +41,7 @@ extension _WidgetExtensions on FlutterPilot {
   static String _coveredMessage(String target) =>
       '"$target" is on screen but not tappable: a dialog, menu or overlay '
       'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
-      'press_back) or interact with what is on top.';
+      'press_key back) or interact with what is on top.';
 
   /// Finds [target] (waiting out a route transition, then scrolling to it)
   /// and taps it. Shared by tap_widget and execute_action_chain so both

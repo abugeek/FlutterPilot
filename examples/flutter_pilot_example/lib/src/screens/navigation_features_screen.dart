@@ -8,13 +8,13 @@ import '../state/bloc_state.dart';
 /// | Tool                 | Demonstrated By                         |
 /// |----------------------|-----------------------------------------|
 /// | navigate_to          | buttons push named routes               |
-/// | press_back           | back button in app bar                  |
+/// | press_key(back)           | back button in app bar                  |
 /// | get_navigation_stack | AI can read stack at any time           |
-/// | simulate_deep_link   | deep-link hint with example URL         |
-/// | set_theme            | light/dark toggle via ThemeCubit        |
-/// | set_locale           | locale dropdown (en/es/fr/de/ar)        |
-/// | set_device_rotation  | portrait/landscape toggle               |
-/// | wait_for_state       | async navigation demo                   |
+/// | navigate_to(deepLink: true)   | deep-link hint with example URL         |
+/// | set_app_settings(theme)            | light/dark toggle via ThemeCubit        |
+/// | set_app_settings(locale)           | locale dropdown (en/es/fr/de/ar)        |
+/// | set_app_settings(orientation)  | portrait/landscape toggle               |
+/// | wait_for(state)       | async navigation demo                   |
 class NavigationFeaturesScreen extends StatefulWidget {
   const NavigationFeaturesScreen({super.key});
 
@@ -40,7 +40,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             builder: (ctx, isDark) => IconButton(
               key: const Key('theme_toggle_button'),
               icon: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
-              tooltip: 'Toggle theme (set_theme)',
+              tooltip: 'Toggle theme (set_app_settings(theme))',
               onPressed: () => ctx.read<ThemeCubit>().toggle(),
             ),
           ),
@@ -54,15 +54,15 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             _aiHint(
               'AI Agent hints:\n'
               '  navigate_to("/state")  navigate_to("/network")\n'
-              '  set_theme("dark")  set_locale("es_ES")\n'
-              '  simulate_deep_link("flutterpilot://note/123")\n'
-              '  get_navigation_stack  press_back',
+              '  set_app_settings(theme: "dark")  set_app_settings(locale: "es_ES")\n'
+              '  navigate_to("flutterpilot://note/123", deepLink: true)\n'
+              '  get_navigation_stack  press_key(back)',
             ),
             const SizedBox(height: 16),
 
             _sectionHeader(
               'Navigate To',
-              'navigate_to · press_back · get_navigation_stack',
+              'navigate_to · press_key(back) · get_navigation_stack',
             ),
             Card(
               child: Padding(
@@ -133,7 +133,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                         }
                       },
                       icon: const Icon(Icons.arrow_back),
-                      label: const Text('press_back'),
+                      label: const Text('press_key(back)'),
                     ),
                   ],
                 ),
@@ -141,7 +141,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Theme Switching', 'set_theme'),
+            _sectionHeader('Theme Switching', 'set_app_settings(theme)'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -173,7 +173,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'AI: set_theme("dark") or set_theme("light")',
+                        'AI: set_app_settings(theme: "dark") or set_app_settings(theme: "light")',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -186,7 +186,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Locale / i18n', 'set_locale'),
+            _sectionHeader('Locale / i18n', 'set_app_settings(locale)'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -213,7 +213,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'AI: set_locale("es_ES") switches language at runtime',
+                      'AI: set_app_settings(locale: "es_ES") switches language at runtime',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -225,7 +225,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Device Rotation', 'set_device_rotation'),
+            _sectionHeader('Device Rotation', 'set_app_settings(orientation)'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -284,7 +284,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Deep Links', 'simulate_deep_link'),
+            _sectionHeader('Deep Links', 'navigate_to(deepLink: true)'),
             Card(
               color: Colors.purple.shade50,
               child: Padding(
@@ -293,7 +293,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'simulate_deep_link fires a URI into the app routing system.',
+                      'navigate_to(deepLink: true) fires a URI into the app routing system.',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
@@ -306,7 +306,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     _codeChip('https://app.example.com/login?token=abc'),
                     const SizedBox(height: 8),
                     Text(
-                      'AI: simulate_deep_link("flutterpilot://note/42")',
+                      'AI: navigate_to("flutterpilot://note/42", deepLink: true)',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.purple.shade700,
@@ -318,7 +318,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
             ),
             const SizedBox(height: 16),
 
-            _sectionHeader('Async wait_for_state', 'wait_for_state'),
+            _sectionHeader('Async wait_for(state)', 'wait_for(state)'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -326,7 +326,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'wait_for_state pauses AI execution until a condition is true.\n'
+                      'wait_for(state) pauses AI execution until a condition is true.\n'
                       'Useful after navigate_to to wait for screen load, or after\n'
                       'triggering async operations.',
                       style: TextStyle(fontSize: 13),
@@ -352,7 +352,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                           : const Icon(Icons.timer),
                       label: Text(
                         _pendingNavigation
-                            ? 'Navigating in 2s... (wait_for_state here)'
+                            ? 'Navigating in 2s... (wait_for(state) here)'
                             : 'Delayed Navigate (2s)',
                       ),
                     ),
@@ -360,7 +360,7 @@ class _NavigationFeaturesScreenState extends State<NavigationFeaturesScreen> {
                     const Text(
                       'AI script:\n'
                       '  1. tap_widget("delayed_nav_button")\n'
-                      '  2. wait_for_state(\'route == "/state"\', timeout: 5000)\n'
+                      '  2. wait_for(state: \'route == "/state"\', timeout: 5000)\n'
                       '  3. get_app_summary  // verify navigation succeeded',
                       style: TextStyle(fontFamily: 'monospace', fontSize: 11),
                     ),

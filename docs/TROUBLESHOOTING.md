@@ -273,14 +273,14 @@ flutter run  # Kill + restart
 
 2. **List available tools**:
    ```bash
-   # Server tool: "list_custom_tools" shows all registered tools
+   # Server tool: "call_custom_tool()" shows all registered tools
    ```
 
 3. **Check plugin requirements**:
    ```bash
    # Some tools need plugins:
-   # get_bloc_state → requires flutterpilot_bloc
-   # get_riverpod_state → requires flutterpilot_riverpod
+   # get_state → requires flutterpilot_bloc
+   # get_state → requires flutterpilot_riverpod
    # get_network_logs → requires flutterpilot_dio
    ```
 
@@ -520,7 +520,7 @@ void main() {
 
 ### "Bloc state is empty / not tracked"
 
-**Problem**: `get_bloc_state` returns no blocs.
+**Problem**: `get_state` returns no blocs.
 
 **Causes**:
 - Bloc.observer not set
@@ -559,7 +559,7 @@ BlocProvider(
 
 ### "Multiple Bloc instances overwrite state"
 
-**Problem**: Two instances of same Bloc type show only one in `get_bloc_state`.
+**Problem**: Two instances of same Bloc type show only one in `get_state`.
 
 **Cause**: Bloc plugin keys by type name only. Two instances collide.
 
@@ -582,7 +582,7 @@ final bloc2 = MyBloc();  // ← bloc2 overwrites bloc1
 
 ### "Riverpod state not syncing"
 
-**Problem**: `get_riverpod_state` doesn't show current values.
+**Problem**: `get_state` doesn't show current values.
 
 **Cause**: ProviderScope observer not set, or multiple ProviderScopes.
 

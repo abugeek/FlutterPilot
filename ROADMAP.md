@@ -9,9 +9,10 @@ tools that always work beat many tools that sometimes work.
 
 ---
 
-## 0. State as of 2026-09-27 (PR #1 merged)
+## 0. State as of 2026-09-28
 
-- 129 MCP tools (down from 164). SDK + 12 plugins + server + CLI. All packages
+- 62 MCP tools (164 → 129 → 62, §4.2); an app sees only those that work for it
+  (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
@@ -261,11 +262,22 @@ current major. §1 is done.
    a Hive-only app 86 / 45 KB, the e2e fixture (Dio) 88.
    Native tools only on iOS; zero-code apps 29. Round 10 of
    `docs/field-test-findings.md`.
-2. **Shrink further:** candidates to merge/remove after field-testing —
-   `navigate_to` / `jump_to_screen` / `simulate_deep_link` / `gorouter_navigate`
-   (one navigation tool), the `wait_*` family (one), `read_dart_file` /
-   `list_dart_files` / `get_build_config` (coding agents already read files),
-   `start_recording` / `stop_and_generate_test`. Realistic target: 60–80 tools.
+2. **Shrink further:** done — 125 → 62 tools (58 → 34 KB of definitions with
+   every plugin; the e2e fixture 88 → 42 tools, hn_reader 104 → 48).
+   Families became one tool with a parameter: `tap_widget` (`gesture`
+   double/long/secondary, `waitFor`), `wait_for` (key/route/animations/state/
+   frames), `navigate_to` (deep links, go_router push/replace),
+   `get_navigation_stack` (go_router routes/history), `set_app_settings`
+   (theme, locale, textScale, orientation, debug overlays), `assert_widget`,
+   `get_state` / `set_state` (Riverpod + Bloc), `hot_reload` (`restart`),
+   `get_errors` (`report`), `compare_screenshot` (`save`), `get_widget_tree`
+   (`diff`), and `clear`/`delete` flags on the log, profile, mock and storage
+   tools. Deleted: `read_dart_file` / `list_dart_files` / `get_build_config`,
+   `start_recording` / `stop_and_generate_test` (recorded only the agent's
+   own actions), `get_stream_logs` (nothing fed it), `get_recent_events`,
+   the sqflite/drift table listers (`exec_sql_query` on sqlite_master).
+   `tool_registration_test` fails above 80. Round 11 of
+   `docs/field-test-findings.md`.
 3. **Tool descriptions:** remove marketing language ("360-degree", "<5ms",
    "Superpowers"); state what it returns and when to use it. Agents choose
    tools from descriptions.
@@ -357,13 +369,13 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
   test on long lists, nested scrollables, horizontal lists, lazy lists where
   the target isn't built yet.
-- **`stream_inspector.dart`** (`get_stream_logs`) — WebSocket/stream capture;
-  what wires it? Probably nothing in a normal app.
-- **`flight_recorder.dart`**, `get_flight_log`, `start_recording` /
-  `stop_and_generate_test` — useful only if §6 is built on top.
+- **`stream_inspector.dart`** — nothing wires it; its tool is gone (§4.2),
+  the SDK code can go too.
+- **`flight_recorder.dart`**, `get_flight_log` — useful only if §6 is built
+  on top. (The recording tools were deleted in §4.2.)
 - **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS
   simulator only) — test on a simulator or hide on other platforms.
-- **Plugin write tools** that make real network calls (`supabase_sign_out`,
+- **Plugin write tools** that make real network calls (`supabase_session`,
   `log_analytics_event`, `record_crashlytics_error`, ...) — keep behind
   `--allow-destructive` and verify they're labeled as such.
 - **Example app** (`examples/flutter_pilot_example`) — 12 demo screens incl.

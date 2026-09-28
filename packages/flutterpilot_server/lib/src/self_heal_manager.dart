@@ -195,7 +195,7 @@ class SelfHealManager {
   void _sendProactiveAlert(String exception) {
     // Log crash alert so terminal/agent sees it immediately.
     _log.severe(
-      '🚨 CRITICAL APP CRASH — call `get_latest_crash_report` for diagnostics. Exception: $exception',
+      '🚨 CRITICAL APP CRASH — call `get_errors(report: true)` for diagnostics. Exception: $exception',
     );
 
     try {
@@ -204,11 +204,11 @@ class SelfHealManager {
           level: LoggingLevel.critical,
           logger: 'FlutterPilot.SelfHeal',
           data:
-              'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_latest_crash_report` for full context.',
+              'CRITICAL APP CRASH: $exception. Self-Heal sequence initiated. Call `get_errors(report: true)` for full context.',
         ),
       );
     } catch (e) {
-      // Notification delivery is best-effort; crash data is still available via get_latest_crash_report.
+      // Notification delivery is best-effort; crash data is still available via get_errors(report: true).
       _log.warning('Failed to send crash notification: $e');
     }
   }

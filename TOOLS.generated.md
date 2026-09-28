@@ -2,25 +2,18 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 125
+Tool count: 62
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
 ## `get_operation`
 
-Polls an asynchronous operation submitted with async:true. Returns pending, completed, or failed status.
+Result of an operation submitted with async:true: pending, or its result. cancel:true cancels it instead, if it has not started yet (a running call is allowed to finish).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `operationId` | string | yes | The operation ID returned by the async submission. |
-
-## `cancel_operation`
-
-Cancels a queued FlutterPilot operation before it starts. Already-running VM calls are allowed to finish safely.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | yes | The operation ID returned by the original tool call. |
+| `cancel` | boolean | no | Cancel the queued operation instead of polling it. |
 
 ## `connect_app`
 
@@ -56,47 +49,15 @@ Makes a registered device the active one: every tool call after this targets it.
 
 ## `get_errors`
 
-Retrieve the most recent unhandled exceptions and stack traces with duplicate aggregation. CALL THIS whenever you suspect a crash or logic failure.
+Recent uncaught exceptions, deduplicated, with your source frame (file:line) and, for layout errors, the culprit widget. report:true returns the structured report of the latest crash instead: exception, stack, route, recent actions and state.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_recent_events`
-
-Retrieves all buffered proactive events (up to 50: errors, taps, state changes) from the stream. Use this to catch up on what happened while you were processing or if the user interacted with the app manually.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_build_config`
-
-Reads the project's pubspec.yaml and returns the app name, version, Flutter/Dart SDK constraints, and dependency list. Use this to understand what packages are available before suggesting code that requires them.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `read_dart_file`
-
-Reads a Dart source file from the connected Flutter project. The path is relative to the project root (where pubspec.yaml is). Use this to give the AI agent codebase context: read widgets, models, routes, or test files before making changes.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `path` | string | yes | Relative or absolute path to the Dart file. Relative paths resolve from the project root. |
-
-## `list_dart_files`
-
-Lists all .dart files in the Flutter project under the given directory (defaults to "lib"). Returns relative paths from the project root. Use to explore project structure before reading files.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `directory` | string | no | Subdirectory to search for Dart files (e.g. "lib", "test"). Defaults to project root if omitted. |
+| `report` | boolean | no | Return the latest crash report instead of the list. |
 
 ## `get_debug_logs`
 
-Returns console output the running app printed since FlutterPilot connected — print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit.
+Returns console output the running app printed since FlutterPilot connected — print(), debugPrint(), and dart:developer log() calls. Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit. clear:true empties the server and in-app buffers instead (a clean baseline before a test).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -105,93 +66,60 @@ Returns console output the running app printed since FlutterPilot connected — 
 | `since_seconds` | integer | no | Only return logs captured within the last N seconds. |
 | `limit` | integer | no | Maximum number of log entries to return (default: 100). |
 | `logger` | string | no | Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print". |
-
-## `clear_debug_logs`
-
-Clears captured console logs (server and in-app buffers). Use this before a specific test scenario so you get a clean baseline.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
+| `clear` | boolean | no | Clear the captured logs instead of reading them. |
 
 ## `get_capabilities`
 
-Returns the server capabilities: connection status, loaded plugins, available state managers, buffer sizes, and configuration. CALL THIS FIRST to discover what plugins and tools are available before attempting state inspection or plugin-specific operations.
+Server and app setup: connection, which FlutterPilot plugins the app registered, SDK capabilities, Dart VM version, pid and isolates, buffer limits. Use when a tool is missing or refused.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 
 ## `profile_frame_budget`
 
-Microsecond Frame Budget & Jank Pinpointer: Analyzes rolling 120-frame timings (Build, Raster, Total) and identifies whether UI thread (build/layout) or GPU thread (raster) is causing dropped frames.
+Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `get_stream_logs`
-
-Real-Time WebSocket & Stream Channel Inspector: Returns captured incoming and outgoing real-time messages (WebSockets, Supabase Realtime, EventStreams). Supports channel filter.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `channel` | string | no | Optional channel name to filter messages by. |
-
-## `tap_at`
-
-Simulates a physical tap at specific (x, y) coordinates. Prefer `tap_widget` if you have a Key.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `x` | number | yes | X screen coordinate in logical pixels. Screen origin is top-left. |
-| `y` | number | yes | Y screen coordinate in logical pixels. Screen origin is top-left. |
 
 ## `tap_widget`
 
-Finds a widget by Key, Virtual Semantic Selector (e.g. "ElevatedButton['Log In']"), semantics identifier, visible text, or coordinates, and taps it. Works reliably across all screen sizes and device types without needing hardcoded coordinates. PREREQUISITES: Call get_interactive_elements or get_widget_tree to discover available widgets. The response reports whether the route changed, post-action state, and widget-tree diff.
+Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']"), semantics identifier or visible text — or at x/y. Exact text wins; text several widgets merely contain is refused with the candidates. gesture: "double", "long" (durationMs) or "secondary" (right-click, context menus). waitFor: a widget to wait for after the tap (replaces a separate wait_for call). The response reports the route change, a widget-tree diff and what is tappable now.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | ValueKey string, semantic selector (e.g. "ElevatedButton['Sign In']"), visible button text, or icon name (e.g. "IconButton['settings']"). |
-| `identifier` | string | no | Semantics identifier property (Flutter 3.19+) for robust AI targeting. |
-| `semanticsId` | integer | no | Numeric SemanticsNode ID from get_semantics_tree for accessibility-first interaction. |
+| `identifier` | string | no | Semantics identifier (Flutter 3.19+). |
+| `semanticsId` | integer | no | SemanticsNode id from get_semantics_tree. |
 | `text` | string | no | Visible text content within the widget to tap. |
 | `type` | string | no | Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton". |
+| `x` | number | no | X in logical pixels (top-left origin), with y. |
+| `y` | number | no | Y in logical pixels. |
+| `gesture` | string | no | Default "tap". |
+| `durationMs` | integer | no | Long-press duration (default 600). |
 | `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
-| `x` | number | no | Optional direct X screen coordinate. |
-| `y` | number | no | Optional direct Y screen coordinate. |
+| `waitFor` | string | no | Key, selector or text of a widget expected to appear after the tap. |
+| `timeoutMs` | integer | no | How long to wait for waitFor (default 5000). |
 
 ## `enter_text`
 
-Types text into a TextField, TextFormField, or editable widget. Can target by Key, identifier, or into the currently focused element if key is omitted or focused_element: true. Automatically updates the TextEditingController and fires onChanged/onSubmitted callbacks. AFTER: The text field now contains the new text. You may need to tap a submit button or call press_key("enter").
+Types text into a TextField/TextFormField found by key, selector (e.g. "TextField['Email']") or label, or into the focused field when no key is given. Replaces the existing text unless clear_first is false; text "" clears the field. Fires onChanged; press_key("enter") afterwards submits.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `text` | string | yes | The text to enter into the text field. |
-| `key` | string | no | Optional ValueKey string, selector (e.g. "TextField['Email']"), or label of the text field to type into. |
-| `identifier` | string | no | Optional semantics identifier of the text field. |
-| `focused_element` | boolean | no | If true, enters text into the currently focused text field without requiring a key. |
+| `text` | string | yes | The text to enter ("" clears the field). |
+| `key` | string | no | ValueKey string, selector (e.g. "TextField['Email']"), or label of the field. Omit for the focused field. |
+| `identifier` | string | no | Semantics identifier of the text field. |
 | `clear_first` | boolean | no | Whether to clear existing text before typing (default: true). |
 
 ## `press_key`
 
-Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). The response says which widget received it. To change text use enter_text / clear_text_field — editing keys like backspace are handled by the OS on desktop.
+Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" (closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). "back" is the system back button: pops the current route, never quits the app from the root. The response says which widget received it. To change text use enter_text.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | Key name to press, e.g. "enter", "tab", "escape", "backspace", "arrowDown", "arrowUp", "space", or single characters. |
+| `key` | string | yes | Key name, e.g. "enter", "tab", "escape", "back", "arrowDown", "space", or a single character. |
 | `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
-
-## `secondary_tap`
-
-Performs a secondary tap (right-click / context tap) on a widget or coordinates. Useful for triggering desktop/web context menus.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey or selector of the widget. |
-| `identifier` | string | no | Semantics identifier of the widget. |
-| `text` | string | no | Visible text of the widget. |
-| `type` | string | no | Widget runtime type. |
-| `x` | number | no | Optional direct X coordinate. |
-| `y` | number | no | Optional direct Y coordinate. |
 
 ## `pinch_zoom`
 
@@ -215,25 +143,6 @@ Ensures a widget is visible by scrolling its parent list. Works with Keys, seman
 | `target` | string | no | Same as key (either name works). |
 | `maxAttempts` | integer | no | Max scroll attempts to locate the widget in lazy lists (default: 8). |
 
-## `double_tap_widget`
-
-Double-taps a widget by Key (two rapid taps). Use for zoom gestures, selection toggles, or any widget that responds to double-tap.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to double-tap. Use get_widget_tree to find keys. |
-| `target` | string | no | Same as key (either name works). |
-
-## `long_press_widget`
-
-Long-presses a widget by Key. Use to trigger context menus, drag handles, or long-press actions. Optional durationMs (default 600).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to long-press. |
-| `target` | string | no | Same as key (either name works). |
-| `durationMs` | integer | no | Duration of the long press in milliseconds (default: 600ms). |
-
 ## `swipe_widget`
 
 Swipes on a widget in a direction (up/down/left/right). Use to scroll lists, dismiss cards, open drawers, or trigger swipe actions.
@@ -254,38 +163,13 @@ Drags one widget onto another by Key. Use for drag-and-drop reordering, drag tar
 | `fromKey` | string | yes | The ValueKey string of the widget to drag from (drag source). |
 | `toKey` | string | yes | The ValueKey string of the target widget to drag to (drop target). |
 
-## `clear_text_field`
-
-Clears the text of a TextField / TextFormField identified by its widget key. Equivalent to select-all then delete. Use enter_text to type new content afterwards.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the text field to clear. |
-| `target` | string | no | Same as key (either name works). |
-
 ## `focus_widget`
 
-Taps the centre of the widget identified by key to request focus (opens the software keyboard for a TextField). Use unfocus_all to close the keyboard afterwards.
+Focuses the widget found by key (opens the software keyboard for a TextField). Without a key, removes focus from everything and dismisses the keyboard.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to focus. |
-| `target` | string | no | Same as key (either name works). |
-
-## `unfocus_all`
-
-Removes focus from all widgets and dismisses the software keyboard. Call this after finishing text input to close the keyboard before taking screenshots or tapping other elements.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `set_text_scale_factor`
-
-Overrides the app-wide text scale factor for accessibility testing. Common values: 1.0 (default), 1.5 (large), 2.0 (extra-large), 3.0 (maximum). Pass 0 to reset to system default. Requires the app to wrap MaterialApp with a MediaQuery that listens to FlutterPilot.textScaleNotifier.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `scale` | number | yes | Text scale factor (1.0 = normal, 2.0 = double size, 0.5 = half size). Test accessibility at 2.0. |
+| `key` | string | no | The ValueKey string or selector of the widget. Omit to unfocus all. |
 
 ## `set_slider_value`
 
@@ -306,48 +190,28 @@ Taps the centre of the first Checkbox, Switch, or Radio widget found under the g
 | `key` | string | no | The ValueKey string of the Checkbox, Switch, or Radio widget to toggle. |
 | `target` | string | no | Same as key (either name works). |
 
-## `pump_frames`
-
-Waits for a specified number of vsync animation frames to complete. Use this to let animations, timers, or async widget builds settle without needing a full wait_for_animation call. Max 120 frames.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `count` | integer | no | Number of frames to pump. Use 1–5 for immediate animations, 60 for ~1 second of wall time. |
-
-## `simulate_deep_link`
-
-Simulates opening a deep link URL, triggering the same routing path as an OS-level deep link (e.g., "myapp://product/123" or "/product/123"). Use this to test deep link handlers, share links, and notification tap flows.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `url` | string | yes | The URL pattern to intercept (exact match or prefix). |
-
-## `press_back`
-
-Simulates pressing the hardware/system back button. Pops the current route from the Navigator. Reports whether a route was actually popped (false if already at root).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `fill_form`
 
-Fills multiple form fields in a single shot using Virtual Semantic Selectors or keys, with optional one-shot form submission. Eliminates multiple turn delays when testing forms.
+Fills several fields in one call and optionally taps a submit button: text for text fields, true/false for checkboxes and switches. Reports the route change and widget-tree diff.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `fields` | object | yes | Map of field selectors to text values (e.g. {"TextField['Email']": "test@flutterpilot.dev", "TextField['Password']": "secret"}). |
-| `submitWith` | string | no | Optional selector or key of the submit button to tap after filling (e.g. "ElevatedButton['Log In']"). |
+| `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
+| `submitWith` | string | no | Optional key/selector of the button to tap after filling (e.g. "ElevatedButton['Log In']"). |
 
-## `wait_for_condition`
+## `wait_for`
 
-Reliably polls until a target element or semantic selector is visible on screen, or until timeout. Prevents flaky test timing during async loading spinners or page transitions.
+Waits (polling, never a blind sleep) for one condition: key — a widget/selector/text is on screen; route — the current route is this one; animations: true — animations and frame callbacks settled; state — a Riverpod provider or Bloc whose value contains expectedValue (needs the plugin); frames — pump N frames (1–120). Fails with the reason on timeout.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Same as selector. |
-| `target` | string | no | Same as selector. |
-| `selector` | string | no | Semantic selector or key to wait for (e.g. "Text['Dashboard']" or "order_confirmed_icon"). |
-| `timeoutMs` | integer | no | Maximum milliseconds to wait before failing (default: 3000). |
+| `key` | string | no | Selector or key to wait for (e.g. "Text['Dashboard']"). |
+| `route` | string | no | Route to wait for (e.g. "/dashboard"). |
+| `animations` | boolean | no | Wait until animations have settled. |
+| `state` | string | no | Provider/bloc name from get_state (e.g. "CounterCubit"); needs expectedValue. |
+| `expectedValue` | string | no | Substring expected in the state's value. |
+| `frames` | integer | no | Number of frames to pump (1–120). |
+| `timeoutMs` | integer | no | Default 5000 (3000 for key). |
 
 ## `audit_screen_health`
 
@@ -363,37 +227,6 @@ Executes a batch sequence of UI actions (taps, text entries) inside the Flutter 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `actions` | array | yes | Steps run in order; the chain stops at the first step that fails. Actions: "tap" (target) and "enter_text" (target, text). Targets work like tap_widget's, e.g. [{"action": "tap", "target": "New note"}, {"action": "enter_text", "target": "Title", "text": "Groceries"}]. |
-
-## `tap_and_wait`
-
-Macro composite tool: Taps a target widget and immediately waits for an expected widget to appear. Replaces 2 separate round-trip tool calls with 1 fast step.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Same as target. |
-| `target` | string | no | Key, semantic selector, or text of the widget to tap (e.g. "login_btn", "Button['Submit']"). |
-| `expect` | string | yes | Key, semantic selector, or text of the widget expected to appear (e.g. "home_dashboard", "Text['Welcome']"). |
-| `timeout` | integer | no | Timeout in milliseconds to wait for the expected widget (default: 5000ms). |
-
-## `enter_text_and_submit`
-
-Macro composite tool: Enters text into an input field and immediately taps a submit button. Executes both steps in a single tool call.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Same as target. |
-| `target` | string | no | Key or semantic selector of the text field (e.g. "email_input", "TextField['Email']"). |
-| `text` | string | yes | Text string to enter into the field. |
-| `submitTarget` | string | yes | Key or semantic selector of the submit button to tap after entering text (e.g. "submit_btn", "Button['Continue']"). |
-
-## `fill_form_batch`
-
-Atomic Form Auto-Filler Macro: Fills multiple input fields and toggles checkboxes/switches in a single frame pass (<5ms) and optionally submits. Reduces 5+ agent turns to 1.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `fields` | object | yes | Map of field targets (keys/selectors) to values (string for TextFields, bool for Checkboxes/Switches). Example: {"TextField['Email']": "alice@test.com", "Checkbox['Terms']": true} |
-| `submitTarget` | string | no | Optional key or selector of the submit button to tap after filling all fields. |
 
 ## `native_screenshot`
 
@@ -448,82 +281,36 @@ Brings the connected app back to the foreground on the iOS simulator (after nati
 
 ## `navigate_to`
 
-Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.
+Goes to a route directly, e.g. "/profile/123" (go_router: router.go; otherwise Navigator.pushNamed). action "push"/"replace" use go_router's push/replace. deepLink:true opens the URL the way an OS deep link does (e.g. "myapp://product/123"). Back: press_key("back").
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `route` | string | yes | The named route to navigate to (e.g. "/home", "/profile/123"). Must be registered in the app router. |
-
-## `jump_to_screen`
-
-Directly teleports to a deep application screen with optional seed state injection (Riverpod/Bloc/storage). Bypasses lengthy manual onboarding or multi-step checkout clicks.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `route` | string | yes | Target route name (e.g. "/order/123", "/settings/security"). |
-| `state` | object | no | Optional map of state seeds to inject before navigation (e.g. {"riverpod:auth": "logged_in"}). |
+| `route` | string | yes | Route or deep-link URL (e.g. "/home", "/profile/123"). |
+| `action` | string | no | Default "go". push/replace need the go_router plugin. |
+| `deepLink` | boolean | no | Open route as an OS deep link. |
 
 ## `get_navigation_stack`
 
-Show the current navigation history (stack). CALL THIS to understand where the user is in the application flow.
+The route stack, bottom to top. With go_router also the location, path/query parameters and matched routes; routes:true adds the router's route table, history:true the recent route changes.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `routes` | boolean | no | Include go_router's configured routes. |
+| `history` | boolean | no | Include recent route changes (go_router). |
 
-## `wait_for_route`
+## `set_app_settings`
 
-Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `route` | string | yes | The route name to wait for (e.g. "/dashboard", "/settings"). |
-| `timeoutMs` | integer | no | Maximum milliseconds to wait for the route (default: 5000ms). |
-
-## `wait_for_animation`
-
-Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.
+Changes how the app renders, one or more at once: theme (light/dark), locale ("fr", "ar", "system"), textScale (2.0 to test large text; 0 resets), orientation (portrait/landscape/all, phones), and the debug overlays debugPaint (layout bounds), repaintRainbow (what repaints) and slowAnimations (5x slower). Pair with audit_screen_health to catch overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `timeoutMs` | integer | no | Maximum milliseconds to wait for all animations to settle (default: 5000ms). |
-
-## `wait_for_state`
-
-Polls a Riverpod provider or Bloc/Cubit until its current value string contains expectedValue, or until timeoutMs elapses. Use after triggering async operations to assert that state has settled. Requires the matching plugin to be active (RiverpodPilotObserver or BlocPilotObserver).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `type` | string | yes |  |
-| `name` | string | yes | State identifier. For Riverpod: the provider's runtimeType string (e.g. "StateProvider<int>"). For Bloc: the bloc's runtimeType string (e.g. "CounterCubit"). |
-| `expectedValue` | string | yes | Substring expected in the state's toString() output |
-| `timeoutMs` | integer | no | Milliseconds to wait before timing out (default 5000) |
-
-## `set_device_rotation`
-
-Rotates the device to portrait or landscape orientation. Use to test responsive layouts, orientation-locked screens, and rotation animations.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `orientation` | string | yes |  |
-
-## `set_locale`
-
-Switch app language (e.g., "en", "de_DE"). Use this to check for text overflows in different languages.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `locale` | string | yes | BCP-47 locale tag (e.g. "en", "fr", "ar", "zh-CN"). Use "system" to restore the device default. |
-
-## `set_theme`
-
-Toggle Light/Dark mode. Use this to verify design consistency across themes.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `theme` | string | yes |  |
+| `theme` | string | no |  |
+| `locale` | string | no | BCP-47 tag (e.g. "en", "zh-CN"); "system" restores the device default. |
+| `textScale` | number | no | Text scale factor (1.0 normal); 0 restores the system value. |
+| `orientation` | string | no |  |
+| `debugPaint` | boolean | no |  |
+| `repaintRainbow` | boolean | no |  |
+| `slowAnimations` | boolean | no |  |
 
 ## `capture_screenshot`
 
@@ -535,32 +322,26 @@ Capture an image of the current screen for visual analysis. Defaults to a scaled
 | `scale` | number | no | Scale factor between 0.2 and 1.0 (default: 0.5 — fast, token-efficient). Pass 1.0 for full resolution. |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
 
-## `save_screenshot_baseline`
-
-Captures the current screen and stores it as a named baseline image for future visual regression comparisons. Call this once to establish a golden image, then use compare_screenshot after code changes.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | A unique name for this baseline image (e.g. "home_screen", "login_dark"). Used to reference it in compare_screenshot. |
-
 ## `compare_screenshot`
 
-Captures the current screen and compares it pixel-by-pixel with a previously saved baseline. Returns the percentage of changed pixels. Use for visual regression testing.
+Visual regression: save:true stores the current screen as the named baseline (per device); without it, compares the screen with that baseline pixel by pixel and returns the changed %, plus a diff image (changes in magenta) when over threshold.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `name` | string | yes | Baseline name set by save_screenshot_baseline |
+| `name` | string | yes | Baseline name, e.g. "home_screen", "login_dark". |
+| `save` | boolean | no | Save (or replace) the baseline instead of comparing. |
 | `threshold` | number | no | Allowed diff % before test fails (default 1.0 = 1%) |
 
 ## `get_widget_tree`
 
-Retrieve the widget hierarchy with screen coordinates (x, y, width, height) and semantic selectors. Automatically performs Semantic Compaction (prunes non-actionable layout wrappers) to save 80% token costs. Pass rootKey/rootSelector to scope capture to a specific dialog/form/sheet (90% extra savings).
+The app's own widgets on screen (DevTools summary tree) with keys, text, selectors and bounds; layout wrappers are pruned unless compact is false. rootKey scopes it to one subtree (a dialog, a form). diff:true returns only what changed since the previous call.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `diff` | boolean | no | Only widgets added/removed/changed since the last call. |
 | `rootKey` | string | no | Optional widget key or semantic selector (e.g. "checkout_form", "Button['Save']") to scope the tree capture to only that subtree. |
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values return faster for complex UIs. |
-| `compact` | boolean | no | Whether to prune intermediate unkeyed layout containers (default: true). Reduces tokens by 80%. |
+| `compact` | boolean | no | Whether to prune intermediate unkeyed layout containers (default: true). |
 
 ## `get_interactive_elements`
 
@@ -576,15 +357,6 @@ CALL THIS FIRST. One-call overview of the running app: current route, the tappab
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `get_widget_tree_diff`
-
-Delta Widget Tree Inspector: Compares current screen with the previously captured tree and returns only added, removed, or updated elements. Saves 95% token consumption.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `maxDepth` | integer | no | Maximum depth to inspect (default: 50). |
-| `compact` | boolean | no | Whether to prune intermediate layout wrappers (default: true). |
 
 ## `get_widget_properties`
 
@@ -603,103 +375,40 @@ Returns the full accessibility semantics tree as seen by screen readers (VoiceOv
 |---|---|---:|---|
 | `maxDepth` | integer | no | Maximum tree depth to traverse (default: 50). Lower values for faster results. |
 
-## `get_self_heal_status`
-
-Check if the application is currently in an unstable/crash state. Use this to verify if your last fix worked or if a new crash was intercepted.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_latest_crash_report`
-
-Retrieve the most recent structured crash report. CALL THIS immediately if you receive a Self-Heal notification or if `get_self_heal_status` returns UNSTABLE.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
 ## `get_flight_log`
 
-Retrieves the chronological 30-60 second rolling flight recorder timeline (user taps, route changes, state mutations, and network requests) leading up to the current state or crash.
+Timeline of the last 30-60 s: taps, route changes, state changes and network requests, oldest first. Use to see what led up to an error. clear:true empties it instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `clear_flight_log`
-
-Clears the flight recorder event buffer.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `diagnose_last_error`
-
-Alias for `get_latest_crash_report`. Returns structured crash diagnostics and state inspection.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
+| `clear` | boolean | no | Clear the timeline instead of reading it. |
 
 ## `hot_reload`
 
-Recompile edited .dart files and hot reload them into the running app, keeping state. CALL THIS after modifying Dart source. Requires the app to be started with `flutter run` or an IDE debug session.
+Recompiles edited .dart files and hot reloads them into the running app, keeping state. restart:true does a hot restart instead (state is reset) — needed for main(), initState, global/static initializers, enums, generic type changes and provider definitions. Needs an app started by `flutter run` or an IDE debug session.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `restart` | boolean | no | Hot restart instead of hot reload. |
 
-## `hot_restart`
+## `get_state`
 
-Recompile and hot restart the app (state is reset). CALL THIS for changes hot reload cannot apply: main(), initState, global/static initializers, enums, generic type changes.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_riverpod_state`
-
-Inspect current values of all active Riverpod providers. Returns provider name, current value (as string), value type, and timestamp. PREREQUISITES: App must use flutterpilot_riverpod plugin with RiverpodPilotObserver. Use get_capabilities first to check if the riverpod plugin is loaded. COMMON ERRORS: Empty result means no providers are active or plugin is not registered.
+Current values of the app's Riverpod providers and Blocs/Cubits (name: value (type)), as their plugins observe them. type limits it to one of the two.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `type` | string | no |  |
 
-## `set_riverpod_state`
+## `set_state`
 
-Inject a new state into a Riverpod provider. Use the provider name or notifier name from `get_riverpod_state`. Accepts plain values (e.g. 42, "active", true) or JSON.
+Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several at once with states. Names come from get_state; type is inferred. Works for bool/number/String/List/Map states; for class-typed states it explains why not — drive the UI instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `provider` | string | no | The Riverpod provider name (e.g. "counterProvider", "FeedNotifier"). |
-| `name` | string | no | Alias for provider. |
-| `target` | string | no | Alias for provider. |
-| `value` | any | yes | The new state value to inject. Can be a primitive value (int, bool, string) or JSON string. |
-
-## `batch_set_state`
-
-Atomic multi-state setter: Injects multiple state values at once (Riverpod, Bloc) in 1ms. Eliminates multi-turn LLM latency when seeding test fixtures or forms.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `type` | string | no | State management type: "riverpod" or "bloc" (default: "riverpod"). |
-| `states` | object | yes | Map of provider/bloc names to their new values, e.g. {"counterProvider": 10, "themeProvider": "dark", "isLoggedIn": true}. |
-
-## `get_bloc_state`
-
-Inspect the current states of all active Blocs and Cubits. CALL THIS to verify business logic transitions.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `set_bloc_state`
-
-Emit a new state into a live Bloc/Cubit (in memory only). Works when the state is a bool/number/String/List/Map; for class-typed states it explains why not — drive the UI instead. Names come from get_bloc_state.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `cubit` | string | yes | Name from get_bloc_state (e.g. "CounterCubit", or "CounterCubit#2" for a second instance). |
-| `state` | any | yes | New state as a plain value or JSON, e.g. 42, true, "text", [1,2]. |
+| `name` | string | no | Provider or bloc name from get_state (e.g. "counterProvider", "CounterCubit#2"). |
+| `value` | any | no | New value: plain (42, true, "text") or JSON. |
+| `states` | object | no | Several at once: {"counterProvider": 10, "themeProvider": "dark"}. |
+| `type` | string | no | Only needed if the name is not observed yet. |
 
 ## `get_network_logs`
 
@@ -721,41 +430,9 @@ Dump the contents of all registered Hive boxes. CALL THIS to verify local persis
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
-## `list_drift_tables`
-
-List all tables in the SQLite (Drift) database.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `dbName` | string | no | The Drift database name registered via FlutterPilot. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `list_sqflite_databases`
-
-List all sqflite databases registered with FlutterPilot. PREREQUISITES: App must use flutterpilot_sqflite plugin.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `list_sqflite_tables`
-
-List all tables in a sqflite database. PREREQUISITES: App must use flutterpilot_sqflite plugin.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `dbName` | string | no | The sqflite database name registered via FlutterPilot. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
 ## `exec_sql_query`
 
-Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. List tables with "SELECT name FROM sqlite_master WHERE type='table'".
+Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. List tables with "SELECT name FROM sqlite_master WHERE type='table'". If the app registers several databases, a call without database names them.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -775,22 +452,15 @@ Returns all SharedPreferences keys and their typed values (String, int, double, 
 
 ## `set_shared_preference`
 
-Writes a key-value pair to SharedPreferences. Specify type as: string (default), int, double, bool, or stringList (JSON array, e.g. '["a","b"]').
+Writes a SharedPreferences key (type: string (default), int, double, bool, stringList as a JSON array). remove:true deletes the key; no key with confirm "CLEAR_ALL" clears every preference. Needs --allow-destructive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The SharedPreferences key to set. |
-| `value` | string | yes | The value to set as a string. Booleans: "true"/"false". Numbers: numeric string. |
+| `key` | string | no | The key. Omit only to clear all (with confirm). |
+| `remove` | boolean | no | Delete the key. |
+| `confirm` | string | no | "CLEAR_ALL" to clear every preference (no key). |
+| `value` | string | no | The value to set as a string. Booleans: "true"/"false". Numbers: numeric string. |
 | `type` | string | no | Value type: "string", "bool", "int", "double", or "stringList" (comma-separated). |
-
-## `clear_shared_preferences`
-
-⚠ DESTRUCTIVE — Removes SharedPreferences entries. If key is specified, only that key is removed. To clear ALL preferences, omit key and pass confirm="CLEAR_ALL". Cannot be undone.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The specific key to remove. Omit to clear ALL preferences (requires confirm). |
-| `confirm` | string | no | Required when clearing all keys (no "key" given). Must be "CLEAR_ALL". |
 
 ## `simulate_network`
 
@@ -802,183 +472,65 @@ Simulates a network condition for all Dio HTTP requests. Use to test offline sta
 
 ## `mock_http_response`
 
-Registers a URL pattern mock so that any Dio request whose URL contains urlPattern returns a synthetic response instead of hitting the network. Use to test error states, empty states, or edge-case API responses. Call clear_http_mocks to remove mocks when done.
+Registers a URL pattern mock so that any Dio request whose URL contains urlPattern returns a synthetic response instead of hitting the network. Use to test error states, empty states, or edge-case API responses. clear:true removes the mock for urlPattern, or all mocks without one — do that when done.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `urlPattern` | string | yes | Substring of the URL to match (e.g. "/api/users") |
-| `statusCode` | integer | yes | HTTP status code (e.g. 200, 404, 500) |
-| `body` | string | yes | Response body as a JSON string (e.g. '{"error":"not found"}') |
+| `urlPattern` | string | no | Substring of the URL to match (e.g. "/api/users") |
+| `clear` | boolean | no | Remove mocks instead of adding one. |
+| `statusCode` | integer | no | HTTP status code (e.g. 200, 404, 500) |
+| `body` | string | no | Response body as a JSON string (e.g. '{"error":"not found"}') |
 | `delayMs` | integer | no | Artificial delay in milliseconds before returning the mock (default 0) |
-
-## `clear_http_mocks`
-
-Removes a specific URL pattern mock, or all mocks if urlPattern is omitted. Always call this after testing a mocked flow to restore real network behaviour.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `urlPattern` | string | no | Pattern to remove. Omit to clear ALL mocks. |
-
-## `start_recording`
-
-Starts recording manual interactions. User should perform the flow in the app while this is active.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `stop_and_generate_test`
-
-Stops recording and returns a log of actions. Use your LLM capability to convert this log into a Flutter `testWidgets` block.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `list_custom_tools`
-
-Discover additional app-specific tools registered by the developer.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `call_custom_tool`
 
-Executes an app-specific tool defined by the developer. CALL THIS if you see a relevant tool listed in `list_custom_tools`.
+Runs a tool the app registered with FlutterPilot.registerCustomTool(). Without name, lists them.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `name` | string | yes | The custom tool name as registered via FlutterPilot.registerCustomTool(). |
+| `name` | string | no | The custom tool name. Omit to list the tools. |
 | `params` | object | no |  |
 
-## `assert_widget_visible`
+## `assert_widget`
 
-Asserts that a widget with the given Key is present and has layout. Returns error if the assertion fails — treat this as a test failure.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to assert is visible. |
-| `target` | string | no | Same as key (either name works). |
-
-## `assert_text_visible`
-
-Asserts that the given text is visible on screen. Set exact=true for exact match, false (default) for substring match.
+Checks the screen in the running app in milliseconds; an error result is a failed assertion. One check per call: text — that text is visible (substring unless exact); key — that widget is on screen, or with enabled true/false that it is enabled/disabled; type + count — exactly that many widgets of the type. Only what the user can see counts (not covered routes or hidden tabs).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `text` | string | yes | The text string to assert is visible on screen. |
-| `exact` | boolean | no | If true, requires an exact text match. If false (default), a substring match is used. |
-
-## `assert_widget_count`
-
-Asserts the exact number of widgets of a given type (e.g. "ListTile", "ElevatedButton") on screen. Returns error if count does not match.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `type` | string | yes | Widget type name to count (e.g. "ElevatedButton", "Text", "ListTile"). |
-| `count` | integer | yes | Expected number of widgets of the given type. |
-
-## `assert_widget_enabled`
-
-Asserts that the widget identified by key is ENABLED (has a non-null onPressed / onTap / onChanged callback). Returns error if the widget is disabled or not found.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to assert is enabled. |
-| `target` | string | no | Same as key (either name works). |
-
-## `assert_widget_disabled`
-
-Asserts that the widget identified by key is DISABLED (onPressed / onTap / onChanged is null). Returns error if the widget is enabled or not found.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | The ValueKey string of the widget to assert is disabled. |
-| `target` | string | no | Same as key (either name works). |
+| `text` | string | no | Text expected on screen. |
+| `exact` | boolean | no | Require an exact text match (default substring). |
+| `key` | string | no | Key, selector or label of the widget. |
+| `enabled` | boolean | no | With key: expect enabled (true) or disabled (false), i.e. onPressed/onTap/onChanged set or null. |
+| `type` | string | no | Widget type to count (e.g. "ListTile"). |
+| `count` | integer | no | Expected count of type. |
 
 ## `get_memory_details`
 
-Returns a detailed memory breakdown of the running app: heap used, heap capacity, external (native) memory, and RSS for every Dart isolate. Use this to detect memory leaks or unexpected growth. Heap > 200 MB or external > 50 MB usually warrants investigation.
+Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab) — compare before/after a screen to find leaks.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-
-## `get_allocation_profile`
-
-Returns the top Dart classes by current heap allocation (like the DevTools Memory tab class list). Use this to find memory leaks — look for classes with unexpectedly high instance counts or byte sizes. Accepts optional limit (default 30) for number of classes to show.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `limit` | integer | no | Number of top classes to show, sorted by heap bytes (default: 30). |
+| `classes` | boolean | no | List the top classes by heap usage. |
+| `limit` | integer | no | Number of classes (default 30). |
 
 ## `get_http_profile`
 
-Returns all HTTP requests made by the app — URL, method, status code, duration, and request/response size. This is the DevTools Network tab in your AI agent. Use this to debug API calls, check for slow requests (>2s), or confirm the app actually sent a request. Optional limit (default 50) caps the number of requests shown.
+HTTP requests the app made through any dart:io client (the DevTools Network tab): method, URL, status, duration, request/response size, most recent first. clear:true empties the list for a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `clear` | boolean | no | Clear the recorded requests instead of listing them. |
 | `limit` | integer | no | Maximum number of requests to return, most recent first (default: 50). |
 | `status_filter` | integer | no | Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests. |
 
-## `clear_http_profile`
-
-Clears the HTTP request history so you get a clean baseline before triggering a specific API call. Pair with get_http_profile.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `get_vm_info`
-
-Returns Dart VM version, process ID, all running isolates and their pause/run state. Use this to confirm which Dart version the app is running on, or to check isolate health.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-
-## `toggle_repaint_rainbow`
-
-Enables or disables the repaint rainbow overlay (each layer that repaints cycles through colors). Use this to visually identify which parts of the UI are repainting more than expected — a classic Flutter performance debugging technique.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | boolean | yes | true to enable the repaint rainbow overlay, false to disable. |
-
-## `toggle_debug_paint`
-
-Enables or disables debug paint — shows layout padding (blue), widget boundaries (orange), baselines (green), and pointer hit areas. Use this to debug layout issues like unexpected padding or misaligned widgets.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | boolean | yes | true to show debug paint boundaries and padding, false to hide. |
-
-## `toggle_slow_animations`
-
-Slows all animations to 1/5 speed (timeDilation=5) or restores normal speed (timeDilation=1). Use this to visually inspect animation curves, catch jank frames, or verify transition correctness. Set enabled=false to restore normal speed.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `enabled` | boolean | yes | true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed. |
-
 ## `get_supabase_auth`
 
-Inspect current Supabase auth state: user profile, session, JWT expiry, and recent auth events. Pass showSensitive=true to reveal email/phone. PREREQUISITES: App must use flutterpilot_supabase plugin.
+Supabase auth state: user, session and JWT expiry, recent auth events; realtime:true adds the Realtime channels (topic, joined, closed). Email/phone are redacted unless showSensitive is true.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `showSensitive` | string | no | Set to "true" to reveal email/phone/user_id. Default: redacted. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_supabase_realtime`
-
-List all active Supabase Realtime channel subscriptions. Shows topic, join status, and close status.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `showSensitive` | boolean | no | Reveal email/phone/user_id. |
+| `realtime` | boolean | no | Include Realtime channel subscriptions. |
 
 ## `query_supabase_table`
 
@@ -993,89 +545,23 @@ Query rows from a Supabase table using the project's own credentials. Returns up
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
-## `supabase_sign_out`
+## `supabase_session`
 
-⚠ MAKES REAL NETWORK CALL — signs out the current Supabase user via the Supabase Auth API. This affects the real session. Scope: "local" (default, this device only), "global" (all devices), "others" (other sessions only). Only use in dev/test environments.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `scope` | string | no | Sign-out scope: "local" (this device), "global" (all devices), "others". |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `supabase_refresh_session`
-
-⚠ MAKES REAL NETWORK CALL — force-refreshes the current Supabase session token via the Supabase Auth API. Use when testing token expiry flows. Only use in dev/test environments.
+Real Supabase Auth API call on the app's session (dev/test projects only): action "refresh" force-refreshes the token (test expiry flows); "sign_out" signs out with scope local (default), global or others. Needs --allow-destructive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_gorouter_state`
-
-Inspect the current GoRouter navigation state: location, path parameters, query parameters, matched routes, and whether pop is available.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_gorouter_config`
-
-List all registered GoRouter routes and their configuration (paths, names, children).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_gorouter_history`
-
-View the recent navigation history — timestamped list of route changes.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `gorouter_navigate`
-
-Navigate using GoRouter. Actions: "go" (replace stack), "push" (add to stack), "replace" (replace current), "pop" (go back). Requires location for go/push/replace.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `location` | string | no | The route path to navigate to (e.g. "/home", "/user/123"). |
-| `action` | string | no | Navigation action. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `action` | string | yes |  |
+| `scope` | string | no | For sign_out. |
 
 ## `get_connectivity`
 
-Check current network connectivity status: wifi, mobile, ethernet, vpn, none. Also shows whether simulated-offline mode is active.
+Network connectivity as the app sees it (wifi, mobile, ethernet, vpn, none) and whether it is online. history:true adds the timestamped transitions.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `get_connectivity_history`
-
-View timestamped log of connectivity state transitions.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `limit` | string | no | Max number of entries to return (default: 100). |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
+| `history` | boolean | no | Include the connectivity changes. |
+| `limit` | integer | no | Max history entries (default 100). |
 
 ## `get_firebase_auth`
 
@@ -1103,40 +589,23 @@ Read Firestore with the app's own connection and signed-in user (so security rul
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
-## `get_secure_storage_keys`
+## `get_secure_storage`
 
-List all keys in FlutterSecureStorage. Values are redacted by default. Pass showValues=true to reveal (sensitive keys like passwords are always redacted).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `showValues` | string | no | "true" to reveal values (except always-redacted keys). |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `read_secure_storage_key`
-
-Read a specific key from FlutterSecureStorage. Keys matching password/secret/api_key patterns are always redacted.
+FlutterSecureStorage keys, values redacted unless showValues is true; key reads one. Keys like password/secret/api_key are always redacted.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The key to read. |
+| `key` | string | no | Read only this key. |
+| `showValues` | boolean | no | Reveal values (except always-redacted keys). |
 
 ## `set_secure_storage_key`
 
-Write a key-value pair to FlutterSecureStorage. Use for test data injection.
+Writes a FlutterSecureStorage key (test data). delete:true removes it; no key with delete:true and confirm "DELETE_ALL" wipes all keys. Needs --allow-destructive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | The key to set. |
-| `value` | string | yes | The value to store. |
-
-## `delete_secure_storage_key`
-
-⚠ DESTRUCTIVE — Delete a specific key from FlutterSecureStorage. To wipe ALL keys, omit "key" and pass confirm="DELETE_ALL". Deletion cannot be undone.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Key to delete. Omit to clear ALL secure storage (requires confirm). |
-| `confirm` | string | no | Required when wiping all keys (no "key" given). Must be exactly "DELETE_ALL" to proceed. |
+| `key` | string | no | The key. |
+| `value` | string | no | The value to store. |
+| `delete` | boolean | no | Delete instead of write. |
+| `confirm` | string | no | "DELETE_ALL" to wipe every key (no key given). |
 

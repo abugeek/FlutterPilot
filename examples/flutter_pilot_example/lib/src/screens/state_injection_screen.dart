@@ -40,7 +40,7 @@ class StateInjectionScreen extends ConsumerWidget {
               child: Padding(
                 padding: EdgeInsets.all(12.0),
                 child: Text(
-                  'AI DIRECTIVE: You can call set_riverpod_state("counterProvider", 99) or set_bloc_state("CounterCubit", 42) to change these values instantly.',
+                  'AI DIRECTIVE: You can call set_state("counterProvider", 99) or set_state("CounterCubit", 42) to change these values instantly.',
                   style: TextStyle(
                     color: Colors.white,
                     fontStyle: FontStyle.italic,

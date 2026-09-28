@@ -15,9 +15,9 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 /// --zero-code runs a plain `flutter create` app without flutterpilot_sdk
 /// and checks what an agent gets from Flutter's own inspector instead.
 ///
-/// Covers: init wiring, widget tree, enter_text, press_key, secondary_tap,
+/// Covers: init wiring, widget tree, enter_text, press_key, secondary tap,
 /// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
-/// hot_reload applying an edited source file with state kept, hot_restart.
+/// hot_reload applying an edited source file with state kept, hot restart.
 Future<void> main(List<String> args) async {
   final d = args.indexOf('-d');
   final device = d >= 0 && d + 1 < args.length ? args[d + 1] : 'macos';
@@ -314,7 +314,7 @@ Future<void> main(List<String> args) async {
       final pluginsOk =
           listed.contains('mock_http_response') &&
           !listed.contains('query_supabase_table') &&
-          !listed.contains('get_riverpod_state');
+          !listed.contains('get_state');
       if (!pluginsOk) failed++;
       print(
         '${pluginsOk ? '✅' : '❌'} plugin tools only for registered plugins',
@@ -342,7 +342,7 @@ Future<void> main(List<String> args) async {
         await check('native_open_app', 'native_open_app', {}, ['foreground']);
         await check(
           'app answers again after native_open_app',
-          'assert_widget_visible',
+          'assert_widget',
           {'target': 'Send'},
           [],
           false,
@@ -357,17 +357,17 @@ Future<void> main(List<String> args) async {
       );
       if (isDesktop) {
         await check(
-          'set_device_rotation honest on desktop',
-          'set_device_rotation',
+          'rotation honest on desktop',
+          'set_app_settings',
           {'orientation': 'landscape'},
           ['Not applicable on desktop', 'skipped'],
         );
       } else if (isMobile) {
-        await check('rotate to landscape', 'set_device_rotation', {
+        await check('rotate to landscape', 'set_app_settings', {
           'orientation': 'landscape',
         });
         await expectViewport('viewport is landscape', landscape: true);
-        await check('rotate back to portrait', 'set_device_rotation', {
+        await check('rotate back to portrait', 'set_app_settings', {
           'orientation': 'portrait',
         });
         await expectViewport('viewport is portrait again', landscape: false);
@@ -400,7 +400,7 @@ Future<void> main(List<String> args) async {
       await check('tap Send', 'tap_widget', {'key': 'Send'});
       await check(
         'mocked response reached UI',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Hello, Pilot (200)'},
         [],
         false,
@@ -410,6 +410,45 @@ Future<void> main(List<String> args) async {
         '/ping',
         '200',
       ]);
+
+      // Merged tools (ROADMAP §4.2): one tool, the mode chosen by a parameter.
+      await check(
+        'wait_for a widget',
+        'wait_for',
+        {'key': 'Send'},
+        ['on screen'],
+      );
+      await check('wait_for needs a condition', 'wait_for', {}, [
+        'Say what to wait for',
+      ], true);
+      await check(
+        'enter_text "" clears the field',
+        'enter_text',
+        {'target': 'Name', 'text': ''},
+        ['Cleared'],
+      );
+      await check(
+        'dark theme',
+        'set_app_settings',
+        {'theme': 'dark'},
+        ['✓ theme dark'],
+      );
+      await check('light theme', 'set_app_settings', {'theme': 'light'});
+      await check(
+        'save baseline',
+        'compare_screenshot',
+        {'name': 'home', 'save': true},
+        ['saved'],
+      );
+      await check(
+        'compare with baseline',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 5},
+        ['PASSED'],
+      );
+      await check('assert_widget needs a check', 'assert_widget', {}, [
+        'Say what to check',
+      ], true);
 
       // Keyboard, context menu, pinch, discovery, and on-screen-only assertions.
       // enter_text focuses the field (the tap on Send above moved focus away).
@@ -424,16 +463,19 @@ Future<void> main(List<String> args) async {
       const react = Duration(seconds: 5);
       await check(
         'submit handled',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Submitted: Pilot'},
         [],
         false,
         react,
       );
-      await check('secondary_tap', 'secondary_tap', {'key': 'card'});
+      await check('secondary tap', 'tap_widget', {
+        'key': 'card',
+        'gesture': 'secondary',
+      });
       await check(
         'context handler ran',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Context menu opened'},
         [],
         false,
@@ -445,7 +487,7 @@ Future<void> main(List<String> args) async {
       });
       await check(
         'zoom applied',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'zoom 1.0'},
         [],
         true,
@@ -477,7 +519,7 @@ Future<void> main(List<String> args) async {
         'card',
       ]);
       // `target` works wherever `key` does.
-      await check('target alias', 'assert_widget_visible', {'target': 'Send'});
+      await check('target alias', 'assert_widget', {'target': 'Send'});
       // Post-action state waits for the page transition: it lists the new
       // page's back button, not the previous screen.
       await check(
@@ -488,7 +530,7 @@ Future<void> main(List<String> args) async {
       );
       await check(
         'covered route is not "visible"',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version A'},
         [],
         true,
@@ -500,11 +542,16 @@ Future<void> main(List<String> args) async {
         {'target': 'PIN', 'text': 's3cret-pin'},
         ['s3cret-pin'],
       );
-      // press_back waits for the pop transition and reports the new screen.
-      await check('back', 'press_back', {}, ['Route changed', 'Send']);
+      // Back waits for the pop transition and reports the new screen.
+      await check(
+        'back',
+        'press_key',
+        {'key': 'back'},
+        ['Route changed', 'Send'],
+      );
       await check(
         'home visible again',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version A'},
         [],
         false,
@@ -518,20 +565,20 @@ Future<void> main(List<String> args) async {
       await check('hot_reload', 'hot_reload');
       await check(
         'reload applied edited source',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version B'},
         [],
         false,
         const Duration(seconds: 5),
       );
-      await check('reload kept state', 'assert_text_visible', {
+      await check('reload kept state', 'assert_widget', {
         'text': 'Hello, Pilot (200)',
       });
 
-      await check('hot_restart', 'hot_restart');
+      await check('hot restart', 'hot_reload', {'restart': true});
       await check(
         'app back after restart',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Version B'},
         [],
         false,
@@ -539,7 +586,7 @@ Future<void> main(List<String> args) async {
       );
       await check(
         'restart reset state',
-        'assert_text_visible',
+        'assert_widget',
         {'text': 'Hello, Pilot'},
         [],
         true,

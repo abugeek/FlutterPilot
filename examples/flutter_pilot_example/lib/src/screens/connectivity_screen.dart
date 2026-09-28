@@ -7,7 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 /// | Tool                           | Demonstrated By                         |
 /// |--------------------------------|-----------------------------------------|
 /// | get_connectivity_status        | live status display                     |
-/// | get_connectivity_history       | scrollable event log                    |
+/// | get_connectivity(history: true)       | scrollable event log                    |
 /// | clear_connectivity_history     | clear button                            |
 class ConnectivityScreen extends StatefulWidget {
   const ConnectivityScreen({super.key});
@@ -87,7 +87,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             _aiHint(
               'AI Agent hints:\n'
               '  get_connectivity_status       → live network type\n'
-              '  get_connectivity_history      → event log\n'
+              '  get_connectivity(history: true)      → event log\n'
               '  clear_connectivity_history    → resets log',
             ),
             const SizedBox(height: 16),
@@ -148,7 +148,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                       'Test offline graceful degradation',
                       '1. simulate_network(condition: "offline")\n'
                           '2. tap_widget("fetch_posts_button")\n'
-                          '3. wait_for_state(\'error_shown == true\', 3000)\n'
+                          '3. wait_for(state: \'error_shown == true\', 3000)\n'
                           '4. get_app_summary  // verify error UI shown\n'
                           '5. simulate_network(condition: "normal")\n'
                           '6. tap_widget("retry_button")',
@@ -159,7 +159,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                       '1. get_connectivity_status\n'
                           '   → { type: "wifi", strength: "strong" }\n'
                           '2. // ... run tests ...\n'
-                          '3. get_connectivity_history\n'
+                          '3. get_connectivity(history: true)\n'
                           '   → [ { time, event: "wifi→none" }, ... ]',
                     ),
                   ],
@@ -171,7 +171,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             // ── Event History ─────────────────────────────────────────────────
             _sectionHeader(
               'Connectivity Event History',
-              'get_connectivity_history',
+              'get_connectivity(history: true)',
             ),
             Card(
               child: _log.isEmpty

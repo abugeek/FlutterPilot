@@ -314,7 +314,7 @@ Mocks persist across hot reloads. Clear them explicitly:
 
 ```bash
 # Clear all HTTP mocks
-clear_http_mocks
+mock_http_response(clear: true)
 
 # Or restart the app
 flutter run  # Kill and restart
@@ -516,7 +516,7 @@ Only load plugins you actually need.
 ### Pattern 2: State Transition Testing
 
 ```
-1. Capture initial state (get_bloc_state)
+1. Capture initial state (get_state)
 2. Trigger action (tap_widget)
 3. Capture new state
 4. Verify state changed correctly

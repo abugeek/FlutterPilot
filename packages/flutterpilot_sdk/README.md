@@ -248,7 +248,7 @@ SharedPrefsPilotInspector.register(prefs);
 // AI can now:
 // - Read with get_shared_preferences
 // - Write with set_shared_preference
-// - Clear with clear_shared_preferences
+// - Clear with set_shared_preference(remove: true)
 ```
 
 ### Custom Tools
@@ -342,7 +342,7 @@ MaterialApp(
 ### Custom Tool Not Callable
 - Verify tool registered via `registerCustomTool()` before `runApp()`
 - Check tool name in call matches registration name
-- Use `list_custom_tools` MCP tool to verify registration
+- Use `call_custom_tool()` MCP tool to verify registration
 
 ### Widget Not Found
 - Ensure widget has a `key: const Key('myKey')`

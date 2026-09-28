@@ -30,8 +30,8 @@ void _safeRegisterExtension(
 /// - `ext.flutterpilot.setSharedPreference` — writes a key-value pair
 /// - `ext.flutterpilot.clearSharedPreferences` — clears one key or all keys
 ///
-/// The MCP server exposes these as `get_shared_preferences`,
-/// `set_shared_preference`, and `clear_shared_preferences` tools.
+/// The MCP server exposes these as the `get_shared_preferences`
+/// and `set_shared_preference` tools.
 ///
 /// ## Security
 /// Values whose keys match common sensitive patterns (token, password, secret,

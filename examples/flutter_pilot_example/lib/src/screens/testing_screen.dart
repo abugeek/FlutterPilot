@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// MCP tools: capture_screenshot, save_screenshot_baseline, compare_screenshot,
-/// start_recording, stop_and_generate_test, get_latest_crash_report,
-/// list_custom_tools, call_custom_tool, pump_frames, hot_reload.
+/// MCP tools: capture_screenshot, compare_screenshot(save: true), compare_screenshot,
+/// execute_action_chain, execute_action_chain, get_errors(report: true),
+/// call_custom_tool(), call_custom_tool, wait_for(frames), hot_reload.
 class TestingScreen extends StatefulWidget {
   const TestingScreen({super.key});
   @override
@@ -34,12 +34,12 @@ class _TestingScreenState extends State<TestingScreen> {
             ),
             _toolCard(
               icon: Icons.save,
-              title: 'save_screenshot_baseline',
+              title: 'compare_screenshot(save: true)',
               desc: 'Save screenshot as named baseline',
               widgetKey: const Key('save_baseline_button'),
               color: Colors.green,
               onTap: () =>
-                  _addLog('save_screenshot_baseline(name: testing_screen)'),
+                  _addLog('compare_screenshot(name: testing_screen, save: true)'),
             ),
             _toolCard(
               icon: Icons.compare,
@@ -86,24 +86,24 @@ class _TestingScreenState extends State<TestingScreen> {
                             Icons.fiber_manual_record,
                             color: Colors.red,
                           ),
-                          label: const Text('start_recording'),
+                          label: const Text('execute_action_chain'),
                           onPressed: _isRecording
                               ? null
                               : () {
                                   setState(() => _isRecording = true);
-                                  _addLog('start_recording');
+                                  _addLog('execute_action_chain');
                                 },
                         ),
                         ElevatedButton.icon(
                           key: const Key('stop_recording_button'),
                           icon: const Icon(Icons.stop),
-                          label: const Text('stop_and_generate_test'),
+                          label: const Text('execute_action_chain'),
                           onPressed: !_isRecording
                               ? null
                               : () {
                                   setState(() => _isRecording = false);
                                   _addLog(
-                                    'stop_and_generate_test -> integration test code',
+                                    'execute_action_chain -> integration test code',
                                   );
                                 },
                         ),
@@ -120,7 +120,7 @@ class _TestingScreenState extends State<TestingScreen> {
             ),
           ]),
           const SizedBox(height: 16),
-          _section('pump_frames Demo', [
+          _section('wait_for(frames) Demo', [
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -143,14 +143,14 @@ class _TestingScreenState extends State<TestingScreen> {
                         ),
                         ElevatedButton(
                           key: const Key('pump_frames_button'),
-                          onPressed: () => _addLog('pump_frames(count: 10)'),
-                          child: const Text('pump_frames'),
+                          onPressed: () => _addLog('wait_for(frames: count: 10)'),
+                          child: const Text('wait_for(frames)'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'pump_frames advances the Flutter rendering pipeline N frames',
+                      'wait_for(frames) advances the Flutter rendering pipeline N frames',
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
@@ -162,20 +162,20 @@ class _TestingScreenState extends State<TestingScreen> {
           _section('Crash & Custom Tools', [
             _toolCard(
               icon: Icons.bug_report,
-              title: 'get_latest_crash_report',
+              title: 'get_errors(report: true)',
               desc: 'Retrieve the most recent Flutter crash report',
               widgetKey: const Key('get_crash_report_button'),
               color: Colors.red,
-              onTap: () => _addLog('get_latest_crash_report -> stack trace'),
+              onTap: () => _addLog('get_errors(report: true) -> stack trace'),
             ),
             _toolCard(
               icon: Icons.extension,
-              title: 'list_custom_tools',
+              title: 'call_custom_tool()',
               desc: 'List all registered custom MCP tool extensions',
               widgetKey: const Key('list_custom_tools_button'),
               color: Colors.teal,
               onTap: () =>
-                  _addLog('list_custom_tools -> [my_custom_tool, ...]'),
+                  _addLog('call_custom_tool() -> [my_custom_tool, ...]'),
             ),
             _toolCard(
               icon: Icons.build,

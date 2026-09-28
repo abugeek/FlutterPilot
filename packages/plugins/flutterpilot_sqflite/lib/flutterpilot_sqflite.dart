@@ -28,7 +28,7 @@ void _safeRegisterExtension(
 /// ```
 ///
 /// ## What AI agents can do
-/// - `list_sqflite_tables` — list all tables in a named database
+/// - `exec_sql_query` with "SELECT name FROM sqlite_master" — list tables
 /// - `exec_sql_query` — run a read-only SELECT/EXPLAIN/PRAGMA query
 class SqflitePilotInspector {
   SqflitePilotInspector._();

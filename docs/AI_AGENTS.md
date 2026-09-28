@@ -232,7 +232,7 @@ Set up test conditions for the login flow:
 ```
 I'm debugging a Bloc state issue:
 
-1. Get all Bloc states with get_bloc_state
+1. Get all Bloc states with get_state
 2. Trigger the action that causes the problem (tap a button)
 3. Inspect the state again to see what changed
 4. Analyze the state transitions and identify the bug
@@ -437,8 +437,8 @@ When talking to Claude, you can reference tool categories:
 - (+ more interaction tools)
 
 ### State Inspection (19 tools)
-- `get_bloc_state` — Bloc state
-- `get_riverpod_state` — Riverpod state
+- `get_state` — Bloc state
+- `get_state` — Riverpod state
 - `get_app_summary` — Current route, errors
 - (+ state manager plugins)
 
@@ -484,7 +484,7 @@ Claude: "The button was tapped. Let me check the state and navigation."
 Claude: "The route is still LoginScreen (navigation didn't happen). 
 Let me check if there's an error in Bloc state."
 
-[Claude calls get_bloc_state]
+[Claude calls get_state]
 Claude: "I found the issue! The LoginBloc state shows an error: 
 'Email validation failed'. The email field has invalid format.
 

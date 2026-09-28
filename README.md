@@ -107,45 +107,47 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations). Plugin tools appear only when that plugin is installed. The
-ones you'll use most:
+registrations): 62 tools, of which an app sees only the ones that can work
+for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
+Families are one tool with a parameter, not one tool per variant. The ones
+you'll use most:
 
 **Orientation** — `get_app_summary` (call first: route, tappable elements,
 errors, logs, window visibility), `get_interactive_elements`,
-`get_widget_tree`, `get_widget_properties`, `capture_screenshot`.
+`get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
+`capture_screenshot`.
 
-**Driving the UI** — `tap_widget`, `enter_text`, `press_key`,
-`secondary_tap`, `long_press_widget`, `double_tap_widget`, `swipe_widget`,
-`drag_widget`, `scroll_into_view`, `toggle_checkbox`, `set_slider_value`,
-`clear_text_field`, `press_back`. Batch known sequences with
-`execute_action_chain`, `fill_form_batch`, `tap_and_wait`,
-`enter_text_and_submit`. Every action reports its own result — route change,
-what appeared/disappeared, tappable elements now, new errors — so you rarely
-need a follow-up read.
+**Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
+`waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
+(`"back"` for system back), `swipe_widget`, `drag_widget`,
+`scroll_into_view`, `toggle_checkbox`, `set_slider_value`. Batch known
+sequences with `execute_action_chain` or `fill_form`. Every action reports
+its own result — route change, what appeared/disappeared, tappable elements
+now, new errors — so you rarely need a follow-up read.
 
-**Verifying** — `assert_widget_visible`, `assert_text_visible`,
-`assert_widget_count`, `assert_widget_enabled` / `assert_widget_disabled`,
-`wait_for_condition`, `save_screenshot_baseline` + `compare_screenshot`,
-`audit_screen_health`.
+**Verifying** — `assert_widget` (text, key, enabled, type + count),
+`wait_for` (widget, route, animations, state, frames), `compare_screenshot`
+(`save: true` for the baseline), `audit_screen_health`.
 
-**Navigation & environment** — `navigate_to`, `get_navigation_stack`,
-`simulate_deep_link`, `set_locale`, `set_text_scale_factor`,
-`set_device_rotation` (mobile only), `hot_reload`, `hot_restart`.
+**Navigation & environment** — `navigate_to` (deep links, go_router
+push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,
+text scale, orientation, debug overlays), `hot_reload` (`restart: true`).
 
-**Errors** — `get_errors`, `get_latest_crash_report` (exception, your source
-line, culprit widget), `get_debug_logs`, `get_flight_log`.
+**Errors** — `get_errors` (`report: true`: exception, your source line,
+culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 
-**Network** — `mock_http_response` / `clear_http_mocks`, `simulate_network`,
-`get_network_logs` (Dio plugin), `get_http_profile` (any `dart:io` client).
+**Network** — `mock_http_response` (`clear: true` to remove),
+`simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
+(any `dart:io` client).
 
-**Performance** — `profile_frame_budget`, `get_memory_details`,
-`get_allocation_profile`.
+**Performance** — `profile_frame_budget`, `get_memory_details`
+(`classes: true` for the top classes).
 
-**State & storage (plugins)** — Riverpod `get_riverpod_state` /
-`set_riverpod_state`, Bloc `get_bloc_state` / `set_bloc_state`, go_router,
+**State & storage (plugins)** — Riverpod and Bloc `get_state` /
+`set_state`, go_router (in the navigation tools),
 SharedPreferences, `exec_sql_query` (Drift or sqflite, read-only), Hive /
 Hive CE `get_hive_contents`, Supabase (`get_supabase_auth`,
-`query_supabase_table`, `get_supabase_realtime`), Firebase
+`query_supabase_table`, `supabase_session`), Firebase
 (`get_firebase_auth`, `query_firestore`), secure_storage and connectivity.
 Field-tested on real apps: Riverpod, go_router, Dio, sqflite,
 SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage,
@@ -339,9 +341,9 @@ Use FlutterPilot in Claude Desktop, Cursor, or any MCP-compatible IDE:
 
 ### 1. **Autonomous Testing**
 ```dart
-// Human flow: Start recording, manually tap through your app
-// AI flow: AI calls start_recording → waits for you → calls stop_and_generate_test
-// Output: Copy-pasteable testWidgets block with all your taps
+// The agent drives the flow with tap_widget / enter_text / fill_form,
+// checks each step with assert_widget, and writes the testWidgets block
+// from the steps it took.
 ```
 
 ### 2. **Self-Healing Crashes**
@@ -359,11 +361,11 @@ Hot reload applied, app recovers
 
 ### 3. **Widget-Level Automation**
 ```dart
-// Instead of tap_at(250, 450) which breaks on different screen sizes:
+// Instead of tapping at (250, 450), which breaks on other screen sizes:
 await mcp.call('tap_widget', {'key': 'submitButton'});
 
 // Or with assertions:
-await mcp.call('assert_widget_enabled', {'key': 'submitButton'});
+await mcp.call('assert_widget', {'key': 'submitButton', 'enabled': true});
 ```
 
 ### 4. **State Injection**
@@ -419,7 +421,7 @@ await mcp.call('get_semantics_tree');
 ### Use Case 4: Accessibility Testing
 1. Call `get_semantics_tree` to get VoiceOver/TalkBack structure
 2. AI validates all labels, roles, bounds
-3. Calls `set_text_scale_factor(2.0)` to test large text
+3. Calls `set_app_settings(textScale: 2.0)` to test large text
 4. **Result:** WCAG compliance verified programmatically
 
 ---
@@ -454,25 +456,25 @@ FlutterPilot never connects to Supabase, Firebase, or any other external service
 
 ### ⚠️ Tools That Make Real External Calls
 
-A small number of **mutating** plugin tools do make real API calls to external services via the SDK instances you passed in. These are clearly marked with `⚠ MAKES REAL NETWORK CALL` in the tool description:
+One **mutating** plugin tool makes real API calls to an external service via the SDK instance you passed in, and only with `--allow-destructive`:
 
 | Tool | Side Effect |
 |------|-------------|
-| `supabase_sign_out` | Calls `client.auth.signOut()` — signs out the real session |
-| `supabase_refresh_session` | Calls `client.auth.refreshSession()` — rotates tokens |
+| `supabase_session(action: "sign_out")` | Calls `client.auth.signOut()` — signs out the real session |
+| `supabase_session(action: "refresh")` | Calls `client.auth.refreshSession()` — rotates tokens |
 
 > **Recommendation:** Only use these tools in development/test environments against non-production Supabase instances. All other FlutterPilot tools are read-only and safe to use in any environment.
 
 ### ⚠️ Destructive Storage Tools
 
-`delete_secure_storage_key` without a `key` argument wipes **all** secure storage. It requires `confirm="DELETE_ALL"` to proceed:
+`set_secure_storage_key(delete: true)` without a `key` wipes **all** secure storage. It requires `confirm="DELETE_ALL"` to proceed:
 
 ```
-# Safe — deletes one key
-delete_secure_storage_key(key: "session_token")
+# Deletes one key
+set_secure_storage_key(key: "session_token", delete: true)
 
 # Requires explicit confirmation — deletes everything
-delete_secure_storage_key(confirm: "DELETE_ALL")
+set_secure_storage_key(delete: true, confirm: "DELETE_ALL")
 ```
 
 ---

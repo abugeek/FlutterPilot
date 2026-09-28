@@ -3,16 +3,73 @@ part of '../../flutterpilot_server.dart';
 /// DevTools-equivalent deep inspection tools that use the VM Service Protocol.
 mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   void _registerDevtoolsTools() {
+    Future<CallToolResult> allocationProfile(
+      Map<String, dynamic> params,
+    ) async {
+      final vmService = await _vmServiceForParameters(params);
+      if (vmService == null) {
+        return CallToolResult(
+          content: [TextContent(text: 'No VM Service connection.')],
+        );
+      }
+      final limit = ((params['limit'] as int?) ?? 30).clamp(1, 500);
+      try {
+        final vm = await vmService.getVM();
+        final isolateId = vm.isolates?.firstOrNull?.id;
+        if (isolateId == null) {
+          return CallToolResult(
+            content: [TextContent(text: 'No isolate available.')],
+          );
+        }
+        final profile = await vmService.getAllocationProfile(isolateId);
+        final members = profile.members ?? [];
+        members.sort(
+          (a, b) => (b.bytesCurrent ?? 0).compareTo(a.bytesCurrent ?? 0),
+        );
+        final top = members.take(limit);
+        final buf = StringBuffer(
+          'Top $limit classes by heap usage (from ${members.length} total):\n'
+          '${'Class'.padRight(40)} ${'Bytes'.padLeft(12)} ${'Instances'.padLeft(12)}\n'
+          '${'-' * 66}\n',
+        );
+        for (final c in top) {
+          if ((c.bytesCurrent ?? 0) == 0) continue;
+          final name = (c.classRef?.name ?? '?').padRight(40);
+          final bytes = ((c.bytesCurrent ?? 0) / 1024)
+              .toStringAsFixed(1)
+              .padLeft(11);
+          final instances = '${c.instancesCurrent ?? 0}'.padLeft(12);
+          buf.writeln('$name ${bytes}KB $instances');
+        }
+        return CallToolResult(content: [TextContent(text: buf.toString())]);
+      } catch (e) {
+        return CallToolResult(
+          content: [TextContent(text: 'Allocation profile failed: $e')],
+          isError: true,
+        );
+      }
+    }
+
     // -- get_memory_details ---------------------------------------------------
     _tool(
       'get_memory_details',
       description:
-          'Returns a detailed memory breakdown of the running app: heap used, '
-          'heap capacity, external (native) memory, and RSS for every Dart isolate. '
-          'Use this to detect memory leaks or unexpected growth. '
-          'Heap > 200 MB or external > 50 MB usually warrants investigation.',
-      inputSchema: ToolInputSchema(properties: {}),
+          'Heap used/capacity and external (native) memory per isolate. '
+          'classes:true lists the top Dart classes by heap bytes and instance '
+          'count instead (the DevTools Memory tab) — compare before/after a '
+          'screen to find leaks.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'classes': JsonSchema.boolean(
+            description: 'List the top classes by heap usage.',
+          ),
+          'limit': JsonSchema.integer(
+            description: 'Number of classes (default 30).',
+          ),
+        },
+      ),
       callback: (params, extra) async {
+        if (params['classes'] == true) return allocationProfile(params);
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {
           return CallToolResult(
@@ -60,79 +117,19 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    // -- get_allocation_profile -----------------------------------------------
-    _tool(
-      'get_allocation_profile',
-      description:
-          'Returns the top Dart classes by current heap allocation (like the '
-          'DevTools Memory tab class list). Use this to find memory leaks — '
-          'look for classes with unexpectedly high instance counts or byte sizes. '
-          'Accepts optional limit (default 30) for number of classes to show.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'limit': JsonSchema.integer(
-            description:
-                'Number of top classes to show, sorted by heap bytes (default: 30).',
-          ),
-        },
-      ),
-      callback: (params, extra) async {
-        final vmService = await _vmServiceForParameters(params);
-        if (vmService == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No VM Service connection.')],
-          );
-        }
-        final limit = ((params['limit'] as int?) ?? 30).clamp(1, 500);
-        try {
-          final vm = await vmService.getVM();
-          final isolateId = vm.isolates?.firstOrNull?.id;
-          if (isolateId == null) {
-            return CallToolResult(
-              content: [TextContent(text: 'No isolate available.')],
-            );
-          }
-          final profile = await vmService.getAllocationProfile(isolateId);
-          final members = profile.members ?? [];
-          members.sort(
-            (a, b) => (b.bytesCurrent ?? 0).compareTo(a.bytesCurrent ?? 0),
-          );
-          final top = members.take(limit);
-          final buf = StringBuffer(
-            'Top $limit classes by heap usage (from ${members.length} total):\n'
-            '${'Class'.padRight(40)} ${'Bytes'.padLeft(12)} ${'Instances'.padLeft(12)}\n'
-            '${'-' * 66}\n',
-          );
-          for (final c in top) {
-            if ((c.bytesCurrent ?? 0) == 0) continue;
-            final name = (c.classRef?.name ?? '?').padRight(40);
-            final bytes = ((c.bytesCurrent ?? 0) / 1024)
-                .toStringAsFixed(1)
-                .padLeft(11);
-            final instances = '${c.instancesCurrent ?? 0}'.padLeft(12);
-            buf.writeln('$name ${bytes}KB $instances');
-          }
-          return CallToolResult(content: [TextContent(text: buf.toString())]);
-        } catch (e) {
-          return CallToolResult(
-            content: [TextContent(text: 'Allocation profile failed: $e')],
-            isError: true,
-          );
-        }
-      },
-    );
-
     // -- get_http_profile -----------------------------------------------------
     _tool(
       'get_http_profile',
       description:
-          'Returns all HTTP requests made by the app — URL, method, status code, '
-          'duration, and request/response size. This is the DevTools Network tab '
-          'in your AI agent. Use this to debug API calls, check for slow requests '
-          '(>2s), or confirm the app actually sent a request. '
-          'Optional limit (default 50) caps the number of requests shown.',
+          'HTTP requests the app made through any dart:io client (the DevTools '
+          'Network tab): method, URL, status, duration, request/response size, '
+          'most recent first. clear:true empties the list for a '
+          'clean baseline.',
       inputSchema: ToolInputSchema(
         properties: {
+          'clear': JsonSchema.boolean(
+            description: 'Clear the recorded requests instead of listing them.',
+          ),
           'limit': JsonSchema.integer(
             description:
                 'Maximum number of requests to return, most recent first (default: 50).',
@@ -144,6 +141,23 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (params, extra) async {
+        if (params['clear'] == true) {
+          await _enableHttpProfiling(params);
+          final res = await _callExtensionRaw(
+            'ext.dart.io.clearHttpProfile',
+            {},
+          );
+          return CallToolResult(
+            isError: res.isError,
+            content: [
+              TextContent(
+                text: res.isError
+                    ? 'Clear failed: ${res.errorMessage}'
+                    : 'HTTP profile cleared.',
+              ),
+            ],
+          );
+        }
         final limit = ((params['limit'] as int?) ?? 50).clamp(1, 500);
         final statusFilter = params['status_filter'] as int?;
         // The VM records nothing until profiling is on; it resets on restart.
@@ -203,164 +217,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           );
         }
         return CallToolResult(content: [TextContent(text: buf.toString())]);
-      },
-    );
-
-    // -- clear_http_profile ---------------------------------------------------
-    _tool(
-      'clear_http_profile',
-      description:
-          'Clears the HTTP request history so you get a clean baseline '
-          'before triggering a specific API call. Pair with get_http_profile.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) async {
-        await _enableHttpProfiling(params);
-        final res = await _callExtensionRaw('ext.dart.io.clearHttpProfile', {});
-        if (res.isError) {
-          return CallToolResult(
-            content: [TextContent(text: 'Clear failed: ${res.errorMessage}')],
-          );
-        }
-        return CallToolResult(
-          content: [TextContent(text: 'HTTP profile cleared.')],
-        );
-      },
-    );
-
-    // -- get_vm_info ----------------------------------------------------------
-    _tool(
-      'get_vm_info',
-      description:
-          'Returns Dart VM version, process ID, all running isolates and their '
-          'pause/run state. Use this to confirm which Dart version the app is '
-          'running on, or to check isolate health.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) async {
-        final vmService = await _vmServiceForParameters(params);
-        if (vmService == null) {
-          return CallToolResult(
-            content: [TextContent(text: 'No VM Service connection.')],
-          );
-        }
-        try {
-          final vm = await vmService.getVM();
-          final buf = StringBuffer();
-          buf.writeln('VM version: ${vm.version ?? 'unknown'}');
-          buf.writeln('PID: ${vm.pid ?? 'unknown'}');
-          buf.writeln('Isolates (${vm.isolates?.length ?? 0}):');
-          for (final iso in vm.isolates ?? []) {
-            buf.writeln('  ${iso.name ?? iso.id} (id=${iso.id})');
-          }
-          return CallToolResult(content: [TextContent(text: buf.toString())]);
-        } catch (e) {
-          return CallToolResult(
-            content: [TextContent(text: 'VM info failed: $e')],
-            isError: true,
-          );
-        }
-      },
-    );
-
-    // -- toggle_repaint_rainbow -----------------------------------------------
-    _tool(
-      'toggle_repaint_rainbow',
-      description:
-          'Enables or disables the repaint rainbow overlay (each layer '
-          'that repaints cycles through colors). Use this to visually identify '
-          'which parts of the UI are repainting more than expected — '
-          'a classic Flutter performance debugging technique.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'enabled': JsonSchema.boolean(
-            description:
-                'true to enable the repaint rainbow overlay, false to disable.',
-          ),
-        },
-        required: ['enabled'],
-      ),
-      callback: (params, extra) async {
-        final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw('ext.flutter.repaintRainbow', {
-          'enabled': enabled.toString(),
-        });
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Repaint rainbow ${enabled ? 'enabled' : 'disabled'}. '
-                  '${enabled ? 'Look for rapidly cycling colors on screen — those widgets repaint every frame.' : ''}',
-            ),
-          ],
-        );
-      },
-    );
-
-    // -- toggle_debug_paint ---------------------------------------------------
-    _tool(
-      'toggle_debug_paint',
-      description:
-          'Enables or disables debug paint — shows layout padding (blue), '
-          'widget boundaries (orange), baselines (green), and pointer hit areas. '
-          'Use this to debug layout issues like unexpected padding or misaligned widgets.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'enabled': JsonSchema.boolean(
-            description:
-                'true to show debug paint boundaries and padding, false to hide.',
-          ),
-        },
-        required: ['enabled'],
-      ),
-      callback: (params, extra) async {
-        final enabled = params['enabled'] as bool? ?? true;
-        final res = await _callExtensionRaw('ext.flutter.debugPaint', {
-          'enabled': enabled.toString(),
-        });
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: 'Debug paint ${enabled ? 'enabled' : 'disabled'}.',
-            ),
-          ],
-        );
-      },
-    );
-
-    // -- toggle_slow_animations -----------------------------------------------
-    _tool(
-      'toggle_slow_animations',
-      description:
-          'Slows all animations to 1/5 speed (timeDilation=5) or restores '
-          'normal speed (timeDilation=1). Use this to visually inspect animation '
-          'curves, catch jank frames, or verify transition correctness. '
-          'Set enabled=false to restore normal speed.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'enabled': JsonSchema.boolean(
-            description:
-                'true to slow animations to 1/5 speed (timeDilation=5), false to restore normal speed.',
-          ),
-        },
-        required: ['enabled'],
-      ),
-      callback: (params, extra) async {
-        final enabled = params['enabled'] as bool? ?? true;
-        final dilation = enabled ? '5.0' : '1.0';
-        final res = await _callExtensionRaw('ext.flutter.timeDilation', {
-          'timeDilation': dilation,
-        });
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: enabled
-                  ? 'Animations slowed to 1/5 speed. Call again with enabled=false to restore.'
-                  : 'Animations restored to normal speed.',
-            ),
-          ],
-        );
       },
     );
   }

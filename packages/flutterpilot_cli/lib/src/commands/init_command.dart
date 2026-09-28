@@ -221,18 +221,18 @@ class InitCommand extends Command<void> {
         final wired = wiredOverrides(withOverrides);
         stdout.writeln(
           '✅ Wired MaterialApp for $wired overrides '
-          '(set_locale / set_text_scale_factor).',
+          '(set_app_settings locale / textScale).',
         );
         if (!wired.contains('locale')) {
           stdout.writeln(
-            '   Skipped locale: MaterialApp already sets locale:, so set_locale '
-            'would change nothing.',
+            '   Skipped locale: MaterialApp already sets locale:, so a locale '
+            'override would change nothing.',
           );
         }
         if (!wired.contains('text scale')) {
           stdout.writeln(
             '   Skipped text scale: MaterialApp has its own builder:. Apply '
-            'FlutterPilot.textScaleNotifier inside it to use set_text_scale_factor.',
+            'FlutterPilot.textScaleNotifier inside it to use set_app_settings(textScale).',
           );
         }
       }
@@ -266,7 +266,7 @@ class InitCommand extends Command<void> {
       final content = await mainFile.readAsString();
       if (!content.contains('FlutterPilot.localeNotifier')) {
         stdout.writeln(
-          '\nTip: To enable runtime locale and text scale overrides (set_locale / set_text_scale), '
+          '\nTip: To enable runtime locale and text scale overrides (set_app_settings), '
           'wrap MaterialApp in ValueListenableBuilder with FlutterPilot.localeNotifier and FlutterPilot.textScaleNotifier.',
         );
       }
@@ -316,7 +316,7 @@ class InitCommand extends Command<void> {
 
     // Only wire what will take effect. If the app already sets `locale:` or
     // has its own `builder:`, leave that override unwired: a listener that
-    // changes nothing would make set_locale/set_text_scale_factor report a
+    // changes nothing would make set_app_settings report a
     // false success.
     final wireLocale = !_hasTopLevelArg(appCode, 'locale');
     final wireScale = !_hasTopLevelArg(appCode, 'builder');

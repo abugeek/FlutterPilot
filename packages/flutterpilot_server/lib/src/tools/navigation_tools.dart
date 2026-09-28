@@ -1,222 +1,244 @@
 part of '../../flutterpilot_server.dart';
 
-/// Tools for navigating routes, waiting for widgets/animations/state,
-/// and changing device orientation, locale, and theme.
+/// Tools for navigating routes and changing theme, locale, text scale,
+/// orientation and the framework's debug overlays.
 mixin _NavigationToolsMixin on _FlutterPilotServerBase {
   void _registerNavigationTools() {
     _tool(
       'navigate_to',
       description:
-          'Programmatically pushes a named route. Useful for jumping directly to a feature screen for testing.',
+          'Goes to a route directly, e.g. "/profile/123" (go_router: '
+          'router.go; otherwise Navigator.pushNamed). action "push"/"replace" '
+          'use go_router\'s push/replace. deepLink:true opens the URL the way '
+          'an OS deep link does (e.g. "myapp://product/123"). Back: '
+          'press_key("back").',
       inputSchema: ToolInputSchema(
         properties: {
           'route': JsonSchema.string(
             description:
-                'The named route to navigate to (e.g. "/home", "/profile/123"). Must be registered in the app router.',
+                'Route or deep-link URL (e.g. "/home", "/profile/123").',
           ),
-        },
-        required: ['route'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.navigateTo',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'jump_to_screen',
-      description:
-          'Directly teleports to a deep application screen with optional seed state injection (Riverpod/Bloc/storage). '
-          'Bypasses lengthy manual onboarding or multi-step checkout clicks.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'route': JsonSchema.string(
+          'action': JsonSchema.string(
+            enumValues: ['go', 'push', 'replace'],
             description:
-                'Target route name (e.g. "/order/123", "/settings/security").',
+                'Default "go". push/replace need the go_router plugin.',
           ),
-          'state': JsonSchema.object(
-            description:
-                'Optional map of state seeds to inject before navigation (e.g. {"riverpod:auth": "logged_in"}).',
+          'deepLink': JsonSchema.boolean(
+            description: 'Open route as an OS deep link.',
           ),
         },
         required: ['route'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.jumpToScreen', {
-          'route': p['route'].toString(),
-          if (p['state'] != null) 'state': json.encode(p['state']),
-        });
+        final route = p['route'].toString();
+        final action = p['action']?.toString() ?? 'go';
+        final _ExtensionResult res;
+        if (p['deepLink'] == true) {
+          res = await _callExtensionRaw('ext.flutterpilot.simulateDeepLink', {
+            'url': route,
+          });
+        } else if (action == 'push' || action == 'replace') {
+          res = await _callExtensionRaw('ext.flutterpilot.goRouterNavigate', {
+            'location': route,
+            'action': action,
+          });
+        } else {
+          res = await _callExtensionRaw('ext.flutterpilot.navigateTo', {
+            'route': route,
+          });
+        }
         if (res.isError) return res.toCallToolResult();
-        final stateInjected =
-            p['state'] != null && (p['state'] as Map).isNotEmpty;
+        final stack = await _callExtensionRaw(
+          'ext.flutterpilot.getNavigationStack',
+          {},
+        );
+        final now = (stack.data?['stack'] as List?)?.join(' -> ');
         return CallToolResult(
           content: [
             TextContent(
-              text: stateInjected
-                  ? '🚀 Teleported directly to "${p['route']}" with state injected.'
-                  : '🚀 Teleported directly to "${p['route']}".',
+              text:
+                  'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.',
             ),
           ],
         );
       },
     );
 
-    _registerAppTool(
-      name: 'get_navigation_stack',
-      description:
-          'Show the current navigation history (stack). CALL THIS to understand where the user is in the application flow.',
-      extension: 'ext.flutterpilot.getNavigationStack',
-      formatResult: (json) =>
-          'Navigation Stack: ${json['stack']?.join(' -> ') ?? 'Empty'}',
-    );
-
     _tool(
-      'wait_for_route',
+      'get_navigation_stack',
       description:
-          'Polls until the current route matches the expected route, or times out. Use instead of sleep() after navigate_to. Default timeout 5000ms.',
+          'The route stack, bottom to top. With go_router also the location, '
+          'path/query parameters and matched routes; routes:true adds the '
+          'router\'s route table, history:true the recent route changes.',
       inputSchema: ToolInputSchema(
         properties: {
-          'route': JsonSchema.string(
-            description:
-                'The route name to wait for (e.g. "/dashboard", "/settings").',
+          'routes': JsonSchema.boolean(
+            description: 'Include go_router\'s configured routes.',
           ),
-          'timeoutMs': JsonSchema.integer(
-            description:
-                'Maximum milliseconds to wait for the route (default: 5000ms).',
-          ),
-        },
-        required: ['route'],
-      ),
-      callback: (p, e) async {
-        final args = {
-          'route': p['route'] as String,
-          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.waitForRoute',
-          args,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    _tool(
-      'wait_for_animation',
-      description:
-          'Waits until all animations and frame callbacks have settled. Call this before taking screenshots or making assertions after animated transitions.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'timeoutMs': JsonSchema.integer(
-            description:
-                'Maximum milliseconds to wait for all animations to settle (default: 5000ms).',
+          'history': JsonSchema.boolean(
+            description: 'Include recent route changes (go_router).',
           ),
         },
       ),
       callback: (p, e) async {
-        final args = {
-          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.waitForAnimation',
-          args,
-        ).then((res) => res.toCallToolResult());
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getNavigationStack',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        final buf = StringBuffer(
+          'Navigation stack: ${(res.data?['stack'] as List?)?.join(' -> ') ?? 'empty'}',
+        );
+        final router = await _callExtensionRaw(
+          'ext.flutterpilot.getGoRouterState',
+          {},
+        );
+        if (!router.isError) {
+          final json = router.data!;
+          buf.write('\ngo_router location: ${json['currentLocation']}');
+          final pathParams = json['pathParameters'] as Map? ?? {};
+          if (pathParams.isNotEmpty) buf.write('\nPath params: $pathParams');
+          final queryParams = json['queryParameters'] as Map? ?? {};
+          if (queryParams.isNotEmpty) buf.write('\nQuery params: $queryParams');
+          buf.write('\nCan pop: ${json['canPop']}');
+          for (final m in json['matchedRoutes'] as List? ?? const []) {
+            buf.write('\n  Matched: ${m['matchedLocation']} → ${m['route']}');
+          }
+          for (final (flag, ext, label) in [
+            ('routes', 'ext.flutterpilot.getGoRouterConfig', 'Routes'),
+            ('history', 'ext.flutterpilot.getGoRouterHistory', 'History'),
+          ]) {
+            if (p[flag] != true) continue;
+            final extra = await _callExtensionRaw(ext, {});
+            buf.write(
+              '\n$label: ${extra.isError ? extra.errorMessage : jsonEncode(extra.data)}',
+            );
+          }
+        } else if (p['routes'] == true || p['history'] == true) {
+          buf.write(
+            '\n(routes and history need the go_router plugin; this app has '
+            'not registered it.)',
+          );
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: FlutterPilotServer._boundToolText(buf.toString()),
+            ),
+          ],
+        );
       },
     );
 
     _tool(
-      'wait_for_state',
+      'set_app_settings',
       description:
-          'Polls a Riverpod provider or Bloc/Cubit until its current value string contains '
-          'expectedValue, or until timeoutMs elapses. Use after triggering async operations '
-          'to assert that state has settled. Requires the matching plugin to be active '
-          '(RiverpodPilotObserver or BlocPilotObserver).',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'type': JsonSchema.string(enumValues: ['riverpod', 'bloc']),
-          'name': JsonSchema.string(
-            description:
-                'State identifier. For Riverpod: the provider\'s runtimeType string '
-                '(e.g. "StateProvider<int>"). For Bloc: the bloc\'s runtimeType string '
-                '(e.g. "CounterCubit").',
-          ),
-          'expectedValue': JsonSchema.string(
-            description: 'Substring expected in the state\'s toString() output',
-          ),
-          'timeoutMs': JsonSchema.integer(
-            description:
-                'Milliseconds to wait before timing out (default 5000)',
-          ),
-        },
-        required: ['type', 'name', 'expectedValue'],
-      ),
-      callback: (p, e) {
-        final mapped = {
-          'type': p['type']?.toString(),
-          'name': p['name']?.toString(),
-          'expectedValue': p['expectedValue']?.toString(),
-          if (p['timeoutMs'] != null) 'timeoutMs': p['timeoutMs'].toString(),
-        };
-        return _callExtensionRaw(
-          'ext.flutterpilot.waitForState',
-          mapped,
-        ).then((res) => res.toCallToolResult());
-      },
-    );
-
-    _tool(
-      'set_device_rotation',
-      description:
-          'Rotates the device to portrait or landscape orientation. Use to test responsive layouts, '
-          'orientation-locked screens, and rotation animations.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'orientation': JsonSchema.string(
-            enumValues: ['portrait', 'landscape', 'all'],
-          ),
-        },
-        required: ['orientation'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.setOrientation',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'set_locale',
-      description:
-          'Switch app language (e.g., "en", "de_DE"). Use this to check for text overflows in different languages.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'locale': JsonSchema.string(
-            description:
-                'BCP-47 locale tag (e.g. "en", "fr", "ar", "zh-CN"). Use "system" to restore the device default.',
-          ),
-        },
-        required: ['locale'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.setLocale',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'set_theme',
-      description:
-          'Toggle Light/Dark mode. Use this to verify design consistency across themes.',
+          'Changes how the app renders, one or more at once: theme '
+          '(light/dark), locale ("fr", "ar", "system"), textScale (2.0 to '
+          'test large text; 0 resets), orientation (portrait/landscape/all, '
+          'phones), and the debug overlays debugPaint (layout bounds), '
+          'repaintRainbow (what repaints) and slowAnimations (5x slower). '
+          'Pair with audit_screen_health to catch overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
+          'locale': JsonSchema.string(
+            description:
+                'BCP-47 tag (e.g. "en", "zh-CN"); "system" restores the device default.',
+          ),
+          'textScale': JsonSchema.number(
+            description:
+                'Text scale factor (1.0 normal); 0 restores the system value.',
+          ),
+          'orientation': JsonSchema.string(
+            enumValues: ['portrait', 'landscape', 'all'],
+          ),
+          'debugPaint': JsonSchema.boolean(),
+          'repaintRainbow': JsonSchema.boolean(),
+          'slowAnimations': JsonSchema.boolean(),
         },
-        required: ['theme'],
       ),
-      callback: (p, e) {
-        final val = p['theme'] == 'dark'
-            ? 'Brightness.dark'
-            : 'Brightness.light';
-        return _callExtensionRaw('ext.flutter.brightnessOverride', {
-          'value': val,
-        }).then((res) => res.toCallToolResult());
+      callback: (p, e) async {
+        final steps = <(String, String, Map<String, dynamic>)>[
+          if (p['theme'] != null)
+            (
+              'theme ${p['theme']}',
+              'ext.flutter.brightnessOverride',
+              {
+                'value': p['theme'] == 'dark'
+                    ? 'Brightness.dark'
+                    : 'Brightness.light',
+              },
+            ),
+          if (p['locale'] != null)
+            (
+              'locale ${p['locale']}',
+              'ext.flutterpilot.setLocale',
+              {'locale': p['locale'].toString()},
+            ),
+          if (p['textScale'] != null)
+            (
+              'text scale ${p['textScale']}',
+              'ext.flutterpilot.setTextScaleFactor',
+              {'scale': p['textScale'].toString()},
+            ),
+          if (p['orientation'] != null)
+            (
+              'orientation ${p['orientation']}',
+              'ext.flutterpilot.setOrientation',
+              {'orientation': p['orientation'].toString()},
+            ),
+          if (p['debugPaint'] != null)
+            (
+              'debug paint ${p['debugPaint'] == true ? 'on' : 'off'}',
+              'ext.flutter.debugPaint',
+              {'enabled': (p['debugPaint'] == true).toString()},
+            ),
+          if (p['repaintRainbow'] != null)
+            (
+              'repaint rainbow ${p['repaintRainbow'] == true ? 'on' : 'off'}',
+              'ext.flutter.repaintRainbow',
+              {'enabled': (p['repaintRainbow'] == true).toString()},
+            ),
+          if (p['slowAnimations'] != null)
+            (
+              'slow animations ${p['slowAnimations'] == true ? 'on' : 'off'}',
+              'ext.flutter.timeDilation',
+              {'timeDilation': p['slowAnimations'] == true ? '5.0' : '1.0'},
+            ),
+        ];
+        if (steps.isEmpty) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'Nothing to change: pass theme, locale, textScale, '
+                    'orientation, debugPaint, repaintRainbow or slowAnimations.',
+              ),
+            ],
+          );
+        }
+        final lines = <String>[];
+        var failed = false;
+        for (final (label, ext, args) in steps) {
+          final res = await _callExtensionRaw(ext, args);
+          if (res.isError) {
+            failed = true;
+            lines.add('✗ $label: ${res.errorMessage}');
+          } else {
+            final note = res.data?['note'];
+            lines.add(
+              res.data?['status'] == 'skipped'
+                  ? '– $label skipped: $note'
+                  : '✓ $label${note != null ? ' ($note)' : ''}',
+            );
+          }
+        }
+        return CallToolResult(
+          isError: failed,
+          content: [TextContent(text: lines.join('\n'))],
+        );
       },
     );
   }
