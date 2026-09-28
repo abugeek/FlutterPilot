@@ -625,6 +625,14 @@ Future<void> main(List<String> args) async {
         'Send',
         'card',
       ]);
+      // Android shows text-selection handles after the key checks: they are
+      // in the root Overlay, not part of MaterialApp's own UI.
+      await checkAbsent(
+        'no whole-app entry in the tappable list',
+        'get_interactive_elements',
+        {},
+        ['"type":"MaterialApp"'],
+      );
       // Errors (ROADMAP §3.10): a layout overflow is a bug to fix, not a
       // crash; an uncaught exception is flagged, with a small report that
       // points at the source line.
@@ -1064,7 +1072,8 @@ class _HomeState extends State<Home> {
     body: Column(children: [
       const Text('Version A'),
       // What set_app_settings(textScale/locale) reached, with no wiring above.
-      Text('Scale ${MediaQuery.textScalerOf(context).scale(10) / 10}'),
+      // toStringAsFixed: on web 1.0.toString() is "1".
+      Text('Scale ${(MediaQuery.textScalerOf(context).scale(10) / 10).toStringAsFixed(1)}'),
       Text('Locale ${Localizations.localeOf(context)}'),
       TextField(
         controller: _name,

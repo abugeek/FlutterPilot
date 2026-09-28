@@ -76,6 +76,21 @@ void _compactStackTests() {
       );
     });
 
+    test('web (DDC) frames are filtered the same way, in the VM form', () {
+      const raw = '''
+dart-sdk/lib/_internal/js_dev_runtime/private/ddc_runtime/errors.dart 274:3       throw_
+package:fixture/main.dart 133:28                                                  <fn>
+package:flutter/src/material/ink_well.dart 1224:21                                handleTap
+package:flutterpilot_sdk/src/interaction_manager.dart 121:33                      <fn>
+dart-sdk/lib/async/zone.dart 1034:54                                              runUnary''';
+      expect(
+        ErrorInspector.compactStackTrace(raw),
+        '  ... [1 framework frames skipped]\n'
+        '<fn> (package:fixture/main.dart:133:28)\n'
+        '  ... [3 framework frames skipped]',
+      );
+    });
+
     test('an app package whose name starts with flutter is kept', () {
       const raw = '#0 f (package:flutter_app/main.dart:1:1)';
       expect(ErrorInspector.compactStackTrace(raw), raw);

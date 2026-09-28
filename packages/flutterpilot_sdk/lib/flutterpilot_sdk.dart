@@ -23,6 +23,7 @@ import 'src/hit_test_utils.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
+import 'src/soft_keyboard.dart';
 import 'src/stream_inspector.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
@@ -39,6 +40,7 @@ export 'src/navigation_tracker.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
 export 'src/settle_tracker.dart';
+export 'src/soft_keyboard.dart';
 export 'src/stream_inspector.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
@@ -409,6 +411,14 @@ class FlutterPilot {
     }
     return false;
   }
+
+  /// Calls a registered `ext.flutterpilot.*` handler directly, as the
+  /// server would through the VM service.
+  @visibleForTesting
+  static Future<ServiceExtensionResponse> debugCallExtension(
+    String method, [
+    Map<String, String> params = const {},
+  ]) => _extensionHandlers[method]!(method, params);
 
   /// Where each piece of on-screen text is (its render object → global
   /// position): pages covered by an opaque one are not on screen.

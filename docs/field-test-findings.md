@@ -321,6 +321,20 @@ marquee), then hn_reader, driven on macOS. Before → after:
 | 200 | request in flight | ✅ new | hn_reader's chips and story page answer while a spinner shows; the response now says "A progress indicator is showing: results may still be loading" |
 | 201 | seen in passing | → tasks | `Tooltip['Menu']` picked "Open navigation menu" (fixed: selector exact values beat substrings, an icon's name ranks below real labels, IconButtonTheme is not a button; on every platform but Android plain "Menu" hit the drawer's menu icon); go_router app without the plugin reports route "Unknown" (fixed: without an observer or router plugin the route is read from the pages in the widget tree — `/ → /details`, `/ → (dialog)`, hidden shell branches skipped — and a route the app can't name is reported as unknown, never "unchanged"; init's step 2 says what it wired and points go_router apps to flutterpilot_gorouter); drawer scrim listed as one element with all screen text; not-found hints list `_ScaffoldSlot.body` |
 
+## Round 16 — Android and web CI (after merging §3.10–§3.13)
+
+`main` was red on Android and web; the stack's branches had been red before
+merging. Reproduced on a local emulator at CI's 320x640 dp with the soft
+keyboard forced on, and in Chrome:
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 202 | button under the on-screen keyboard | ❌→fixed | after the text checks the keyboard stays up; the Scaffold shrinks, the bottom row is clipped, and tap_widget refused "a dialog, menu or overlay covers it". A tap now closes the keyboard first (focus kept, like the back gesture), taps, and says "Closed the on-screen keyboard first"; if it won't close the error names the keyboard |
+| 203 | text-selection handle listed as "MaterialApp" | ❌→fixed | Android shows handles after select-all; they live in the root Overlay, whose nearest app widget is MaterialApp, so the whole screen was listed with every text on it. A handler is never reported under an owner across an Overlay |
+| 204 | web crash report | ❌→fixed | web stacks (`package:app/main.dart 12:5  f`, `dart-sdk/…`) weren't recognised: 1.4 KB of framework frames. Filtered like VM stacks, app frames rewritten as `f (package:app/main.dart:12:5)` |
+| 205 | URI file on web | ❌→fixed | discovery probed the URI with HTTP; DWDS doesn't answer 200, so the web app was never found. It now checks that something listens on the port |
+| 206 | fixture "Scale 1.0" on web | test fix | `1.0.toString()` is "1" in JS; the fixture formats with one decimal |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

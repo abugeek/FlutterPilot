@@ -128,6 +128,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     final buffer = StringBuffer();
     final targetStr = target.toString();
     buffer.write('$actionName${targetStr.isNotEmpty ? ' "$targetStr"' : ''}.');
+    // E.g. it closed the on-screen keyboard to reach the target.
+    final note = res.data?['note'];
+    if (note is String) buffer.write(' $note');
     final route = postState?['route'] ?? delta?['toRoute'];
     final changed =
         postState?['routeChanged'] == true || delta?['navigated'] == true;
@@ -922,6 +925,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               : 'Action chain stopped after $executed/$total steps. '
                     '$failure\nRemaining steps were skipped. State now:\n',
         );
+        for (final step in (res.data?['steps'] as List?) ?? const []) {
+          if (step is Map && step['note'] is String) {
+            buffer.write('Step ${step['index']}: ${step['note']}\n');
+          }
+        }
         buffer.write(_formatActionFeedback('Chain finished', const {}, res));
         return CallToolResult(
           isError: failure != null,
