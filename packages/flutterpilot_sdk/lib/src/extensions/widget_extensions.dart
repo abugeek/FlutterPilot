@@ -38,10 +38,17 @@ extension _WidgetExtensions on FlutterPilot {
     );
   }
 
-  static String _coveredMessage(String target) =>
-      '"$target" is on screen but not tappable: a dialog, menu or overlay '
-      'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
-      'press_key back) or interact with what is on top.';
+  static String _coveredMessage(String target) => SoftKeyboard.isVisible
+      ? '"$target" is on screen but not tappable: the on-screen keyboard '
+            'covers it (or it is clipped) and did not close. Submit or leave '
+            'the field first (press_key enter / press_key back).'
+      : '"$target" is on screen but not tappable: a dialog, menu or overlay '
+            'covers it, or it is clipped. Dismiss the overlay (press_key '
+            'escape / press_key back) or interact with what is on top.';
+
+  /// Set by [_tapTarget] when it closed the on-screen keyboard to reach its
+  /// target; the tap response says so.
+  static String? _tapNote;
 
   /// Finds [target] (waiting for the screen to settle, then scrolling to it)
   /// and taps it. Shared by tap_widget and execute_action_chain so both
@@ -80,6 +87,29 @@ extension _WidgetExtensions on FlutterPilot {
         await InteractionManager.pumpAndSettleAdaptive();
         ro = element.renderObject;
       } catch (_) {}
+    }
+    _tapNote = null;
+    // Under the on-screen keyboard: close it, as a user would, and look again.
+    if ((ro is! RenderBox ||
+            !ro.hasSize ||
+            !ro.attached ||
+            !HitTestUtils.isElementHittable(element)) &&
+        await SoftKeyboard.hide()) {
+      _tapNote =
+          'Closed the on-screen keyboard first: it covered "$target" '
+          '(the field keeps focus).';
+      element = PilotWidgetInspector.findElement(target) ?? element;
+      if (!HitTestUtils.isElementHittable(element)) {
+        try {
+          await Scrollable.ensureVisible(
+            element,
+            duration: const Duration(milliseconds: 150),
+            alignment: 0.5,
+          );
+          await InteractionManager.pumpAndSettleAdaptive();
+        } catch (_) {}
+      }
+      ro = element.renderObject;
     }
     if (ro is! RenderBox || !ro.hasSize || !ro.attached) {
       return (status: 'noLayout', error: 'No layout for target: $target');
@@ -408,7 +438,12 @@ extension _WidgetExtensions on FlutterPilot {
         treeBefore: treeBefore,
       );
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', 'target': target, ...after}),
+        json.encode({
+          'status': 'success',
+          'target': target,
+          'note': ?_tapNote,
+          ...after,
+        }),
       );
     });
 
@@ -1645,6 +1680,7 @@ extension _WidgetExtensions on FlutterPilot {
             continue;
           }
           ({String status, String? error}) r;
+          _tapNote = null;
           switch (action) {
             case 'tap' || 'tap_widget' || 'tapWidget' when target != null:
               r = await _tapTarget(target);
@@ -1672,6 +1708,7 @@ extension _WidgetExtensions on FlutterPilot {
             'action': action,
             'target': target,
             'status': r.status,
+            'note': ?_tapNote,
           });
         }
 

@@ -116,36 +116,21 @@ class VmDiscoveryService {
     }
   }
 
-  /// Whether something answers at [rawUri] (a stale file names a dead port).
+  /// Whether something listens at [rawUri]'s host and port: a stale file
+  /// names a port nothing listens on any more. (Not an HTTP probe: the web
+  /// debug proxy, DWDS, doesn't answer one.)
   static Future<bool> _verifyVmUri(
     String rawUri, {
     Duration timeout = const Duration(seconds: 1),
   }) async {
-    final client = HttpClient();
-    final connectTimeout = Duration(
-      milliseconds: (timeout.inMilliseconds * 0.4).round().clamp(100, 1000),
-    );
-    final responseTimeout = Duration(
-      milliseconds: (timeout.inMilliseconds * 0.6).round().clamp(150, 2000),
-    );
-    client.connectionTimeout = connectTimeout;
     try {
-      var uri = Uri.parse(rawUri);
-      // flutter run writes the ws:// endpoint; probe its http:// root instead.
-      if (uri.scheme.startsWith('ws')) {
-        uri = uri.replace(
-          scheme: uri.scheme == 'wss' ? 'https' : 'http',
-          path: uri.path.replaceFirst(RegExp(r'ws/?$'), ''),
-        );
-      }
-      final req = await client.getUrl(uri);
-      final resp = await req.close().timeout(responseTimeout);
-      return resp.statusCode == HttpStatus.ok ||
-          resp.statusCode == HttpStatus.found;
+      final uri = Uri.parse(rawUri);
+      if (!uri.hasPort) return false;
+      final socket = await Socket.connect(uri.host, uri.port, timeout: timeout);
+      socket.destroy();
+      return true;
     } catch (_) {
       return false;
-    } finally {
-      client.close(force: true);
     }
   }
 }

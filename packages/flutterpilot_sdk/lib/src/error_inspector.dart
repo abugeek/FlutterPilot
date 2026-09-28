@@ -57,6 +57,16 @@ class ErrorInspector {
     onErrorCaptured?.call(details);
   }
 
+  /// A frame in Flutter, the Dart SDK, FlutterPilot or stack_trace, in the
+  /// VM format (`#3  f (package:flutter/…:1:2)`) or the web one
+  /// (`package:flutter/… 1:2  f`, `dart-sdk/lib/… 3:4  g`).
+  static final _frameworkFrame = RegExp(
+    r'(^|\()(package:flutter/|package:flutterpilot|package:stack_trace/|'
+    r'dart:|dart-sdk/)',
+  );
+
+  static final _webFrame = RegExp(r'^(\S+\.dart) (\d+):(\d+)\s+(.*)$');
+
   /// Compacts a raw stack trace to the app's own frames: Flutter, the Dart
   /// SDK (`dart:`), FlutterPilot itself (it is on the stack when an agent's
   /// tap triggers the error) and async-gap markers are counted, not shown.
@@ -71,10 +81,7 @@ class ErrorInspector {
       if (trimmed.isEmpty) continue;
       final isFramework =
           trimmed == '<asynchronous suspension>' ||
-          trimmed.contains('(package:flutter/') ||
-          trimmed.contains('(package:flutterpilot') ||
-          trimmed.contains('(dart:') ||
-          trimmed.contains('(package:stack_trace/');
+          _frameworkFrame.hasMatch(trimmed);
       if (!isFramework) {
         if (skippedFrameworkFrames > 0) {
           compacted.add(
@@ -82,7 +89,12 @@ class ErrorInspector {
           );
           skippedFrameworkFrames = 0;
         }
-        compacted.add(trimmed);
+        // Web frames ("package:app/main.dart 12:5  f") in the VM's form,
+        // so an app frame always reads "f (package:app/main.dart:12:5)".
+        final web = _webFrame.firstMatch(trimmed);
+        compacted.add(
+          web == null ? trimmed : '${web[4]} (${web[1]}:${web[2]}:${web[3]})',
+        );
       } else {
         skippedFrameworkFrames++;
       }

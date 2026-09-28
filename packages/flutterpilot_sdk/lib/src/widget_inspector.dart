@@ -944,6 +944,9 @@ class PilotWidgetInspector {
       Element? target;
       if (owner != null &&
           perOwner[owner] == 1 &&
+          // An app widget above an Overlay (MaterialApp) only hosts what
+          // is shown there — text selection handles, menus — it isn't it.
+          !h.chain.any((e) => e.widget is Overlay) &&
           (_coversMostOf(h.primitive, owner) ||
               (!_isDragOnly(h.primitive.widget) &&
                   !h.chain.any(_isNamedControl)))) {
