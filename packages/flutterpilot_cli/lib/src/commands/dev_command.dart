@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:args/command_runner.dart';
 
+import 'mcp_command.dart';
+
 /// Command to run the Flutter app and auto-launch FlutterPilot server.
 class DevCommand extends Command<void> {
   @override
@@ -46,6 +48,12 @@ class DevCommand extends Command<void> {
       flutterArgs.addAll(['-d', device]);
     }
 
+    if (!McpInstallCommand.isConfigured(Directory.current.path)) {
+      stdout.writeln(
+        'ℹ️ No MCP client in this project uses FlutterPilot yet: run '
+        '"flutterpilot mcp install" (Claude Code, Cursor, VS Code).',
+      );
+    }
     stdout.writeln('🚀 Starting Flutter app: flutter ${flutterArgs.join(" ")}');
 
     final process = await Process.start(

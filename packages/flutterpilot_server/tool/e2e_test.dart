@@ -64,6 +64,16 @@ Future<void> main(List<String> args) async {
       ], cwd: app);
       File('$app/lib/main.dart').writeAsStringSync(_fixtureMain);
       await sh('flutter', ['pub', 'get'], cwd: app);
+      await sh('dart', [
+        'run',
+        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+        'mcp',
+        'install',
+        '--client',
+        'claude',
+        '--local',
+        repo,
+      ], cwd: app);
     }
 
     print('▶ flutter run -d $device (first build can take a few minutes)');
@@ -832,11 +842,23 @@ Future<void> main(List<String> args) async {
     // finds the app in the client's workspace folders (MCP roots).
     if (File('$app/.dart_tool/flutterpilot_vm_uri').existsSync()) {
       final elsewhere = Directory.systemTemp.createTempSync('fp_e2e_cwd_');
-      Future<String?> summaryFromFreshServer({List<String>? roots}) async {
-        final p = await Process.start('dart', [
-          'run',
-          '$serverDir/bin/flutterpilot_server.dart',
-        ], workingDirectory: elsewhere.path);
+
+      /// Starts a server in an empty folder ([command], default `dart run`
+      /// with no arguments); null when get_app_summary succeeds, else its
+      /// error. Retries for a while when success is expected.
+      Future<String?> summaryFromFreshServer({
+        List<String>? roots,
+        List<String>? command,
+      }) async {
+        final retry = roots != null || command != null;
+        final cmd =
+            command ??
+            ['dart', 'run', '$serverDir/bin/flutterpilot_server.dart'];
+        final p = await Process.start(
+          cmd.first,
+          cmd.skip(1).toList(),
+          workingDirectory: elsewhere.path,
+        );
         p.stderr.drain<void>();
         final m = _Mcp(
           p,
@@ -869,10 +891,10 @@ Future<void> main(List<String> args) async {
                 .map((c) => c['text'] ?? '')
                 .join('\n');
             ok = res['error'] == null && result?['isError'] != true;
-            if (!ok && roots != null) {
+            if (!ok && retry) {
               await Future<void>.delayed(const Duration(milliseconds: 500));
             }
-          } while (!ok && roots != null && DateTime.now().isBefore(deadline));
+          } while (!ok && retry && DateTime.now().isBefore(deadline));
           return ok ? null : text;
         } finally {
           p.kill();
@@ -893,6 +915,27 @@ Future<void> main(List<String> args) async {
         "app in the client's workspace roots"
         '${withRoots == null ? '' : '\n   $withRoots'}',
       );
+      // The server exactly as `flutterpilot mcp install` configured it for
+      // Claude Code (compiled executable, -p <app>).
+      final installed = File('$app/.mcp.json');
+      if (installed.existsSync()) {
+        final entry =
+            (jsonDecode(installed.readAsStringSync())
+                    as Map)['mcpServers']['flutterpilot']
+                as Map;
+        final fromConfig = await summaryFromFreshServer(
+          command: [
+            entry['command'] as String,
+            ...(entry['args'] as List).cast<String>(),
+          ],
+        );
+        if (fromConfig != null) failed++;
+        print(
+          '${fromConfig == null ? '✅' : '❌'} the server "mcp install" wrote '
+          'to .mcp.json drives the app'
+          '${fromConfig == null ? '' : '\n   $fromConfig'}',
+        );
+      }
       elsewhere.deleteSync(recursive: true);
     } else {
       print(

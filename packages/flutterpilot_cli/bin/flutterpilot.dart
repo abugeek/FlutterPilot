@@ -10,6 +10,7 @@ void main(List<String> args) async {
         )
         ..addCommand(InitCommand())
         ..addCommand(DevCommand())
+        ..addCommand(McpCommand())
         ..addCommand(DoctorCommand())
         ..addCommand(TestCommand())
         ..addCommand(AuditCommand());
