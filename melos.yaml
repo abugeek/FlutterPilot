@@ -29,14 +29,6 @@ scripts:
     run: cd examples/flutter_pilot_example && flutter run
     description: Run the example reference app.
 
-  example:verify:
-    run: dart packages/flutterpilot_server/tool/e2e_verify.dart
-    description: Run end-to-end verification against the running example app.
-
-  vscode:compile:
-    run: cd packages/flutterpilot_vscode && npm install && npm run compile
-    description: Compile the VS Code extension.
-
   fix:
     run: melos exec -c 1 -- "flutter fix --apply || dart fix --apply"
     description: Apply automated fixes to all packages.
