@@ -21,6 +21,7 @@ import 'src/ring_buffer.dart';
 import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
 import 'src/keyboard_simulator.dart';
+import 'src/layout_explorer.dart';
 import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';

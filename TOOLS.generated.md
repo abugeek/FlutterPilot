@@ -369,7 +369,7 @@ One widget's state: type, text (Text/TextField content), isEnabled, isChecked (C
 
 ## `inspect_widget`
 
-Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds them) and the app widgets above it, each with its location. Use before editing code to change what is on screen. Debug builds only.
+Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds it) and the app widgets above it. layout:true adds the constraints and size of each box up its ancestors and explains overflows and 0-sized widgets (which children fill a Row, which ancestor gives max width 0). Use before editing UI code.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -377,6 +377,7 @@ Which file:line in the app's code creates a widget: pass key (key, selector or v
 | `target` | string | no | Same as key (either name works). |
 | `x` | number | no | X in logical pixels (top-left origin), with y. |
 | `y` | number | no | Y in logical pixels. |
+| `layout` | boolean | no | Also constraints and sizes up the ancestors, and why it overflows or is 0 wide. |
 
 ## `get_semantics_tree`
 

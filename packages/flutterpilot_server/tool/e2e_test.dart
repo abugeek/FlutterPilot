@@ -693,6 +693,16 @@ Future<void> main(List<String> args) async {
         false,
         react,
       );
+      // ROADMAP §5.4: why it overflows, from the box inside it.
+      await check(
+        'inspect_widget layout explains the overflow',
+        'inspect_widget',
+        {'key': 'squeezed', 'layout': true},
+        ['90×8', 'overflows by 50 px', 'need 90 px, it has 40 (width)'],
+        false,
+        Duration.zero,
+        4096,
+      );
       await checkAbsent(
         'an overflow is not an uncaught exception',
         'get_errors',
@@ -1241,7 +1251,7 @@ class _HomeState extends State<Home> {
         ),
         Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
-          const SizedBox(width: 40, child: Row(children: [SizedBox(width: 90, height: 8)])),
+          const SizedBox(width: 40, child: Row(children: [SizedBox(key: ValueKey('squeezed'), width: 90, height: 8)])),
       ]),
     ]),
   );

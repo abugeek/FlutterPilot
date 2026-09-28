@@ -377,8 +377,13 @@ Highest value first. Each should answer a *why*, not just dump data.
    time per type); frames over the display's budget are explained, the
    rest summarised. The AI tap overlay is switched off while profiling
    (it animates every frame). Findings #214–217.
-4. **Layout explorer:** constraints and sizes up the ancestor chain for a
-   widget ("why does this Row overflow / why is this Expanded 0 wide").
+4. ~~**Layout explorer**~~ — done (2026-09-28), as `inspect_widget(...,
+   layout: true)` (no new tool): constraints and size of each render box
+   from the widget up (identical wrappers folded), flex fit, and issues
+   explained — a Row/Column overflow by how much and which children fill
+   it (named as the app wrote them: `Text lib/…:32 (RichText)`), a 0-wide
+   box and which ancestor gave it max 0. Works without source locations
+   (profile builds). Findings #218–220.
 5. **Memory leak check:** navigate into/out of a screen N times, compare class
    instance counts (or integrate `leak_tracker`), report retained classes.
 6. **Network detail:** `get_http_profile` request detail (headers, bodies) via

@@ -15,7 +15,8 @@ part of '../../flutterpilot_sdk.dart';
 /// - `toggleCheckbox` — Toggle a Checkbox/Switch/Radio
 /// - `setSliderValue` — Set a Slider's value
 /// - `getWidgetProperties` — Read semantic properties of a widget
-/// - `inspectWidget` — The app source file:line that creates a widget
+/// - `inspectWidget` — The app source file:line that creates a widget;
+///   with `layout`, constraints and sizes up its ancestors
 /// - `getWidgetTree` — Capture the full widget tree as JSON
 /// - `assertWidgetVisible` — Assert a widget exists and has layout
 /// - `assertTextVisible` — Assert text is visible on screen
@@ -1242,14 +1243,16 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      if (!SourceLocator.available) {
+      // layout:true answers without source locations too (profile builds).
+      final layout = parameters['layout'] == 'true';
+      if (!SourceLocator.available && !layout) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'This build records no source locations: they exist only in debug '
           'builds with widget creation tracking (the default for '
           '"flutter run"; not in profile/release or with '
           '--no-track-widget-creation). Relaunch with "flutter run" in debug '
-          'mode.',
+          'mode. layout:true still works.',
         );
       }
       final target = parameters['key'] ?? parameters['target'];
@@ -1281,7 +1284,8 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final result = SourceLocator.describe(element);
-      if (result['source'] == null) {
+      if (layout) result.addAll(LayoutExplorer.describe(element));
+      if (result['source'] == null && !layout) {
         result['error'] =
             'No widget created by the app\'s own code draws this: it and '
             'everything above it come from the framework or packages.';

@@ -131,7 +131,8 @@ you'll use most:
 **Orientation** — `get_app_summary` (call first: route, tappable elements,
 errors, logs, window visibility), `get_interactive_elements`,
 `get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
-`inspect_widget` (the file:line that draws a widget), `capture_screenshot`.
+`inspect_widget` (the file:line that draws a widget; `layout: true` for why
+it overflows or is 0 wide), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`

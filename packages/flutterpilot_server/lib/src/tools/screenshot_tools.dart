@@ -528,9 +528,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'Which file:line in the app\'s code creates a widget: pass key '
           '(key, selector or visible text) or x,y (logical pixels, e.g. from '
           'a screenshot). Returns the source (for framework widgets, the app '
-          'widget that builds them) and the app widgets above it, each with '
-          'its location. Use before editing code to change what is on screen. '
-          'Debug builds only.',
+          'widget that builds it) and the app widgets above it. layout:true '
+          'adds the constraints and size of each box up its ancestors and '
+          'explains overflows and 0-sized widgets (which children fill a '
+          'Row, which ancestor gives max width 0). Use before editing UI '
+          'code.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -543,6 +545,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             description: 'X in logical pixels (top-left origin), with y.',
           ),
           'y': JsonSchema.number(description: 'Y in logical pixels.'),
+          'layout': JsonSchema.boolean(
+            description:
+                'Also constraints and sizes up the ancestors, and why it '
+                'overflows or is 0 wide.',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -551,6 +558,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           if (target != null) 'key': target.toString(),
           if (p['x'] != null) 'x': p['x'].toString(),
           if (p['y'] != null) 'y': p['y'].toString(),
+          if (p['layout'] == true) 'layout': 'true',
         });
         if (res.isError) return res.toCallToolResult();
         final data = Map<String, dynamic>.of(res.data ?? const {});
