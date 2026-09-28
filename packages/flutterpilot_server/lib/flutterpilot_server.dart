@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
 import 'src/fleet_manager.dart';
+import 'src/image_budget.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
@@ -69,7 +70,24 @@ abstract class _FlutterPilotServerBase {
         );
       }
       try {
-        return await callback(args, extra);
+        final result = await callback(args, extra);
+        final images = result.content.whereType<ImageContent>();
+        if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
+          return result;
+        }
+        return CallToolResult(
+          isError: result.isError,
+          content: [
+            for (final c in result.content)
+              c is ImageContent
+                  ? ImageContent(
+                      data: fitBase64Png(c.data),
+                      mimeType: c.mimeType,
+                    )
+                  : c,
+            TextContent(text: '(Image scaled down to fit the size limit.)'),
+          ],
+        );
       } catch (e) {
         return CallToolResult(
           isError: true,
@@ -106,6 +124,9 @@ abstract class _FlutterPilotServerBase {
 
   /// The VM service URI of the current connection (unredacted).
   String? get _connectedUri;
+
+  /// Runtime state of the active device, once connected.
+  DeviceRuntimeContext? get _activeContext;
 
   bool _isAllowedConnectionUri(String rawUri);
 
@@ -242,6 +263,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   @override
   String? get _connectedUri => _vmService == null ? null : _vmServiceUri;
+
+  @override
+  DeviceRuntimeContext? get _activeContext =>
+      _deviceContexts[_fleetManager.activeDeviceId ?? 'default'];
 
   @override
   Future<void> _renameDeviceContext(String from, String to) async {
@@ -402,6 +427,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.connectionGeneration = _connectionGeneration;
     activeContext.cachedMainIsolateId = null;
     activeContext.hasSdk = null;
+    activeContext.lifecycle = null;
     activeContext.zeroCodeErrors.clear();
     final checkedService = _vmService!;
     _sdkExtensionsReady = _waitForSdkExtensions(checkedService).then((found) {
@@ -410,9 +436,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (found != null) updateSdkToolVisibility(hasSdk: found);
     });
     try {
-      await _updateNativeToolVisibility(
-        (await _vmService!.getVM()).operatingSystem,
-      );
+      final vm = await _vmService!.getVM();
+      activeContext.operatingSystem = vm.operatingSystem;
+      await _updateNativeToolVisibility(vm.operatingSystem, pid: vm.pid);
     } catch (_) {
       // Visibility is best-effort; the tools still explain themselves.
     }
@@ -617,6 +643,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                   'data': error,
                 }, deviceId: context.deviceId);
               }
+            } else if (event.extensionKind == 'ext.flutterpilot.lifecycle') {
+              context.lifecycle = event.extensionData?.data['state']
+                  ?.toString();
             } else if (event.extensionKind == 'ext.flutterpilot.action') {
               _appendEvent({
                 'type': 'action',
@@ -1043,6 +1072,15 @@ Use this guide to understand what tools to call, when, and in what order.
                   '(FlutterPilot finds it), or call connect_app(uri: ...) '
                   'with the VM service URI flutter run prints.',
         ErrorCategory.connectionLost,
+      );
+    }
+    // iOS suspends a backgrounded app: every call would hang until it's back.
+    if (context.lifecycle == 'paused' && context.operatingSystem == 'ios') {
+      return _ExtensionResult.error(
+        'The app is in the background, and iOS suspends it: nothing can '
+        'reach it until it is in the foreground again. On the simulator call '
+        'native_open_app; on a phone, open the app.',
+        ErrorCategory.appInBackground,
       );
     }
     context.connectionGeneration = context.connectionGeneration == 0
@@ -1703,6 +1741,9 @@ class _BackgroundOperation {
 enum ErrorCategory {
   /// The VM Service connection is not available.
   connectionLost,
+
+  /// The app is backgrounded and suspended by the OS (iOS).
+  appInBackground,
 
   /// The VM Service is currently reconnecting — retry shortly.
   reconnecting,

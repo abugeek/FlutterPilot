@@ -192,6 +192,26 @@ relaunched through the MCP tools.
 | 141 | tool list per device | ✅ | switching between SDK and zero-code apps shows 124 / 29 tools (tools/list_changed) |
 | 142 | per-device state | ✅ | routes, screenshot baselines (`save`/`compare` keyed by device), hot reload go to the active device |
 
+## Round 8 — native iOS tools (§2.2)
+
+`../native_app` (location permission via geolocator, a text field, a
+lifecycle label; SDK via `init --local`) on the iPhone 17 simulator, with
+idb installed. Driven through the MCP tools.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 143 | native tools hidden with idb installed | ❌→fixed | `pip3 install --user fb-idb` puts idb in `~/Library/Python/<v>/bin`, off PATH; the server only checked `which idb`. Now looks there too |
+| 144 | `native_tap` coordinates | ❌→fixed | description said "native screenshot pixel space", but idb taps in points: a tap at pixel coords reported success and hit nothing. Now points everywhere; `native_screenshot` is scaled to points (240 KB → 45 KB) |
+| 145 | `native_describe_screen` | ⚠️→fixed | raw idb JSON (~400 B per element). Now one line per element with its tap point: the location alert is 5 lines |
+| 146 | backgrounded app (HOME) | ❌→fixed | iOS suspends it: every call hung 50 s, then "The app may be unresponsive". SDK now posts lifecycle events; the server answers at once "in the background… native_open_app" |
+| 147 | no way back to the app | ❌→added | `native_open_app` (simulator): bundle id and simulator from the VM's pid; state kept |
+| 148 | large images | ❌→fixed | mcp_dart's base64 check overflows the stack above ~3 MB: a full-size home-screen screenshot became "Internal server error". Every tool's images are now scaled to fit |
+| 149 | permission alert after a tap | ⚠️→hint | not in the Flutter tree, and iOS doesn't always make the app `inactive`. A tap that changed nothing now mentions native_describe_screen; the summary flags an inactive app on phones |
+| 150 | `press_key` enter | ⚠️→fixed | submitted the field but the response said nothing changed (no tree diff was computed). Now diffs like a tap |
+| 151 | summary "Focused" | ⚠️→fixed | named the `Focus` wrapper; now the app's widget (`TextField`) |
+| 152 | `native_text` into a Flutter field | ✅ | real iOS text input reaches Flutter's TextField (" Jr" appended) |
+| 153 | location allow / deny | ✅ | both paths end in the app's own result text |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

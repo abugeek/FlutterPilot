@@ -429,8 +429,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
         );
         final lifecycle = data['lifecycle'];
-        // 'inactive' is a visible, unfocused window: nothing to report.
-        if (lifecycle != null &&
+        final os = _activeContext?.operatingSystem;
+        // On a desktop, 'inactive' is a visible, unfocused window: nothing to
+        // report. On a phone it means something covers the app.
+        if (lifecycle == 'inactive' && (os == 'ios' || os == 'android')) {
+          summary.writeln(
+            '• App inactive: something of the OS covers it (a system alert '
+            'such as a permission request, the app switcher, Control '
+            'Center); the tappable elements below may be hidden.'
+            '${os == 'ios' ? ' native_describe_screen shows what is on top.' : ''}',
+          );
+        } else if (lifecycle != null &&
             lifecycle != 'resumed' &&
             lifecycle != 'inactive') {
           summary.writeln(

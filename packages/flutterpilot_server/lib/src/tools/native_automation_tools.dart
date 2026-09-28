@@ -21,14 +21,98 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   /// Shows the native tools only where they can work: an iOS app, with
   /// `xcrun` (screenshot) and `idb` (everything else) on this machine.
   /// Called after every VM connection; hidden until then.
-  Future<void> _updateNativeToolVisibility(String? operatingSystem) async {
+  Future<void> _updateNativeToolVisibility(
+    String? operatingSystem, {
+    int? pid,
+  }) async {
     final ios = operatingSystem == 'ios' && Platform.isMacOS;
-    final idb = ios && await _onPath('idb');
+    if (ios) _idb = await _findIdb();
+    _simulatorApp = ios && pid != null ? await _findSimulatorApp(pid) : null;
+    final idb = ios && _idb != null;
     final xcrun = ios && await _onPath('xcrun');
     for (final MapEntry(key: name, value: tool) in _nativeTools.entries) {
-      final usable = name == 'native_screenshot' ? xcrun : idb;
+      final usable = switch (name) {
+        'native_screenshot' => xcrun,
+        'native_open_app' => xcrun && _simulatorApp != null,
+        _ => idb,
+      };
       if (tool.enabled != usable) usable ? tool.enable() : tool.disable();
     }
+  }
+
+  /// The simulator app behind the connection. Simulator apps are processes
+  /// on this Mac, so the VM's pid leads to the app bundle and the simulator
+  /// it runs in. Null for apps on a phone.
+  ({String bundleId, String udid})? _simulatorApp;
+
+  static Future<({String bundleId, String udid})?> _findSimulatorApp(
+    int pid,
+  ) async {
+    try {
+      final ps = await Process.run('ps', ['-p', '$pid', '-o', 'comm=']);
+      final executable = (ps.stdout as String).trim();
+      final udid = RegExp(
+        r'/CoreSimulator/Devices/([0-9A-Fa-f-]{36})/',
+      ).firstMatch(executable)?.group(1);
+      if (udid == null) return null;
+      final plist = await Process.run('plutil', [
+        '-extract',
+        'CFBundleIdentifier',
+        'raw',
+        '-o',
+        '-',
+        '${File(executable).parent.path}/Info.plist',
+      ]);
+      final bundleId = (plist.stdout as String).trim();
+      if (plist.exitCode != 0 || bundleId.isEmpty) return null;
+      return (bundleId: bundleId, udid: udid);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Physical pixels per point on the simulator's screen, from the SDK;
+  /// kept for when the app is backgrounded and can't answer.
+  double? _nativePixelRatio;
+
+  /// From the SDK, or else (app backgrounded, no SDK) from the screen
+  /// width in points that idb reports, given the screenshot's [pixelWidth].
+  Future<double?> _pixelRatio(String udid, int pixelWidth) async {
+    final ping = await _callExtensionRaw('ext.flutterpilot.ping', {});
+    var ratio = (ping.data?['devicePixelRatio'] as num?)?.toDouble();
+    if (ratio == null && _nativePixelRatio == null && _idb != null) {
+      try {
+        final r = await Process.run(_idb!, [
+          'ui',
+          'describe-all',
+          '--udid',
+          udid,
+          '--json',
+        ]);
+        final app = (jsonDecode(r.stdout as String) as List)
+            .whereType<Map>()
+            .firstWhere((e) => e['type'] == 'Application');
+        ratio = pixelWidth / ((app['frame'] as Map)['width'] as num);
+      } catch (_) {}
+    }
+    return _nativePixelRatio = ratio ?? _nativePixelRatio;
+  }
+
+  /// The idb executable. `pip3 install --user fb-idb` puts it in
+  /// `~/Library/Python/<version>/bin`, which is usually not on PATH.
+  String? _idb;
+
+  static Future<String?> _findIdb() async {
+    if (await _onPath('idb')) return 'idb';
+    final home = Platform.environment['HOME'];
+    if (home == null) return null;
+    final candidates = [
+      File('$home/.local/bin/idb'),
+      if (Directory('$home/Library/Python').existsSync())
+        for (final version in Directory('$home/Library/Python').listSync())
+          File('${version.path}/bin/idb'),
+    ];
+    return candidates.where((f) => f.existsSync()).firstOrNull?.path;
   }
 
   static Future<bool> _onPath(String exe) async {
@@ -50,6 +134,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   Future<String?> _resolveSimulatorUdid(Map<String, dynamic> p) async {
     final explicit = p['simulatorUdid']?.toString();
     if (explicit != null && explicit.isNotEmpty) return explicit;
+    if (_simulatorApp != null) return _simulatorApp!.udid;
 
     if (!Platform.isMacOS) return null;
     try {
@@ -185,11 +270,31 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
               ],
             );
           }
-          final bytes = await tempFile.readAsBytes();
+          var bytes = await tempFile.readAsBytes();
+          final decoded = img.decodePng(bytes);
+          final ratio = decoded == null
+              ? null
+              : await _pixelRatio(udid, decoded.width);
+          var note =
+              'coordinates are physical pixels: divide by the '
+              'screen scale (2 or 3) for native_tap';
+          if (ratio != null && ratio > 1) {
+            final image = decoded;
+            if (image != null) {
+              bytes = img.encodePng(
+                img.copyResize(
+                  image,
+                  width: (image.width / ratio).round(),
+                  interpolation: img.Interpolation.average,
+                ),
+              );
+              note = 'in points, the coordinates native_tap takes';
+            }
+          }
           return CallToolResult(
             content: [
               ImageContent(data: base64Encode(bytes), mimeType: 'image/png'),
-              TextContent(text: 'Native screenshot captured ($udid).'),
+              TextContent(text: 'Native screenshot ($note).'),
             ],
           );
         } finally {
@@ -201,20 +306,15 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_tap'] = _tool(
       'native_tap',
       description:
-          'Taps native screen coordinates via `idb ui tap` — reaches system permission dialogs, '
-          'alerts, and other OS chrome that tap_widget/tap_at cannot see because they are not '
-          'part of the Flutter widget tree. Use native_screenshot first to find coordinates. '
-          'Requires idb (brew install idb-companion && pip3 install fb-idb). macOS + iOS Simulator only.',
+          'Taps the iOS simulator screen via `idb ui tap` — reaches system '
+          'permission alerts and other OS chrome that tap_widget cannot, '
+          'because they are not part of the Flutter widget tree. Coordinates '
+          'are points: take them from native_describe_screen (or '
+          'native_screenshot, which is in points too).',
       inputSchema: ToolInputSchema(
         properties: {
-          'x': JsonSchema.number(
-            description:
-                'X coordinate in the native screenshot\'s pixel space.',
-          ),
-          'y': JsonSchema.number(
-            description:
-                'Y coordinate in the native screenshot\'s pixel space.',
-          ),
+          'x': JsonSchema.number(description: 'X in points.'),
+          'y': JsonSchema.number(description: 'Y in points.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -237,7 +337,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         // are frequently fractional (e.g. 275.0), so round rather than pass through.
         final x = (p['x'] as num).round().toString();
         final y = (p['y'] as num).round().toString();
-        final result = await Process.run('idb', [
+        final result = await Process.run(_idb ?? 'idb', [
           'ui',
           'tap',
           x,
@@ -291,7 +391,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           return _noSimulatorError(await _listBootedSimulators());
         }
         final text = p['text'].toString();
-        final result = await Process.run('idb', [
+        final result = await Process.run(_idb ?? 'idb', [
           'ui',
           'text',
           text,
@@ -344,7 +444,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           return _noSimulatorError(await _listBootedSimulators());
         }
         final button = p['button'].toString();
-        final result = await Process.run('idb', [
+        final result = await Process.run(_idb ?? 'idb', [
           'ui',
           'button',
           button,
@@ -396,7 +496,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         if (udid == null) {
           return _noSimulatorError(await _listBootedSimulators());
         }
-        final result = await Process.run('idb', [
+        final result = await Process.run(_idb ?? 'idb', [
           'ui',
           'describe-all',
           '--udid',
@@ -415,9 +515,92 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           );
         }
         return CallToolResult(
-          content: [TextContent(text: result.stdout as String)],
+          content: [TextContent(text: describeNativeScreen(result.stdout))],
+        );
+      },
+    );
+
+    _nativeTools['native_open_app'] = _tool(
+      'native_open_app',
+      description:
+          'Brings the connected app back to the foreground on the iOS '
+          'simulator (after native_button HOME, or when another app is in '
+          'front), keeping its state. iOS suspends a backgrounded app, so '
+          'every other tool fails until then.',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final app = _simulatorApp;
+        if (app == null) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text: 'The connected app is not running in an iOS simulator.',
+              ),
+            ],
+          );
+        }
+        final result = await Process.run('xcrun', [
+          'simctl',
+          'launch',
+          app.udid,
+          app.bundleId,
+        ]);
+        if (result.exitCode != 0) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'simctl launch failed: ${result.stderr}'),
+            ],
+          );
+        }
+        final deadline = DateTime.now().add(const Duration(seconds: 3));
+        while (_activeContext?.lifecycle != null &&
+            _activeContext?.lifecycle != 'resumed' &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Brought ${app.bundleId} to the foreground (app state kept).',
+            ),
+          ],
         );
       },
     );
   }
+}
+
+/// One line per element of `idb ui describe-all --json`, with the point to
+/// pass to native_tap, instead of ~400 bytes of JSON per element.
+String describeNativeScreen(Object? json) {
+  final List<Object?> elements;
+  try {
+    elements = jsonDecode(json.toString()) as List<Object?>;
+  } catch (_) {
+    return json.toString();
+  }
+  final lines = <String>[];
+  for (final e in elements.whereType<Map>()) {
+    final type = e['type']?.toString() ?? '?';
+    final label = e['AXLabel']?.toString().trim() ?? '';
+    final value = e['AXValue']?.toString().trim() ?? '';
+    if (type == 'Application' || (label.isEmpty && value.isEmpty)) continue;
+    final f = e['frame'];
+    final at = f is Map
+        ? ' → tap (${((f['x'] as num) + (f['width'] as num) / 2).round()}, '
+              '${((f['y'] as num) + (f['height'] as num) / 2).round()})'
+        : '';
+    lines.add(
+      '- $type "$label"${value.isEmpty ? '' : ' = "$value"'}'
+      '${e['enabled'] == false ? ' (disabled)' : ''}$at',
+    );
+  }
+  if (lines.isEmpty) {
+    return 'Nothing native on screen with a label (Flutter content is not '
+        'described here; use get_app_summary).';
+  }
+  return '${lines.join('\n')}\nCoordinates are points (native_tap).';
 }
