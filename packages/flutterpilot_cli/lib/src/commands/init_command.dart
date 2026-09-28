@@ -7,7 +7,8 @@ import 'package:yaml_edit/yaml_edit.dart';
 const _repoUrl = 'https://github.com/abugeek/FlutterPilot.git';
 
 /// App dependency -> (FlutterPilot plugin, wiring line the user must add).
-const _plugins = {
+/// Shared by `init` (adds the plugin) and `doctor` (checks it is wired).
+const appPlugins = {
   'flutter_riverpod': (
     'flutterpilot_riverpod',
     'ProviderScope(observers: [RiverpodPilotObserver()], child: ...)',
@@ -149,7 +150,7 @@ class InitCommand extends Command<void> {
     final dependencies = (yaml['dependencies'] as Map?) ?? const {};
 
     final detected = <String, (String, String)>{
-      for (final e in _plugins.entries)
+      for (final e in appPlugins.entries)
         if (dependencies.containsKey(e.key)) e.value.$1: e.value,
     };
 

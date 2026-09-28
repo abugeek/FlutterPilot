@@ -293,8 +293,17 @@ current major. §1 is done.
 3. **Publish to pub.dev** (sdk, plugins, server, cli) with a melos release
    flow, so `init` can use hosted versions instead of git deps. Needs
    `dependency_overrides` removal and version constraints between packages.
-4. **`flutterpilot doctor`**: verify entitlements, SDK wiring, plugin
-   registration, VM service reachability, and print exact fixes.
+4. **`flutterpilot doctor`:** done. From the files: SDK added and
+   `FlutterPilot.initialize()` called; for each package with a plugin, the
+   plugin added and wired (its `…Pilot…` symbol used in lib/); macOS
+   `network.client` (❌ for apps with a networking package, else ⚠️); an MCP
+   config whose server exists. From the running app (the URI file, over the
+   VM service): SDK registered, each plugin's extension registered (else
+   the wiring line + "hot restart"); zero-code apps are fine as such. Each
+   problem prints the exact fix; exit 1 on problems. Tried on hn_reader
+   (running: all ✅), notes_app, firebase_app/hive_app/plain_app (missing
+   network.client). e2e runs it against the fixture (SDK + Dio registered,
+   MCP config) and a zero-code app. `init` does not add the entitlement.
 
 ## 4. Token efficiency (agents pay for every tool and every byte)
 

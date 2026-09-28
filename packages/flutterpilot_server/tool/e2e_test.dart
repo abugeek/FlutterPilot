@@ -924,6 +924,30 @@ Future<void> main(List<String> args) async {
         "app in the client's workspace roots"
         '${withRoots == null ? '' : '\n   $withRoots'}',
       );
+      // flutterpilot doctor reads what the running app registered (§3.4).
+      final doctor = await Process.run('dart', [
+        'run',
+        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+        'doctor',
+        '-p',
+        app,
+      ]);
+      final report = '${doctor.stdout}${doctor.stderr}';
+      final expected = zeroCode
+          ? ['App running (zero-code']
+          : [
+              '✅ SDK registered in the running app',
+              '✅ flutterpilot_dio registered',
+              '✅ MCP config: Claude Code',
+            ];
+      // (Its exit code may be 1: the fixture's macOS build lacks the
+      // network.client entitlement, which doctor rightly flags for Dio.)
+      final doctorOk = expected.every(report.contains);
+      if (!doctorOk) failed++;
+      print(
+        '${doctorOk ? '✅' : '❌'} doctor sees the running app and what it '
+        'registered${doctorOk ? '' : '\n   $report'}',
+      );
       // The server exactly as `flutterpilot mcp install` configured it for
       // Claude Code (compiled executable, -p <app>).
       final installed = File('$app/.mcp.json');

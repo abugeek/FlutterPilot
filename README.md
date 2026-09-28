@@ -28,6 +28,9 @@ flutterpilot mcp install
 
 # 4. Run the app so the server finds it:
 flutterpilot dev
+
+# Something missing? Checks the setup and the running app, prints fixes:
+flutterpilot doctor
 ```
 
 > Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
@@ -236,6 +239,9 @@ flutterpilot init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds match
 flutter pub get
 ```
 Plugins do nothing until wired up — `init` prints the exact line for each one.
+`flutterpilot doctor` checks the wiring (SDK initialized, each plugin used,
+macOS network entitlement, MCP config) and, while the app runs, that the SDK
+and every plugin registered — with the exact fix for anything missing.
 
 #### Step 2: Initialize SDK
 ```dart
