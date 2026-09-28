@@ -264,6 +264,19 @@ merged path.
 | 177 | recording, stream logs | ❌→deleted | `start_recording` described recording the user's manual taps but recorded only FlutterPilot-driven actions; nothing ever fed `get_stream_logs` |
 | 178 | enum states | ⚠️ known | `set_state` on a Notifier holding an enum (ThemeMode) is refused honestly ("String is not a subtype of ThemeMode") |
 
+## Round 12 — errors vs crashes (§3.10)
+
+The e2e fixture got a Crash button (throws in onPressed) and a Squeeze
+toggle (a Row overflow); driven through the MCP tools on macOS.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 179 | overflow vs exception | ✅ | already split by the SDK's severity: the overflow is listed, the app is not flagged; the throw is flagged until hot reload |
+| 180 | crash report | ❌→fixed | 3.5 KB, 2 KB of it a widget-tree dump fetched with a full tree walk for every report, "No data available" sections for absent plugins, "🚨 Critical App Crash Report" and a "DIRECTIVE FOR AI". Now 0.4 KB: exception, app frames, route, state, last requests |
+| 181 | stacks | ❌→fixed | an error from an agent's tap listed FlutterPilot's own frames (interaction_manager, widget_extensions) and `dart:developer` with async markers. Only the app's frames are shown now |
+| 182 | culprit widget | ⚠️→fixed | "Row Row:file:///private/var/…/lib/main.dart:81:44" → "Row (lib/main.dart:81:44)" |
+| 183 | notifications | ⚠️→fixed | level critical, "Self-Heal sequence initiated", once per distinct exception with only a 2 s debounce of repeats. Now level error, once per exception until hot reload |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

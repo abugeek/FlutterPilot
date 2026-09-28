@@ -357,8 +357,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text: FlutterPilotServer._boundToolText(
                 _selfHealManager.isUnstable
-                    ? 'A crash was intercepted since the last hot reload '
-                          '(get_errors(report: true) for the full report).\n\n$text'
+                    ? 'An uncaught exception happened since the last hot '
+                          'reload (get_errors(report: true): its stack and the '
+                          'app state).\n\n$text'
                     : text,
               ),
             ),

@@ -11,6 +11,7 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 /// Usage (from packages/flutterpilot_server):
 ///   dart run tool/e2e_test.dart [-d <device>]   # default device: macos
 ///   dart run tool/e2e_test.dart --zero-code [-d <device>]
+///   add --verbose to print every response
 ///
 /// --zero-code runs a plain `flutter create` app without flutterpilot_sdk
 /// and checks what an agent gets from Flutter's own inspector instead.
@@ -22,6 +23,8 @@ Future<void> main(List<String> args) async {
   final d = args.indexOf('-d');
   final device = d >= 0 && d + 1 < args.length ? args[d + 1] : 'macos';
   final zeroCode = args.contains('--zero-code');
+  // Prints every response in full, not only failures.
+  final verbose = args.contains('--verbose');
   final isDesktop = const {'macos', 'linux', 'windows'}.contains(device);
   final isWeb = device == 'chrome' || device == 'web-server';
   final isMobile = !isDesktop && !isWeb;
@@ -153,9 +156,12 @@ Future<void> main(List<String> args) async {
         }
       } while (!ok && DateTime.now().isBefore(deadline));
       if (!ok) failed++;
-      final shown = text.length > 300 ? '${text.substring(0, 300)}…' : text;
+      final shown = verbose || text.length <= 300
+          ? text
+          : '${text.substring(0, 300)}…';
       print(
-        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $shown'}',
+        '${ok ? '✅' : '❌'} $label (${text.length}b)'
+        '${ok && !verbose ? '' : '\n   $shown'}',
       );
     }
 
@@ -265,6 +271,12 @@ Future<void> main(List<String> args) async {
         true,
       );
       await check('hot_reload', 'hot_reload');
+      await checkAbsent(
+        'hot reload clears the exception flag',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
       await check(
         'print output captured',
         'get_debug_logs',
@@ -518,6 +530,50 @@ Future<void> main(List<String> args) async {
         'Send',
         'card',
       ]);
+      // Errors (ROADMAP §3.10): a layout overflow is a bug to fix, not a
+      // crash; an uncaught exception is flagged, with a small report that
+      // points at the source line.
+      await check('overflow the layout', 'tap_widget', {'key': 'Squeeze'});
+      await check(
+        'overflow is listed with its widget and line',
+        'get_errors',
+        {},
+        ['overflowed', 'Row (lib/main.dart:'],
+        false,
+        react,
+      );
+      await checkAbsent(
+        'an overflow is not an uncaught exception',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
+      await check('undo the overflow', 'tap_widget', {'key': 'Squeeze'});
+      await check('throw from a button', 'tap_widget', {'key': 'Crash'});
+      await check(
+        'uncaught exception is flagged',
+        'get_errors',
+        {},
+        ['Boom from the Crash button', 'since the last hot reload'],
+        false,
+        react,
+      );
+      await check(
+        'crash report is small and names the source line',
+        'get_errors',
+        {'report': true},
+        ['Boom from the Crash button', 'main.dart:', '## Route'],
+        false,
+        Duration.zero,
+        2048,
+      );
+      await checkAbsent(
+        'the stack is the app\'s, not FlutterPilot\'s',
+        'get_errors',
+        {},
+        ['flutterpilot_sdk', 'asynchronous suspension', 'Widget Tree'],
+      );
+
       // `target` works wherever `key` does.
       await check('target alias', 'assert_widget', {'target': 'Send'});
       // Post-action state waits for the page transition: it lists the new
@@ -563,6 +619,12 @@ Future<void> main(List<String> args) async {
         main.readAsStringSync().replaceFirst('Version A', 'Version B'),
       );
       await check('hot_reload', 'hot_reload');
+      await checkAbsent(
+        'hot reload clears the exception flag',
+        'get_errors',
+        {},
+        ['since the last hot reload'],
+      );
       await check(
         'reload applied edited source',
         'assert_widget',
@@ -735,6 +797,7 @@ class _HomeState extends State<Home> {
   String _submitted = '';
   String _menu = '';
   String _zoomed = 'zoom 1.0';
+  bool _squeeze = false;
 
   Future<void> _send() async {
     final res = await dio.get('https://example.com/ping');
@@ -777,6 +840,18 @@ class _HomeState extends State<Home> {
         ),
         child: const Text('Details'),
       ),
+      Row(children: [
+        TextButton(
+          onPressed: () => throw StateError('Boom from the Crash button'),
+          child: const Text('Crash'),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _squeeze = !_squeeze),
+          child: const Text('Squeeze'),
+        ),
+        if (_squeeze)
+          const SizedBox(width: 40, child: Row(children: [SizedBox(width: 90, height: 8)])),
+      ]),
     ]),
   );
 }

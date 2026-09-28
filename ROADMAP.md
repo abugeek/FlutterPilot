@@ -165,12 +165,16 @@ current major. §1 is done.
    and drifts — delete it or generate it. README still advertises old
    category counts.
 
-10. **Self-heal is alarmist and heavy:** a 38px layout overflow is logged as
-    "🚨 CRITICAL APP CRASH", marks the app UNSTABLE, and every captured error
-    fires 6 extension calls (including a full widget tree) from the server
-    (`SelfHealManager.handleCrash`). Classify by severity (layout vs uncaught
-    exception), debounce repeated errors, and fetch diagnostics lazily when
-    `get_latest_crash_report` is actually called.
+10. **Self-heal is alarmist and heavy:** done. Layout overflows are
+    warnings (SDK `severity`), not uncaught exceptions: no flag, no
+    notification. An uncaught exception notifies the client once per distinct
+    exception until the next hot reload (MCP log level `error`, no
+    "CRITICAL"). `get_errors(report: true)` is built on demand from 5 calls
+    (no widget tree): exception, the app's frames only (FlutterPilot and
+    `dart:` frames are counted, not shown), route, clipped state, last 6
+    requests — 3.5 KB → 0.4 KB in the e2e fixture. Layout errors name the
+    culprit as `Row (lib/main.dart:81:44)`. Proven by the fixture's Crash and
+    Squeeze buttons (e2e). Round 12 of `docs/field-test-findings.md`.
 11. **Keyboard simulator** (`keyboard_simulator.dart`) dispatches each key
     twice — `HardwareKeyboard.handleKeyEvent` *and* the deprecated
     `keyMessageHandler`. Use one correct path (the platform key-data path

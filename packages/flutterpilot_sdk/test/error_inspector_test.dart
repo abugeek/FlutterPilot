@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/error_inspector.dart';
 
 void main() {
+  _compactStackTests();
   TestWidgetsFlutterBinding.ensureInitialized();
   group('ErrorInspector', () {
     setUp(() {
@@ -52,6 +53,32 @@ void main() {
 
       expect(caughtDetails, isNotNull);
       expect(caughtDetails!.exception.toString(), 'Callback Exception');
+    });
+  });
+}
+
+void _compactStackTests() {
+  group('compactStackTrace', () {
+    test('keeps only the app frames when an agent tap caused the error', () {
+      const raw = '''
+#0      _HomeState.build.<anonymous closure> (package:fixture/main.dart:73:28)
+#1      _InkResponseState.handleTap (package:flutter/src/material/ink_well.dart:1224:21)
+#2      _LinkedHashMapMixin.forEach (dart:_compact_hash:721:13)
+#3      InteractionManager.tapAt (package:flutterpilot_sdk/src/interaction_manager.dart:154:5)
+<asynchronous suspension>
+#4      _runExtension.<anonymous closure> (dart:developer-patch/developer.dart:140:13)
+<asynchronous suspension>''';
+      expect(
+        ErrorInspector.compactStackTrace(raw),
+        '#0      _HomeState.build.<anonymous closure> '
+        '(package:fixture/main.dart:73:28)\n'
+        '  ... [6 framework frames skipped]',
+      );
+    });
+
+    test('an app package whose name starts with flutter is kept', () {
+      const raw = '#0 f (package:flutter_app/main.dart:1:1)';
+      expect(ErrorInspector.compactStackTrace(raw), raw);
     });
   });
 }

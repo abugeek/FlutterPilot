@@ -57,8 +57,9 @@ class ErrorInspector {
     onErrorCaptured?.call(details);
   }
 
-  /// Compacts a raw stack trace by stripping internal Flutter framework frames
-  /// and preserving user project frames (package:...) for an 80% token reduction.
+  /// Compacts a raw stack trace to the app's own frames: Flutter, the Dart
+  /// SDK (`dart:`), FlutterPilot itself (it is on the stack when an agent's
+  /// tap triggers the error) and async-gap markers are counted, not shown.
   static String? compactStackTrace(String? rawStack) {
     if (rawStack == null || rawStack.isEmpty) return null;
     final lines = rawStack.split('\n');
@@ -69,10 +70,11 @@ class ErrorInspector {
       final trimmed = line.trim();
       if (trimmed.isEmpty) continue;
       final isFramework =
-          trimmed.contains('package:flutter/') ||
-          trimmed.contains('dart:async/') ||
-          trimmed.contains('dart:ui/') ||
-          trimmed.contains('package:stack_trace/');
+          trimmed == '<asynchronous suspension>' ||
+          trimmed.contains('(package:flutter/') ||
+          trimmed.contains('(package:flutterpilot') ||
+          trimmed.contains('(dart:') ||
+          trimmed.contains('(package:stack_trace/');
       if (!isFramework) {
         if (skippedFrameworkFrames > 0) {
           compacted.add(
@@ -114,12 +116,18 @@ class ErrorInspector {
         (l) => l.contains('relevant error-causing widget was'),
       );
       if (i < 0) return null;
-      return lines
+      final text = lines
           .skip(i + 1)
           .take(3)
           .takeWhile((l) => l.trim().isNotEmpty)
           .map((l) => l.trim())
           .join(' ');
+      // "Row Row:file:///…/app/lib/main.dart:81:44" → "Row (lib/main.dart:81:44)"
+      final source = RegExp(
+        r'file://\S*/((?:lib|test|bin|integration_test)/\S+?:\d+:\d+)',
+      ).firstMatch(text)?.group(1);
+      if (source == null) return text;
+      return '${text.split(RegExp(r'[\s:]')).first} ($source)';
     } catch (_) {
       return null;
     }
