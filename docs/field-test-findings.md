@@ -368,7 +368,8 @@ keyboard forced on, and in Chrome:
 | 218 | the known subtitle overflow (textScale 1.6) | ✅ | `inspect_widget(x, y, layout: true)` on the subtitle: "Row lib/ui/story_tile.dart:30:19 overflows by 60.6 px: its children need 732.6 px, it has 672", widest children the two Texts at :32 and :37 (not flexible); the Text line shows `w 0–∞` (a Row lets it be as wide as it likes). Matches get_errors' RenderFlex message |
 | 219 | children named RichText | ❌→fixed | the Row's children are the RichTexts Text builds; boxes are now named after the nearest app widget that owns them: `Text lib/ui/story_tile.dart:32:13 (RichText)` |
 | 220 | the suggested fix | ✅ | wrapping the Text at :32 in Flexible + ellipsis (temporarily, hot reload): the Text gets `w 0–368 Flexible(flex 1)` and no issue is reported. Reverted (the overflow stays as the known defect) |
- (debug mode, macOS, HN reader)
+
+## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)
