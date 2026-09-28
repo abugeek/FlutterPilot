@@ -54,7 +54,8 @@ tools that always work beat many tools that sometimes work.
   service-extension closures** → SDK changes and provider definitions need
   `hot_restart`. In-app mocks/state reset on restart.
 - **macOS sandbox:** apps need `com.apple.security.network.client` in both
-  entitlement files or all HTTP fails with `errno = 1`.
+  entitlement files or all HTTP fails with `errno = 1`. `flutterpilot init`
+  adds it; `flutterpilot doctor` checks it.
 - **Riverpod 3 retries failed providers forever by default** (endless spinner).
 - **`dart format` on a whole directory reformats unrelated files** → format
   only files you touched.
@@ -303,7 +304,9 @@ current major. §1 is done.
    problem prints the exact fix; exit 1 on problems. Tried on hn_reader
    (running: all ✅), notes_app, firebase_app/hive_app/plain_app (missing
    network.client). e2e runs it against the fixture (SDK + Dio registered,
-   MCP config) and a zero-code app. `init` does not add the entitlement.
+   MCP config) and a zero-code app. `init` adds the entitlement to both
+   macOS entitlement files when the project has a macOS runner (an existing
+   key, even `false`, is left alone); none → nothing to do.
 
 ## 4. Token efficiency (agents pay for every tool and every byte)
 

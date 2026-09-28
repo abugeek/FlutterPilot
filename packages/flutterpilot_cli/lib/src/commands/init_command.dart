@@ -221,6 +221,10 @@ class InitCommand extends Command<void> {
       if (withImport != content) await mainFile.writeAsString(withImport);
     }
 
+    for (final line in addMacosNetworkClient(rootPath)) {
+      stdout.writeln(line);
+    }
+
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
@@ -243,6 +247,56 @@ class InitCommand extends Command<void> {
       '  ${detected.isEmpty ? 3 : 4}. flutterpilot mcp install (connects Claude Code / '
       'Cursor / VS Code), then flutterpilot dev (runs the app so the server finds it).',
     );
+  }
+
+  /// macOS apps run sandboxed: without `com.apple.security.network.client`
+  /// every HTTP request fails with errno = 1. Adds it to both entitlement
+  /// files when the project has a macOS runner; returns lines for the user.
+  static List<String> addMacosNetworkClient(String rootPath) {
+    final runner = Directory(p.join(rootPath, 'macos', 'Runner'));
+    if (!runner.existsSync()) return const [];
+    final out = <String>[];
+    for (final name in ['DebugProfile', 'Release']) {
+      final file = File(p.join(runner.path, '$name.entitlements'));
+      final rel = 'macos/Runner/$name.entitlements';
+      if (!file.existsSync()) {
+        out.add(
+          '⚠️ No $rel: add com.apple.security.network.client to your '
+          'macOS entitlements so HTTP works.',
+        );
+        continue;
+      }
+      final content = file.readAsStringSync();
+      final patched = withNetworkClient(content);
+      if (patched == null) {
+        out.add(
+          '⚠️ Could not edit $rel: add <key>com.apple.security.'
+          'network.client</key><true/> yourself so HTTP works.',
+        );
+      } else if (patched != content) {
+        file.writeAsStringSync(patched);
+        out.add(
+          '✅ Added the network.client entitlement to $rel '
+          '(macOS HTTP needs it).',
+        );
+      }
+    }
+    return out;
+  }
+
+  /// [plist] with `com.apple.security.network.client` set to true before
+  /// the top-level `</dict>`; unchanged if the key is there (even false:
+  /// that's the developer's choice); null if there's no `</dict>`.
+  static String? withNetworkClient(String plist) {
+    const key = 'com.apple.security.network.client';
+    if (plist.contains('<key>$key</key>')) return plist;
+    final end = plist.lastIndexOf('</dict>');
+    if (end < 0) return null;
+    // Match the file's indentation (Flutter's template uses a tab).
+    final indent =
+        RegExp(r'\n([ \t]+)<key>').firstMatch(plist)?.group(1) ?? '\t';
+    return '${plist.substring(0, end)}$indent<key>$key</key>\n'
+        '$indent<true/>\n${plist.substring(end)}';
   }
 
   /// Next step 2: what init did about route tracking, and what's left.
