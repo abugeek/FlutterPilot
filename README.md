@@ -84,7 +84,19 @@ Use absolute paths; `-p` is your Flutter app's root:
 ```
 - Add `"--allow-destructive"` to `args` to allow state/storage writes.
 - Without compiling: `"command": "/path/to/flutter/bin/dart", "args": ["run", "/ABSOLUTE/PATH/.../bin/flutterpilot_server.dart", "-p", "..."]` (slower start).
-- VS Code (`.vscode/mcp.json`) uses `"servers"` instead of `"mcpServers"` and `"type": "stdio"`.
+- VS Code (Copilot agent mode) reads `.vscode/mcp.json` in the app's folder,
+  with `"servers"` and `"type": "stdio"`:
+  ```json
+  {
+    "servers": {
+      "flutterpilot": {
+        "type": "stdio",
+        "command": "/ABSOLUTE/PATH/FlutterPilot/packages/flutterpilot_server/build/flutterpilot_server",
+        "args": ["-p", "${workspaceFolder}"]
+      }
+    }
+  }
+  ```
 - Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../build/flutterpilot_server -p /ABSOLUTE/PATH/your_flutter_app`
 - Run the app with `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` (or `flutterpilot dev`) so the server finds it.
 - Rebuild the executable after pulling server changes.

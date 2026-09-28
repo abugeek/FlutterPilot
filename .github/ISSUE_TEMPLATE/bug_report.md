@@ -17,7 +17,6 @@ Which package is affected?
 - [ ] flutterpilot_dio
 - [ ] flutterpilot_drift
 - [ ] flutterpilot_hive
-- [ ] flutterpilot_vscode
 
 ## Steps to Reproduce
 1. 

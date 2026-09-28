@@ -217,7 +217,13 @@ current major. §1 is done.
    shows platform / app / SDK / "not running"; a failed switch stays on the
    current device. e2e checks register/list/switch/refusals. Left: running
    the same flow on several devices at once (§8 "Parallel devices").
-5. **VS Code extension** (`packages/flutterpilot_vscode`) untested — test or remove.
+5. **VS Code extension:** removed. It had never worked: it sent `tools/call`
+   without the MCP `initialize` handshake (every call rejected), found the
+   server via a path that exists only inside this repo, polled tools that
+   don't exist (`get_bloc_state`), had no icon and no tests, and ran a
+   private server the AI agent never talks to. VS Code agents use the
+   `.vscode/mcp.json` config in the README; §3.2 (`flutterpilot mcp
+   install`) should write it. Not yet verified inside VS Code itself.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
    plugin-range check on Linux; `e2e_test.dart` on macOS, iOS simulator and
    Chrome (macos runner) and Android emulator (Linux + KVM); weekly cron.

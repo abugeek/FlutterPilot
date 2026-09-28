@@ -7,7 +7,6 @@ Thank you for your interest in contributing to FlutterPilot! This guide will hel
 - [Flutter SDK](https://flutter.dev/docs/get-started/install) >= 3.0.0
 - [Dart SDK](https://dart.dev/get-dart) >= 3.11.0
 - [Melos](https://melos.invertase.dev/) for monorepo management
-- [Node.js](https://nodejs.org/) (for VS Code extension development)
 
 ## Getting Started
 
@@ -46,7 +45,6 @@ FlutterPilot/
 ├── packages/
 │   ├── flutterpilot_sdk/         # Core SDK (in-app, zero deps)
 │   ├── flutterpilot_server/      # MCP server bridge
-│   ├── flutterpilot_vscode/      # VS Code extension
 │   └── plugins/
 │       ├── flutterpilot_bloc/    # Bloc state inspector
 │       ├── flutterpilot_dio/     # Dio network inspector
