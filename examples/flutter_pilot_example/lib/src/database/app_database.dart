@@ -12,19 +12,19 @@ part 'app_database.g.dart';
 // ---------------------------------------------------------------------------
 
 /// A simple notes table so AI agents can demo `exec_sql_query` and
-/// `exec_sql_query` against a real Drift database.
+/// list its tables (`sqlite_master`) against a real Drift database.
 class Notes extends Table {
-  IntColumn get id => integer().autoIncrement();
-  TextColumn get title => text().withLength(min: 1, max: 200);
-  TextColumn get body => text();
-  DateTimeColumn get createdAt => dateTime().withDefault();
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text().withLength(min: 1, max: 200)();
+  TextColumn get body => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get pinned => boolean().withDefault(const Constant(false))();
 }
 
 /// Tags allow AI agents to run JOIN queries, showing richer SQL support.
 class Tags extends Table {
-  IntColumn get id => integer().autoIncrement();
-  TextColumn get name => text().withLength(min: 1, max: 50);
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text().withLength(min: 1, max: 50)();
 }
 
 /// Many-to-many join table.
