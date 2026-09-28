@@ -38,8 +38,9 @@ class _TestingScreenState extends State<TestingScreen> {
               desc: 'Save screenshot as named baseline',
               widgetKey: const Key('save_baseline_button'),
               color: Colors.green,
-              onTap: () =>
-                  _addLog('compare_screenshot(name: testing_screen, save: true)'),
+              onTap: () => _addLog(
+                'compare_screenshot(name: testing_screen, save: true)',
+              ),
             ),
             _toolCard(
               icon: Icons.compare,
@@ -143,7 +144,8 @@ class _TestingScreenState extends State<TestingScreen> {
                         ),
                         ElevatedButton(
                           key: const Key('pump_frames_button'),
-                          onPressed: () => _addLog('wait_for(frames: count: 10)'),
+                          onPressed: () =>
+                              _addLog('wait_for(frames: count: 10)'),
                           child: const Text('wait_for(frames)'),
                         ),
                       ],
