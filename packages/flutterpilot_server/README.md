@@ -201,6 +201,13 @@ The server listens to the VM service. If your app crashes:
 3. Connected AI agent sees notification
 4. AI can analyze and apply fixes via hot reload
 
+If the app dies in native code (an Objective-C, Swift or Kotlin exception,
+or a signal), the next tool's error says so, with the exception message.
+About 20 s later, once the OS has written the crash report, it adds the
+frames where the exception was thrown and the report's path. This works for
+macOS, the iOS simulator and Android (`adb`); a physical iPhone keeps its
+crash reports.
+
 ---
 
 ## Troubleshooting

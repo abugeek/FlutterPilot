@@ -395,6 +395,15 @@ keyboard forced on, and in Chrome:
 | 230 | contrast missed after a theme switch | ❌→fixed | with a grey 400 subtitle (tried, then reverted), `audit_screen_health` 90 ms after `set_app_settings(theme: "light")` reported nothing: `AnimatedTheme` fades for 200 ms and the pixels were still dark. The audit now waits up to 1 s for animations, then reports `"74 pts · …" contrast 1.79:1 (#bdbdbd on #fff8f6) … Code: Text lib/ui/story_tile.dart:33:13`. The real app's colors pass in light and dark |
 | 231 | contrast lines per row | ❌→fixed | one line per list row; now one per code and colors (`… and 4 more like it`); the row over the tinted bar stays separate (1.61:1 on #fceae5). Reading order: 27 controls top to bottom, no jumps |
 
+## Native crash reason (ROADMAP §5.8), HN reader on macOS and the iOS simulator
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 232 | uncaught NSException | ✅ | raised in the running, unmodified app through lldb (`[[NSOperationQueue mainQueue] addOperationWithBlock:^{ [NSException raise:…] }]`, then detach). The next `get_errors`, 0.1–1.2 s later: "The app crashed in native code. *** Terminating app due to uncaught exception 'FPFieldTest', reason: '…'"; after the report: `EXC_CRASH (SIGABRT)`, frames, report path. Same on the iOS simulator (hn_reader on iPhone 17; the message from the simulator's log via `simctl spawn`). Frames there are only `main`: the block was lldb's; a real thrower's frames come first (checked on #161's Firebase report: `+[FIRInstallations validateAPIKey:] FIRInstallations.m:162`). Reproducing #161 itself needed editing firebase_app's key; not done |
+| 233 | report takes ~20 s | ❌→fixed | the first version waited 12 s for the `.ips` and found nothing: macOS wrote it 22 s after the crash (2 s on another run), and a normal exit also cost 11 s. Now the kernel's `name[pid] Corpse allowed` log line (only for crashes, ~1 s to query) answers at once; frames follow when the report is in. SIGTERM (normal exit): no note, 3 s once |
+| 234 | lost before onDone | ❌→fixed | in e2e a tool call hit the dead socket before the connection's `onDone`, which then skipped (not the live connection any more): no crash note. The watch now starts in `_scheduleReconnect`, however the loss was noticed |
+| 235 | not covered | ⚠️ gap | Android (`adb logcat -b crash`) unit-tested only: no emulator or adb here. A physical iPhone keeps its reports (`devicectl`). An app that crashes before FlutterPilot connected (Firebase in `main()` can be that fast) has no pid to match |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

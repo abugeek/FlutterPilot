@@ -66,6 +66,7 @@ When interacting with a Flutter app using FlutterPilot:
 
 ### 8. Crash Fix Loop
 1. When a crash occurs, call `get_errors` (`report: true` for the full crash report) — it includes the exception, your source frame (file:line) and, for layout errors, the culprit widget's location.
+   If the app died in native code (an Objective-C/Swift/Kotlin exception or a signal; macOS, iOS simulator, Android), any tool's "not running" error says so, with the exception message, then (the OS writes the report ~20 s later) the frames where it was thrown and the report path.
 2. Use `get_flight_log` for the event timeline leading up to it.
 3. Fix the Dart source, then `hot_reload` (`restart: true` for main()/static initializer/provider-definition changes).
 4. Reproduce the triggering steps and verify with `get_errors` and `assert_widget` (§3).

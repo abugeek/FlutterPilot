@@ -408,17 +408,19 @@ Highest value first. Each should answer a *why*, not just dump data.
    pixels (text color from its style when opaque; 4.5:1, large 3:1); the
    screen reader order of the controls and where it jumps back up.
    Findings #228–231.
-8. **Native crash reason:** when the app dies outside Dart (an Objective-C,
-   Swift or Kotlin exception — e.g. Firebase's iOS SDK aborting on a
-   malformed API key, findings #161), the agent only sees "not running";
-   the reason is in the OS log. `get_native_crash_log` returns the last
-   uncaught native exception and its first frames: iOS simulator via
-   `xcrun simctl spawn <udid> log show` (the server already knows the udid
-   and bundle id, see `native_open_app`), macOS via
-   `~/Library/Logs/DiagnosticReports`, Android via `adb logcat -b crash`,
-   physical iPhone via `devicectl` crash reports. Also: when the connection
-   drops, check for a fresh crash and say so in the error instead of
-   "not running".
+8. ~~**Native crash reason**~~ — done (2026-09-29), with no new tool: when
+   the connection drops, the next tool's error says whether the app
+   crashed and why. Apple (macOS apps, iOS simulator apps): the kernel logs
+   a crash at once (`name[pid] Corpse allowed`; a normal exit has none),
+   the uncaught NSException message comes from the app's log (`log show`,
+   in the simulator via `simctl spawn`), and ~20 s later the `.ips` report
+   in `~/Library/Logs/DiagnosticReports` adds the kind, the frames where it
+   was thrown (system frames on top skipped) and the report path. Android:
+   `adb logcat -b crash` (Kotlin/Java `FATAL EXCEPTION` or a native signal
+   with its abort message), unit-tested only (no emulator here). Not
+   covered: a physical iPhone (reports stay on the phone; `devicectl`), and
+   an app that dies before FlutterPilot connected (no pid to match).
+   Findings #232–235.
 
 ## 6. Test generation done right
 

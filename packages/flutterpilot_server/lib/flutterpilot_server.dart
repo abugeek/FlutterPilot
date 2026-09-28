@@ -17,6 +17,7 @@ import 'src/frame_timeline.dart';
 import 'src/http_detail.dart';
 import 'src/image_budget.dart';
 import 'src/memory_leaks.dart';
+import 'src/native_crash.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
@@ -50,6 +51,12 @@ abstract class _FlutterPilotServerBase {
   /// (profile_action).
   final Map<String, ToolFunction> _toolCallbacks = {};
 
+  /// Where the connected app runs, to find its crash report if it dies.
+  CrashTarget? _crashTarget;
+
+  /// Started when the connection drops; cleared when an app connects.
+  NativeCrashWatch? _nativeCrash;
+
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
   /// "Tool execution failed." and log the reason where the agent can't see it.
@@ -65,6 +72,24 @@ abstract class _FlutterPilotServerBase {
       description: description,
       inputSchema: inputSchema,
       callback: callback,
+    );
+  }
+
+  /// A tool failing because the app is gone says why, when the OS
+  /// recorded a native crash (ROADMAP §5.8).
+  Future<CallToolResult> _withNativeCrash(CallToolResult result) async {
+    final crash = await _nativeCrash?.current();
+    if (crash == null) return result;
+    return CallToolResult(
+      isError: true,
+      content: [
+        ...result.content,
+        TextContent(
+          text:
+              '${crash.describe()}\nFix the cause, then start the app again '
+              '(flutter run); FlutterPilot reconnects by itself.',
+        ),
+      ],
     );
   }
 
@@ -95,7 +120,8 @@ abstract class _FlutterPilotServerBase {
         );
       }
       try {
-        final result = await callback(args, extra);
+        var result = await callback(args, extra);
+        if (result.isError) result = await _withNativeCrash(result);
         final images = result.content.whereType<ImageContent>();
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
@@ -525,9 +551,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (found != null) _refreshToolVisibility();
     });
     try {
+      _nativeCrash = null;
       final vm = await _vmService!.getVM();
       activeContext.operatingSystem = vm.operatingSystem;
       await _updateNativeToolVisibility(vm.operatingSystem, pid: vm.pid);
+      _crashTarget = vm.pid == null || vm.operatingSystem == null
+          ? null
+          : CrashTarget(
+              pid: vm.pid!,
+              operatingSystem: vm.operatingSystem!,
+              since: DateTime.now(),
+              simulatorUdid: _simulatorApp?.udid,
+            );
     } catch (_) {
       // Visibility is best-effort; the tools still explain themselves.
     }
@@ -582,6 +617,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   void _scheduleReconnect() {
+    // However the loss was noticed (the socket closing, or a call failing
+    // first), find out whether the app crashed; once per connection.
+    final target = _crashTarget;
+    if (target != null && _nativeCrash == null && !_disposed) {
+      _nativeCrash = NativeCrashWatch(target);
+    }
     if (_isReconnecting || _disposed) return;
     _isReconnecting = true;
     _vmService = null;

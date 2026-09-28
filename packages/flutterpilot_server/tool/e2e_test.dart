@@ -1097,6 +1097,25 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // ROADMAP §5.8: a native crash is reported with its reason, not just
+    // "not running" (macOS files a report for a SIGABRT from outside too).
+    final pgrep = device == 'macos'
+        ? await Process.run('pgrep', ['-f', 'fixture.app/Contents/MacOS/'])
+        : null;
+    final pid = int.tryParse('${pgrep?.stdout}'.trim().split('\n').first);
+    if (pid != null) {
+      Process.killPid(pid, ProcessSignal.sigabrt);
+      await check(
+        'a native crash is reported when the app dies',
+        'get_errors',
+        {},
+        ['The app crashed in native code', 'call get_errors again'],
+        true,
+        const Duration(seconds: 20),
+      );
+      appId = null; // nothing left to stop
+    }
+
     if (appId != null) {
       flutter.stdin.writeln(
         jsonEncode([
