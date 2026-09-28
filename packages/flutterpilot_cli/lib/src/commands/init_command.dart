@@ -74,6 +74,26 @@ const appPlugins = {
   ),
 };
 
+/// The class a plugin's wiring line uses (`DioPilotInterceptor`): once it
+/// appears in the app's code, the plugin is wired.
+String? wiringSymbol(String wiring) =>
+    RegExp(r'\b[A-Z]\w*Pilot\w*\b').firstMatch(wiring)?[0];
+
+/// All of the app's own Dart code (lib/), concatenated.
+String appSources(String project) {
+  final lib = Directory(p.join(project, 'lib'));
+  if (!lib.existsSync()) return '';
+  final buffer = StringBuffer();
+  for (final f in lib.listSync(recursive: true)) {
+    if (f is File && f.path.endsWith('.dart')) {
+      try {
+        buffer.writeln(f.readAsStringSync());
+      } catch (_) {}
+    }
+  }
+  return buffer.toString();
+}
+
 /// Command to initialize FlutterPilot in an existing Flutter project.
 class InitCommand extends Command<void> {
   @override
@@ -178,8 +198,12 @@ class InitCommand extends Command<void> {
         ], source('flutterpilot_sdk'));
       }
     }
-    await pubspecFile.writeAsString(editor.toString());
-    stdout.writeln('✅ Updated pubspec.yaml.');
+    if (editor.toString() == pubspecContent) {
+      stdout.writeln('ℹ️ pubspec.yaml already has FlutterPilot.');
+    } else {
+      await pubspecFile.writeAsString(editor.toString());
+      stdout.writeln('✅ Updated pubspec.yaml.');
+    }
 
     final mainFile = File(p.join(rootPath, 'lib', 'main.dart'));
     var trackerAdded = false;
@@ -235,13 +259,23 @@ class InitCommand extends Command<void> {
         goRouter: detected.containsKey('flutterpilot_gorouter'),
       ),
     );
-    if (detected.isNotEmpty) {
+    // Only the plugins the app doesn't use yet (a re-run lists none).
+    final sources = appSources(rootPath);
+    final unwired = {
+      for (final MapEntry(key: plugin, value: (_, line)) in detected.entries)
+        if (!sources.contains(wiringSymbol(line) ?? line)) plugin: line,
+    };
+    if (unwired.isNotEmpty) {
       stdout.writeln(
         '  3. Wire each plugin (import package:<plugin>/<plugin>.dart) — they do nothing until you do:',
       );
-      for (final MapEntry(key: plugin, value: (_, line)) in detected.entries) {
+      for (final MapEntry(key: plugin, value: line) in unwired.entries) {
         stdout.writeln('       $plugin:  $line');
       }
+    } else if (detected.isNotEmpty) {
+      stdout.writeln(
+        '  3. Plugins: already wired (${detected.keys.join(', ')}).',
+      );
     }
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutterpilot mcp install (connects Claude Code / '
