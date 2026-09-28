@@ -319,7 +319,7 @@ marquee), then hn_reader, driven on macOS. Before → after:
 | 198 | looping text (marquee) | ✅ | ignored after moving 600 ms, remembered for later actions: no-op tap 1.3 s the first time, then ~0.75 s; navigation unaffected (the marquee is covered) |
 | 199 | hot restart | ❌→fixed | tools failed "not registered" for a moment after hot_reload(restart) returned; it now waits for the new isolate's first frame and FlutterPilot's extensions (~600 ms) |
 | 200 | request in flight | ✅ new | hn_reader's chips and story page answer while a spinner shows; the response now says "A progress indicator is showing: results may still be loading" |
-| 201 | seen in passing | → tasks | `Tooltip['Menu']` picked "Open navigation menu"; go_router app without the plugin reports route "Unknown"; drawer scrim listed as one element with all screen text; not-found hints list `_ScaffoldSlot.body` |
+| 201 | seen in passing | → tasks | `Tooltip['Menu']` picked "Open navigation menu" (fixed: selector exact values beat substrings, an icon's name ranks below real labels, IconButtonTheme is not a button; on every platform but Android plain "Menu" hit the drawer's menu icon); go_router app without the plugin reports route "Unknown"; drawer scrim listed as one element with all screen text; not-found hints list `_ScaffoldSlot.body` |
 
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
