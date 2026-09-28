@@ -746,7 +746,8 @@ Future<void> main(List<String> args) async {
         'a tap that does nothing says so',
         'tap_widget',
         {'key': 'card'},
-        ['Nothing changed in the 0.5 s after it'],
+        // The quiet time is measured: 0.6 s on a slow runner.
+        ['Nothing changed in the', 's after it either'],
       );
 
       final main = File('$app/lib/main.dart');
