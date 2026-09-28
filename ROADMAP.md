@@ -279,9 +279,17 @@ current major. §1 is done.
    **Left:** a plain `flutter run` / IDE launch writes no URI file and can't
    be found. Next step: the Dart Tooling Daemon (IDEs run one; apps register
    there via `ConnectedApp`), which needs its URI (VS Code/IntelliJ expose it).
-2. **`flutterpilot mcp install`**: writes the MCP config for Claude Code /
-   Cursor / VS Code for the current project (the exact `claude mcp add ...`
-   line with `-p`), and `flutterpilot dev` prints it.
+2. **`flutterpilot mcp install`:** done. In the app folder it compiles the
+   server (next to the CLI: a checkout or the `pub global activate` clone;
+   `--local`, `--no-compile` for `dart run`) and adds `flutterpilot` to
+   `.mcp.json` (Claude Code), `.cursor/mcp.json`, `.vscode/mcp.json`
+   (`${workspaceFolder}`) — the clients the project uses, or `--client`.
+   Other servers and keys are kept; a JSONC file is left alone with the
+   entry printed; reinstalling is a no-op. Prints the user-scope
+   `claude mcp add` line (no `-p`: Claude Code starts servers in the project).
+   `init` ends with it, `dev` suggests it when no config has FlutterPilot.
+   e2e starts the server exactly as `.mcp.json` says and drives the app.
+   Not yet verified inside Cursor / VS Code themselves.
 3. **Publish to pub.dev** (sdk, plugins, server, cli) with a melos release
    flow, so `init` can use hosted versions instead of git deps. Needs
    `dependency_overrides` removal and version constraints between packages.

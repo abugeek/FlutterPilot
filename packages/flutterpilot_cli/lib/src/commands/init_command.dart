@@ -239,7 +239,8 @@ class InitCommand extends Command<void> {
       }
     }
     stdout.writeln(
-      '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
+      '  ${detected.isEmpty ? 3 : 4}. flutterpilot mcp install (connects Claude Code / '
+      'Cursor / VS Code), then flutterpilot dev (runs the app so the server finds it).',
     );
   }
 

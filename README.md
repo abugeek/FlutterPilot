@@ -21,8 +21,13 @@ dart pub global activate --source path ./packages/flutterpilot_cli
 #    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
 flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPilot
 
-# 3. Run the app, then point your agent's MCP config at the server:
-flutter run
+# 3. Add the FlutterPilot server to your agent's MCP config (.mcp.json for
+#    Claude Code, .cursor/mcp.json, .vscode/mcp.json — the ones the project
+#    uses; --client to choose). Compiles the server; other servers are kept.
+flutterpilot mcp install
+
+# 4. Run the app so the server finds it:
+flutterpilot dev
 ```
 
 > Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
@@ -65,6 +70,11 @@ void main() {
 ---
 
 ## 🔌 MCP Setup (any IDE)
+
+`flutterpilot mcp install` (in the app folder) does all of this for Claude
+Code, Cursor and VS Code and prints the `claude mcp add` line for user scope.
+Run it again after pulling FlutterPilot changes — it recompiles the server.
+By hand:
 
 Build the server once (fast startup, no `dart` on the IDE's PATH needed):
 ```bash
