@@ -118,7 +118,7 @@ class DoctorCommand extends Command<void> {
         if (pubspec is Map && pubspec[section] is Map)
           ...(pubspec[section] as Map).keys.cast<String>(),
     };
-    final source = _dartSources(project);
+    final source = appSources(project);
 
     // SDK
     if (!deps.contains('flutterpilot_sdk')) {
@@ -157,7 +157,7 @@ class DoctorCommand extends Command<void> {
         );
         continue;
       }
-      final symbol = RegExp(r'\b[A-Z]\w*Pilot\w*\b').firstMatch(wiring)?[0];
+      final symbol = wiringSymbol(wiring);
       if (symbol != null && !source.contains(symbol)) {
         checks.add(
           DoctorCheck.fail(
@@ -342,21 +342,6 @@ class DoctorCommand extends Command<void> {
     } catch (_) {
       return {};
     }
-  }
-
-  /// All of the app's own Dart code (lib/), concatenated.
-  static String _dartSources(String project) {
-    final lib = Directory(p.join(project, 'lib'));
-    if (!lib.existsSync()) return '';
-    final buffer = StringBuffer();
-    for (final f in lib.listSync(recursive: true)) {
-      if (f is File && f.path.endsWith('.dart')) {
-        try {
-          buffer.writeln(f.readAsStringSync());
-        } catch (_) {}
-      }
-    }
-    return buffer.toString();
   }
 
   static bool _entitled(String project, String file, String key) {

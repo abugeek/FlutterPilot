@@ -34,6 +34,34 @@ Future<void> main() async {
 
     tearDown(() => tempDir.deleteSync(recursive: true));
 
+    test('a second run changes nothing and asks for no wiring done', () async {
+      Future<String> initOutput() async {
+        final out = StringBuffer();
+        final sink = _Capture(out);
+        await IOOverrides.runZoned(
+          () => runner.run(['init', '-p', tempDir.path]),
+          stdout: () => sink,
+        );
+        return out.toString();
+      }
+
+      final first = await initOutput();
+      expect(first, contains('✅ Updated pubspec.yaml.'));
+      expect(first, contains('flutterpilot_dio:  DioPilotInterceptor'));
+      final main = File(p.join(tempDir.path, 'lib', 'main.dart'));
+      main.writeAsStringSync(
+        '${main.readAsStringSync()}\n// DioPilotInterceptor.register();\n',
+      );
+      final pubspec = File(p.join(tempDir.path, 'pubspec.yaml'));
+      final before = pubspec.readAsStringSync();
+      final second = await initOutput();
+      expect(pubspec.readAsStringSync(), before);
+      expect(second, contains('pubspec.yaml already has FlutterPilot'));
+      expect(second, isNot(contains('flutterpilot_dio:  ')));
+      // Riverpod is still not wired: it is still listed.
+      expect(second, contains('flutterpilot_riverpod:  '));
+    });
+
     test('adds the Firebase plugin for Auth/Firestore, not firebase_core '
         'alone', () async {
       Future<YamlMap> depsFor(String firebaseDeps) async {
@@ -358,4 +386,16 @@ Future<void> main() async {
       expect(Directory(p.join(app.path, 'macos')).existsSync(), isFalse);
     });
   });
+}
+
+/// Collects what `init` prints.
+class _Capture implements Stdout {
+  _Capture(this._out);
+  final StringBuffer _out;
+  @override
+  void writeln([Object? o = '']) => _out.writeln(o);
+  @override
+  void write(Object? o) => _out.write(o);
+  @override
+  dynamic noSuchMethod(Invocation i) => null;
 }
