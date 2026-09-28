@@ -21,6 +21,8 @@ import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
 import 'src/zero_code.dart';
 
+export 'src/cli.dart' show runFlutterPilotServer;
+
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
 part 'src/tools/devtools_tools.dart';

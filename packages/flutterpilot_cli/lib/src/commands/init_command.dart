@@ -4,6 +4,8 @@ import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 
+import '../version.dart';
+
 const _repoUrl = 'https://github.com/abugeek/FlutterPilot.git';
 
 /// App dependency -> (FlutterPilot plugin, wiring line the user must add).
@@ -101,6 +103,15 @@ class InitCommand extends Command<void> {
         'ref',
         help: 'Git ref (branch, tag, or commit) to pin when using git.',
         defaultsTo: 'main',
+      )
+      ..addOption(
+        'source',
+        allowed: ['auto', 'hosted', 'git'],
+        defaultsTo: 'auto',
+        help:
+            'Where the packages come from. auto: pub.dev once FlutterPilot '
+            'is published there (this release, ^$flutterpilotVersion), else '
+            'git. --ref implies git, --local a path.',
       );
   }
 
@@ -127,7 +138,23 @@ class InitCommand extends Command<void> {
       );
     }
 
-    // Packages are not on pub.dev yet: point at git, or a local checkout.
+    final hosted =
+        local == null &&
+        switch (argResults?['source'] as String? ?? 'auto') {
+          'hosted' => true,
+          'git' => false,
+          _ => !(argResults?.wasParsed('ref') ?? false) && await onPubDev(),
+        };
+    stdout.writeln(
+      local != null
+          ? '📦 Using the FlutterPilot checkout at $local.'
+          : hosted
+          ? '📦 Using pub.dev (FlutterPilot ^$flutterpilotVersion).'
+          : '📦 Using git ($ref): FlutterPilot is not on pub.dev yet '
+                '(--source hosted to force it).',
+    );
+
+    // A local checkout, this release from pub.dev, or git.
     Object source(String package) {
       final subdir = package == 'flutterpilot_sdk'
           ? 'packages/$package'
@@ -140,6 +167,7 @@ class InitCommand extends Command<void> {
           ),
         };
       }
+      if (hosted) return '^$flutterpilotVersion';
       return {
         'git': {'url': _repoUrl, 'path': subdir, 'ref': ref},
       };
@@ -164,8 +192,19 @@ class InitCommand extends Command<void> {
     for (final package in ['flutterpilot_sdk', ...detected.keys]) {
       editor.update(['dependencies', package], source(package));
     }
-    // Plugins depend on hosted flutterpilot_sdk; force them onto the same source.
-    if (detected.isNotEmpty) {
+    // Plugins depend on hosted flutterpilot_sdk; from git or a checkout,
+    // force them onto the same source. From pub.dev they already are: drop
+    // an override an earlier git init left.
+    final overrides = yaml['dependency_overrides'];
+    if (hosted) {
+      if (overrides is Map && overrides.containsKey('flutterpilot_sdk')) {
+        if (overrides.length == 1) {
+          editor.remove(['dependency_overrides']);
+        } else {
+          editor.remove(['dependency_overrides', 'flutterpilot_sdk']);
+        }
+      }
+    } else if (detected.isNotEmpty) {
       if (yaml['dependency_overrides'] == null) {
         editor.update(
           ['dependency_overrides'],
@@ -247,6 +286,24 @@ class InitCommand extends Command<void> {
       '  ${detected.isEmpty ? 3 : 4}. flutterpilot mcp install (connects Claude Code / '
       'Cursor / VS Code), then flutterpilot dev (runs the app so the server finds it).',
     );
+  }
+
+  /// Whether flutterpilot_sdk is published on pub.dev (so `init` can use
+  /// hosted versions). Offline or slow: false, and git is used.
+  static Future<bool> onPubDev() async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+    try {
+      final req = await client.getUrl(
+        Uri.parse('https://pub.dev/api/packages/flutterpilot_sdk'),
+      );
+      final res = await req.close().timeout(const Duration(seconds: 3));
+      await res.drain<void>();
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   /// macOS apps run sandboxed: without `com.apple.security.network.client`

@@ -43,7 +43,7 @@ dependencies:
   flutter:
     sdk: flutter
 $firebaseDeps''');
-        await runner.run(['init', '-p', tempDir.path]);
+        await runner.run(['init', '-p', tempDir.path, '--source', 'git']);
         final pubspec = File(p.join(tempDir.path, 'pubspec.yaml'));
         return (loadYaml(pubspec.readAsStringSync()) as YamlMap)['dependencies']
             as YamlMap;
@@ -72,10 +72,31 @@ $firebaseDeps''');
       );
     });
 
+    test('hosted: this release from pub.dev, and no sdk override', () async {
+      // An earlier git init left an override; hosted packages don't need it.
+      await runner.run(['init', '-p', tempDir.path, '--source', 'git']);
+      await runner.run(['init', '-p', tempDir.path, '--source', 'hosted']);
+      final yaml =
+          loadYaml(
+                File(p.join(tempDir.path, 'pubspec.yaml')).readAsStringSync(),
+              )
+              as YamlMap;
+      final deps = yaml['dependencies'] as YamlMap;
+      expect(deps['flutterpilot_sdk'], '^$flutterpilotVersion');
+      expect(deps['flutterpilot_dio'], '^$flutterpilotVersion');
+      expect(yaml['dependency_overrides'], isNull);
+    });
+
+    test('flutterpilotVersion matches pubspec.yaml', () {
+      final pubspec =
+          loadYaml(File('pubspec.yaml').readAsStringSync()) as YamlMap;
+      expect(flutterpilotVersion, pubspec['version']);
+    });
+
     test(
       'adds git deps for sdk + detected plugins and overrides the sdk',
       () async {
-        await runner.run(['init', '-p', tempDir.path]);
+        await runner.run(['init', '-p', tempDir.path, '--source', 'git']);
         final yaml =
             loadYaml(
                   File(p.join(tempDir.path, 'pubspec.yaml')).readAsStringSync(),
@@ -162,7 +183,7 @@ void main() {
 
         final runner = CommandRunner<void>('flutterpilot', 'CLI')
           ..addCommand(InitCommand());
-        await runner.run(['init', '-p', tempDir.path]);
+        await runner.run(['init', '-p', tempDir.path, '--source', 'git']);
 
         final mainContent = mainFile.readAsStringSync();
         expect(mainContent.contains('FlutterPilot.initialize();'), isTrue);
@@ -320,10 +341,8 @@ Future<void> main() async {
           ..createSync(recursive: true)
           ..writeAsStringSync(template);
       }
-      await (CommandRunner<void>(
-        'flutterpilot',
-        '',
-      )..addCommand(InitCommand())).run(['init', '-p', app.path]);
+      await (CommandRunner<void>('flutterpilot', '')..addCommand(InitCommand()))
+          .run(['init', '-p', app.path, '--source', 'git']);
       for (final f in ['DebugProfile', 'Release']) {
         expect(
           File(

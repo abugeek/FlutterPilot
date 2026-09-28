@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
 
+import '../version.dart';
+
 /// `flutterpilot mcp ...`: connect AI clients to the FlutterPilot server.
 class McpCommand extends Command<void> {
   @override
@@ -87,6 +89,13 @@ class McpInstallCommand extends Command<void> {
             'Compile the server to an executable (fast start; clients need '
             'no dart on PATH). --no-compile runs it with "dart run".',
       )
+      ..addOption(
+        'server-path',
+        hide: true,
+        help:
+            'Build the server from this flutterpilot_server folder the way '
+            'a pub.dev install does (tests).',
+      )
       ..addFlag(
         'allow-destructive',
         negatable: false,
@@ -105,7 +114,12 @@ class McpInstallCommand extends Command<void> {
         usage,
       );
     }
-    final serverDir = await _serverPackage(argResults!['local'] as String?);
+    final serverPath = argResults!['server-path'] as String?;
+    final serverDir =
+        (serverPath == null
+            ? await _serverPackage(argResults!['local'] as String?)
+            : null) ??
+        _hostPackage(serverPath);
     final chosen = argResults!['client'] as List<String>;
     final clients = chosen.isNotEmpty
         ? [for (final c in chosen) McpClient.values.byName(c)]
@@ -113,6 +127,7 @@ class McpInstallCommand extends Command<void> {
 
     final ServerLaunch launch;
     try {
+      await _resolve(serverDir);
       launch = argResults!['compile'] as bool
           ? await _compile(serverDir)
           : (
@@ -242,8 +257,9 @@ class McpInstallCommand extends Command<void> {
   }
 
   /// The flutterpilot_server package: from --local, or next to this CLI's
-  /// own package (a checkout, or the clone `pub global activate` made).
-  static Future<String> _serverPackage(String? local) async {
+  /// own package (a checkout, or the clone `pub global activate` made);
+  /// null when the CLI came from pub.dev and has no server beside it.
+  static Future<String?> _serverPackage(String? local) async {
     String dir;
     if (local != null) {
       dir = p.join(p.absolute(local), 'packages', 'flutterpilot_server');
@@ -251,15 +267,13 @@ class McpInstallCommand extends Command<void> {
       final lib = await Isolate.resolvePackageUri(
         Uri.parse('package:flutterpilot_cli/flutterpilot_cli.dart'),
       );
-      if (lib == null) {
-        throw UsageException(
-          "Can't tell where this CLI is installed; pass --local <FlutterPilot checkout>.",
-          '',
-        );
-      }
+      if (lib == null) return null;
       dir = p.normalize(
         p.join(p.dirname(lib.toFilePath()), '..', '..', 'flutterpilot_server'),
       );
+      if (!File(p.join(dir, 'bin', 'flutterpilot_server.dart')).existsSync()) {
+        return null;
+      }
     }
     if (!File(p.join(dir, 'bin', 'flutterpilot_server.dart')).existsSync()) {
       throw UsageException(
@@ -270,28 +284,68 @@ class McpInstallCommand extends Command<void> {
     return dir;
   }
 
+  /// Where a pub.dev install keeps the server it builds:
+  /// `~/.flutterpilot` (or `$FLUTTERPILOT_HOME`).
+  static String get homeDir {
+    final env = Platform.environment;
+    return env['FLUTTERPILOT_HOME'] ??
+        p.join(env['HOME'] ?? env['USERPROFILE'] ?? '.', '.flutterpilot');
+  }
+
+  /// A small package depending on flutterpilot_server (this release from
+  /// pub.dev, or [serverPath]) whose executable is the server — for a CLI
+  /// installed from pub.dev, which has no server beside it.
+  static String _hostPackage(String? serverPath) {
+    final dir = p.join(homeDir, 'server');
+    final dependency = serverPath == null
+        ? '^$flutterpilotVersion'
+        : '\n    path: ${jsonEncode(p.absolute(serverPath))}';
+    File(p.join(dir, 'pubspec.yaml'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        'name: flutterpilot_server_host\n'
+        'publish_to: none\n'
+        'environment:\n  sdk: ^3.11.0\n'
+        'dependencies:\n  flutterpilot_server: $dependency\n',
+      );
+    File(p.join(dir, 'bin', 'flutterpilot_server.dart'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        "import 'package:flutterpilot_server/flutterpilot_server.dart';\n\n"
+        'Future<void> main(List<String> args) => runFlutterPilotServer(args);\n',
+      );
+    // Its pubspec may name a new version: resolve again.
+    final config = File(p.join(dir, '.dart_tool', 'package_config.json'));
+    if (config.existsSync()) config.deleteSync();
+    return dir;
+  }
+
   /// Compiles the server to `build/flutterpilot_server` — again on every
   /// install, so an update never leaves a stale executable.
-  static Future<ServerLaunch> _compile(String serverDir) async {
+  static Future<void> _dart(String dir, List<String> args) async {
     final dart = Platform.resolvedExecutable;
-    Future<void> sh(List<String> args) async {
-      final r = await Process.run(dart, args, workingDirectory: serverDir);
-      if (r.exitCode != 0) {
-        throw ProcessException(
-          dart,
-          args,
-          'dart ${args.join(' ')} failed in $serverDir:\n${r.stdout}${r.stderr}',
-          r.exitCode,
-        );
-      }
+    final r = await Process.run(dart, args, workingDirectory: dir);
+    if (r.exitCode != 0) {
+      throw ProcessException(
+        dart,
+        args,
+        'dart ${args.join(' ')} failed in $dir:\n${r.stdout}${r.stderr}',
+        r.exitCode,
+      );
     }
+  }
 
+  /// Fetches the server's dependencies if they aren't yet.
+  static Future<void> _resolve(String serverDir) async {
     if (!File(
       p.join(serverDir, '.dart_tool', 'package_config.json'),
     ).existsSync()) {
       stdout.writeln('Fetching server dependencies…');
-      await sh(['pub', 'get']);
+      await _dart(serverDir, ['pub', 'get']);
     }
+  }
+
+  static Future<ServerLaunch> _compile(String serverDir) async {
     final exe = p.join(
       serverDir,
       'build',
@@ -299,7 +353,7 @@ class McpInstallCommand extends Command<void> {
     );
     Directory(p.dirname(exe)).createSync(recursive: true);
     stdout.writeln('Compiling the FlutterPilot server (about a minute)…');
-    await sh([
+    await _dart(serverDir, [
       'compile',
       'exe',
       p.join('bin', 'flutterpilot_server.dart'),

@@ -50,6 +50,51 @@ void main() {
     expect(vscode['args'], ['run', serverScript, '-p', r'${workspaceFolder}']);
   });
 
+  test('without a server beside the CLI, builds one from a package that '
+      'depends on flutterpilot_server', () async {
+    final home = Directory.systemTemp.createTempSync('fp_home_');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final serverPath = p.join(repo, 'packages', 'flutterpilot_server');
+    final r = await Process.run(
+      Platform.resolvedExecutable,
+      [
+        'run',
+        'bin/flutterpilot.dart',
+        'mcp',
+        'install',
+        '-p',
+        app.path,
+        '--server-path',
+        serverPath,
+        '--no-compile',
+        '-c',
+        'claude',
+      ],
+      environment: {'FLUTTERPILOT_HOME': home.path},
+    );
+    expect(r.exitCode, 0, reason: '${r.stdout}${r.stderr}');
+    final host = p.join(home.path, 'server');
+    expect(
+      File(p.join(host, 'pubspec.yaml')).readAsStringSync(),
+      contains(serverPath),
+    );
+    expect(
+      File(p.join(host, 'bin', 'flutterpilot_server.dart')).readAsStringSync(),
+      contains('runFlutterPilotServer(args)'),
+    );
+    // Resolved, so `dart run` works.
+    expect(
+      File(p.join(host, '.dart_tool', 'package_config.json')).existsSync(),
+      isTrue,
+    );
+    expect(read('.mcp.json')['mcpServers']['flutterpilot']['args'], [
+      'run',
+      p.join(host, 'bin', 'flutterpilot_server.dart'),
+      '-p',
+      p.normalize(app.path),
+    ]);
+  });
+
   test('defaults to the clients the project uses, else Claude Code', () {
     expect(McpInstallCommand.detectClients(app.path), [McpClient.claude]);
     Directory(p.join(app.path, '.vscode')).createSync();

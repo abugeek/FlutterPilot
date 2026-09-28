@@ -291,9 +291,19 @@ current major. §1 is done.
    `init` ends with it, `dev` suggests it when no config has FlutterPilot.
    e2e starts the server exactly as `.mcp.json` says and drives the app.
    Not yet verified inside Cursor / VS Code themselves.
-3. **Publish to pub.dev** (sdk, plugins, server, cli) with a melos release
-   flow, so `init` can use hosted versions instead of git deps. Needs
-   `dependency_overrides` removal and version constraints between packages.
+3. **Publish to pub.dev:** ready; the upload itself is the owner's step
+   (see `RELEASING.md`). All 15 packages pass `pub publish --dry-run` with
+   0 warnings (`tool/publish_check.dart`, publish order; the plugins get a
+   temporary override to the checkout's SDK until pub.dev has it). Every
+   package has a README, LICENSE and CHANGELOG, and the plugin READMEs were
+   rewritten from one table (host package, wiring line, tools). `init
+   --source auto` (the default) uses `^0.1.0` from pub.dev once
+   `flutterpilot_sdk` is there, with no dependency_overrides (it drops the
+   one a git init left), and git until then. A CLI installed from pub.dev
+   has no server beside it: `mcp install` builds one from
+   `~/.flutterpilot/server`, a package depending on `flutterpilot_server`
+   whose bin calls `runFlutterPilotServer` (the server's CLI now lives in
+   its library). All 15 names were free on pub.dev on 2026-09-28.
 4. **`flutterpilot doctor`:** done. From the files: SDK added and
    `FlutterPilot.initialize()` called; for each package with a plugin, the
    plugin added and wired (its `…Pilot…` symbol used in lib/); macOS

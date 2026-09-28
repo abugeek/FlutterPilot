@@ -13,7 +13,8 @@
 
 ### Option A: The 1-Command CLI Workflow (Recommended)
 ```bash
-# 1. Install CLI
+# 1. Install CLI (from a checkout; `dart pub global activate flutterpilot_cli`
+#    once it is on pub.dev)
 dart pub global activate --source path ./packages/flutterpilot_cli
 
 # 2. In your Flutter project root, add the SDK + matching plugins (git deps)
