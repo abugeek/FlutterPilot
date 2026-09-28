@@ -116,7 +116,7 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Rendering | `set_app_settings` (theme, locale, textScale, orientation, debug overlays) |
 | Errors & logs | `get_errors` (`report`), `get_flight_log`, `get_debug_logs` |
 | Code changes | `hot_reload` (`restart`) |
-| Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`), `get_http_profile` |
+| Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` |
 | State (Riverpod/Bloc) | `get_state`, `set_state` |
 | Network (Dio) | `get_network_logs`, `mock_http_response`, `simulate_network` |
 | Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |

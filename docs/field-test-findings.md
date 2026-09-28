@@ -369,6 +369,15 @@ keyboard forced on, and in Chrome:
 | 219 | children named RichText | ❌→fixed | the Row's children are the RichTexts Text builds; boxes are now named after the nearest app widget that owns them: `Text lib/ui/story_tile.dart:32:13 (RichText)` |
 | 220 | the suggested fix | ✅ | wrapping the Text at :32 in Flexible + ellipsis (temporarily, hot reload): the Text gets `w 0–368 Flexible(flex 1)` and no issue is reported. Reverted (the overflow stays as the known defect) |
 
+## Leak check in get_memory_details (ROADMAP §5.5), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 221 | planted leak (listener never removed) | ✅ | cycle open story → back, 5 rounds: `_ReadTrackerState lib/ui/story_screen.dart:129 +5 (1 → … → 6)`, kept alive: `_ReadTrackerState ← closure _onRead ← _List[6] ← ChangeNotifier._listeners ← static readEvents`. Reverted. ~3.4 s |
+| 222 | noise | ❌→fixed | the debug JIT's Code/ICData/Instructions and `_List` grew every round; framework classes are now listed only when they grow by the same amount each round and belong to a library |
+| 223 | path of an arbitrary instance | ❌→fixed | `getInstances` returned a live DateTime, not a leaked one, so the path pointed at Riverpod state. A confirming round now diffs instance identities; the path is taken from an instance that round created and GC kept; classes with none are dropped. It also showed a DateTime held by the SDK's `_agentActiveUntil`: instances FlutterPilot holds are reported as FlutterPilot's, not the app's |
+| 224 | clean app | ✅ | no app class leaks; `_RecognizerEventData` (+5/tap) and `GestureArenaEntry` (+1/tap) are labelled "held only by framework objects": gesture recognizers keep an entry per pointer id (Flutter never removes `_pointerToEventData` entries; `_entries`, flutter/flutter#117356) |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

@@ -57,7 +57,7 @@ When interacting with a Flutter app using FlutterPilot:
 - `profile_frame_budget` — p50/p90/p99 frame times, build vs raster split, jank count.
 - `profile_action(tool: "tap_widget", arguments: {...})` — CPU profile of one action: the app's functions by self/total time with file:line, and the hottest framework functions with the app code that called them. For frames over budget it adds build/layout/paint/raster times and which app widgets rebuilt (self time per widget type). FlutterPilot's own work is left out. Add `durationMs` to keep sampling after the action for results that load later.
 - `get_http_profile` — the DevTools Network tab.
-- `get_memory_details` — heap usage; `classes: true` for the top classes.
+- `get_memory_details` — heap usage; `classes: true` for the top classes. Leak check: `cycle: [{tool: "tap_widget", arguments: {key: "Open"}}, {tool: "press_key", arguments: {key: "back"}}], times: 5` returns the classes that keep instances from every round, where they're defined, and what keeps one alive (retaining path), and says when it's framework bookkeeping or FlutterPilot itself rather than the app.
 
 ### 7. Multi-Device Fleet Testing
 - FlutterPilot connects to one app by itself (listed as `default`). Add the others with `register_device(id: "iphone", uri: "http://127.0.0.1:PORT/TOKEN=/")` — the URI `flutter run` prints; registering the already-connected app's URI just renames it.

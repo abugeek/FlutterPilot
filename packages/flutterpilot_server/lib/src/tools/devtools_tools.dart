@@ -19,6 +19,298 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     'hot_reload',
   };
 
+  /// get_memory_details(cycle, times): runs the cycle once to warm up, then
+  /// [times] rounds with a GC'd allocation profile after each; reports the
+  /// classes that grew every round, where they are defined and, for the
+  /// app's own, what retains one.
+  Future<CallToolResult> _leakCheck(
+    Map<String, dynamic> params,
+    RequestHandlerExtra? extra,
+  ) async {
+    CallToolResult fail(String text) =>
+        CallToolResult(isError: true, content: [TextContent(text: text)]);
+    final steps = <({String tool, Map<String, dynamic> arguments})>[];
+    for (final step in (params['cycle'] as List? ?? const [])) {
+      final tool = step is Map ? step['tool'] : null;
+      if (tool is! String ||
+          !_profilableTools.contains(tool) ||
+          !_toolCallbacks.containsKey(tool)) {
+        return fail(
+          'Each cycle step is {"tool": <action tool>, "arguments": {...}}; '
+          'action tools: '
+          '${(_profilableTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}. '
+          'Got ${jsonEncode(step)}.',
+        );
+      }
+      final args = step['arguments'];
+      steps.add((
+        tool: tool,
+        arguments: args is Map ? Map<String, dynamic>.from(args) : {},
+      ));
+    }
+    if (steps.isEmpty) {
+      return fail(
+        'cycle is empty: give the steps that open something and return, '
+        'e.g. a tap then press_key back.',
+      );
+    }
+    final times = ((params['times'] as num?)?.toInt() ?? 5).clamp(2, 20);
+    final context = await _deviceContextForParameters(params);
+    final vm = context?.service;
+    if (vm == null) {
+      return fail(
+        'No active Flutter app connection. Start your app with '
+        '"flutter run" or call connect_app.',
+      );
+    }
+    final isolateId = await _uiIsolateId(vm, context?.cachedMainIsolateId);
+    if (isolateId == null) return fail('No Flutter isolate found.');
+    final classifier = await _codeClassifier(vm, isolateId);
+
+    /// Null when every step succeeded, else what failed.
+    Future<String?> round(String label) async {
+      for (var i = 0; i < steps.length; i++) {
+        final step = steps[i];
+        final res = await _toolCallbacks[step.tool]!(step.arguments, extra!);
+        if (res.isError == true) {
+          final text = res.content
+              .whereType<TextContent>()
+              .map((c) => c.text)
+              .join(' ');
+          return '$label, step ${i + 1} (${step.tool}) failed: '
+              '${text.split('\n').first}';
+        }
+      }
+      return null;
+    }
+
+    Future<Map<String, ({String name, String? library, int instances})>>
+    snapshot() async {
+      final profile = await vm.getAllocationProfile(isolateId, gc: true);
+      return {
+        for (final m in profile.members ?? const <ClassHeapStats>[])
+          if (m.classRef?.id != null)
+            m.classRef!.id!: (
+              name: m.classRef!.name ?? '?',
+              library: m.classRef!.library?.uri,
+              instances: m.instancesCurrent ?? 0,
+            ),
+      };
+    }
+
+    Future<double> heapMb() async =>
+        ((await vm.getMemoryUsage(isolateId)).heapUsage ?? 0) / (1024 * 1024);
+
+    final label = steps
+        .map((s) => '${s.tool}(${jsonEncode(s.arguments)})')
+        .join(' → ');
+    // Warm-up: first visits fill caches (images, fonts, lazy singletons).
+    final warm = await round('Warm-up');
+    if (warm != null) {
+      return fail(
+        '$warm\nThe cycle must work from the current screen and end back on '
+        'it.',
+      );
+    }
+    final snapshots = [await snapshot()];
+    final heapBefore = await heapMb();
+    String? stopped;
+    for (var r = 1; r <= times; r++) {
+      stopped = await round('Round $r');
+      if (stopped != null) break;
+      snapshots.add(await snapshot());
+    }
+    final heapAfter = await heapMb();
+    final rounds = snapshots.length - 1;
+
+    final growing = growingClasses(
+      snapshots,
+    ).where((c) => classifier.ownerOf(c.library) != CodeOwner.flutterpilot);
+    final app = growing
+        .where((c) => classifier.ownerOf(c.library) == CodeOwner.app)
+        .toList();
+    // Framework and package classes only when they grow by the same amount
+    // every round and belong to a library: VM internals (Code, ICData)
+    // grow as the debug JIT compiles, caches and lists unevenly.
+    final other = growing
+        .where(
+          (c) =>
+              classifier.ownerOf(c.library) != CodeOwner.app &&
+              c.library != null &&
+              c.steady,
+        )
+        .toList();
+
+    Future<String> where(GrowingClass c) async {
+      try {
+        final cls = await vm.getObject(isolateId, c.id);
+        if (cls is Class) {
+          final loc = cls.location;
+          final uri = loc?.script?.uri ?? c.library;
+          if (uri != null) {
+            final line = loc?.line;
+            return ' ${classifier.display(uri)}${line == null ? '' : ':$line'}';
+          }
+        }
+      } catch (_) {}
+      return c.library == null ? '' : ' ${classifier.display(c.library!)}';
+    }
+
+    /// identityHashCode -> object id of each live instance; null when the
+    /// class has too many instances to list.
+    Future<Map<int, String>?> instancesOf(GrowingClass c) async {
+      final limit = c.counts.last + 50;
+      if (limit > 5000) return null;
+      try {
+        final set = await vm.getInstances(isolateId, c.id, limit);
+        return {
+          for (final i in set.instances ?? const <ObjRef>[])
+            if (i is InstanceRef && i.identityHashCode != null && i.id != null)
+              i.identityHashCode!: i.id!,
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+
+    /// The path, or null; `flutterpilot` true when FlutterPilot's own
+    /// objects hold it (e.g. the SDK's frame-pump deadline).
+    Future<({String text, bool flutterpilot})?> retainingPath(
+      String objectId,
+    ) async {
+      try {
+        final path = await vm.getRetainingPath(isolateId, objectId, 12);
+        final elements = [
+          for (final e in path.elements ?? const <RetainingObject>[])
+            e.toJson(),
+        ];
+        if (elements.isEmpty) return null;
+        final owners = pathLibraries(elements).map(classifier.ownerOf).toSet();
+        // Held without any app object on the way: framework bookkeeping
+        // (e.g. gesture recognizers keep an entry per pointer id), not
+        // something the app's code can release.
+        final appHolds = owners.contains(CodeOwner.app);
+        // Framework-only paths run long; their first hops say enough.
+        final shown = appHolds ? elements : elements.take(6).toList();
+        final text =
+            '${describeRetainingPath(shown)}'
+            '${shown.length < elements.length ? ' ← …' : ''}'
+            '${path.gcRootType == null ? '' : ' (GC root: ${path.gcRootType})'}'
+            '${appHolds ? '' : '. Held only by framework/package objects, not by the app\'s code.'}';
+        return (
+          text: text,
+          flutterpilot: owners.contains(CodeOwner.flutterpilot),
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Confirming round: instances created in it that survive a GC were
+    // leaked by it, so their retaining path is the leak's (any instance
+    // could be a live one). A class with none is dropped as noise.
+    final candidates = [...app.take(4), ...other.take(4)];
+    final paths = <String, String>{};
+    final notLeaking = <GrowingClass>{};
+    final heldByPilot = <GrowingClass>{};
+    String? confirmStopped;
+    if (rounds >= 2 && stopped == null && candidates.isNotEmpty) {
+      await vm.getAllocationProfile(isolateId, gc: true);
+      final before = {for (final c in candidates) c.id: await instancesOf(c)};
+      confirmStopped = await round('Confirming round');
+      if (confirmStopped == null) {
+        await vm.getAllocationProfile(isolateId, gc: true);
+        for (final c in candidates) {
+          final old = before[c.id];
+          final now = old == null ? null : await instancesOf(c);
+          if (old == null || now == null) continue;
+          final fresh = now.keys.where((h) => !old.containsKey(h));
+          if (fresh.isEmpty) {
+            notLeaking.add(c);
+            continue;
+          }
+          // Up to three new instances: one FlutterPilot holds is not the
+          // app's leak; if all are, the class is FlutterPilot's.
+          var pilotOnly = true;
+          for (final hash in fresh.take(3)) {
+            final path = await retainingPath(now[hash]!);
+            if (path == null) {
+              pilotOnly = false;
+              break;
+            }
+            if (path.flutterpilot) continue;
+            paths[c.id] = path.text;
+            pilotOnly = false;
+            break;
+          }
+          if (pilotOnly) heldByPilot.add(c);
+        }
+      }
+    }
+    bool leaks(GrowingClass c) =>
+        !notLeaking.contains(c) && !heldByPilot.contains(c);
+    final appLeaks = app.where(leaks).toList();
+    final otherLeaks = other.where(leaks).toList();
+
+    String growth(GrowingClass c) => '+${c.growth} (${c.counts.join(' → ')})';
+    final buf = StringBuffer(
+      'Leak check: $rounds round${rounds == 1 ? '' : 's'} of $label after '
+      'one warm-up; heap after GC ${heapBefore.toStringAsFixed(1)} → '
+      '${heapAfter.toStringAsFixed(1)} MB.\n',
+    );
+    if (stopped != null) buf.writeln('Stopped early: $stopped');
+    if (confirmStopped != null) {
+      buf.writeln(
+        'Confirming round failed ($confirmStopped): paths unchecked.',
+      );
+    }
+    if (rounds < 2) {
+      buf.writeln('Too few rounds completed to tell growth from noise.');
+    } else if (appLeaks.isEmpty && otherLeaks.isEmpty) {
+      buf.writeln(
+        'No app class leaks per round, and no framework class keeps '
+        'instances from every round: nothing leaks per cycle.',
+      );
+    } else {
+      if (appLeaks.isNotEmpty) {
+        buf.writeln('App classes leaking every round:');
+        for (final c in appLeaks.take(6)) {
+          buf.writeln('  ${c.name}${await where(c)}  ${growth(c)}');
+          if (paths[c.id] case final path?) {
+            buf.writeln('    kept alive: $path');
+          }
+        }
+      } else {
+        buf.writeln('No app class leaks per round.');
+      }
+      if (otherLeaks.isNotEmpty) {
+        buf.writeln(
+          'Framework/package classes growing by the same amount every '
+          'round (${otherLeaks.length}):',
+        );
+        for (final c in otherLeaks.take(6)) {
+          buf.writeln('  ${c.name}${await where(c)}  ${growth(c)}');
+          if (paths[c.id] case final path?) {
+            buf.writeln('    kept alive: $path');
+          }
+        }
+      }
+    }
+    if (heldByPilot.isNotEmpty) {
+      buf.writeln(
+        'Held by FlutterPilot itself while it drives the app (not the '
+        'app\'s): ${heldByPilot.map((c) => c.name).join(', ')}.',
+      );
+    }
+    if (notLeaking.isNotEmpty) {
+      buf.writeln(
+        'Grew, but kept nothing from the confirming round (not a leak): '
+        '${notLeaking.map((c) => c.name).join(', ')}.',
+      );
+    }
+    return CallToolResult(content: [TextContent(text: buf.toString().trim())]);
+  }
+
   /// Reads (or with [set], sets) a boolean framework debug extension such
   /// as `ext.flutter.profileUserWidgetBuilds`; null when the app doesn't
   /// have it (profile/release builds).
@@ -174,8 +466,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       description:
           'Heap used/capacity and external (native) memory per isolate. '
           'classes:true lists the top Dart classes by heap bytes and instance '
-          'count instead (the DevTools Memory tab) — compare before/after a '
-          'screen to find leaks.',
+          'count instead (the DevTools Memory tab). Leak check: cycle (action '
+          'tool calls that end where they started, e.g. open a screen then '
+          'press back) runs times rounds; returns the classes that gained '
+          'instances every round, where they are defined and what keeps one '
+          'alive.',
       inputSchema: ToolInputSchema(
         properties: {
           'classes': JsonSchema.boolean(
@@ -184,9 +479,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'limit': JsonSchema.integer(
             description: 'Number of classes (default 30).',
           ),
+          'cycle': JsonSchema.array(
+            items: JsonSchema.object(),
+            description:
+                'Leak check: steps [{"tool": "tap_widget", "arguments": '
+                '{"key": "Open"}}, {"tool": "press_key", "arguments": '
+                '{"key": "back"}}] that return to the starting screen.',
+          ),
+          'times': JsonSchema.integer(
+            description: 'Leak check rounds after one warm-up (default 5).',
+          ),
         },
       ),
       callback: (params, extra) async {
+        if (params['cycle'] != null) return _leakCheck(params, extra);
         if (params['classes'] == true) return allocationProfile(params);
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {

@@ -518,12 +518,14 @@ Checks the screen in the running app in milliseconds; an error result is a faile
 
 ## `get_memory_details`
 
-Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab) — compare before/after a screen to find leaks.
+Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab). Leak check: cycle (action tool calls that end where they started, e.g. open a screen then press back) runs times rounds; returns the classes that gained instances every round, where they are defined and what keeps one alive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `classes` | boolean | no | List the top classes by heap usage. |
 | `limit` | integer | no | Number of classes (default 30). |
+| `cycle` | array | no | Leak check: steps [{"tool": "tap_widget", "arguments": {"key": "Open"}}, {"tool": "press_key", "arguments": {"key": "back"}}] that return to the starting screen. |
+| `times` | integer | no | Leak check rounds after one warm-up (default 5). |
 
 ## `profile_action`
 

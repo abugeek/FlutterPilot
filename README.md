@@ -159,7 +159,8 @@ culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 
 **Performance** — `profile_frame_budget`, `profile_action` (CPU
 profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`
-(`classes: true` for the top classes).
+(`classes: true` for the top classes; `cycle` + `times` for a leak check
+with retaining paths).
 
 **State & storage (plugins)** — Riverpod and Bloc `get_state` /
 `set_state`, go_router (in the navigation tools),

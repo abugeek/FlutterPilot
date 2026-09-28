@@ -15,6 +15,7 @@ import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
 import 'src/image_budget.dart';
+import 'src/memory_leaks.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';

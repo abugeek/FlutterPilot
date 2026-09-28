@@ -788,6 +788,29 @@ Future<void> main(List<String> args) async {
         {'key': 'back'},
         ['Route changed', 'Send'],
       );
+      // ROADMAP §5.5: opening and closing the details page leaks nothing
+      // of the app's.
+      await check(
+        'leak check: details page cycle keeps no app objects',
+        'get_memory_details',
+        {
+          'cycle': [
+            {
+              'tool': 'tap_widget',
+              'arguments': {'key': 'Details'},
+            },
+            {
+              'tool': 'press_key',
+              'arguments': {'key': 'back'},
+            },
+          ],
+          'times': 3,
+        },
+        ['Leak check: 3 rounds', 'No app class leaks per round'],
+        false,
+        Duration.zero,
+        4096,
+      );
       await check(
         'a drawer is read once it is open',
         'tap_widget',

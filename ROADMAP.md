@@ -384,8 +384,14 @@ Highest value first. Each should answer a *why*, not just dump data.
    it (named as the app wrote them: `Text lib/…:32 (RichText)`), a 0-wide
    box and which ancestor gave it max 0. Works without source locations
    (profile builds). Findings #218–220.
-5. **Memory leak check:** navigate into/out of a screen N times, compare class
-   instance counts (or integrate `leak_tracker`), report retained classes.
+5. ~~**Memory leak check**~~ — done (2026-09-29), as `get_memory_details(cycle,
+   times)` (no new tool): one warm-up, then GC'd allocation profiles after
+   each round; classes that gain instances every round (framework ones
+   only when steady and in a library — the debug JIT's Code/ICData grow
+   unevenly), confirmed by a last round whose new instances must survive
+   GC, with the retaining path of such an instance and who holds it (app,
+   framework only, or FlutterPilot itself). leak_tracker not needed.
+   Findings #221–224.
 6. **Network detail:** `get_http_profile` request detail (headers, bodies) via
    `getHttpProfileRequest`; works for any dart:io client, not only Dio.
 7. **Accessibility audit:** missing semantics labels on icon buttons, contrast
