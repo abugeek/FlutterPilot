@@ -92,4 +92,170 @@ void main() {
       expect(count, greaterThanOrEqualTo(3));
     });
   });
+
+  group('interactive elements skip framework noise', () {
+    Widget scaffoldApp() => MaterialApp(
+      home: DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Home'),
+            actions: [
+              PopupMenuButton<int>(
+                tooltip: 'Menu',
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 1, child: Text('A')),
+                ],
+              ),
+            ],
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: 'One'),
+                Tab(text: 'Two'),
+              ],
+            ),
+          ),
+          drawer: Drawer(
+            child: ListView(
+              children: [
+                const Text('In drawer'),
+                ListTile(title: const Text('Drawer item'), onTap: () {}),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              Column(
+                children: [
+                  ElevatedButton(onPressed: () {}, child: const Text('Go')),
+                  KeyedSubtree(
+                    key: const ValueKey(_Slot.body),
+                    child: TextButton(
+                      key: const GlobalObjectKey(7),
+                      onPressed: () {},
+                      child: const Text('Push Later'),
+                    ),
+                  ),
+                ],
+              ),
+              const Text('second'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    List<String?> labels() => [
+      for (final e in PilotWidgetInspector.getInteractiveElements())
+        e['text'] as String?,
+    ];
+
+    testWidgets('app bar, tab bar and scaffold are not merged entries', (
+      tester,
+    ) async {
+      await tester.pumpWidget(scaffoldApp());
+      expect(labels(), [
+        'Go',
+        'Push Later',
+        'Open navigation menu',
+        'Menu',
+        'One',
+        'Two',
+      ]);
+      final types = PilotWidgetInspector.getInteractiveElements().map(
+        (e) => e['type'],
+      );
+      expect(types, isNot(contains('Scaffold')));
+      expect(types, isNot(contains('AppBar')));
+      expect(types, isNot(contains('TabBar')));
+      expect(types, containsAll(['ElevatedButton', 'PopupMenuButton<int>']));
+    });
+
+    testWidgets('open drawer lists its items, not the scrim', (tester) async {
+      await tester.pumpWidget(scaffoldApp());
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      expect(labels(), ['Drawer item']);
+    });
+
+    testWidgets('not-found hints leave out framework and private keys', (
+      tester,
+    ) async {
+      await tester.pumpWidget(scaffoldApp());
+      final hints = PilotWidgetInspector.getAvailableActionableTargets(
+        limit: 50,
+      );
+      expect(hints.take(3), ['Go', 'Push Later', 'Open navigation menu']);
+      for (final noise in [
+        'GlobalObjectKey',
+        '_ScaffoldSlot',
+        '_Slot',
+        'StandardComponentType',
+        '[<',
+      ]) {
+        expect(hints.where((h) => h.contains(noise)), isEmpty, reason: noise);
+      }
+    });
+
+    testWidgets('hints still include keys the app wrote', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Card(
+              key: const ValueKey('login_card'),
+              child: ElevatedButton(
+                key: const ValueKey(3),
+                onPressed: () {},
+                child: const Text('Log In'),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(PilotWidgetInspector.getAvailableActionableTargets(), [
+        '3',
+        'login_card',
+      ]);
+    });
+
+    testWidgets('a tappable container is labelled by its own text only', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                InkWell(
+                  onTap: () {},
+                  child: Row(
+                    children: [
+                      TextButton(onPressed: () {}, child: const Text('A')),
+                      TextButton(onPressed: () {}, child: const Text('B')),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () {},
+                  child: Row(
+                    children: [
+                      const Text('Title'),
+                      IconButton(
+                        tooltip: 'Delete',
+                        onPressed: () {},
+                        icon: const Icon(Icons.delete),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(labels(), ['A', 'B', 'Title', 'Delete']);
+    });
+  });
 }
+
+enum _Slot { body }

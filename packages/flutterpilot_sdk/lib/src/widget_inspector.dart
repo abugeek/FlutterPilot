@@ -476,42 +476,20 @@ class PilotWidgetInspector {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return [];
 
-    final suggestions = <String>{};
+    // What can be tapped first, by the name tap_widget accepts; then other
+    // widgets the app keyed (a card to scope a search to).
+    final suggestions = <String>{
+      for (final e in getInteractiveElements())
+        (e['key'] ?? e['text'] ?? e['type']) as String,
+    };
     void collect(Element element) {
       if (suggestions.length >= limit) return;
-      final widget = element.widget;
-      final typeName = widget.runtimeType.toString();
-      final key = widget.key?.toString();
-
-      if (widget.key is ValueKey) {
-        final val = (widget.key as ValueKey).value.toString();
-        suggestions.add(val);
-      } else if (key != null &&
-          key.isNotEmpty &&
-          !key.startsWith('[<#') &&
-          !key.contains('GlobalKey') &&
-          !key.contains('RawViewKey') &&
-          !key.contains('_MaterialApp') &&
-          !key.contains('_WidgetsApp') &&
-          !key.contains('OverlayState')) {
-        var cleanKey = key;
-        if (cleanKey.startsWith("['") && cleanKey.endsWith("']")) {
-          cleanKey = cleanKey.substring(2, cleanKey.length - 2);
-        } else if (cleanKey.startsWith("[<'") && cleanKey.endsWith("'>]")) {
-          cleanKey = cleanKey.substring(3, cleanKey.length - 3);
-        }
-        suggestions.add(cleanKey);
-      } else if (_isButtonOrClickable(typeName)) {
-        final selector = _computeSemanticSelector(element);
-        if (selector != null) suggestions.add(selector);
-      } else if (typeName == 'TextField' || typeName == 'TextFormField') {
-        final selector = _computeSemanticSelector(element);
-        if (selector != null) suggestions.add(selector);
-      }
+      final key = _userKey(element);
+      if (key != null && key.isNotEmpty) suggestions.add(key);
       element.visitScreenChildren(collect);
     }
 
-    collect(root);
+    if (suggestions.length < limit) collect(root);
     return suggestions.take(limit).toList();
   }
 
@@ -614,8 +592,10 @@ class PilotWidgetInspector {
     return 'Icon#${icon.codePoint.toRadixString(16)}';
   }
 
-  static String _extractDescendantText(Element element) =>
-      _describeDescendants(element).text;
+  static String _extractDescendantText(
+    Element element, {
+    Set<Element> skip = const {},
+  }) => _describeDescendants(element, skip: skip).text;
 
   /// A widget's own label for ambiguity messages: a Tooltip's message,
   /// otherwise the text under it.
@@ -625,8 +605,12 @@ class PilotWidgetInspector {
     return _extractDescendantText(element);
   }
 
-  /// The text under [element]; `glyphOnly` when it is only icon names.
-  static ({String text, bool glyphOnly}) _describeDescendants(Element element) {
+  /// The text under [element], leaving out the subtrees in [skip];
+  /// `glyphOnly` when it is only icon names.
+  static ({String text, bool glyphOnly}) _describeDescendants(
+    Element element, {
+    Set<Element> skip = const {},
+  }) {
     // Ordered and de-duplicated: widgets like NavigationDestination render
     // their label twice (text + tooltip).
     final parts = <String>{};
@@ -639,6 +623,7 @@ class PilotWidgetInspector {
     }
 
     void extract(Element e) {
+      if (skip.contains(e)) return;
       final w = e.widget;
       if (w is Text) {
         add(w.data ?? w.textSpan?.toPlainText());
@@ -908,52 +893,178 @@ class PilotWidgetInspector {
   /// Returns a concise, high-signal list of all interactive or text elements
   /// that are currently visible and hittable on screen.
   static List<Map<String, dynamic>> getInteractiveElements() {
-    final elements = <Map<String, dynamic>>[];
     final root = WidgetsBinding.instance.rootElement;
-    if (root == null) return elements;
-    final byRect = <String, int>{};
+    if (root == null) return [];
 
-    // Find real gesture handlers, then report each under the nearest widget
-    // from the app's own code (ListTile, ChoiceChip, NavigationDestination...)
-    // so labels and keys are the ones the developer wrote.
-    void visit(Element element, Element? owner) {
+    // Find real gesture handlers, remembering the nearest widget from the
+    // app's own code (ListTile, ChoiceChip, NavigationDestination...) and
+    // the framework widgets in between.
+    final hits = <({Element primitive, Element? owner, List<Element> chain})>[];
+    final path = <Element>[];
+    // Only the outermost tap handler per owner counts: an InkWell's inner
+    // GestureDetector is the same control.
+    void visit(Element element, Element? owner, int ownerDepth, bool inHit) {
       final widget = element.widget;
-      final ownerHere = debugIsWidgetLocalCreation(widget) ? element : owner;
-      if (_isGesturePrimitive(widget) &&
-          HitTestUtils.isElementHittable(element)) {
-        final target = ownerHere ?? element;
-        final ro = target.renderObject;
-        if (ro is RenderBox && ro.hasSize) {
-          final pos = ro.localToGlobal(Offset.zero);
-          final rect =
-              '${pos.dx.round()},${pos.dy.round()},${ro.size.width.round()},${ro.size.height.round()}';
-          final key = _extractCleanKey(target.widget.key);
-          final entry = <String, dynamic>{
-            'type': target.widget.runtimeType.toString(),
-            'key': ?key,
-            'text': _extractDescendantText(target),
-            'bounds': {
-              'x': pos.dx.round(),
-              'y': pos.dy.round(),
-              'width': ro.size.width.round(),
-              'height': ro.size.height.round(),
-            },
-          };
-          if ((entry['text'] as String).isEmpty) entry.remove('text');
-          final existing = byRect[rect];
-          if (existing == null) {
-            byRect[rect] = elements.length;
-            elements.add(entry);
-          } else if (key != null && elements[existing]['key'] == null) {
-            elements[existing] = entry; // prefer the keyed widget
-          }
-        }
+      if (debugIsWidgetLocalCreation(widget)) {
+        owner = element;
+        ownerDepth = path.length;
+        inHit = false;
       }
-      element.visitScreenChildren((c) => visit(c, ownerHere));
+      path.add(element);
+      if (!inHit &&
+          _isGesturePrimitive(widget) &&
+          HitTestUtils.isElementHittable(element)) {
+        hits.add((
+          primitive: element,
+          owner: owner,
+          chain: path.sublist(owner == null ? 0 : ownerDepth + 1),
+        ));
+        // A drag surface can hold separate tap controls (the drawer's scrim).
+        inHit = !_isDragOnly(widget);
+      }
+      element.visitScreenChildren((c) => visit(c, owner, ownerDepth, inHit));
+      path.removeLast();
     }
 
-    visit(root, null);
+    visit(root, null, 0, false);
+
+    final perOwner = <Element, int>{};
+    for (final h in hits) {
+      if (h.owner != null) perOwner[h.owner!] = (perOwner[h.owner!] ?? 0) + 1;
+    }
+
+    // Report each handler under the app widget that owns it, so labels and
+    // keys are the ones the developer wrote — unless that widget is a
+    // container (Scaffold, AppBar, TabBar) holding several handlers or a
+    // small control of its own: then under that control (DrawerButton) or
+    // the handler itself, so the label isn't every text in the container.
+    final targets = <Element>[];
+    for (final h in hits) {
+      final owner = h.owner;
+      Element? target;
+      if (owner != null &&
+          perOwner[owner] == 1 &&
+          (_coversMostOf(h.primitive, owner) ||
+              (!_isDragOnly(h.primitive.widget) &&
+                  !h.chain.any(_isNamedControl)))) {
+        target = owner;
+      } else {
+        target = h.chain.firstWhere(_isNamedControl, orElse: () => h.primitive);
+        // Framework drag surfaces (drawer edge, scroll views) aren't targets.
+        if (target == h.primitive && _isDragOnly(target.widget)) continue;
+      }
+      if (!targets.contains(target)) targets.add(target);
+    }
+
+    final elements = <Map<String, dynamic>>[];
+    final byRect = <String, int>{};
+    for (final target in targets) {
+      final ro = target.renderObject;
+      if (ro is! RenderBox || !ro.hasSize) continue;
+      // Text of other targets inside this one is theirs: a container whose
+      // label would only repeat its children's (a drawer scrim, a card
+      // around buttons) has none of its own.
+      final nested = <Element>{};
+      void findNested(Element e) {
+        if (targets.contains(e)) {
+          nested.add(e);
+        } else {
+          e.visitScreenChildren(findNested);
+        }
+      }
+
+      target.visitScreenChildren(findNested);
+      final key = _userKey(target);
+      final text = _extractDescendantText(target, skip: nested);
+      if (key == null && text.isEmpty && nested.isNotEmpty) continue;
+      // A framework handler with no key or text can't be addressed anyway.
+      if (key == null &&
+          text.isEmpty &&
+          !debugIsWidgetLocalCreation(target.widget) &&
+          !_isNamedControl(target)) {
+        continue;
+      }
+      final pos = ro.localToGlobal(Offset.zero);
+      final rect =
+          '${pos.dx.round()},${pos.dy.round()},${ro.size.width.round()},${ro.size.height.round()}';
+      final entry = <String, dynamic>{
+        'type': target.widget.runtimeType.toString(),
+        'key': ?key,
+        if (text.isNotEmpty) 'text': text,
+        'bounds': {
+          'x': pos.dx.round(),
+          'y': pos.dy.round(),
+          'width': ro.size.width.round(),
+          'height': ro.size.height.round(),
+        },
+      };
+      final existing = byRect[rect];
+      if (existing == null) {
+        byRect[rect] = elements.length;
+        elements.add(entry);
+      } else if (key != null && elements[existing]['key'] == null) {
+        elements[existing] = entry; // prefer the keyed widget
+      }
+    }
     return elements;
+  }
+
+  /// A key the developer can pass back to a finder: not framework-internal
+  /// ones (GlobalObjectKey, UniqueKey, LayoutId slots like
+  /// `_ScaffoldSlot.body`, `StandardComponentType.drawerButton`).
+  static String? _userKey(Element element) {
+    final key = element.widget.key;
+    if (key == null || key is GlobalKey || key is UniqueKey) return null;
+    if (!debugIsWidgetLocalCreation(element.widget)) {
+      // Framework widgets: only a plain string could have come from the app.
+      return key is ValueKey && key.value is String
+          ? key.value as String
+          : null;
+    }
+    final value = key is ValueKey
+        ? key.value
+        : key is ObjectKey
+        ? key.value
+        : null;
+    if (value != null &&
+        value is! String &&
+        value is! num &&
+        value.runtimeType.toString().startsWith('_')) {
+      return null;
+    }
+    return _extractCleanKey(key);
+  }
+
+  /// The handler fills most of [owner], so it is that widget's own tap area
+  /// (a Card's InkWell), not one small control inside it.
+  static bool _coversMostOf(Element primitive, Element owner) {
+    final p = primitive.renderObject;
+    final o = owner.renderObject;
+    if (p is! RenderBox || o is! RenderBox || !p.hasSize || !o.hasSize) {
+      return false;
+    }
+    return p.size.width * p.size.height * 4 >= o.size.width * o.size.height;
+  }
+
+  /// A GestureDetector that only handles drags (drawer edge, scrollables).
+  static bool _isDragOnly(Widget w) =>
+      w is GestureDetector &&
+      w.onTap == null &&
+      w.onTapDown == null &&
+      w.onTapUp == null &&
+      w.onLongPress == null &&
+      w.onLongPressStart == null &&
+      w.onDoubleTap == null &&
+      w.onSecondaryTap == null;
+
+  /// A public framework control a handler belongs to (DrawerButton,
+  /// BackButton, IconButton, ListTile, Chip...).
+  static bool _isNamedControl(Element e) {
+    final name = e.widget.runtimeType.toString().split('<').first;
+    return !name.startsWith('_') &&
+        (name.endsWith('Button') ||
+            name.endsWith('ListTile') ||
+            name.endsWith('Chip'));
   }
 
   /// Widgets that actually receive taps/text/drags.
