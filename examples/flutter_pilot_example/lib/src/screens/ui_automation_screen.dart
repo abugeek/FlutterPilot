@@ -323,7 +323,10 @@ class _UiAutomationScreenState extends State<UiAutomationScreen> {
             const SizedBox(height: 16),
 
             // ── Tip ─────────────────────────────────────────────────────────
-            _sectionHeader('tap_widget(x, y) by Coordinates', 'tap_widget(x, y)'),
+            _sectionHeader(
+              'tap_widget(x, y) by Coordinates',
+              'tap_widget(x, y)',
+            ),
             Card(
               color: Colors.amber.shade50,
               child: const Padding(

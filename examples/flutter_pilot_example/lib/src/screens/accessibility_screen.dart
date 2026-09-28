@@ -43,7 +43,10 @@ class _AccessibilityScreenState extends State<AccessibilityScreen> {
               const SizedBox(height: 16),
 
               // -- Text Scale -----------------------------------------------
-              _sectionHeader('Text Scale Factor', 'set_app_settings(textScale)'),
+              _sectionHeader(
+                'Text Scale Factor',
+                'set_app_settings(textScale)',
+              ),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
