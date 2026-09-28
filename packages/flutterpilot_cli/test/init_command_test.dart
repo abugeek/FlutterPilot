@@ -185,6 +185,57 @@ void main() {
       expect(InitCommand.addNavigationTracker(router), router);
     });
 
+    group('route tracking step', () {
+      String step(
+        String main, {
+        bool added = false,
+        bool before = false,
+        bool goRouter = false,
+      }) => InitCommand.routeTrackingStep(
+        main,
+        trackerAdded: added,
+        trackedBefore: before,
+        goRouter: goRouter,
+      );
+
+      test('says what init added, not "already wired"', () {
+        expect(step('MaterialApp(', added: true), contains('added'));
+        expect(step('MaterialApp(', added: true), isNot(contains('already')));
+      });
+
+      test('an existing tracker is already wired', () {
+        expect(
+          step(
+            'MaterialApp(navigatorObservers: [NavigationTracker()])',
+            before: true,
+          ),
+          contains('already wired'),
+        );
+      });
+
+      test('go_router points to its plugin, never "already wired"', () {
+        final out = step(
+          'MaterialApp.router(routerConfig: router)',
+          goRouter: true,
+        );
+        expect(out, contains('flutterpilot_gorouter'));
+        expect(out, isNot(contains('already wired')));
+      });
+
+      test('another .router app is told how routes are named', () {
+        final out = step('MaterialApp.router(routerConfig: r)');
+        expect(out, contains("can't take NavigationTracker"));
+        expect(out, isNot(contains('already wired')));
+      });
+
+      test('no MaterialApp in main.dart asks to add the observer', () {
+        expect(
+          step('void main() => runApp(const App());'),
+          contains('Add `navigatorObservers: [NavigationTracker()]`'),
+        );
+      });
+    });
+
     test('patchMain handles arrow-bodied main', () {
       final out = InitCommand.patchMain('void main() => runApp(const App());')!;
       expect(out, contains('FlutterPilot.initialize();'));

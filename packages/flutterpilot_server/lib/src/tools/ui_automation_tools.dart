@@ -31,6 +31,14 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
 /// needing a follow-up get_widget_tree/capture_screenshot round-trip.
 /// Only falls back to suggesting a screenshot when truly nothing
 /// observable changed — no route change and no widget-tree diff.
+/// " Route unchanged (/home)." — but never claims "unchanged" for a route
+/// the app can't name (no page in a Navigator): a navigation may have
+/// happened unseen.
+String _unchangedRoute(Object? route) => route == null || route == 'Unknown'
+    ? ' Route unknown (no page in a Navigator), so a navigation would not '
+          'show here: read the widget diff.'
+    : ' Route unchanged ($route).';
+
 /// What the screen shows once the action settled: the tappable elements,
 /// new errors, and whether it was still moving when read.
 String _screenNow(Map<String, dynamic>? data) {
@@ -86,9 +94,7 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
       '. Route changed: ${delta['fromRoute']} → ${delta['toRoute']}.',
     );
   } else {
-    buffer.write(
-      '. Route unchanged (${delta['toRoute'] ?? delta['fromRoute'] ?? 'unknown'}).',
-    );
+    buffer.write('.${_unchangedRoute(delta['toRoute'] ?? delta['fromRoute'])}');
   }
   buffer.write(diffText);
   buffer.write(_quietNote(delta));
@@ -129,7 +135,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       buffer.write(
         changed
             ? ' Route changed: ${delta?['fromRoute'] ?? postState?['previousRoute'] ?? '?'} → $route.'
-            : ' Route unchanged ($route).',
+            : _unchangedRoute(route),
       );
     }
     // What appeared/disappeared, so the agent rarely needs a follow-up read.
@@ -722,7 +728,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final routeNote = navigated
             ? ' Route changed: ${delta?['fromRoute']} → ${delta?['toRoute']}.'
             : submitted
-            ? ' Route unchanged (${delta?['toRoute'] ?? 'unknown'}).'
+            ? _unchangedRoute(delta?['toRoute'])
             : '';
         final diffNote = _widgetDiffSummary(
           delta?['widgetDiff'] as Map<String, dynamic>?,

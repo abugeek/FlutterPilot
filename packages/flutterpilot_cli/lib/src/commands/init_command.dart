@@ -182,6 +182,9 @@ class InitCommand extends Command<void> {
 
     final mainFile = File(p.join(rootPath, 'lib', 'main.dart'));
     var trackerAdded = false;
+    final trackedBefore =
+        mainFile.existsSync() &&
+        mainFile.readAsStringSync().contains('NavigationTracker');
     if (mainFile.existsSync()) {
       final content = await mainFile.readAsString();
       final patched = patchMain(content);
@@ -220,9 +223,12 @@ class InitCommand extends Command<void> {
     stdout.writeln('\nNext steps:');
     stdout.writeln('  1. flutter pub get');
     stdout.writeln(
-      trackerAdded
-          ? '  2. (route tracking already wired)'
-          : '  2. Add `navigatorObservers: [NavigationTracker()]` to your MaterialApp (skip if using go_router).',
+      routeTrackingStep(
+        mainFile.existsSync() ? mainFile.readAsStringSync() : '',
+        trackerAdded: trackerAdded,
+        trackedBefore: trackedBefore,
+        goRouter: detected.containsKey('flutterpilot_gorouter'),
+      ),
     );
     if (detected.isNotEmpty) {
       stdout.writeln(
@@ -235,6 +241,35 @@ class InitCommand extends Command<void> {
     stdout.writeln(
       '  ${detected.isEmpty ? 3 : 4}. flutter run, then connect your agent to the FlutterPilot MCP server.',
     );
+  }
+
+  /// Next step 2: what init did about route tracking, and what's left.
+  /// Without any tracking, the SDK names routes after the on-screen page.
+  static String routeTrackingStep(
+    String main, {
+    required bool trackerAdded,
+    required bool trackedBefore,
+    required bool goRouter,
+  }) {
+    if (goRouter) {
+      return '  2. Route tracking (go_router): wire flutterpilot_gorouter '
+          '(step 3) for full locations like /story/42; until then routes are '
+          "named after the on-screen page's path pattern.";
+    }
+    if (trackerAdded) {
+      return '  2. Route tracking: added NavigationTracker() to MaterialApp.';
+    }
+    if (trackedBefore) {
+      return '  2. Route tracking: already wired (NavigationTracker).';
+    }
+    if (RegExp(r'App\.router\s*\(').hasMatch(main)) {
+      return "  2. Route tracking: MaterialApp.router can't take "
+          "NavigationTracker; routes are named after the on-screen page's "
+          "name. Your router's FlutterPilot plugin gives full locations.";
+    }
+    return '  2. Add `navigatorObservers: [NavigationTracker()]` to your '
+        'MaterialApp (not found in lib/main.dart). Until then routes are '
+        "named after the on-screen page's name.";
   }
 
   /// Adds `NavigationTracker()` to a plain `MaterialApp(` (not `.router`),
