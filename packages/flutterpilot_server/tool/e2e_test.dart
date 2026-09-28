@@ -310,6 +310,15 @@ Future<void> main(List<String> args) async {
         '${nativeOk ? '✅' : '❌'} native tools '
         '${isIos ? 'listed on iOS' : 'hidden off iOS'} (${listed.length} tools)',
       );
+      // Plugin tools only for plugins the app registered (the fixture: Dio).
+      final pluginsOk =
+          listed.contains('mock_http_response') &&
+          !listed.contains('query_supabase_table') &&
+          !listed.contains('get_riverpod_state');
+      if (!pluginsOk) failed++;
+      print(
+        '${pluginsOk ? '✅' : '❌'} plugin tools only for registered plugins',
+      );
       // Simulator with idb (not on CI runners): native screen, backgrounding
       // and bringing the app back.
       if (listed.contains('native_open_app') &&

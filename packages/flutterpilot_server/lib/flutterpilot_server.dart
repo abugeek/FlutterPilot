@@ -17,6 +17,7 @@ import 'src/image_budget.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
+import 'src/plugin_tools.dart';
 import 'src/self_heal_manager.dart';
 import 'src/vm_discovery.dart';
 import 'src/zero_code.dart';
@@ -433,7 +434,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _sdkExtensionsReady = _waitForSdkExtensions(checkedService).then((found) {
       if (!identical(activeContext.service, checkedService)) return;
       activeContext.hasSdk = found;
-      if (found != null) updateSdkToolVisibility(hasSdk: found);
+      if (found != null) _refreshToolVisibility();
     });
     try {
       final vm = await _vmService!.getVM();
@@ -589,13 +590,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         if (event.kind == EventKind.kIsolateStart) {
           context.zeroCodeErrors.clear();
         }
+        // Plugins register when the app sets them up (after Firebase init,
+        // a first Dio, ...): list their tools then.
         if (event.kind == EventKind.kServiceExtensionAdded &&
-            context.hasSdk != true &&
             (event.extensionRPC?.startsWith('ext.flutterpilot.') ?? false)) {
           context.hasSdk = true;
-          if (context.deviceId == (_fleetManager.activeDeviceId ?? 'default')) {
-            updateSdkToolVisibility(hasSdk: true);
-          }
+          if (identical(context, _activeContext)) _scheduleToolVisibility();
         }
       });
       await service.streamListen(EventStreams.kIsolate);
@@ -813,16 +813,55 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   Iterable<String> get listedToolNames =>
       _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
 
+  Timer? _visibilityTimer;
+
+  /// Extensions arrive in bursts (~70 at startup, again after a hot
+  /// restart): recompute once they settle.
+  void _scheduleToolVisibility() {
+    _visibilityTimer?.cancel();
+    _visibilityTimer = Timer(
+      const Duration(milliseconds: 300),
+      _refreshToolVisibility,
+    );
+  }
+
+  /// Reads which extensions the active app has registered and lists the tools
+  /// that can work with them.
+  Future<void> _refreshToolVisibility() async {
+    final context = _activeContext;
+    final vm = context?.service;
+    if (context == null || vm == null || context.hasSdk == null) return;
+    try {
+      final rpcs = <String>{};
+      for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+        rpcs.addAll((await vm.getIsolate(ref.id!)).extensionRPCs ?? const []);
+      }
+      if (!identical(context, _activeContext)) return;
+      updateToolVisibility(hasSdk: context.hasSdk, extensions: rpcs);
+    } catch (_) {
+      // Keep the current list; calls explain themselves.
+    }
+  }
+
   /// Lists only the tools that can work: without flutterpilot_sdk in the app
-  /// (zero-code mode) that is [zeroCodeTools]. Native tools keep their own
-  /// rule. Sends one tools/list_changed instead of one per tool. Called after
-  /// each connection.
-  void updateSdkToolVisibility({required bool hasSdk}) {
+  /// (zero-code mode) that is [zeroCodeTools]; with it, a plugin's tools once
+  /// the app registers that plugin ([pluginToolExtensions]). Before the check
+  /// ([hasSdk] null) everything. Native tools keep their own rule. Sends one
+  /// tools/list_changed instead of one per tool.
+  void updateToolVisibility({
+    required bool? hasSdk,
+    Set<String> extensions = const {},
+  }) {
     if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
     var changed = false;
     for (final MapEntry(key: name, value: tool) in _allTools.entries) {
       if (_nativeTools.containsKey(name)) continue;
-      final usable = hasSdk || zeroCodeTools.contains(name);
+      final needs = pluginToolExtensions[name];
+      final usable = switch (hasSdk) {
+        false => zeroCodeTools.contains(name),
+        true when needs != null => needs.any(extensions.contains),
+        _ => true,
+      };
       if (tool.enabled == usable) continue;
       changed = true;
       try {
@@ -1716,6 +1755,7 @@ Use this guide to understand what tools to call, when, and in what order.
     _isReconnecting = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _visibilityTimer?.cancel();
     for (final context in _deviceContexts.values) {
       await context.dispose();
     }

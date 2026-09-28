@@ -253,11 +253,14 @@ current major. §1 is done.
 
 ## 4. Token efficiency (agents pay for every tool and every byte)
 
-1. **Expose only relevant tools:** register plugin tools only when the app
-   reports that capability (`get_capabilities` already knows), and send
-   `notifications/tools/list_changed` after connect. Hide iOS-only native tools
-   on other platforms. Target: an app without Supabase/Firebase/Hive never
-   sees those ~20 tools.
+1. **Expose only relevant tools:** done — a plugin's tools are listed once
+   the app registers that plugin's extensions (`pluginToolExtensions` in
+   `src/plugin_tools.dart`, 35 tools), per device, recomputed when extensions
+   are added (debounced: one `tools/list_changed`). on macOS every app got
+   119 tools / 68 KB of definitions; now hn_reader (6 plugins) 104 / 57 KB,
+   a Hive-only app 86 / 45 KB, the e2e fixture (Dio) 88.
+   Native tools only on iOS; zero-code apps 29. Round 10 of
+   `docs/field-test-findings.md`.
 2. **Shrink further:** candidates to merge/remove after field-testing —
    `navigate_to` / `jump_to_screen` / `simulate_deep_link` / `gorouter_navigate`
    (one navigation tool), the `wait_*` family (one), `read_dart_file` /
