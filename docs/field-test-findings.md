@@ -304,6 +304,23 @@ the scale and locale its screen gets. hn_reader (go_router,
 | 192 | real bug found | ✅ | at 2x hn_reader's story row overflows by 65–212 px: get_errors names `Row (lib/ui/story_tile.dart:30:19)` |
 | 193 | old wiring | ✅ | hn_reader's ValueListenableBuilder + withClampedTextScaling still passes the scale through; the notifiers are deprecated, nothing sets them |
 
+## Round 15 — settle timing (§3.13)
+
+A scratch go_router app with each kind of motion (push, go, delayed go,
+dialog, sheet, popup menu, drawer, tabs, long-press, Enter-submit, a looping
+marquee), then hn_reader, driven on macOS. Before → after:
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 194 | push / go / dialog / sheet / popup / Enter / chain | ✅ | already waited for route transitions |
+| 195 | long-press, double-tap, fill_form(submitWith) | ❌→fixed | answered mid-transition (+7/-0: new page in, old not out) with no tappable list; all mutating extensions now share one after-action step (also swipe, drag, toggle, x/y and secondary taps, pinch) |
+| 196 | drawer, tab switch | ❌→fixed | not routes: answered at ~130 ms with the drawer/tab mid-slide ("Drawer item", "In Two" missing). Now waits until on-screen text holds still between frames (~400 ms). Tappable elements alone weren't enough: they drop out of the list while sliding |
+| 197 | navigation 250 ms after the tap | ❌→fixed | showed the old screen, "Route unchanged". An action that changed nothing is watched 0.5 s more; it now shows the new page. A tap that really does nothing says "Nothing changed in the 0.5 s after it either" |
+| 198 | looping text (marquee) | ✅ | ignored after moving 600 ms, remembered for later actions: no-op tap 1.3 s the first time, then ~0.75 s; navigation unaffected (the marquee is covered) |
+| 199 | hot restart | ❌→fixed | tools failed "not registered" for a moment after hot_reload(restart) returned; it now waits for the new isolate's first frame and FlutterPilot's extensions (~600 ms) |
+| 200 | request in flight | ✅ new | hn_reader's chips and story page answer while a spinner shows; the response now says "A progress indicator is showing: results may still be loading" |
+| 201 | seen in passing | → tasks | `Tooltip['Menu']` picked "Open navigation menu"; go_router app without the plugin reports route "Unknown"; drawer scrim listed as one element with all screen text; not-found hints list `_ScaffoldSlot.body` |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

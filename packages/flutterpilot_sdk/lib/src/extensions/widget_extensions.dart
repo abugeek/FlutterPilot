@@ -43,7 +43,7 @@ extension _WidgetExtensions on FlutterPilot {
       'covers it, or it is clipped. Dismiss the overlay (press_key escape / '
       'press_key back) or interact with what is on top.';
 
-  /// Finds [target] (waiting out a route transition, then scrolling to it)
+  /// Finds [target] (waiting for the screen to settle, then scrolling to it)
   /// and taps it. Shared by tap_widget and execute_action_chain so both
   /// resolve targets the same way. [error] is set unless status is 'ok'.
   static Future<({String status, String? error})> _tapTarget(
@@ -52,7 +52,7 @@ extension _WidgetExtensions on FlutterPilot {
   }) async {
     var element = PilotWidgetInspector.findElement(target);
     if (element == null || !HitTestUtils.isElementHittable(element)) {
-      await FlutterPilot._waitForRouteSettled();
+      await FlutterPilot._waitForScreenSettled();
       element = PilotWidgetInspector.findElement(target);
       if (element == null || !HitTestUtils.isElementHittable(element)) {
         await ScrollSimulator.scrollUntilVisible(
@@ -118,7 +118,7 @@ extension _WidgetExtensions on FlutterPilot {
     } else {
       var element = PilotWidgetInspector.findElement(target);
       if (element == null) {
-        await FlutterPilot._waitForRouteSettled();
+        await FlutterPilot._waitForScreenSettled();
         element = PilotWidgetInspector.findElement(target);
       }
       if (element == null) {
@@ -196,21 +196,71 @@ extension _WidgetExtensions on FlutterPilot {
     return 'Widget not found matching: "$target". HINT: Call get_interactive_elements() or get_widget_tree() to inspect available widgets.';
   }
 
-  /// Builds the postcondition `delta` block returned by every mutating
-  /// extension: whether navigation happened, plus a capped widget-tree
-  /// diff so the caller usually doesn't need a follow-up get_widget_tree
-  /// or capture_screenshot call just to see what an action did.
-  static Map<String, dynamic> _buildActionDelta({
+  /// How long an action that changed nothing is watched for a late effect.
+  static const _quietWatch = Duration(milliseconds: 500);
+
+  /// What an action led to, read once the screen it led to has settled: the
+  /// `postActionState` and the `delta` (route change and a capped
+  /// widget-tree diff) every mutating extension returns, so the caller
+  /// rarely needs a follow-up get_widget_tree or capture_screenshot.
+  ///
+  /// With [watchQuiet], an action that changed nothing is watched a little
+  /// longer: navigation after a short request or a debounced setState lands
+  /// after the screen first settles, and would otherwise read as a tap that
+  /// did nothing. `quietMs` says how long it was watched.
+  static Future<Map<String, dynamic>> _afterAction({
     required String? routeBefore,
-    required String? routeAfter,
     required Map<String, dynamic> treeBefore,
-    required Map<String, dynamic> treeAfter,
-  }) {
+    bool watchQuiet = true,
+  }) async {
+    var post = await FlutterPilot.getPostActionState(
+      previousRoute: routeBefore,
+    );
+    var diff = PilotWidgetInspector.diffWidgetTrees(
+      treeBefore,
+      PilotWidgetInspector.captureWidgetTree(),
+    );
+    bool quiet() =>
+        diff['hasChanges'] != true &&
+        NavigationTracker.currentRoute == routeBefore;
+    int? quietMs;
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains(
+      'Test',
+    );
+    if (watchQuiet && !isTest && quiet()) {
+      final watch = Stopwatch()..start();
+      while (watch.elapsed < _quietWatch && quiet()) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        diff = PilotWidgetInspector.diffWidgetTrees(
+          treeBefore,
+          PilotWidgetInspector.captureWidgetTree(),
+        );
+      }
+      if (quiet()) {
+        quietMs = watch.elapsedMilliseconds;
+      } else {
+        // It did something after all: read the screen it led to.
+        final errors = post['newErrorCount'] as int? ?? 0;
+        post = await FlutterPilot.getPostActionState(
+          previousRoute: routeBefore,
+        );
+        post['newErrorCount'] = errors + (post['newErrorCount'] as int? ?? 0);
+        diff = PilotWidgetInspector.diffWidgetTrees(
+          treeBefore,
+          PilotWidgetInspector.captureWidgetTree(),
+        );
+      }
+    }
+    final routeAfter = NavigationTracker.currentRoute;
     return {
-      'navigated': routeBefore != routeAfter,
-      'fromRoute': routeBefore,
-      'toRoute': routeAfter,
-      'widgetDiff': PilotWidgetInspector.diffWidgetTrees(treeBefore, treeAfter),
+      'postActionState': post,
+      'delta': {
+        'navigated': routeBefore != routeAfter,
+        'fromRoute': routeBefore,
+        'toRoute': routeAfter,
+        'widgetDiff': diff,
+        'quietMs': ?quietMs,
+      },
     };
   }
 
@@ -221,6 +271,7 @@ extension _WidgetExtensions on FlutterPilot {
       final yVal = double.tryParse(parameters['y'] ?? '');
       if (xVal != null && yVal != null) {
         final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         if (FlutterPilot._isRecording) {
           FlutterPilot._recordAction('tapAt', {'x': xVal, 'y': yVal});
         }
@@ -228,16 +279,15 @@ extension _WidgetExtensions on FlutterPilot {
           Offset(xVal, yVal),
           label: '(${xVal.round()}, ${yVal.round()})',
         );
-        final routeAfter = NavigationTracker.currentRoute;
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+        );
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
             'coordinates': {'x': xVal, 'y': yVal},
-            'delta': {
-              'navigated': routeBefore != routeAfter,
-              'fromRoute': routeBefore,
-              'toRoute': routeAfter,
-            },
+            ...after,
           }),
         );
       }
@@ -304,6 +354,7 @@ extension _WidgetExtensions on FlutterPilot {
           );
           final center = globalRect.center;
           final routeBefore = NavigationTracker.currentRoute;
+          final treeBefore = PilotWidgetInspector.captureWidgetTree();
           if (FlutterPilot._isRecording) {
             FlutterPilot._recordAction('tapWidget', {
               'semanticsId': semanticsId,
@@ -313,21 +364,16 @@ extension _WidgetExtensions on FlutterPilot {
             center,
             label: 'Semantics #$semanticsId',
           );
-          final routeAfter = NavigationTracker.currentRoute;
-          final postActionState = await FlutterPilot.getPostActionState(
-            previousRoute: routeBefore,
+          final after = await _afterAction(
+            routeBefore: routeBefore,
+            treeBefore: treeBefore,
           );
           return ServiceExtensionResponse.result(
             json.encode({
               'status': 'success',
               'semanticsId': semanticsId,
               'coordinates': {'x': center.dx, 'y': center.dy},
-              'postActionState': postActionState,
-              'delta': {
-                'navigated': routeBefore != routeAfter,
-                'fromRoute': routeBefore,
-                'toRoute': routeAfter,
-              },
+              ...after,
             }),
           );
         } else {
@@ -357,22 +403,12 @@ extension _WidgetExtensions on FlutterPilot {
           tapped.error!,
         );
       }
-      final routeAfter = NavigationTracker.currentRoute;
-      final postActionState = await FlutterPilot.getPostActionState(
-        previousRoute: routeBefore,
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
       );
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'target': target,
-          'postActionState': postActionState,
-          'delta': _buildActionDelta(
-            routeBefore: routeBefore,
-            routeAfter: routeAfter,
-            treeBefore: treeBefore,
-            treeAfter: PilotWidgetInspector.captureWidgetTree(),
-          ),
-        }),
+        json.encode({'status': 'success', 'target': target, ...after}),
       );
     });
 
@@ -426,17 +462,18 @@ extension _WidgetExtensions on FlutterPilot {
         final pos = ro.localToGlobal(ro.size.center(Offset.zero));
         final covered = _refuseIfCovered(element, target);
         if (covered != null) return covered;
+        final routeBefore = NavigationTracker.currentRoute;
+        final treeBefore = PilotWidgetInspector.captureWidgetTree();
         await InteractionManager.secondaryTapAt(
           pos,
           label: 'Right Click: $target',
         );
-        final postActionState = await FlutterPilot.getPostActionState();
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+        );
         return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'target': target,
-            'postActionState': postActionState,
-          }),
+          json.encode({'status': 'success', 'target': target, ...after}),
         );
       }
 
@@ -471,20 +508,13 @@ extension _WidgetExtensions on FlutterPilot {
           entered.error!,
         );
       }
-      final routeAfter = NavigationTracker.currentRoute;
-      final postActionState = await FlutterPilot.getPostActionState();
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
+        watchQuiet: false,
+      );
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'text': _echoText(text),
-          'postActionState': postActionState,
-          'delta': _buildActionDelta(
-            routeBefore: routeBefore,
-            routeAfter: routeAfter,
-            treeBefore: treeBefore,
-            treeAfter: PilotWidgetInspector.captureWidgetTree(),
-          ),
-        }),
+        json.encode({'status': 'success', 'text': _echoText(text), ...after}),
       );
     });
 
@@ -533,8 +563,13 @@ extension _WidgetExtensions on FlutterPilot {
             'modifiers': modifiers.toList(),
           });
         }
-        final postActionState = await FlutterPilot.getPostActionState(
-          previousRoute: routeBefore,
+        // Enter often submits, and a submit may navigate after a request:
+        // watch a quiet Enter a little longer. Tab and arrows stay fast.
+        final lower = key.toLowerCase();
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+          watchQuiet: lower == 'enter' || lower == 'numpadenter',
         );
         return ServiceExtensionResponse.result(
           json.encode({
@@ -547,13 +582,7 @@ extension _WidgetExtensions on FlutterPilot {
                 : (PilotWidgetInspector.extractCleanKey(focused!.key) ??
                       focused.runtimeType.toString()),
             'field': ?field,
-            'postActionState': postActionState,
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: NavigationTracker.currentRoute,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
+            ...after,
           }),
         );
       } catch (e) {
@@ -624,14 +653,20 @@ extension _WidgetExtensions on FlutterPilot {
         }
       }
 
+      final routeBefore = NavigationTracker.currentRoute;
+      final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.pinchZoomAt(center, scale: scale);
-      final postActionState = await FlutterPilot.getPostActionState();
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
+        watchQuiet: false,
+      );
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
           'scale': scale,
           'center': {'x': center.dx, 'y': center.dy},
-          'postActionState': postActionState,
+          ...after,
         }),
       );
     });
@@ -698,17 +733,12 @@ extension _WidgetExtensions on FlutterPilot {
         final covered = _refuseIfCovered(element, target);
         if (covered != null) return covered;
         await InteractionManager.doubleTapAt(pos, label: target);
-        final routeAfter = NavigationTracker.currentRoute;
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+        );
         return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
-          }),
+          json.encode({'status': 'success', ...after}),
         );
       }
       return ServiceExtensionResponse.error(
@@ -755,17 +785,12 @@ extension _WidgetExtensions on FlutterPilot {
           duration: Duration(milliseconds: ms),
           label: target,
         );
-        final routeAfter = NavigationTracker.currentRoute;
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+        );
         return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
-          }),
+          json.encode({'status': 'success', ...after}),
         );
       }
       return ServiceExtensionResponse.error(
@@ -830,17 +855,13 @@ extension _WidgetExtensions on FlutterPilot {
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.swipeFromTo(start, end);
-      final routeAfter = NavigationTracker.currentRoute;
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
+        watchQuiet: false,
+      );
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'delta': _buildActionDelta(
-            routeBefore: routeBefore,
-            routeAfter: routeAfter,
-            treeBefore: treeBefore,
-            treeAfter: PilotWidgetInspector.captureWidgetTree(),
-          ),
-        }),
+        json.encode({'status': 'success', ...after}),
       );
     });
 
@@ -893,17 +914,13 @@ extension _WidgetExtensions on FlutterPilot {
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.dragFromTo(from, to);
-      final routeAfter = NavigationTracker.currentRoute;
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
+        watchQuiet: false,
+      );
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'delta': _buildActionDelta(
-            routeBefore: routeBefore,
-            routeAfter: routeAfter,
-            treeBefore: treeBefore,
-            treeAfter: PilotWidgetInspector.captureWidgetTree(),
-          ),
-        }),
+        json.encode({'status': 'success', ...after}),
       );
     });
 
@@ -1049,20 +1066,15 @@ extension _WidgetExtensions on FlutterPilot {
       final covered = _refuseIfCovered(element, target);
       if (covered != null) return covered;
       await InteractionManager.tapAt(center, label: target);
-      final routeAfter = NavigationTracker.currentRoute;
+      final after = await _afterAction(
+        routeBefore: routeBefore,
+        treeBefore: treeBefore,
+      );
       if (FlutterPilot._isRecording) {
         FlutterPilot._recordAction('toggleCheckbox', {'key': target});
       }
       return ServiceExtensionResponse.result(
-        json.encode({
-          'status': 'success',
-          'delta': _buildActionDelta(
-            routeBefore: routeBefore,
-            routeAfter: routeAfter,
-            treeBefore: treeBefore,
-            treeAfter: PilotWidgetInspector.captureWidgetTree(),
-          ),
-        }),
+        json.encode({'status': 'success', ...after}),
       );
     });
 
@@ -1562,19 +1574,18 @@ extension _WidgetExtensions on FlutterPilot {
           }
         }
 
-        final routeAfter = NavigationTracker.currentRoute;
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+          watchQuiet: submitted,
+        );
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
             'fieldsFilled': filledCount,
             'totalFields': fields.length,
             'submitted': submitted,
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
+            ...after,
           }),
         );
       } catch (e) {
@@ -1664,7 +1675,10 @@ extension _WidgetExtensions on FlutterPilot {
           });
         }
 
-        final routeAfter = NavigationTracker.currentRoute;
+        final after = await _afterAction(
+          routeBefore: routeBefore,
+          treeBefore: treeBefore,
+        );
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -1672,15 +1686,7 @@ extension _WidgetExtensions on FlutterPilot {
             'totalActions': decoded.length,
             'steps': steps,
             'failure': ?failure,
-            'postActionState': await FlutterPilot.getPostActionState(
-              previousRoute: routeBefore,
-            ),
-            'delta': _buildActionDelta(
-              routeBefore: routeBefore,
-              routeAfter: routeAfter,
-              treeBefore: treeBefore,
-              treeAfter: PilotWidgetInspector.captureWidgetTree(),
-            ),
+            ...after,
           }),
         );
       } catch (e) {

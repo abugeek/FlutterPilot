@@ -200,10 +200,19 @@ current major. §1 is done.
     is reported ("had no effect" / "partly applied"), not faked. `init` no
     longer rewrites MaterialApp; the notifiers are deprecated and old wiring
     keeps working. Round 14 of `docs/field-test-findings.md`.
-13. **Settle timing:** post-action state is read ~150 ms after an action, so
-    during page/menu transitions (~300 ms) it can list the previous screen's
-    elements. Wait for route animations (`ModalRoute.animation` status) and
-    popup menus before snapshotting.
+13. **Settle timing:** done. Measured on a scratch go_router app and
+    hn_reader: page, dialog, sheet and popup transitions were already
+    waited out, but long-press, double-tap, fill_form(submitWith), swipe,
+    drag, toggle and x/y taps weren't; drawers and tab switches (no route)
+    answered mid-slide; navigation 250 ms after a tap read as "nothing
+    changed"; tools failed as "not registered" right after a hot restart.
+    Every mutating tool now reads the screen once routes are still and the
+    on-screen text holds still between frames (text that keeps moving past
+    600 ms is a loop — marquee, pulsing badge — and is ignored, and
+    remembered); an action that changed nothing is watched 0.5 s more and
+    says so; a progress indicator on screen is reported ("may still be
+    loading"). Hot restart answers once the new isolate drew its first frame
+    and registered FlutterPilot. Round 15 of `docs/field-test-findings.md`.
 
 ## 2. Coverage the product claims but hasn't proven
 

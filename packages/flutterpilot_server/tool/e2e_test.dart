@@ -706,6 +706,38 @@ Future<void> main(List<String> args) async {
         false,
         settle, // CI simulators can be slow to dismiss the keyboard and pop
       );
+      // Settle timing (ROADMAP §3.13): each response describes the screen
+      // the action led to, not the one mid-animation or before a late push.
+      await check(
+        'navigation after a delay is in the tap response',
+        'tap_widget',
+        {'key': 'Later'},
+        ['Route changed', 'DetailsPage', 'Back'],
+      );
+      await check(
+        'back from the delayed page',
+        'press_key',
+        {'key': 'back'},
+        ['Route changed', 'Send'],
+      );
+      await check(
+        'a drawer is read once it is open',
+        'tap_widget',
+        {'key': 'Drawer'},
+        ['Tappable now', 'Drawer item'],
+      );
+      await check(
+        'and once it is closed',
+        'tap_widget',
+        {'key': 'Drawer item'},
+        ['Tappable now', 'Send'],
+      );
+      await check(
+        'a tap that does nothing says so',
+        'tap_widget',
+        {'key': 'card'},
+        ['Nothing changed in the 0.5 s after it'],
+      );
 
       final main = File('$app/lib/main.dart');
       main.writeAsStringSync(
@@ -927,8 +959,19 @@ class _HomeState extends State<Home> {
     setState(() => _greeting = 'Hello, ${_name.text} (${res.statusCode})');
   }
 
+  final _scaffold = GlobalKey<ScaffoldState>();
+
   @override
   Widget build(BuildContext context) => Scaffold(
+    key: _scaffold,
+    drawer: Drawer(
+      child: SafeArea(
+        child: TextButton(
+          onPressed: () => _scaffold.currentState!.closeDrawer(),
+          child: const Text('Drawer item'),
+        ),
+      ),
+    ),
     body: Column(children: [
       const Text('Version A'),
       // What set_app_settings(textScale/locale) reached, with no wiring above.
@@ -966,7 +1009,23 @@ class _HomeState extends State<Home> {
         ),
         child: const Text('Details'),
       ),
-      Row(children: [
+      Wrap(children: [
+        // Navigates after a short "request": the tap's response should
+        // still show the page it led to.
+        TextButton(
+          onPressed: () async {
+            await Future<void>.delayed(const Duration(milliseconds: 300));
+            if (!context.mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const DetailsPage()),
+            );
+          },
+          child: const Text('Later'),
+        ),
+        TextButton(
+          onPressed: () => _scaffold.currentState!.openDrawer(),
+          child: const Text('Drawer'),
+        ),
         TextButton(
           onPressed: () => throw StateError('Boom from the Crash button'),
           child: const Text('Crash'),

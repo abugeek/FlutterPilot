@@ -396,7 +396,7 @@ Future<void> _pumpAndSettleRoute() async {
   try {
     await WidgetsBinding.instance.endOfFrame;
   } catch (_) {}
-  await FlutterPilot._waitForRouteSettled();
+  await FlutterPilot._waitForScreenSettled();
 }
 
 RouterDelegate<Object?>? _rootRouterDelegate() {

@@ -109,10 +109,26 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     }
     try {
       final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
+      final hadSdk =
+          service == 'hotRestart' && await _hasSdkExtensions(vmService);
       await vmService
           .callMethod(method, isolateId: isolateId)
           .timeout(const Duration(minutes: 2));
       _selfHealManager.reset();
+      if (service == 'hotRestart' &&
+          !await _waitForRestartedApp(vmService, sdk: hadSdk)) {
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '$successText\nBut the restarted app had not drawn its first '
+                  'frame${hadSdk ? ' or registered FlutterPilot' : ''} after '
+                  '10 s: main() may be stuck (awaiting something before '
+                  'runApp). Check get_logs.',
+            ),
+          ],
+        );
+      }
       return CallToolResult(content: [TextContent(text: successText)]);
     } catch (err) {
       final details = err is RPCError
@@ -129,5 +145,50 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         isError: true,
       );
     }
+  }
+
+  static Future<bool> _hasSdkExtensions(VmService vm) async {
+    for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+      final isolate = await vm.getIsolate(ref.id!);
+      if (isolate.extensionRPCs?.any(
+            (e) => e.startsWith('ext.flutterpilot.'),
+          ) ??
+          false) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// A hot restart returns before the new isolate has run main(): until it
+  /// has drawn its first frame (and, with the SDK, registered FlutterPilot's
+  /// extensions), every tool would fail as "not registered". Waits up to
+  /// 10 s; false if it never got there.
+  static Future<bool> _waitForRestartedApp(
+    VmService vm, {
+    required bool sdk,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+          final isolate = await vm.getIsolate(ref.id!);
+          final rpcs = isolate.extensionRPCs ?? const <String>[];
+          if (sdk && !rpcs.any((e) => e.startsWith('ext.flutterpilot.'))) {
+            continue;
+          }
+          if (!rpcs.contains('ext.flutter.didSendFirstFrameEvent')) continue;
+          final res = await vm.callServiceExtension(
+            'ext.flutter.didSendFirstFrameEvent',
+            isolateId: ref.id,
+          );
+          if (res.json?['enabled'] == 'true') return true;
+        }
+      } catch (_) {
+        // The old isolate may vanish mid-poll; try again.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    return false;
   }
 }

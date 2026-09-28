@@ -31,6 +31,47 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
 /// needing a follow-up get_widget_tree/capture_screenshot round-trip.
 /// Only falls back to suggesting a screenshot when truly nothing
 /// observable changed — no route change and no widget-tree diff.
+/// What the screen shows once the action settled: the tappable elements,
+/// new errors, and whether it was still moving when read.
+String _screenNow(Map<String, dynamic>? data) {
+  final post = data?['postActionState'] as Map<String, dynamic>?;
+  final buffer = StringBuffer();
+  final elements = post?['visibleInteractiveElements'] as List?;
+  if (elements != null && elements.isNotEmpty) {
+    buffer.write(
+      '\nTappable now (${post!['interactiveElementsCount']}): '
+      '${elements.map((e) => '"$e"').join(', ')}',
+    );
+  }
+  if (post?['stillMoving'] == true) {
+    buffer.write(
+      '\nThe screen was still moving 2 s after the action (a looping '
+      'animation?), so the above may be mid-motion.',
+    );
+  }
+  if (post?['loading'] == true) {
+    buffer.write(
+      '\nA progress indicator is showing: results may still be loading; '
+      'wait_for them.',
+    );
+  }
+  final newErrors = post?['newErrorCount'];
+  if (newErrors is int && newErrors > 0) {
+    buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
+  }
+  return buffer.toString();
+}
+
+/// Said when an action changed nothing, even after being watched for a
+/// late effect ([delta] `quietMs`); empty otherwise.
+String _quietNote(Map<String, dynamic>? delta) {
+  final ms = delta?['quietMs'];
+  if (ms is! int) return '';
+  return ' Nothing changed in the ${(ms / 1000).toStringAsFixed(1)} s after '
+      'it either. If it starts slow work (a request), wait_for the result '
+      '(or pass waitFor).';
+}
+
 String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
   final delta = data?['delta'] as Map<String, dynamic>?;
   if (delta == null) return '$verb.';
@@ -50,13 +91,15 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
     );
   }
   buffer.write(diffText);
-  if (!navigated && diffText.isEmpty) {
+  buffer.write(_quietNote(delta));
+  if (!navigated && diffText.isEmpty && delta['quietMs'] == null) {
     buffer.write(
       ' No widget-tree changes detected either. HINT: If you expected a purely '
       'visual-only change (color, animation frame, pixel-level effect with no '
       'structural diff), call capture_screenshot to confirm.',
     );
   }
+  buffer.write(_screenNow(data));
   return buffer.toString();
 }
 
@@ -93,17 +136,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     buffer.write(
       _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
     );
-    final elements = postState?['visibleInteractiveElements'] as List?;
-    if (elements != null && elements.isNotEmpty) {
-      buffer.write(
-        '\nTappable now (${postState!['interactiveElementsCount']}): '
-        '${elements.map((e) => '"$e"').join(', ')}',
-      );
-    }
-    final newErrors = postState?['newErrorCount'];
-    if (newErrors is int && newErrors > 0) {
-      buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
-    }
+    buffer.write(_quietNote(delta));
+    buffer.write(_screenNow(res.data));
     // A permission alert is not part of the Flutter tree (and doesn't even
     // change the app's lifecycle on iOS): an action that "did nothing" may
     // have opened one.
@@ -697,7 +731,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}$routeNote$diffNote',
+                  'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
+                  '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data)}',
             ),
           ],
         );
