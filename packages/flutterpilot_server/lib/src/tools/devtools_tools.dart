@@ -799,10 +799,12 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_http_profile',
       description:
-          'HTTP requests the app made through any dart:io client (the DevTools '
-          'Network tab): method, URL, status, duration, request/response size, '
-          'most recent first. clear:true empties the list for a '
-          'clean baseline.',
+          'HTTP requests the app made through any dart:io client (HttpClient, '
+          'package:http, Dio; the DevTools Network tab): #number, method, URL, '
+          'status, duration, sizes, most recent first; url filters. id: '
+          'one request in full — headers, bodies (JSON, secrets masked), '
+          'timing, redirects, error. clear:true empties the list for a clean '
+          'baseline.',
       inputSchema: ToolInputSchema(
         properties: {
           'clear': JsonSchema.boolean(
@@ -815,6 +817,14 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'status_filter': JsonSchema.integer(
             description:
                 'Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests.',
+          ),
+          'url': JsonSchema.string(
+            description: 'Only requests whose URL contains this text.',
+          ),
+          'id': JsonSchema.integer(
+            description:
+                'The #number of a request in the list: its headers, bodies '
+                'and timing.',
           ),
         },
       ),
@@ -852,8 +862,58 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
-        final requests = (res.data?['requests'] as List<dynamic>?) ?? [];
-        var filtered = requests.whereType<Map<String, dynamic>>().toList();
+        final requests = ((res.data?['requests'] as List<dynamic>?) ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        // #number: position since the last clear (the VM's ids are 19
+        // digits), stable while the list only grows.
+        final numbers = {
+          for (var i = 0; i < requests.length; i++) requests[i]['id']: i + 1,
+        };
+        final wanted = params['id'];
+        if (wanted != null) {
+          final n = wanted is num ? wanted.toInt() : int.tryParse('$wanted');
+          if (n == null || n < 1 || n > requests.length) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'No request #$wanted: ${requests.length} recorded since '
+                      'the last clear (#1–#${requests.length}). List them '
+                      'without id first.',
+                ),
+              ],
+            );
+          }
+          final detail = await _callExtensionRaw(
+            'ext.dart.io.getHttpProfileRequest',
+            {'id': '${requests[n - 1]['id']}'},
+          );
+          if (detail.isError || detail.data == null) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'Request #$n detail unavailable: ${detail.errorMessage}',
+                ),
+              ],
+            );
+          }
+          return CallToolResult(
+            content: [
+              TextContent(text: formatRequestDetail(detail.data!, number: n)),
+            ],
+          );
+        }
+        var filtered = requests;
+        final urlFilter = params['url'] as String?;
+        if (urlFilter != null && urlFilter.isNotEmpty) {
+          filtered = filtered
+              .where((r) => '${r['uri']}'.contains(urlFilter))
+              .toList();
+        }
         if (statusFilter != null) {
           filtered = filtered
               .where(
@@ -867,31 +927,39 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
               TextContent(
                 text: wasOff
                     ? 'HTTP profiling was off and is now enabled. Repeat the action, then call this again.'
-                    : 'No HTTP requests recorded yet.',
+                    : requests.isEmpty
+                    ? 'No HTTP requests recorded yet.'
+                    : 'None of the ${requests.length} recorded requests match '
+                          '${[if (urlFilter != null) 'url "$urlFilter"', if (statusFilter != null) 'status $statusFilter'].join(' and ')}.',
               ),
             ],
           );
         }
         final shown = filtered.reversed.take(limit);
         final buf = StringBuffer(
-          '${filtered.length} HTTP requests (showing last $limit):\n',
+          '${filtered.length} HTTP requests'
+          '${filtered.length > limit ? ' (last $limit shown)' : ''}; '
+          'get_http_profile(id: N) for one in full:\n',
         );
         for (final req in shown) {
           final method = req['method'] ?? '?';
           final uri = req['uri'] ?? '?';
+          final response = req['response'] as Map?;
           final status =
-              (req['response'] as Map?)?['statusCode']?.toString() ?? '...';
-          final start = req['startTime'] as int? ?? 0;
-          final end = req['endTime'] as int? ?? 0;
-          final durationMs = end > 0
-              ? '${((end - start) / 1000).round()}ms'
-              : 'pending';
+              response?['statusCode']?.toString() ??
+              ((req['request'] as Map?)?['error'] != null ||
+                      response?['error'] != null
+                  ? 'failed'
+                  : '...');
+          final ms = durationMs(req);
+          final durationText = ms == null ? 'pending' : '${ms}ms';
           final reqSize = ((req['request'] as Map?)?['contentLength'] ?? 0)
               .toString();
           final respSize = ((req['response'] as Map?)?['contentLength'] ?? 0)
               .toString();
           buf.writeln(
-            '[$status] $method $uri  ⏱$durationMs  ↑${reqSize}B ↓${respSize}B',
+            '#${numbers[req['id']]} [$status] $method $uri  ⏱$durationText  '
+            '↑${reqSize}B ↓${respSize}B',
           );
         }
         return CallToolResult(content: [TextContent(text: buf.toString())]);

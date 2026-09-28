@@ -831,6 +831,48 @@ Future<void> main(List<String> args) async {
         ['Nothing changed in the', 's after it either'],
       );
 
+      // ROADMAP §5.6: an unmocked request goes out through dart:io and
+      // shows in full (success or network error both have request headers).
+      // Just before the hot reload: the fixture doesn't catch a 404, and the
+      // reload clears that uncaught error for the checks after it.
+      await check('clear the HTTP profile', 'get_http_profile', {
+        'clear': true,
+      });
+      await check('clear the mock', 'mock_http_response', {'clear': true});
+      await check('send for real', 'tap_widget', {'key': 'Send'});
+      await check(
+        'get_http_profile lists it by number',
+        'get_http_profile',
+        {'url': 'example.com/ping'},
+        ['#1 [', 'GET https://example.com/ping'],
+        false,
+        const Duration(seconds: 15),
+      );
+      await check(
+        'get_http_profile id shows it in full',
+        'get_http_profile',
+        {'id': 1},
+        ['#1 GET https://example.com/ping', 'Request headers:'],
+        false,
+        Duration.zero,
+        8192,
+      );
+      // Back to the mocked state the reload checks below expect.
+      await check('mock /ping again', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 200,
+        'body': '{"ok":true}',
+      });
+      await check('send mocked again', 'tap_widget', {'key': 'Send'});
+      await check(
+        'mocked response on screen again',
+        'assert_widget',
+        {'text': 'Hello, Pilot (200)'},
+        [],
+        false,
+        const Duration(seconds: 5),
+      );
+
       final main = File('$app/lib/main.dart');
       main.writeAsStringSync(
         main.readAsStringSync().replaceFirst('Version A', 'Version B'),

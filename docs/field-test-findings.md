@@ -378,6 +378,14 @@ keyboard forced on, and in Chrome:
 | 223 | path of an arbitrary instance | ❌→fixed | `getInstances` returned a live DateTime, not a leaked one, so the path pointed at Riverpod state. A confirming round now diffs instance identities; the path is taken from an instance that round created and GC kept; classes with none are dropped. It also showed a DateTime held by the SDK's `_agentActiveUntil`: instances FlutterPilot holds are reported as FlutterPilot's, not the app's |
 | 224 | clean app | ✅ | no app class leaks; `_RecognizerEventData` (+5/tap) and `GestureArenaEntry` (+1/tap) are labelled "held only by framework objects": gesture recognizers keep an entry per pointer id (Flutter never removes `_pointerToEventData` entries; `_entries`, flutter/flutter#117356) |
 
+## Network detail in get_http_profile (ROADMAP §5.6), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 225 | wrong duration | ❌→fixed | the list showed the top-level `endTime`, when the request finished *sending* (310 ms); the response ended at 529 ms. Durations now run to `response.endTime` |
+| 226 | request in full | ✅ | `get_http_profile(id: 1)` on the Show feed: `#1 GET …/showstories.json → 200 OK in 545 ms`, timeline "Connection established +317 ms … Waiting (TTFB) +544 ms" (connecting was most of it), both header sets and the JSON body. `url` filters; a filter matching nothing now says how many were recorded instead of "none recorded yet" |
+| 227 | e2e, unmocked request | ✅ | the fixture's Send through Dio without a mock appears as `#1 [404] GET https://example.com/ping` and in full with `id: 1`. The fixture doesn't catch Dio's 404, so the check runs just before the hot reload that clears the exception flag. Redaction of credentials (headers, JSON, form fields) is covered by unit tests only: no field-test app sends credentials |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

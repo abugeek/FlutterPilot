@@ -539,13 +539,15 @@ Why an interaction is slow: runs tool (tap_widget, scroll_into_view, execute_act
 
 ## `get_http_profile`
 
-HTTP requests the app made through any dart:io client (the DevTools Network tab): method, URL, status, duration, request/response size, most recent first. clear:true empties the list for a clean baseline.
+HTTP requests the app made through any dart:io client (HttpClient, package:http, Dio; the DevTools Network tab): #number, method, URL, status, duration, sizes, most recent first; url filters. id: one request in full — headers, bodies (JSON, secrets masked), timing, redirects, error. clear:true empties the list for a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `clear` | boolean | no | Clear the recorded requests instead of listing them. |
 | `limit` | integer | no | Maximum number of requests to return, most recent first (default: 50). |
 | `status_filter` | integer | no | Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests. |
+| `url` | string | no | Only requests whose URL contains this text. |
+| `id` | integer | no | The #number of a request in the list: its headers, bodies and timing. |
 
 ## `get_supabase_auth`
 

@@ -392,8 +392,14 @@ Highest value first. Each should answer a *why*, not just dump data.
    GC, with the retaining path of such an instance and who holds it (app,
    framework only, or FlutterPilot itself). leak_tracker not needed.
    Findings #221–224.
-6. **Network detail:** `get_http_profile` request detail (headers, bodies) via
-   `getHttpProfileRequest`; works for any dart:io client, not only Dio.
+6. ~~**Network detail**~~ — done (2026-09-29): `get_http_profile` numbers
+   requests (`#23`, position since the last clear), filters by `url`, and
+   `id: 23` returns one in full via `getHttpProfileRequest`: connection
+   timeline, redirects, error, request/response headers and bodies (JSON
+   compact, capped at 3000 chars, binary as a size). Credential headers and
+   secret-looking JSON/form fields are masked. The listed duration was the
+   time to *send* the request; it now runs to the end of the response.
+   Findings #225–227.
 7. **Accessibility audit:** missing semantics labels on icon buttons, contrast
    ratios, focus order — on top of the (now honest) tap-target check.
 8. **Native crash reason:** when the app dies outside Dart (an Objective-C,

@@ -155,7 +155,7 @@ culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 
 **Network** — `mock_http_response` (`clear: true` to remove),
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
-(any `dart:io` client).
+(any `dart:io` client; `id` for one request's headers and bodies).
 
 **Performance** — `profile_frame_budget`, `profile_action` (CPU
 profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`

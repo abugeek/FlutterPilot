@@ -51,7 +51,7 @@ When interacting with a Flutter app using FlutterPilot:
 ### 5. Network Mocking & Conditioning (Dio plugin)
 - **Mock Responses**: `mock_http_response(urlPattern: "...", statusCode: 500, body: '{"error":"server_down"}')` to test failure handling without a backend; `mock_http_response(clear: true)` afterwards.
 - **Network Conditioning**: `simulate_network(condition: "slow_3g"|"fast_4g"|"offline"|"normal")`.
-- **Verify**: `get_network_logs` (Dio) or `get_http_profile` (any dart:io client: status, timing, sizes).
+- **Verify**: `get_network_logs` (Dio) or `get_http_profile` (any dart:io client: status, timing, sizes; `url` filters; `id: N` for one request's headers, bodies and connection timeline, credentials masked).
 
 ### 6. Performance (DevTools equivalents)
 - `profile_frame_budget` — p50/p90/p99 frame times, build vs raster split, jank count.
