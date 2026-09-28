@@ -187,9 +187,19 @@ current major. §1 is done.
     reports the field's text and cursor. `enter_text` left the whole text
     selected on desktop (focus selects all); the cursor now ends up at the
     end. Round 13 of `docs/field-test-findings.md`.
-12. **Text scale / locale overrides** need the app to wrap MaterialApp in a
-    `ValueListenableBuilder` (tools now say so). Let `flutterpilot init` inject
-    that wiring, like it injects `NavigationTracker`.
+12. **Text scale / locale overrides:** done, with no wiring at all instead
+    of `init` wrapping MaterialApp (which missed apps whose MaterialApp is
+    not in main.dart, has its own `builder:`/`locale:`, or is Cupertino).
+    The locale goes to the app as a device locale change
+    (`dispatchLocalesChanged`) and resolves through its `supportedLocales`;
+    the text scale is put into the root MediaQuery (the one `View` builds
+    from the device), rebuilt first and patched before anything below builds
+    when a device change (keyboard, rotation, resize) refreshes it, and
+    re-patched after hot reload. The response says what the app shows: an
+    unsupported locale or an app that pins `locale:` or clamps text scaling
+    is reported ("had no effect" / "partly applied"), not faked. `init` no
+    longer rewrites MaterialApp; the notifiers are deprecated and old wiring
+    keeps working. Round 14 of `docs/field-test-findings.md`.
 13. **Settle timing:** post-action state is read ~150 ms after an action, so
     during page/menu transitions (~300 ms) it can list the previous screen's
     elements. Wait for route animations (`ModalRoute.animation` status) and

@@ -138,13 +138,17 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'test large text; 0 resets), orientation (portrait/landscape/all, '
           'phones), and the debug overlays debugPaint (layout bounds), '
           'repaintRainbow (what repaints) and slowAnimations (5x slower). '
-          'Pair with audit_screen_health to catch overflows.',
+          'Locale and textScale act like the device setting, with no app '
+          'code: the response says what the app shows, e.g. when it does '
+          'not support the locale or clamps text scaling. Pair with '
+          'audit_screen_health to catch overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
           'locale': JsonSchema.string(
             description:
-                'BCP-47 tag (e.g. "en", "zh-CN"); "system" restores the device default.',
+                'BCP-47 tag (e.g. "en", "en-GB", "zh-Hans-CN"); "system" '
+                'restores the device locale.',
           ),
           'textScale': JsonSchema.number(
             description:
@@ -228,11 +232,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             lines.add('✗ $label: ${res.errorMessage}');
           } else {
             final note = res.data?['note'];
-            lines.add(
-              res.data?['status'] == 'skipped'
-                  ? '– $label skipped: $note'
-                  : '✓ $label${note != null ? ' ($note)' : ''}',
-            );
+            lines.add(switch (res.data?['status']) {
+              'skipped' => '– $label skipped: $note',
+              // Applied to the device settings, but the app ignores or
+              // clamps it: a finding about the app, not a tool failure.
+              'no_effect' => '– $label had no effect: $note',
+              'limited' => '– $label partly applied: $note',
+              _ => '✓ $label${note != null ? ' ($note)' : ''}',
+            });
           }
         }
         return CallToolResult(

@@ -17,6 +17,7 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 /// and checks what an agent gets from Flutter's own inspector instead.
 ///
 /// Covers: init wiring, widget tree, enter_text, press_key, secondary tap,
+/// text scale and locale on an unwired MaterialApp,
 /// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot restart.
 Future<void> main(List<String> args) async {
@@ -446,6 +447,45 @@ Future<void> main(List<String> args) async {
         ['✓ theme dark'],
       );
       await check('light theme', 'set_app_settings', {'theme': 'light'});
+      // Text scale and locale act like the device settings: no wiring in the
+      // fixture's plain MaterialApp (ROADMAP §3.12).
+      await check(
+        'text scale reaches an unwired app',
+        'set_app_settings',
+        {'textScale': 1.5},
+        ['✓ text scale 1.5'],
+      );
+      await check('app shows scale 1.5', 'assert_widget', {
+        'text': 'Scale 1.5',
+      });
+      await check(
+        'text scale resets',
+        'set_app_settings',
+        {'textScale': 0},
+        ['✓ text scale 0'],
+      );
+      await check('app shows scale 1.0', 'assert_widget', {
+        'text': 'Scale 1.0',
+      });
+      await check(
+        'locale reaches an unwired app',
+        'set_app_settings',
+        {'locale': 'en-GB'},
+        ['✓ locale en-GB'],
+      );
+      await check('app shows en_GB', 'assert_widget', {'text': 'Locale en_GB'});
+      await check(
+        'unsupported locale is reported, not faked',
+        'set_app_settings',
+        {'locale': 'fr'},
+        ['had no effect', 'does not support fr', 'en_US, en_GB'],
+      );
+      await check(
+        'locale back to the device',
+        'set_app_settings',
+        {'locale': 'system'},
+        ['✓ locale system'],
+      );
       await check(
         'save baseline',
         'compare_screenshot',
@@ -835,7 +875,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
   dio = Dio()..interceptors.add(DioPilotInterceptor());
-  runApp(MaterialApp(navigatorObservers: [NavigationTracker()], home: const Home()));
+  runApp(MaterialApp(
+    navigatorObservers: [NavigationTracker()],
+    supportedLocales: const [Locale('en', 'US'), Locale('en', 'GB')],
+    home: const Home(),
+  ));
 }
 
 class Home extends StatefulWidget {
@@ -887,6 +931,9 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) => Scaffold(
     body: Column(children: [
       const Text('Version A'),
+      // What set_app_settings(textScale/locale) reached, with no wiring above.
+      Text('Scale ${MediaQuery.textScalerOf(context).scale(10) / 10}'),
+      Text('Locale ${Localizations.localeOf(context)}'),
       TextField(
         controller: _name,
         decoration: const InputDecoration(labelText: 'Name'),

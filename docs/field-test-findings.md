@@ -289,6 +289,21 @@ driven through the MCP tools on macOS.
 | 186 | enter_text selection | ❌→fixed | on desktop the focus change after enter_text selected the whole text, so the next backspace would have cleared the field. The cursor is at the end now (also fill_form) |
 | 187 | other platforms | ✅ unit | Android/Linux/Windows edit through Flutter's shortcuts, macOS/iOS through the new fallback: same result, never twice (widget tests on all six platforms; e2e on CI's iOS/Android/web runs) |
 
+## Round 14 — locale and text scale without wiring (§3.12)
+
+e2e fixture: a plain `MaterialApp` (supportedLocales en_US, en_GB) showing
+the scale and locale its screen gets. hn_reader (go_router,
+`MaterialApp.router`) driven on macOS, with its old wiring and without it.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 188 | unwired app | ❌→fixed | set_app_settings refused both ("not wired in this app"); `init` only wired a MaterialApp in main.dart without its own builder:/locale:. Now both work with no app code: fixture shows "Scale 1.5" and "Locale en_GB"; hn_reader with its wiring removed renders at 1.5x |
+| 189 | unsupported locale | ✅ | "locale de had no effect: the app does not support de (supportedLocales: en_US); it shows en_US" — the device locale was set, the app ignores it, as on a phone |
+| 190 | "system" and "zh-CN" | ❌→fixed | the SDK split tags on "_" only and parsed "system" as a language code. Tags with "-"/"_", scripts (zh-Hans-CN) and regions (es-419) parse; "system" restores the device locale |
+| 191 | keeps applying | ✅ | a hot reload on hn_reader kept 2x (screenshot); window resize and MaterialApp rebuilt with a new supportedLocales list are covered by widget tests, each failing when its fix is removed |
+| 192 | real bug found | ✅ | at 2x hn_reader's story row overflows by 65–212 px: get_errors names `Row (lib/ui/story_tile.dart:30:19)` |
+| 193 | old wiring | ✅ | hn_reader's ValueListenableBuilder + withClampedTextScaling still passes the scale through; the notifiers are deprecated, nothing sets them |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

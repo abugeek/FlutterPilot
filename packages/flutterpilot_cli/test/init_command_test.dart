@@ -167,12 +167,10 @@ void main() {
         final mainContent = mainFile.readAsStringSync();
         expect(mainContent.contains('FlutterPilot.initialize();'), isTrue);
         expect(mainContent.contains('NavigationTracker()'), isTrue);
-        expect(mainContent.contains('FlutterPilot.localeNotifier'), isTrue);
-        expect(mainContent.contains('FlutterPilot.textScaleNotifier'), isTrue);
-        expect(mainContent.contains('ValueListenableBuilder<Locale?>'), isTrue);
-        expect(mainContent.contains('ValueListenableBuilder<double?>'), isTrue);
         // A non-const observer inside `const MaterialApp(` would not compile.
         expect(mainContent, isNot(contains('const MaterialApp')));
+        // set_app_settings(locale/textScale) needs no wiring in the app.
+        expect(mainContent, isNot(contains('ValueListenableBuilder')));
       },
     );
 
@@ -185,16 +183,6 @@ void main() {
       );
       const router = 'MaterialApp.router(routerConfig: r)';
       expect(InitCommand.addNavigationTracker(router), router);
-    });
-
-    test('addValueListenableOverrides wraps MaterialApp idempotently', () {
-      const input = 'MaterialApp(home: Scaffold())';
-      final wrapped = InitCommand.addValueListenableOverrides(input);
-      expect(wrapped, contains('ValueListenableBuilder<Locale?>'));
-      expect(wrapped, contains('ValueListenableBuilder<double?>'));
-      expect(wrapped, contains('FlutterPilot.localeNotifier'));
-      expect(wrapped, contains('FlutterPilot.textScaleNotifier'));
-      expect(InitCommand.addValueListenableOverrides(wrapped), wrapped);
     });
 
     test('patchMain handles arrow-bodied main', () {
@@ -210,31 +198,6 @@ void main() {
         startsWith("import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';"),
       );
       expect(InitCommand.ensureImport('plain()'), 'plain()');
-    });
-
-    test('overrides skip text scale when the app has its own builder', () {
-      final out = InitCommand.addValueListenableOverrides(
-        'MaterialApp(builder: (c, w) => w!, home: X())',
-      );
-      expect(out, contains('FlutterPilot.localeNotifier'));
-      expect(out, isNot(contains('FlutterPilot.textScaleNotifier')));
-    });
-
-    test('a nested widget\'s builder: does not block text scale wiring', () {
-      // The notes field-test app: home: BlocBuilder(builder: ...).
-      final out = InitCommand.addValueListenableOverrides(
-        'MaterialApp(title: "N", home: BlocBuilder<A, S>(builder: (c, s) => X()))',
-      );
-      expect(out, contains('FlutterPilot.localeNotifier'));
-      expect(out, contains('FlutterPilot.textScaleNotifier'));
-      expect(InitCommand.wiredOverrides(out), 'locale and text scale');
-    });
-
-    test('an app\'s own locale: is respected', () {
-      final out = InitCommand.addValueListenableOverrides(
-        "MaterialApp(locale: const Locale('en'), home: X())",
-      );
-      expect(InitCommand.wiredOverrides(out), 'text scale');
     });
 
     test('patchMain reuses an existing ensureInitialized()', () {

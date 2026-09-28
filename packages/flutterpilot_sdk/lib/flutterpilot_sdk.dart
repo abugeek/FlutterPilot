@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'src/ai_overlay_manager.dart';
+import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
@@ -25,6 +26,7 @@ import 'src/stream_inspector.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
 
+export 'src/app_settings_override.dart';
 export 'src/error_inspector.dart';
 export 'src/flight_recorder.dart';
 export 'src/frame_budget_profiler.dart';
@@ -193,45 +195,20 @@ class FlutterPilot {
   // Held to keep the semantics tree alive once enabled.
   static SemanticsHandle? _semanticsHandle;
 
-  /// A [ValueNotifier] that broadcasts locale overrides to the widget tree.
-  ///
-  /// When a non-null [ui.Locale] is set via the `ext.flutterpilot.setLocale`
-  /// service extension, widgets listening to this notifier can rebuild with
-  /// the new locale. Setting the value back to `null` restores the
-  /// platform default.
-  ///
-  /// ```dart
-  /// ValueListenableBuilder<Locale?>(
-  ///   valueListenable: FlutterPilot.localeNotifier,
-  ///   builder: (context, locale, child) {
-  ///     // Use locale override or fall back to platform locale.
-  ///     return MaterialApp(locale: locale);
-  ///   },
-  /// )
-  /// ```
+  /// No longer used: `set_app_settings(locale:)` changes the device locale
+  /// the app sees, with no wiring. Nothing sets this any more.
+  @Deprecated(
+    'set_app_settings(locale:) needs no wiring now. Remove the '
+    'ValueListenableBuilder and the locale: it passes to MaterialApp.',
+  )
   static final ValueNotifier<ui.Locale?> localeNotifier = ValueNotifier(null);
 
-  /// A [ValueNotifier] that broadcasts text-scale overrides.
-  ///
-  /// Wrap your `MaterialApp` (or any widget) with a [MediaQuery] that reads
-  /// this notifier to support accessibility testing via `set_app_settings(textScale: ...)`:
-  ///
-  /// ```dart
-  /// ValueListenableBuilder<double?>(
-  ///   valueListenable: FlutterPilot.textScaleNotifier,
-  ///   builder: (ctx, scale, child) {
-  ///     return MediaQuery(
-  ///       data: MediaQuery.of(ctx).copyWith(
-  ///         textScaler: scale != null
-  ///             ? TextScaler.linear(scale)
-  ///             : MediaQuery.of(ctx).textScaler,
-  ///       ),
-  ///       child: child!,
-  ///     );
-  ///   },
-  ///   child: MaterialApp(...),
-  /// )
-  /// ```
+  /// No longer used: `set_app_settings(textScale:)` changes the device text
+  /// scale the app sees, with no wiring. Nothing sets this any more.
+  @Deprecated(
+    'set_app_settings(textScale:) needs no wiring now. Remove the '
+    'ValueListenableBuilder and the MaterialApp builder: that reads it.',
+  )
   static final ValueNotifier<double?> textScaleNotifier = ValueNotifier(null);
 
   static double _lastFps = 0;

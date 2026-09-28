@@ -131,10 +131,6 @@ class FlutterPilot {
   static void initialize();  // Must be called before runApp
   static String get sdkVersion => '0.1.0';
   
-  // Notifiers (listen for runtime changes)
-  static final localeNotifier = ValueNotifier<Locale?>(null);
-  static final textScaleNotifier = ValueNotifier<double?>(null);
-  
   // Custom tools
   static Future<void> registerCustomTool(
     String name,
@@ -268,52 +264,20 @@ void main() {
 // AI can now call: call_custom_tool name:clearCache
 ```
 
-### Locale Runtime Switching
+### Locale and Text Scale
 
-```dart
-MaterialApp(
-  locale: Locale('en'),
-  supportedLocales: [Locale('en'), Locale('es')],
-  localizationsDelegates: [...],
-  builder: (context, child) {
-    return ValueListenableBuilder<Locale?>(
-      valueListenable: FlutterPilot.localeNotifier,
-      builder: (context, locale, _) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            locale: locale ?? Locale('en'),
-          ),
-          child: child,
-        );
-      },
-    );
-  },
-  home: MyApp(),
-)
-```
+`set_app_settings(locale: "fr")` and `set_app_settings(textScale: 2)` need no
+code in the app. They act like the device settings: the locale goes through
+the app's `supportedLocales` and the text scale through any clamp the app
+applies (`MediaQuery.withClampedTextScaling`). The response says what the
+app shows, e.g. `locale fr had no effect: the app does not support fr
+(supportedLocales: en_US); it shows en_US`. Both stay applied across
+keyboard, rotation, window resizes and hot reloads until reset
+(`locale: "system"`, `textScale: 0`).
 
-### Text Scale Override (Accessibility)
-
-```dart
-MaterialApp(
-  builder: (context, child) {
-    return ValueListenableBuilder<double?>(
-      valueListenable: FlutterPilot.textScaleNotifier,
-      builder: (context, scale, _) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: scale != null
-              ? TextScaler.linear(scale)
-              : MediaQuery.textScalerOf(context),
-          ),
-          child: child,
-        );
-      },
-    );
-  },
-  home: MyApp(),
-)
-```
+Apps that wrapped `MaterialApp` in a `ValueListenableBuilder` on
+`FlutterPilot.localeNotifier` / `textScaleNotifier` (older `flutterpilot
+init`) keep working; the notifiers are deprecated and the wrapper can go.
 
 ---
 
