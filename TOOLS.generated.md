@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 130
+Tool count: 125
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -1077,70 +1077,31 @@ View timestamped log of connectivity state transitions.
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
-## `get_firebase_status`
+## `get_firebase_auth`
 
-Check which Firebase services are registered and their status (Crashlytics, Analytics, Performance, Messaging).
+Who is signed in to Firebase Auth in the app: uid (for Firestore paths like users/{uid}/...), providers, anonymous/verified, token expiry and custom claims, recent sign-in/out events, and the Firebase project. Email/name/phone are redacted unless showSensitive=true. Needs the flutterpilot_firebase plugin.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `showSensitive` | boolean | no | Reveal email, display name and phone number. |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
-## `get_fcm_token`
+## `query_firestore`
 
-Get the Firebase Cloud Messaging token (truncated for security).
+Read Firestore with the app's own connection and signed-in user (so security rules apply as in the app). path is a collection ("users/UID/notes") or a document ("users/UID"). Optional where ("done == false", ops == != < <= > >= array-contains), orderBy ("createdAt desc"), limit (default 20, max 100), source "cache" to see what the app has locally instead of the server. Needs the flutterpilot_firebase plugin.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `path` | string | no | Collection or document path. |
+| `where` | string | no | One filter: "field op value". |
+| `orderBy` | string | no | Field, optionally followed by "desc". |
+| `limit` | integer | no | 1–100, default 20. |
+| `source` | string | no | "server" (default) or "cache". |
 | `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
 | `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
 | `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `log_analytics_event`
-
-⚠ MAKES REAL NETWORK CALL — logs a custom Firebase Analytics event to your Firebase project (visible in the Firebase console). Useful for verifying analytics instrumentation during development. Do not call in production test runs to avoid polluting analytics data.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Event name (e.g. "button_pressed", "screen_view"). |
-| `params` | string | no | Optional JSON object of event parameters (e.g. '{"button_id":"submit"}'). |
-
-## `get_analytics_log`
-
-View recent analytics events logged through FlutterPilot.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `limit` | string | no | Max number of events to return (default: 200). |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
-
-## `start_performance_trace`
-
-Start a named Firebase Performance trace. Use stop_performance_trace to end it.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Trace name (e.g. "checkout_flow", "data_sync"). |
-
-## `stop_performance_trace`
-
-Stop a previously started Firebase Performance trace.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `name` | string | yes | Trace name that was passed to start_performance_trace. |
-
-## `record_crashlytics_error`
-
-⚠ MAKES REAL NETWORK CALL — records a test error in Firebase Crashlytics (appears in your Firebase console). Useful for verifying crash reporting instrumentation. Do not call repeatedly or in CI — it pollutes your production Crashlytics dashboard.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `message` | string | no | Error message to record. |
-| `fatal` | string | no | "true" for fatal error, "false" for non-fatal (default). |
 
 ## `get_secure_storage_keys`
 

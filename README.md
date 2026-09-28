@@ -145,10 +145,11 @@ line, culprit widget), `get_debug_logs`, `get_flight_log`.
 `set_riverpod_state`, Bloc `get_bloc_state` / `set_bloc_state`, go_router,
 SharedPreferences, `exec_sql_query` (Drift or sqflite, read-only), Hive /
 Hive CE `get_hive_contents`, Supabase (`get_supabase_auth`,
-`query_supabase_table`, `get_supabase_realtime`), secure_storage and
-connectivity. Field-tested on real apps: Riverpod, go_router, Dio, sqflite,
-SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage and
-Supabase. Firebase is not yet (see [ROADMAP.md](ROADMAP.md) §2).
+`query_supabase_table`, `get_supabase_realtime`), Firebase
+(`get_firebase_auth`, `query_firestore`), secure_storage and connectivity.
+Field-tested on real apps: Riverpod, go_router, Dio, sqflite,
+SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage,
+Supabase and Firebase (Auth + Firestore, on the local emulators).
 
 **Devices** — `connect_app`, `list_connected_devices`, `register_device`,
 `switch_device`: one server drives several running apps (e.g. iOS simulator,
@@ -205,7 +206,7 @@ Android emulator, Chrome), one active device at a time.
 - **`flutterpilot_supabase`** — Auth state, session, realtime channels
 - **`flutterpilot_gorouter`** — Route state, config, history, programmatic navigation
 - **`flutterpilot_connectivity`** — Network status, history, simulated offline
-- **`flutterpilot_firebase`** — Crashlytics, Analytics, Performance, FCM
+- **`flutterpilot_firebase`** — Firebase Auth user and Firestore reads (as the app sees them)
 - **`flutterpilot_secure_storage`** — Encrypted key-value inspection (auto-redacted)
 
 ---
@@ -283,13 +284,11 @@ GoRouterPilotInspector.register(router);
 // If using connectivity_plus:
 ConnectivityPilotInspector.register();
 
-// If using Firebase:
-await Firebase.initializeApp();
+// If using Firebase Auth / Firestore:
+await Firebase.initializeApp(...);
 FirebasePilotInspector.register(
-  crashlytics: FirebaseCrashlytics.instance,
-  analytics: FirebaseAnalytics.instance,
-  performance: FirebasePerformance.instance,
-  messaging: FirebaseMessaging.instance,
+  auth: FirebaseAuth.instance,
+  firestore: FirebaseFirestore.instance,
 );
 
 // If using flutter_secure_storage:
@@ -461,11 +460,8 @@ A small number of **mutating** plugin tools do make real API calls to external s
 |------|-------------|
 | `supabase_sign_out` | Calls `client.auth.signOut()` — signs out the real session |
 | `supabase_refresh_session` | Calls `client.auth.refreshSession()` — rotates tokens |
-| `log_analytics_event` | Sends event to Firebase Analytics dashboard |
-| `record_crashlytics_error` | Sends error to Firebase Crashlytics dashboard |
-| `start_performance_trace` | Starts a Firebase Performance trace (network call when stopped) |
 
-> **Recommendation:** Only use these tools in development/test environments against non-production Firebase projects and Supabase instances. All other FlutterPilot tools are read-only and safe to use in any environment.
+> **Recommendation:** Only use these tools in development/test environments against non-production Supabase instances. All other FlutterPilot tools are read-only and safe to use in any environment.
 
 ### ⚠️ Destructive Storage Tools
 

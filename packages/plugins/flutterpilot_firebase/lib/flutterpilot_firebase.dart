@@ -1,384 +1,294 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:firebase_performance/firebase_performance.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
-void _safeRegisterExtension(
-  String method,
-  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
-  handler,
-) {
-  try {
-    registerExtension(method, handler);
-  } on ArgumentError {
-    // Already registered — safe to ignore during re-initialization.
-  }
-}
-
-/// FlutterPilot plugin that exposes Firebase services state to AI agents.
-///
-/// Provides visibility into:
-/// - **Crashlytics**: crash collection status, forced crashes for testing
-/// - **Analytics**: log events, get current screen, observer reference
-/// - **Performance**: custom traces, metrics, collection status
-/// - **Messaging**: FCM token, notification permission status, topic subscriptions
+/// FlutterPilot plugin that lets AI agents see Firebase Auth and Firestore
+/// the way the app sees them: who is signed in, and what the database
+/// holds. Read-only; change data through the app's own UI.
 ///
 /// ## Setup
 /// ```dart
-/// await Firebase.initializeApp();
+/// await Firebase.initializeApp(...);
+/// FlutterPilot.initialize();
 /// FirebasePilotInspector.register(
-///   crashlytics: FirebaseCrashlytics.instance,
-///   analytics: FirebaseAnalytics.instance,
-///   performance: FirebasePerformance.instance,
-///   messaging: FirebaseMessaging.instance,
+///   auth: FirebaseAuth.instance,
+///   firestore: FirebaseFirestore.instance,
 /// );
 /// ```
-///
-/// All parameters are optional — register only the services you use.
+/// Both are optional — register what the app uses.
 class FirebasePilotInspector {
   FirebasePilotInspector._();
 
-  static bool _registered = false;
-  static FirebaseCrashlytics? _crashlytics;
-  static FirebaseAnalytics? _analytics;
-  static FirebasePerformance? _performance;
-  static FirebaseMessaging? _messaging;
-  static final List<Map<String, dynamic>> _analyticsLog = [];
-  static final Map<String, Trace> _activeTraces = {};
-  static const int _maxAnalyticsLog = 200;
+  static FirebaseAuth? _auth;
+  static FirebaseFirestore? _firestore;
+  static StreamSubscription<User?>? _authSub;
+  static final List<Map<String, dynamic>> _authEvents = [];
+  static const int _maxAuthEvents = 20;
 
-  /// Registers Firebase services with FlutterPilot.
-  ///
-  /// All parameters are optional. Only registered services will have
-  /// their extensions available.
-  static void register({
-    FirebaseCrashlytics? crashlytics,
-    FirebaseAnalytics? analytics,
-    FirebasePerformance? performance,
-    FirebaseMessaging? messaging,
-  }) {
+  /// Registers the Firebase services the app uses with FlutterPilot.
+  static void register({FirebaseAuth? auth, FirebaseFirestore? firestore}) {
     FlutterPilot.registerCapability(
       'firebase',
-      version: '1',
+      version: '2',
       extensions: [
-        'ext.flutterpilot.getFirebaseStatus',
-        'ext.flutterpilot.getAnalyticsLog',
-        'ext.flutterpilot.logAnalyticsEvent',
-        'ext.flutterpilot.getFcmToken',
-        'ext.flutterpilot.recordCrashlyticsError',
-        'ext.flutterpilot.startPerformanceTrace',
-        'ext.flutterpilot.stopPerformanceTrace',
+        'ext.flutterpilot.getFirebaseAuth',
+        'ext.flutterpilot.queryFirestore',
       ],
-      mutating: true,
     );
     if (!FlutterPilot.isInitialized) {
       debugPrint(
         '[FlutterPilot] FirebasePilotInspector.register called before '
-        'FlutterPilot.initialize(). Extensions will not be registered.',
+        'FlutterPilot.initialize(). Call FlutterPilot.initialize() first.',
       );
-      return;
     }
-    if (_registered) return;
-    _registered = true;
-    _crashlytics = crashlytics;
-    _analytics = analytics;
-    _performance = performance;
-    _messaging = messaging;
-    _registerExtensions();
-  }
-
-  /// Clears all tracked state. Call on hot-restart to prevent stale data.
-  static void reset() {
-    _analyticsLog.clear();
-    for (final trace in _activeTraces.values) {
-      trace.stop();
-    }
-    _activeTraces.clear();
-    _crashlytics = null;
-    _analytics = null;
-    _performance = null;
-    _messaging = null;
-    _registered = false;
-  }
-
-  static void _registerExtensions() {
-    // -- ext.flutterpilot.getFirebaseStatus ------------------------------------
-    _safeRegisterExtension('ext.flutterpilot.getFirebaseStatus', (
-      method,
-      parameters,
-    ) async {
-      final result = <String, dynamic>{
-        'crashlytics': _crashlytics != null
-            ? {
-                'available': true,
-                'isCrashlyticsCollectionEnabled':
-                    _crashlytics!.isCrashlyticsCollectionEnabled,
-              }
-            : {'available': false},
-        'analytics': {'available': _analytics != null},
-        'performance': _performance != null
-            ? {
-                'available': true,
-                'isPerformanceCollectionEnabled': _performance!
-                    .isPerformanceCollectionEnabled(),
-              }
-            : {'available': false},
-        'messaging': {'available': _messaging != null},
-      };
-
-      if (_messaging != null) {
-        try {
-          final settings = await _messaging!.getNotificationSettings();
-          result['messaging'] = {
-            'available': true,
-            'authorizationStatus': settings.authorizationStatus.name,
-            'alert': settings.alert.name,
-            'badge': settings.badge.name,
-            'sound': settings.sound.name,
-          };
-        } catch (_) {
-          // Permission check may fail on some platforms
-        }
+    reset();
+    _auth = auth;
+    _firestore = firestore;
+    _authSub = auth?.authStateChanges().listen((user) {
+      _authEvents.add({
+        'event': user == null ? 'signedOut' : 'signedIn',
+        'provider': ?user?.providerData.firstOrNull?.providerId,
+        'at': DateTime.now().toIso8601String(),
+      });
+      while (_authEvents.length > _maxAuthEvents) {
+        _authEvents.removeAt(0);
       }
-
-      return ServiceExtensionResponse.result(json.encode(result));
     });
+    registerExtension('ext.flutterpilot.getFirebaseAuth', _getAuth);
+    registerExtension('ext.flutterpilot.queryFirestore', _queryFirestore);
+  }
 
-    // -- ext.flutterpilot.getFcmToken -----------------------------------------
-    _safeRegisterExtension('ext.flutterpilot.getFcmToken', (
-      method,
-      parameters,
-    ) async {
-      if (_messaging == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'FirebaseMessaging not registered.',
-        );
-      }
+  /// Forgets the registered services (e.g. before registering again).
+  static void reset() {
+    _authSub?.cancel();
+    _authSub = null;
+    _authEvents.clear();
+    _auth = null;
+    _firestore = null;
+  }
 
+  static ServiceExtensionResponse _error(String message) =>
+      ServiceExtensionResponse.error(
+        ServiceExtensionResponse.extensionError,
+        message,
+      );
+
+  static Future<ServiceExtensionResponse> _getAuth(
+    String method,
+    Map<String, String> parameters,
+  ) async {
+    final auth = _auth;
+    if (auth == null) {
+      return _error(
+        'FirebaseAuth not registered: pass auth: FirebaseAuth.instance to '
+        'FirebasePilotInspector.register.',
+      );
+    }
+    final sensitive = parameters['showSensitive'] == 'true';
+    final user = auth.currentUser;
+    final result = <String, dynamic>{
+      'projectId': auth.app.options.projectId,
+      'signedIn': user != null,
+      'events': _authEvents,
+    };
+    if (user != null) {
+      String? hide(String? v) => sensitive ? v : redact(v);
+      result['user'] = {
+        // Needed to build the app's Firestore paths (users/{uid}/...).
+        'uid': user.uid,
+        'email': hide(user.email),
+        'displayName': hide(user.displayName),
+        'phoneNumber': hide(user.phoneNumber),
+        'isAnonymous': user.isAnonymous,
+        'emailVerified': user.emailVerified,
+        'providers': [for (final p in user.providerData) p.providerId],
+        'createdAt': user.metadata.creationTime?.toIso8601String(),
+        'lastSignInAt': user.metadata.lastSignInTime?.toIso8601String(),
+      };
       try {
-        final token = await _messaging!.getToken();
+        // Cached token: no network call unless it expired.
+        final token = await user.getIdTokenResult();
+        result['token'] = {
+          'signInProvider': token.signInProvider,
+          'expiresAt': token.expirationTime?.toIso8601String(),
+          'customClaims': {
+            for (final e in (token.claims ?? const {}).entries)
+              if (!_standardClaims.contains(e.key)) e.key: e.value,
+          },
+        };
+      } catch (e) {
+        result['token'] = {'error': e.toString()};
+      }
+    }
+    return ServiceExtensionResponse.result(jsonEncode(result));
+  }
+
+  static const _standardClaims = {
+    'iss', 'aud', 'auth_time', 'user_id', 'sub', 'iat', 'exp', 'email', //
+    'email_verified', 'firebase', 'name', 'picture', 'phone_number',
+  };
+
+  static Future<ServiceExtensionResponse> _queryFirestore(
+    String method,
+    Map<String, String> parameters,
+  ) async {
+    final firestore = _firestore;
+    if (firestore == null) {
+      return _error(
+        'FirebaseFirestore not registered: pass firestore: '
+        'FirebaseFirestore.instance to FirebasePilotInspector.register.',
+      );
+    }
+    final path = (parameters['path'] ?? '').trim().replaceAll(
+      RegExp(r'^/+|/+$'),
+      '',
+    );
+    if (path.isEmpty) {
+      return _error(
+        'Missing "path": a collection ("users/abc/notes") or a document '
+        '("users/abc").',
+      );
+    }
+    final limit = int.tryParse(parameters['limit'] ?? '') ?? 20;
+    if (limit < 1 || limit > 100) {
+      return _error('limit must be between 1 and 100.');
+    }
+    final source = parameters['source'] == 'cache'
+        ? Source.cache
+        : Source.server;
+    final options = GetOptions(source: source);
+    final isDocument = path.split('/').length.isEven;
+    try {
+      if (isDocument) {
+        final doc = await firestore.doc(path).get(options);
         return ServiceExtensionResponse.result(
-          json.encode({
-            'token': token != null
-                ? '${token.substring(0, (token.length > 20 ? 20 : token.length))}...'
-                : null,
-            'tokenLength': token?.length,
+          jsonEncode({
+            'path': path,
+            'kind': 'document',
+            'source': source.name,
+            'exists': doc.exists,
+            if (doc.exists) 'data': firestoreToJson(doc.data()),
           }),
         );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Failed to get FCM token: $e',
-        );
       }
-    });
-
-    // -- ext.flutterpilot.logAnalyticsEvent ------------------------------------
-    _safeRegisterExtension('ext.flutterpilot.logAnalyticsEvent', (
-      method,
-      parameters,
-    ) async {
-      if (_analytics == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'FirebaseAnalytics not registered.',
-        );
-      }
-
-      final name = parameters['name'];
-      if (name == null || name.isEmpty) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing "name" parameter.',
-        );
-      }
-
-      final paramsJson = parameters['params'];
-      Map<String, Object>? eventParams;
-      if (paramsJson != null) {
-        try {
-          final decoded = json.decode(paramsJson);
-          if (decoded is Map) {
-            eventParams = decoded.map(
-              (k, v) => MapEntry(k.toString(), v as Object),
-            );
-          }
-        } catch (_) {
-          return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.invalidParams,
-            'Invalid JSON for "params" parameter.',
+      Query<Map<String, dynamic>> query = firestore.collection(path);
+      final where = parameters['where'];
+      if (where != null && where.trim().isNotEmpty) {
+        final filter = parseWhere(where);
+        if (filter == null) {
+          return _error(
+            'Could not read where "$where". Use "field op value", op one of '
+            '${_operators.join(' ')}; e.g. "done == false".',
           );
         }
+        query = _applyWhere(query, filter);
       }
-
-      try {
-        await _analytics!.logEvent(name: name, parameters: eventParams);
-        _analyticsLog.add({
-          'event': name,
-          'params': eventParams,
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-        while (_analyticsLog.length > _maxAnalyticsLog) {
-          _analyticsLog.removeAt(0);
-        }
-        return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', 'event': name}),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Failed to log event: $e',
+      final orderBy = parameters['orderBy']?.trim();
+      if (orderBy != null && orderBy.isNotEmpty) {
+        final parts = orderBy.split(RegExp(r'\s+'));
+        query = query.orderBy(
+          parts.first,
+          descending: parts.length > 1 && parts[1].toLowerCase() == 'desc',
         );
       }
-    });
-
-    // -- ext.flutterpilot.getAnalyticsLog -------------------------------------
-    _safeRegisterExtension('ext.flutterpilot.getAnalyticsLog', (
-      method,
-      parameters,
-    ) async {
-      final limitStr = parameters['limit'];
-      final limit = (int.tryParse(limitStr ?? '') ?? _maxAnalyticsLog).clamp(
-        1,
-        _maxAnalyticsLog,
-      );
-      final entries = _analyticsLog.length > limit
-          ? _analyticsLog.sublist(_analyticsLog.length - limit)
-          : _analyticsLog;
-
+      final snapshot = await query.limit(limit).get(options);
       return ServiceExtensionResponse.result(
-        json.encode({
-          'events': entries,
-          'count': entries.length,
-          'total': _analyticsLog.length,
+        jsonEncode({
+          'path': path,
+          'kind': 'collection',
+          'source': source.name,
+          'count': snapshot.docs.length,
+          'limit': limit,
+          'docs': [
+            for (final d in snapshot.docs)
+              {'id': d.id, 'data': firestoreToJson(d.data())},
+          ],
         }),
       );
-    });
+    } on FirebaseException catch (e) {
+      return _error(
+        'Firestore ${e.code}: ${e.message}'
+        '${e.code == 'permission-denied' ? ' (security rules deny this read ${_auth?.currentUser == null ? 'while nobody is signed in' : 'for the signed-in user'})' : ''}'
+        '${e.code == 'unavailable' && source == Source.cache ? ' (not in the local cache)' : ''}',
+      );
+    } catch (e) {
+      return _error('Query failed: $e');
+    }
+  }
 
-    // -- ext.flutterpilot.startPerformanceTrace --------------------------------
-    _safeRegisterExtension('ext.flutterpilot.startPerformanceTrace', (
-      method,
-      parameters,
-    ) async {
-      if (_performance == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'FirebasePerformance not registered.',
-        );
-      }
+  static const _operators = [
+    '==',
+    '!=',
+    '<',
+    '<=',
+    '>',
+    '>=',
+    'array-contains',
+  ];
 
-      final name = parameters['name'];
-      if (name == null || name.isEmpty) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing "name" parameter.',
-        );
-      }
+  static Query<Map<String, dynamic>> _applyWhere(
+    Query<Map<String, dynamic>> q,
+    ({String field, String op, Object? value}) f,
+  ) => switch (f.op) {
+    '==' => q.where(f.field, isEqualTo: f.value),
+    '!=' => q.where(f.field, isNotEqualTo: f.value),
+    '<' => q.where(f.field, isLessThan: f.value),
+    '<=' => q.where(f.field, isLessThanOrEqualTo: f.value),
+    '>' => q.where(f.field, isGreaterThan: f.value),
+    '>=' => q.where(f.field, isGreaterThanOrEqualTo: f.value),
+    _ => q.where(f.field, arrayContains: f.value),
+  };
 
-      if (_activeTraces.containsKey(name)) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Trace "$name" is already running. Stop it first.',
-        );
-      }
+  /// `"done == false"`, `"title == 'Buy milk'"`, `"n >= 3"`, `"tags
+  /// array-contains work"` → field, operator and a typed value. Null when it
+  /// isn't one of these.
+  @visibleForTesting
+  static ({String field, String op, Object? value})? parseWhere(String input) {
+    final m = RegExp(
+      r'^\s*([A-Za-z_][\w.]*)\s*(array-contains|==|!=|<=|>=|<|>|=)\s*(.+?)\s*$',
+    ).firstMatch(input);
+    if (m == null) return null;
+    final raw = m.group(3)!;
+    final Object? value;
+    if (RegExp(r'''^(['"]).*\1$''').hasMatch(raw)) {
+      value = raw.substring(1, raw.length - 1);
+    } else if (raw == 'true' || raw == 'false') {
+      value = raw == 'true';
+    } else if (raw == 'null') {
+      value = null;
+    } else {
+      value = num.tryParse(raw) ?? raw;
+    }
+    final op = m.group(2) == '=' ? '==' : m.group(2)!;
+    return (field: m.group(1)!, op: op, value: value);
+  }
 
-      try {
-        final trace = _performance!.newTrace(name);
-        await trace.start();
-        _activeTraces[name] = trace;
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'started',
-            'trace': name,
-            'activeTraces': _activeTraces.keys.toList(),
-          }),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Failed to start trace: $e',
-        );
-      }
-    });
+  /// Firestore values as plain JSON: timestamps as ISO strings, references
+  /// as their path, geo points as lat/lng, bytes as their length.
+  @visibleForTesting
+  static Object? firestoreToJson(Object? value) => switch (value) {
+    Timestamp t => t.toDate().toUtc().toIso8601String(),
+    DateTime d => d.toUtc().toIso8601String(),
+    GeoPoint g => {'lat': g.latitude, 'lng': g.longitude},
+    DocumentReference r => r.path,
+    Blob b => '<${b.bytes.length} bytes>',
+    Map m => {
+      for (final e in m.entries) e.key.toString(): firestoreToJson(e.value),
+    },
+    List l => [for (final v in l) firestoreToJson(v)],
+    _ => value,
+  };
 
-    // -- ext.flutterpilot.stopPerformanceTrace ---------------------------------
-    _safeRegisterExtension('ext.flutterpilot.stopPerformanceTrace', (
-      method,
-      parameters,
-    ) async {
-      final name = parameters['name'];
-      if (name == null || name.isEmpty) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing "name" parameter.',
-        );
-      }
-
-      final trace = _activeTraces.remove(name);
-      if (trace == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'No active trace named "$name".',
-        );
-      }
-
-      try {
-        await trace.stop();
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'stopped',
-            'trace': name,
-            'activeTraces': _activeTraces.keys.toList(),
-          }),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Failed to stop trace: $e',
-        );
-      }
-    });
-
-    // -- ext.flutterpilot.recordCrashlyticsError --------------------------------
-    _safeRegisterExtension('ext.flutterpilot.recordCrashlyticsError', (
-      method,
-      parameters,
-    ) async {
-      if (_crashlytics == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'FirebaseCrashlytics not registered.',
-        );
-      }
-
-      final message = parameters['message'] ?? 'FlutterPilot test error';
-      final fatal = parameters['fatal'] == 'true';
-
-      try {
-        await _crashlytics!.recordError(
-          Exception(message),
-          null,
-          reason: 'FlutterPilot: $message',
-          fatal: fatal,
-        );
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'recorded',
-            'message': message,
-            'fatal': fatal,
-          }),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Failed to record error: $e',
-        );
-      }
-    });
+  /// First two characters and the length: enough to recognise, not to leak.
+  @visibleForTesting
+  static String? redact(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value.length <= 2) return '***';
+    return '${value.substring(0, 2)}***[${value.length} chars]';
   }
 }

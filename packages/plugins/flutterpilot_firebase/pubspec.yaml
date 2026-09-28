@@ -1,5 +1,5 @@
 name: flutterpilot_firebase
-description: "Firebase inspector plugin for FlutterPilot — exposes Crashlytics logs, analytics events, performance traces, and FCM status to AI agents."
+description: "Firebase inspector plugin for FlutterPilot — lets AI agents see Firebase Auth state and read Firestore the way the app does."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -17,11 +17,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ">=2.0.0 <5.0.0"
-  firebase_crashlytics: ">=3.0.0 <6.0.0"
-  firebase_analytics: ">=10.0.0 <13.0.0"
-  firebase_performance: ">=0.9.0 <0.12.0"
-  firebase_messaging: ">=14.0.0 <17.0.0"
+  firebase_core: ">=3.0.0 <5.0.0"
+  firebase_auth: ">=5.0.0 <7.0.0"
+  cloud_firestore: ">=5.0.0 <7.0.0"
   flutterpilot_sdk: ^0.1.0
 dev_dependencies:
   flutter_test:

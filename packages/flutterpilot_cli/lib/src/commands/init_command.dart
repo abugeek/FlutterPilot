@@ -45,9 +45,17 @@ const _plugins = {
     'flutterpilot_supabase',
     'SupabasePilotInspector.register(Supabase.instance.client);',
   ),
-  'firebase_core': (
+  // Not firebase_core: the plugin brings Auth + Firestore, which an app
+  // using only e.g. Analytics shouldn't get.
+  'firebase_auth': (
     'flutterpilot_firebase',
-    'FirebasePilotInspector.register(crashlytics: ..., analytics: ...);',
+    'FirebasePilotInspector.register(auth: FirebaseAuth.instance, '
+        'firestore: FirebaseFirestore.instance);',
+  ),
+  'cloud_firestore': (
+    'flutterpilot_firebase',
+    'FirebasePilotInspector.register(auth: FirebaseAuth.instance, '
+        'firestore: FirebaseFirestore.instance);',
   ),
   'flutter_secure_storage': (
     'flutterpilot_secure_storage',
