@@ -70,6 +70,8 @@ Future<void> main(List<String> args) async {
     flutter = await Process.start('flutter', [
       'run',
       '--machine',
+      // What `flutterpilot dev` passes; lets a server find the app (§3.1).
+      '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
       '-d',
       device,
     ], workingDirectory: app);
@@ -826,6 +828,78 @@ Future<void> main(List<String> args) async {
       true,
     );
 
+    // A server the client starts outside the project, with no --uri or -p,
+    // finds the app in the client's workspace folders (MCP roots).
+    if (File('$app/.dart_tool/flutterpilot_vm_uri').existsSync()) {
+      final elsewhere = Directory.systemTemp.createTempSync('fp_e2e_cwd_');
+      Future<String?> summaryFromFreshServer({List<String>? roots}) async {
+        final p = await Process.start('dart', [
+          'run',
+          '$serverDir/bin/flutterpilot_server.dart',
+        ], workingDirectory: elsewhere.path);
+        p.stderr.drain<void>();
+        final m = _Mcp(
+          p,
+          onRequest: (method) => method == 'roots/list'
+              ? {
+                  'roots': [
+                    for (final r in roots ?? const <String>[])
+                      {'uri': Uri.directory(r).toString()},
+                  ],
+                }
+              : null,
+        );
+        try {
+          await m.request('initialize', {
+            'protocolVersion': '2024-11-05',
+            'capabilities': {'roots': ?(roots == null ? null : {})},
+            'clientInfo': {'name': 'e2e-roots', 'version': '1'},
+          });
+          m.notify('notifications/initialized');
+          final deadline = DateTime.now().add(const Duration(seconds: 20));
+          String text;
+          bool ok;
+          do {
+            final res = await m.request('tools/call', {
+              'name': 'get_app_summary',
+              'arguments': {},
+            });
+            final result = res['result'] as Map?;
+            text = ((result?['content'] as List?) ?? [])
+                .map((c) => c['text'] ?? '')
+                .join('\n');
+            ok = res['error'] == null && result?['isError'] != true;
+            if (!ok && roots != null) {
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+            }
+          } while (!ok && roots != null && DateTime.now().isBefore(deadline));
+          return ok ? null : text;
+        } finally {
+          p.kill();
+        }
+      }
+
+      final noRoots = await summaryFromFreshServer();
+      final saysHow = noRoots != null && noRoots.contains('flutterpilot dev');
+      if (!saysHow) failed++;
+      print(
+        '${saysHow ? '✅' : '❌'} outside the project without roots: '
+        'says how to make the app findable${saysHow ? '' : '\n   $noRoots'}',
+      );
+      final withRoots = await summaryFromFreshServer(roots: [work.path]);
+      if (withRoots != null) failed++;
+      print(
+        '${withRoots == null ? '✅' : '❌'} outside the project: finds the '
+        "app in the client's workspace roots"
+        '${withRoots == null ? '' : '\n   $withRoots'}',
+      );
+      elsewhere.deleteSync(recursive: true);
+    } else {
+      print(
+        '⏭ no .dart_tool/flutterpilot_vm_uri on $device: roots check skipped',
+      );
+    }
+
     if (appId != null) {
       flutter.stdin.writeln(
         jsonEncode([
@@ -855,12 +929,27 @@ Future<void> main(List<String> args) async {
 
 /// Minimal line-delimited JSON-RPC client for the MCP stdio transport.
 class _Mcp {
-  _Mcp(this._p) {
+  /// [onRequest] answers requests the server sends (e.g. `roots/list`).
+  _Mcp(this._p, {Map<String, dynamic>? Function(String method)? onRequest}) {
     _p.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((
       line,
     ) {
       try {
         final msg = jsonDecode(line) as Map<String, dynamic>;
+        if (msg['method'] is String && msg.containsKey('id')) {
+          final result = onRequest?.call(msg['method'] as String);
+          _p.stdin.writeln(
+            jsonEncode({
+              'jsonrpc': '2.0',
+              'id': msg['id'],
+              if (result != null)
+                'result': result
+              else
+                'error': {'code': -32601, 'message': 'not supported'},
+            }),
+          );
+          return;
+        }
         _pending.remove(msg['id'])?.complete(msg);
       } catch (_) {}
     });

@@ -201,7 +201,19 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   final bool allowRemoteConnections;
   @override
   final String? remoteAccessToken;
-  final Directory _projectRoot;
+
+  /// `-p`: the only place to look for the app when given.
+  final Directory? _explicitProjectRoot;
+
+  /// The MCP client's workspace folders (`roots/list`), searched with the
+  /// working directory when no `-p` was given.
+  List<Directory> _clientRoots = const [];
+
+  Directory get _projectRoot => _explicitProjectRoot ?? Directory.current;
+
+  List<Directory> get _discoveryRoots => _explicitProjectRoot != null
+      ? [_explicitProjectRoot]
+      : [Directory.current, ..._clientRoots];
   @override
   VmService? _vmService;
   @override
@@ -243,7 +255,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     this.remoteAccessToken,
     Directory? projectRoot,
   }) : _vmServiceUri = vmServiceUri,
-       _projectRoot = projectRoot ?? Directory.current,
+       _explicitProjectRoot = projectRoot,
        server = McpServer(
          Implementation(name: 'FlutterPilot', version: '0.1.0'),
          options: McpServerOptions(
@@ -255,6 +267,47 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _selfHealManager = SelfHealManager(server: server);
     _registerTools();
     _registerPrompts();
+    server.server.oninitialized = () => unawaited(_refreshClientRoots());
+    server.server.setNotificationHandler<JsonRpcRootsListChangedNotification>(
+      Method.notificationsRootsListChanged,
+      (_) => _refreshClientRoots(),
+      (params, meta) => JsonRpcRootsListChangedNotification.fromJson({
+        'jsonrpc': jsonRpcVersion,
+        'method': Method.notificationsRootsListChanged,
+        'params': ?params,
+      }),
+    );
+  }
+
+  /// Reads the client's workspace folders and, if no app is connected yet,
+  /// looks for one there — so the server finds the app without `-p` even
+  /// when the client starts it outside the project.
+  Future<void> _refreshClientRoots() async {
+    if (_explicitProjectRoot != null ||
+        server.server.getClientCapabilities()?.roots == null) {
+      return;
+    }
+    try {
+      final result = await server.server.listRoots();
+      _clientRoots = [
+        for (final root in result.roots)
+          if (Uri.tryParse(root.uri) case final uri? when uri.scheme == 'file')
+            Directory.fromUri(uri),
+      ];
+      _log.info(
+        'Workspace roots: ${_clientRoots.map((d) => d.path).join(', ')}',
+      );
+    } catch (e) {
+      _log.fine('roots/list failed: $e');
+      return;
+    }
+    if (_vmService == null && (_vmServiceUri?.isEmpty ?? true)) {
+      try {
+        await _connectToVmService();
+      } catch (e) {
+        _log.fine('Connect after roots/list failed: $e');
+      }
+    }
   }
 
   Future<void> start() async {
@@ -304,7 +357,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
       _log.info('Auto-discovering running Flutter app...');
       final discovered = await VmDiscoveryService.discover(
-        projectRoot: _projectRoot,
+        roots: _discoveryRoots,
       );
       if (discovered != null) {
         _vmServiceUri = discovered;
@@ -370,13 +423,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     if (_disposed) return;
     if (_vmServiceUri == null || _vmServiceUri!.isEmpty) {
       final discovered = await VmDiscoveryService.discover(
-        projectRoot: _projectRoot,
+        roots: _discoveryRoots,
       );
       if (discovered != null) {
         _vmServiceUri = discovered;
       } else {
         _log.info(
-          'Standby mode: Waiting for Flutter app to launch (call connect_app or flutter run).',
+          'No running Flutter app found yet. ${VmDiscoveryService.howToStart}',
         );
         return;
       }
@@ -398,9 +451,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     } catch (_) {
       // The app was most likely restarted on a new port: rediscover it
       // instead of retrying a dead URI forever.
-      final found = await VmDiscoveryService.discover(
-        projectRoot: _projectRoot,
-      );
+      final found = await VmDiscoveryService.discover(roots: _discoveryRoots);
       final discovered = found == null ? null : normalizeVmServiceUri(found);
       final owner = discovered == null
           ? null
@@ -1045,9 +1096,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
                   'on a new port). If it restarted, call register_device(id: '
                   '"$deviceId", uri: <new URI>); list_connected_devices shows '
                   'the others.'
-            : 'No running Flutter app found. Start it with "flutter run" '
-                  '(FlutterPilot finds it), or call connect_app(uri: ...) '
-                  'with the VM service URI flutter run prints.',
+            : 'No running Flutter app found. ${VmDiscoveryService.howToStart}',
         ErrorCategory.connectionLost,
       );
     }

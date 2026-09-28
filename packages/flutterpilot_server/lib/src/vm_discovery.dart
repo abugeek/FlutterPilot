@@ -1,129 +1,122 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
 final _discoveryLog = Logger('VmDiscoveryService');
 
-/// Service to automatically discover the Dart VM Service URI of a running Flutter app.
+/// Finds the VM Service URI of a running Flutter app from the file
+/// `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` writes
+/// (what `flutterpilot dev` passes).
+///
+/// A plain `flutter run` writes nothing and listens on a random port behind
+/// an auth code, so it can't be found; ports are not probed (any web server
+/// on 8080 would pass for a VM service).
 class VmDiscoveryService {
-  /// Probes local files and active ports to discover a running VM Service URI.
+  /// Relative path of the URI file inside a Flutter project.
+  static const uriFile = '.dart_tool/flutterpilot_vm_uri';
+
+  /// What makes an app findable, for "no app" messages.
+  static const howToStart =
+      'Start the app with "flutterpilot dev" (or "flutter run '
+      '--vmservice-out-file=$uriFile") in its project folder or under the '
+      'workspace; FlutterPilot then finds it. A plain "flutter run" can\'t be '
+      'found: call connect_app(uri: ...) with the VM service URI it prints.';
+
+  /// How deep below each root to look for a Flutter project (a workspace
+  /// root is often a monorepo: `apps/mobile/`).
+  static const maxDepth = 3;
+
+  /// Stops a scan of a huge root (a home folder) early.
+  static const _maxDirs = 3000;
+
+  static const _skipDirs = {'build', 'node_modules', 'Pods'};
+
+  /// A Flutter project's own folders, which never hold another app.
+  static const _projectDirs = {
+    'ios',
+    'android',
+    'macos',
+    'linux',
+    'windows',
+    'web',
+    'lib',
+    'test',
+  };
+
+  /// Returns the URI of a running app found under [roots] — the most
+  /// recently launched one when several are running — or null.
   static Future<String?> discover({
-    Directory? projectRoot,
-    Duration timeout = const Duration(seconds: 3),
+    List<Directory> roots = const [],
+    Duration timeout = const Duration(seconds: 1),
   }) async {
-    // 1. Check project .dart_tool directory for service files
-    final fromFiles = await _checkProjectFiles(projectRoot);
-    if (fromFiles != null) {
-      _discoveryLog.info(
-        'Discovered VM Service URI from project file: $fromFiles',
-      );
-      return fromFiles;
+    final files = <File>[];
+    for (final root in roots) {
+      files.addAll(findUriFiles(root));
     }
-
-    // 2. Check /tmp or temp directory for flutter service info files
-    final fromTemp = await _checkTempFiles();
-    if (fromTemp != null) {
-      _discoveryLog.info('Discovered VM Service URI from temp file: $fromTemp');
-      return fromTemp;
-    }
-
-    // 3. Probe common localhost ports for active Dart VM services
-    final fromProbe = await _probeLocalhostPorts(timeout: timeout);
-    if (fromProbe != null) {
-      _discoveryLog.info(
-        'Discovered VM Service URI via localhost probe: $fromProbe',
-      );
-      return fromProbe;
-    }
-
-    return null;
-  }
-
-  static Future<String?> _checkProjectFiles(Directory? root) async {
-    if (root == null || !root.existsSync()) return null;
-
-    final candidates = [
-      // Written by `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`
-      // (what `flutterpilot dev` passes). Plain-text URI.
-      p.join(root.path, '.dart_tool', 'flutterpilot_vm_uri'),
-      p.join(root.path, '.flutterpilot', 'session.json'),
-      p.join(root.path, '.dart_tool', 'service_info.json'),
-      p.join(root.path, '.dart_tool', 'daemon.json'),
-      p.join(root.path, '.dart_tool', 'flutter_service_info.json'),
-    ];
-
-    for (final candidate in candidates) {
-      final file = File(candidate);
-      if (file.existsSync()) {
-        try {
-          final content = (await file.readAsString()).trim();
-          if (content.startsWith('http') || content.startsWith('ws')) {
-            if (await _verifyVmUri(content)) return content;
-            continue;
-          }
-          final parsed = jsonDecode(content);
-          if (parsed is Map) {
-            final uri =
-                parsed['uri'] ?? parsed['serviceUri'] ?? parsed['vmServiceUri'];
-            if (uri is String && uri.isNotEmpty && await _verifyVmUri(uri)) {
-              return uri;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-    return null;
-  }
-
-  static Future<String?> _checkTempFiles() async {
-    try {
-      final tempDir = Directory.systemTemp;
-      if (!tempDir.existsSync()) return null;
-
-      await for (final entity in tempDir.list()) {
-        if (entity is File &&
-            (entity.path.contains('flutter_service_info') ||
-                entity.path.contains('dart_vm_service'))) {
-          try {
-            final content = await entity.readAsString();
-            final parsed = jsonDecode(content);
-            if (parsed is Map) {
-              final uri = parsed['uri'] ?? parsed['serviceUri'];
-              if (uri is String && uri.isNotEmpty && await _verifyVmUri(uri)) {
-                return uri;
-              }
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  static Future<String?> _probeLocalhostPorts({
-    required Duration timeout,
-  }) async {
-    // Check standard Dart / Flutter VM service ports concurrently
-    final primaryPorts = [8181, 5858, 8080, 8081, 9100, 9101];
-
-    final futures = primaryPorts.map((port) async {
-      final uri = 'http://127.0.0.1:$port/';
-      if (await _verifyVmUri(uri, timeout: timeout)) {
+    files.sort((a, b) => _modified(b).compareTo(_modified(a)));
+    for (final file in files) {
+      final uri = _read(file);
+      if (uri != null && await _verifyVmUri(uri, timeout: timeout)) {
+        _discoveryLog.info('Discovered VM Service URI in ${file.path}');
         return uri;
       }
-      return null;
-    });
-
-    final results = await Future.wait(futures);
-    for (final res in results) {
-      if (res != null) return res;
     }
     return null;
   }
 
-  /// Verifies if a given URI points to an active Dart VM service.
+  /// URI files under [root], down to [maxDepth] directories below it.
+  static List<File> findUriFiles(Directory root) {
+    final found = <File>[];
+    if (!root.existsSync()) return found;
+    var visited = 0;
+    void scan(Directory dir, int depth) {
+      if (visited++ > _maxDirs) return;
+      final file = File(p.join(dir.path, uriFile));
+      if (file.existsSync()) found.add(file);
+      if (depth >= maxDepth) return;
+      List<FileSystemEntity> children;
+      try {
+        children = dir.listSync(followLinks: false);
+      } catch (_) {
+        return; // unreadable (permissions)
+      }
+      final isProject = File(p.join(dir.path, 'pubspec.yaml')).existsSync();
+      for (final child in children) {
+        final name = p.basename(child.path);
+        if (child is Directory &&
+            !name.startsWith('.') &&
+            !_skipDirs.contains(name) &&
+            !(isProject && _projectDirs.contains(name))) {
+          scan(child, depth + 1);
+        }
+      }
+    }
+
+    scan(root.absolute, 0);
+    return found;
+  }
+
+  static DateTime _modified(File f) {
+    try {
+      return f.lastModifiedSync();
+    } catch (_) {
+      return DateTime(0);
+    }
+  }
+
+  static String? _read(File file) {
+    try {
+      final content = file.readAsStringSync().trim();
+      return content.startsWith('http') || content.startsWith('ws')
+          ? content
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Whether something answers at [rawUri] (a stale file names a dead port).
   static Future<bool> _verifyVmUri(
     String rawUri, {
     Duration timeout = const Duration(seconds: 1),
@@ -147,15 +140,12 @@ class VmDiscoveryService {
       }
       final req = await client.getUrl(uri);
       final resp = await req.close().timeout(responseTimeout);
-      if (resp.statusCode == HttpStatus.ok ||
-          resp.statusCode == HttpStatus.found) {
-        return true;
-      }
+      return resp.statusCode == HttpStatus.ok ||
+          resp.statusCode == HttpStatus.found;
     } catch (_) {
       return false;
     } finally {
       client.close(force: true);
     }
-    return false;
   }
 }
