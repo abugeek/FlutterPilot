@@ -939,10 +939,11 @@ Future<void> main(List<String> args) async {
               '✅ SDK registered in the running app',
               '✅ flutterpilot_dio registered',
               '✅ MCP config: Claude Code',
+              // init added it (the fixture supports macOS).
+              '✅ macOS: network.client entitlement',
             ];
-      // (Its exit code may be 1: the fixture's macOS build lacks the
-      // network.client entitlement, which doctor rightly flags for Dio.)
-      final doctorOk = expected.every(report.contains);
+      final doctorOk =
+          (zeroCode || doctor.exitCode == 0) && expected.every(report.contains);
       if (!doctorOk) failed++;
       print(
         '${doctorOk ? '✅' : '❌'} doctor sees the running app and what it '

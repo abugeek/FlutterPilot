@@ -271,4 +271,72 @@ Future<void> main() async {
       );
     });
   });
+
+  group('macOS network.client entitlement', () {
+    const template = '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>
+''';
+    late Directory app;
+    setUp(() => app = Directory.systemTemp.createTempSync('fp_ent_'));
+    tearDown(() => app.deleteSync(recursive: true));
+
+    test('is added before </dict> in the file\'s indentation', () {
+      final out = InitCommand.withNetworkClient(template)!;
+      expect(
+        out,
+        contains(
+          '\t<key>com.apple.security.network.server</key>\n\t<true/>\n'
+          '\t<key>com.apple.security.network.client</key>\n\t<true/>\n'
+          '</dict>',
+        ),
+      );
+    });
+
+    test('an existing key is left alone, even false', () {
+      final off = template.replaceFirst(
+        '</dict>',
+        '\t<key>com.apple.security.network.client</key>\n\t<false/>\n</dict>',
+      );
+      expect(InitCommand.withNetworkClient(off), off);
+      final once = InitCommand.withNetworkClient(template)!;
+      expect(InitCommand.withNetworkClient(once), once);
+      expect(InitCommand.withNetworkClient('<plist/>'), isNull);
+    });
+
+    test('init adds it to both files when the app supports macOS', () async {
+      File(p.join(app.path, 'pubspec.yaml')).writeAsStringSync(
+        'name: a\ndependencies:\n  flutter:\n    sdk: flutter\n',
+      );
+      for (final f in ['DebugProfile', 'Release']) {
+        File(p.join(app.path, 'macos', 'Runner', '$f.entitlements'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync(template);
+      }
+      await (CommandRunner<void>(
+        'flutterpilot',
+        '',
+      )..addCommand(InitCommand())).run(['init', '-p', app.path]);
+      for (final f in ['DebugProfile', 'Release']) {
+        expect(
+          File(
+            p.join(app.path, 'macos', 'Runner', '$f.entitlements'),
+          ).readAsStringSync(),
+          contains('<key>com.apple.security.network.client</key>'),
+        );
+      }
+    });
+
+    test('no macOS runner: nothing to do', () {
+      expect(InitCommand.addMacosNetworkClient(app.path), isEmpty);
+      expect(Directory(p.join(app.path, 'macos')).existsSync(), isFalse);
+    });
+  });
 }
