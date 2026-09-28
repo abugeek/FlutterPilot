@@ -1,68 +1,82 @@
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_firebase/flutterpilot_firebase.dart';
 
 void main() {
-  setUp(() {
-    FirebasePilotInspector.reset();
+  group('parseWhere', () {
+    test('reads typed values', () {
+      expect(FirebasePilotInspector.parseWhere('done == false'), (
+        field: 'done',
+        op: '==',
+        value: false,
+      ));
+      expect(FirebasePilotInspector.parseWhere("title = 'Buy milk'"), (
+        field: 'title',
+        op: '==',
+        value: 'Buy milk',
+      ));
+      expect(FirebasePilotInspector.parseWhere('n >= 3'), (
+        field: 'n',
+        op: '>=',
+        value: 3,
+      ));
+      expect(FirebasePilotInspector.parseWhere('tags array-contains work'), (
+        field: 'tags',
+        op: 'array-contains',
+        value: 'work',
+      ));
+      expect(FirebasePilotInspector.parseWhere('deletedAt == null'), (
+        field: 'deletedAt',
+        op: '==',
+        value: null,
+      ));
+    });
+
+    test('rejects what it cannot read', () {
+      expect(FirebasePilotInspector.parseWhere('done'), isNull);
+      expect(FirebasePilotInspector.parseWhere('== 3'), isNull);
+    });
   });
 
-  tearDown(() {
-    FirebasePilotInspector.reset();
+  test('firestoreToJson turns Firestore types into plain JSON', () {
+    final at = DateTime.utc(2026, 9, 28, 12);
+    expect(
+      FirebasePilotInspector.firestoreToJson({
+        'at': Timestamp.fromDate(at),
+        'where': const GeoPoint(41.3, 69.2),
+        'raw': Blob(Uint8List(3)),
+        'list': [
+          1,
+          {'nested': Timestamp.fromDate(at)},
+        ],
+        'text': 'hi',
+      }),
+      {
+        'at': '2026-09-28T12:00:00.000Z',
+        'where': {'lat': 41.3, 'lng': 69.2},
+        'raw': '<3 bytes>',
+        'list': [
+          1,
+          {'nested': '2026-09-28T12:00:00.000Z'},
+        ],
+        'text': 'hi',
+      },
+    );
   });
 
-  group('FirebasePilotInspector', () {
-    test('register is safe to call without any services', () {
-      // Firebase services require initializeApp() — we test the guard path
-      // which handles all-null params gracefully.
-      try {
-        FirebasePilotInspector.register();
-      } on UnsupportedError {
-        // Expected — registerExtension not available in test env.
-      }
-    });
+  test('redact keeps a hint, never the value', () {
+    expect(FirebasePilotInspector.redact(null), isNull);
+    expect(FirebasePilotInspector.redact('ab'), '***');
+    expect(
+      FirebasePilotInspector.redact('pilot@example.com'),
+      'pi***[17 chars]',
+    );
+  });
 
-    test('register is idempotent', () {
-      try {
-        FirebasePilotInspector.register();
-        FirebasePilotInspector.register(); // second call ignored
-      } on UnsupportedError {
-        // Expected in test env.
-      }
-    });
-
-    test('reset clears all registered services', () {
-      // After register + reset, re-registration should work again.
-      FirebasePilotInspector.reset();
-      try {
-        FirebasePilotInspector.register();
-      } on UnsupportedError {
-        // Expected.
-      }
-    });
-
-    test('reset is safe to call multiple times', () {
-      FirebasePilotInspector.reset();
-      FirebasePilotInspector.reset();
-      FirebasePilotInspector.reset();
-    });
-
-    test('reset does not crash when active traces exist', () {
-      // Verify that reset() stops and clears any active traces without
-      // throwing — even if no traces are actually running.
-      expect(() => FirebasePilotInspector.reset(), returnsNormally);
-    });
-
-    test('partial registration (only analytics) does not throw', () {
-      // Apps may only use analytics without Crashlytics etc.
-      // FirebasePilotInspector.register only registers extensions for
-      // services that are non-null.
-      try {
-        FirebasePilotInspector.register(
-          // All null — tests the guard path that skips null services
-        );
-      } on UnsupportedError {
-        // Expected in test env.
-      }
-    });
+  test('reset is safe without registration', () {
+    FirebasePilotInspector.reset();
+    FirebasePilotInspector.reset();
   });
 }

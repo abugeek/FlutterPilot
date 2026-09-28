@@ -212,6 +212,25 @@ idb installed. Driven through the MCP tools.
 | 152 | `native_text` into a Flutter field | ✅ | real iOS text input reaches Flutter's TextField (" Jr" appended) |
 | 153 | location allow / deny | ✅ | both paths end in the app's own result text |
 
+## Round 9 — Firebase and plain hive (§2.1)
+
+`../firebase_app` (email sign-up/sign-in, per-user notes in Firestore,
+owner-only security rules) on the iPhone 17 simulator against the local Auth
++ Firestore emulators; `../hive_app` (plain `hive` 2.2.3 + `hive_flutter`) on
+macOS. Both set up with `flutterpilot init --local`.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 154 | old Firebase plugin | ❌→replaced | 7 tools for Crashlytics/Analytics/Performance/FCM: none has an emulator; `get_analytics_log` listed only events the agent itself sent; two tools wrote fake data into the real project; it forced all four SDKs on any app with `firebase_core` |
+| 155 | `get_firebase_auth` | ✅ new | uid (for paths), providers, token expiry, custom claims, sign-in/out events; email redacted unless showSensitive. 2 ms |
+| 156 | `query_firestore` | ✅ new | collection/document, where, orderBy, limit ("limit reached"), cache vs server; Timestamps as ISO. Rules errors name the rule line and whether anyone is signed in. 3–24 ms, < 300 chars |
+| 157 | `init` for Firebase | ⚠️→fixed | triggered on `firebase_core` (an Analytics-only app would get Auth + Firestore); now on `firebase_auth`/`cloud_firestore`, with the right register line |
+| 158 | toggles in action diffs | ❌→fixed | tapping a SwitchListTile/Checkbox reported "no change": the diff tracked type/key/text only. Now `= true/false` (switch, checkbox, slider) |
+| 159 | honest "no change" | ✅ | a hive_app bug (switch reading a box the builder didn't listen to) showed as "no change" while hive held the new value — the diff told the truth |
+| 160 | plain `hive` | ✅ | boxes readable, writes from the UI visible (plugin is duck-typed) |
+| 161 | native crash on launch | ⚠️ gap | Firebase iOS SDK aborts on a malformed API key (NSException). The agent only sees "not running"; the reason is in the simulator log. Candidate tool: native crash/log reader |
+| 162 | generated files in git | ⚠️→fixed | six plugins tracked `.flutter-plugins-dependencies` (with another machine's paths); untracked and ignored |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

@@ -120,12 +120,14 @@ class PilotWidgetInspector {
     }
     final ro = element.renderObject;
     final selector = _computeSemanticSelector(element);
+    final value = _controlValue(element);
     return [
       {
         'type': typeName,
         'key': ?keyStr,
         'selector': ?selector,
         if (text.isNotEmpty) 'text': text,
+        'value': ?value,
         if (ro is RenderBox && ro.hasSize && widget is! Text)
           'layout': () {
             final pos = ro.localToGlobal(Offset.zero);
@@ -140,6 +142,32 @@ class PilotWidgetInspector {
         if (childDepth > maxDepth) 'truncated': true,
       },
     ];
+  }
+
+  /// The state of a switch, checkbox or slider at [element] or, for an app
+  /// widget wrapping one (a SwitchListTile), the first one inside it: a
+  /// toggle changes nothing else a diff could see.
+  static Object? _controlValue(Element element) {
+    Object? valueOf(Widget w) => switch (w) {
+      Switch s => s.value,
+      SwitchListTile s => s.value,
+      CupertinoSwitch s => s.value,
+      Checkbox c => c.value,
+      CheckboxListTile c => c.value,
+      Slider s => s.value,
+      _ => null,
+    };
+    var value = valueOf(element.widget);
+    if (value != null) return value;
+    var budget = 12;
+    void visit(Element e) {
+      if (value != null || --budget < 0) return;
+      value = valueOf(e.widget);
+      if (value == null) e.visitChildren(visit);
+    }
+
+    element.visitChildren(visit);
+    return value;
   }
 
   /// High-performance Hierarchical & Positional Element Matcher (O(N)).
@@ -808,6 +836,7 @@ class PilotWidgetInspector {
       final key = current['key']?.toString();
       final text = current['text']?.toString();
       final selector = current['selector']?.toString();
+      final value = current['value'];
 
       // Keys and semantic selectors are not guaranteed to be unique. Keep the
       // structural path in the identity so repeated list rows do not overwrite
@@ -816,7 +845,8 @@ class PilotWidgetInspector {
       final semanticIdentity = key ?? selector ?? type;
       final nodeIdentifier = '$path:$semanticIdentity';
       final nodeDescription =
-          '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}';
+          '$type${key != null ? '($key)' : ''}${text != null && text.isNotEmpty ? '["$text"]' : ''}'
+          '${value != null ? ' = $value' : ''}';
       result[nodeIdentifier] = (
         label: semanticIdentity,
         description: nodeDescription,

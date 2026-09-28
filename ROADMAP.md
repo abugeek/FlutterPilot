@@ -26,8 +26,8 @@ tools that always work beat many tools that sometimes work.
   all four run in CI. Field tests (real apps) so far on macOS only.
 - Plugins field-tested: riverpod, go_router, dio, sqflite, shared_preferences,
   connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
-  secure_storage, supabase in `../notes_app`. **Untested in a real app:**
-  firebase.
+  secure_storage, supabase in `../notes_app`; firebase (Auth + Firestore,
+  emulators) in `../firebase_app`; plain hive in `../hive_app`.
 
 ### How to work (the method that found every real bug so far)
 
@@ -191,8 +191,13 @@ current major. §1 is done.
    secure_storage and Supabase — `../notes_app` (own git repo; local Supabase
    via `supabase start`, ports 553xx, test account in
    `supabase/seed_accounts.md`). 22 findings, all fixed: see
-   `docs/field-test-findings.md` round 4. Left: **Firebase** (needs the
-   emulator suite), plain `hive` (only `hive_ce` exercised).
+   `docs/field-test-findings.md` round 4. **Firebase:** the old plugin
+   (Crashlytics/Analytics/Performance/FCM — no emulator for any; it only
+   saw events the agent itself sent) was replaced by Auth + Firestore
+   (`get_firebase_auth`, `query_firestore`), field-tested in
+   `../firebase_app` against the local emulators (`firebase emulators:start
+   --only auth,firestore --project demo-flutterpilot`, needs Java). Plain
+   `hive` 2.2.3 checked in `../hive_app`. Findings: round 9. §2.1 is done.
 2. **Mobile + web:** e2e done — identical results on macOS, iOS simulator,
    Android emulator and Chrome (tap, text, keys, secondary tap, pinch,
    rotation, chains, hot reload + restart; web via DWDS). The `native_*`

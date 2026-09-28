@@ -224,148 +224,105 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     );
 
     // =========================================================================
-    // Firebase
+    // Firebase (flutterpilot_firebase)
     // =========================================================================
 
     _registerAppTool(
-      name: 'get_firebase_status',
+      name: 'get_firebase_auth',
       description:
-          'Check which Firebase services are registered and their status '
-          '(Crashlytics, Analytics, Performance, Messaging).',
-      extension: 'ext.flutterpilot.getFirebaseStatus',
-      formatResult: (json) {
-        final buf = StringBuffer('Firebase Services:\n');
-        for (final service in [
-          'crashlytics',
-          'analytics',
-          'performance',
-          'messaging',
-        ]) {
-          final info = json[service] as Map? ?? {};
-          final available = info['available'] == true;
-          buf.writeln(
-            '  $service: ${available ? '✓ registered' : '✗ not registered'}',
-          );
-          if (service == 'crashlytics' && available) {
-            buf.writeln(
-              '    Collection enabled: ${info['isCrashlyticsCollectionEnabled']}',
-            );
-          }
-          if (service == 'messaging' && available) {
-            buf.writeln('    Authorization: ${info['authorizationStatus']}');
-          }
-        }
-        return buf.toString();
-      },
-    );
-
-    _registerAppTool(
-      name: 'get_fcm_token',
-      description:
-          'Get the Firebase Cloud Messaging token (truncated for security).',
-      extension: 'ext.flutterpilot.getFcmToken',
-    );
-
-    _tool(
-      'log_analytics_event',
-      description:
-          '⚠ MAKES REAL NETWORK CALL — logs a custom Firebase Analytics event '
-          'to your Firebase project (visible in the Firebase console). '
-          'Useful for verifying analytics instrumentation during development. '
-          'Do not call in production test runs to avoid polluting analytics data.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Event name (e.g. "button_pressed", "screen_view").',
-          ),
-          'params': JsonSchema.string(
-            description:
-                'Optional JSON object of event parameters (e.g. \'{"button_id":"submit"}\').',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.logAnalyticsEvent',
-          p,
-        );
-        return res.toCallToolResult();
-      },
-    );
-
-    _registerAppTool(
-      name: 'get_analytics_log',
-      description: 'View recent analytics events logged through FlutterPilot.',
-      extension: 'ext.flutterpilot.getAnalyticsLog',
+          'Who is signed in to Firebase Auth in the app: uid (for Firestore '
+          'paths like users/{uid}/...), providers, anonymous/verified, token '
+          'expiry and custom claims, recent sign-in/out events, and the '
+          'Firebase project. Email/name/phone are redacted unless '
+          'showSensitive=true. Needs the flutterpilot_firebase plugin.',
+      extension: 'ext.flutterpilot.getFirebaseAuth',
       properties: {
-        'limit': JsonSchema.string(
-          description: 'Max number of events to return (default: 200).',
+        'showSensitive': JsonSchema.boolean(
+          description: 'Reveal email, display name and phone number.',
         ),
       },
+      formatResult: (json) {
+        final buf = StringBuffer('Project: ${json['projectId']}\n');
+        final user = json['user'] as Map?;
+        if (user == null) {
+          buf.writeln('Not signed in.');
+        } else {
+          buf.writeln(
+            'Signed in: uid ${user['uid']}'
+            '${user['isAnonymous'] == true ? ' (anonymous)' : ''}',
+          );
+          for (final field in ['email', 'displayName', 'phoneNumber']) {
+            if (user[field] != null) buf.writeln('  $field: ${user[field]}');
+          }
+          buf.writeln(
+            '  providers: ${(user['providers'] as List).join(', ')}; '
+            'email verified: ${user['emailVerified']}',
+          );
+          final token = json['token'] as Map?;
+          if (token?['expiresAt'] != null) {
+            buf.writeln('  token expires: ${token!['expiresAt']}');
+          }
+          final claims = token?['customClaims'] as Map?;
+          if (claims != null && claims.isNotEmpty) {
+            buf.writeln('  custom claims: ${jsonEncode(claims)}');
+          }
+        }
+        final events = json['events'] as List? ?? const [];
+        if (events.isNotEmpty) {
+          buf.writeln('Recent auth events:');
+          for (final e in events.reversed.take(5)) {
+            buf.writeln(
+              '  ${e['at']} ${e['event']}'
+              '${e['provider'] != null ? ' (${e['provider']})' : ''}',
+            );
+          }
+        }
+        return buf.toString().trim();
+      },
     );
 
-    _tool(
-      'start_performance_trace',
+    _registerAppTool(
+      name: 'query_firestore',
       description:
-          'Start a named Firebase Performance trace. Use stop_performance_trace to end it.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description: 'Trace name (e.g. "checkout_flow", "data_sync").',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.startPerformanceTrace',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'stop_performance_trace',
-      description: 'Stop a previously started Firebase Performance trace.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'name': JsonSchema.string(
-            description:
-                'Trace name that was passed to start_performance_trace.',
-          ),
-        },
-        required: ['name'],
-      ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.stopPerformanceTrace',
-        p,
-      ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'record_crashlytics_error',
-      description:
-          '⚠ MAKES REAL NETWORK CALL — records a test error in Firebase '
-          'Crashlytics (appears in your Firebase console). Useful for verifying '
-          'crash reporting instrumentation. Do not call repeatedly or in CI — '
-          'it pollutes your production Crashlytics dashboard.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'message': JsonSchema.string(description: 'Error message to record.'),
-          'fatal': JsonSchema.string(
-            description:
-                '"true" for fatal error, "false" for non-fatal (default).',
-            enumValues: ['true', 'false'],
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        if (!allowDestructive) return _destructiveOperationDenied();
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.recordCrashlyticsError',
-          p,
-        );
-        return res.toCallToolResult();
+          'Read Firestore with the app\'s own connection and signed-in user '
+          '(so security rules apply as in the app). path is a collection '
+          '("users/UID/notes") or a document ("users/UID"). Optional where '
+          '("done == false", ops == != < <= > >= array-contains), orderBy '
+          '("createdAt desc"), limit (default 20, max 100), source "cache" to '
+          'see what the app has locally instead of the server. Needs the '
+          'flutterpilot_firebase plugin.',
+      extension: 'ext.flutterpilot.queryFirestore',
+      properties: {
+        'path': JsonSchema.string(description: 'Collection or document path.'),
+        'where': JsonSchema.string(
+          description: 'One filter: "field op value".',
+        ),
+        'orderBy': JsonSchema.string(
+          description: 'Field, optionally followed by "desc".',
+        ),
+        'limit': JsonSchema.integer(description: '1–100, default 20.'),
+        'source': JsonSchema.string(
+          description: '"server" (default) or "cache".',
+          enumValues: ['server', 'cache'],
+        ),
+      },
+      formatResult: (json) {
+        final path = json['path'];
+        final from = json['source'] == 'cache' ? ' (from the local cache)' : '';
+        if (json['kind'] == 'document') {
+          return json['exists'] == true
+              ? 'Document $path$from:\n${jsonEncode(json['data'])}'
+              : 'Document $path does not exist$from.';
+        }
+        final docs = json['docs'] as List? ?? const [];
+        if (docs.isEmpty) return 'Collection $path: no documents match$from.';
+        final more = docs.length == json['limit']
+            ? ' (limit reached; there may be more)'
+            : '';
+        return [
+          'Collection $path: ${docs.length} document(s)$from$more',
+          for (final d in docs) '- ${d['id']}: ${jsonEncode(d['data'])}',
+        ].join('\n');
       },
     );
 

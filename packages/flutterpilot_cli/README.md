@@ -24,7 +24,7 @@ flutterpilot init
 ```
 
 **What it does:**
-- Scans `pubspec.yaml` for popular dependencies (`riverpod`, `bloc`, `dio`, `drift`, `hive`, `shared_preferences`, `supabase_flutter`, `firebase_core`, `go_router`, `connectivity_plus`, `flutter_secure_storage`, `sqflite`).
+- Scans `pubspec.yaml` for popular dependencies (`riverpod`, `bloc`, `dio`, `drift`, `hive`, `shared_preferences`, `supabase_flutter`, `firebase_auth`/`cloud_firestore`, `go_router`, `connectivity_plus`, `flutter_secure_storage`, `sqflite`).
 - Adds `flutterpilot_sdk: ^0.1.0` and matching plugins to `dev_dependencies`.
 - Patches `lib/main.dart` with `WidgetsFlutterBinding.ensureInitialized();` and `FlutterPilot.initialize();`.
 - Runs `flutter pub get`.

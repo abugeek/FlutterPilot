@@ -34,6 +34,35 @@ Future<void> main() async {
 
     tearDown(() => tempDir.deleteSync(recursive: true));
 
+    test('adds the Firebase plugin for Auth/Firestore, not firebase_core '
+        'alone', () async {
+      Future<YamlMap> depsFor(String firebaseDeps) async {
+        File(p.join(tempDir.path, 'pubspec.yaml')).writeAsStringSync('''
+name: my_sample_app
+dependencies:
+  flutter:
+    sdk: flutter
+$firebaseDeps''');
+        await runner.run(['init', '-p', tempDir.path]);
+        final pubspec = File(p.join(tempDir.path, 'pubspec.yaml'));
+        return (loadYaml(pubspec.readAsStringSync()) as YamlMap)['dependencies']
+            as YamlMap;
+      }
+
+      expect(
+        (await depsFor(
+          '  firebase_core: ^4.0.0\n  firebase_analytics: ^12.0.0\n',
+        )).containsKey('flutterpilot_firebase'),
+        isFalse,
+      );
+      expect(
+        (await depsFor(
+          '  firebase_core: ^4.0.0\n  cloud_firestore: ^6.0.0\n',
+        )).containsKey('flutterpilot_firebase'),
+        isTrue,
+      );
+    });
+
     test('fails with UsageException when pubspec.yaml is missing', () {
       final empty = Directory.systemTemp.createTempSync('fp_empty_');
       addTearDown(() => empty.deleteSync(recursive: true));

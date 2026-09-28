@@ -34,6 +34,31 @@ void main() {
       expect(treeString, contains('submit_button'));
     });
 
+    testWidgets('a toggled switch shows up in the tree diff', (tester) async {
+      Future<Map<String, dynamic>> treeWith(bool on) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SwitchListTile(
+                key: const ValueKey('dark'),
+                title: const Text('Dark mode'),
+                value: on,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        );
+        return PilotWidgetInspector.captureWidgetTree();
+      }
+
+      final off = await treeWith(false);
+      final on = await treeWith(true);
+      final diff = PilotWidgetInspector.diffWidgetTrees(off, on);
+      expect(diff['modifiedCount'], 1);
+      expect(diff['modified'].toString(), contains('= false'));
+      expect(diff['modified'].toString(), contains('= true'));
+    });
+
     testWidgets('findElementByKey finds widget', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
