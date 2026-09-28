@@ -39,7 +39,7 @@ Future<void> main() async {
         final out = StringBuffer();
         final sink = _Capture(out);
         await IOOverrides.runZoned(
-          () => runner.run(['init', '-p', tempDir.path]),
+          () => runner.run(['init', '-p', tempDir.path, '--source', 'git']),
           stdout: () => sink,
         );
         return out.toString();
