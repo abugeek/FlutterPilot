@@ -7,6 +7,7 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 ## 🚀 CLI & Zero-Code Mode
 
 - **1-Command Setup**: Run `flutterpilot init` in any Flutter project root to auto-detect Riverpod/Bloc/Dio/Drift and configure packages.
+- **Check setup**: `flutterpilot doctor` checks SDK/plugin wiring, macOS entitlements, MCP config and (if running) what the app registered, with exact fixes.
 - **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code) with a compiled server.
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
