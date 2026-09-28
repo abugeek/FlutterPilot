@@ -432,7 +432,31 @@ Future<void> main(List<String> args) async {
         'target': 'Name',
         'text': 'Pilot',
       });
-      await check('tap Send', 'tap_widget', {'key': 'Send'});
+      // ROADMAP §5.2: the tap runs inside a CPU profile and still happens
+      // (the next check sees its result on screen).
+      await check(
+        'profile_action profiles tap Send',
+        'profile_action',
+        {
+          'tool': 'tap_widget',
+          'arguments': {'key': 'Send'},
+        },
+        [
+          'Profiled tap_widget',
+          'running Dart on the UI isolate',
+          'tap_widget result: Widget tapped',
+        ],
+        false,
+        Duration.zero,
+        4096,
+      );
+      await check(
+        'profile_action refuses a non-action tool',
+        'profile_action',
+        {'tool': 'get_app_summary'},
+        ['runs an action tool'],
+        true,
+      );
       await check(
         'mocked response reached UI',
         'assert_widget',

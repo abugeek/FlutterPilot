@@ -11,6 +11,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
+import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
 import 'src/image_budget.dart';
 import 'src/device_runtime_context.dart';
@@ -42,6 +43,10 @@ abstract class _FlutterPilotServerBase {
   /// Every registered tool by name, for showing only the usable ones.
   final Map<String, RegisteredTool> _allTools = {};
 
+  /// Every tool's callback by name, for tools that run another tool
+  /// (profile_action).
+  final Map<String, ToolFunction> _toolCallbacks = {};
+
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
   /// "Tool execution failed." and log the reason where the agent can't see it.
@@ -50,7 +55,22 @@ abstract class _FlutterPilotServerBase {
     String? description,
     ToolInputSchema? inputSchema,
     required ToolFunction callback,
-  }) => _allTools[name] = server.registerTool(
+  }) {
+    _toolCallbacks[name] = callback;
+    return _allTools[name] = _registerTool(
+      name,
+      description: description,
+      inputSchema: inputSchema,
+      callback: callback,
+    );
+  }
+
+  RegisteredTool _registerTool(
+    String name, {
+    String? description,
+    ToolInputSchema? inputSchema,
+    required ToolFunction callback,
+  }) => server.registerTool(
     name,
     description: description,
     inputSchema: inputSchema,
@@ -1007,6 +1027,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 
 ## Performance
 - `profile_frame_budget` — p50/p90/p99 build/raster, jank
+- `profile_action(tool, arguments)` — CPU profile of one action: the app functions it ran (self/total ms, file:line)
 - `get_memory_details` (classes:true: top classes by heap) — compare before/after a screen for leaks
 
 ## Fixing

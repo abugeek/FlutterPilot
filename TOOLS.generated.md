@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 63
+Tool count: 64
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -523,6 +523,16 @@ Heap used/capacity and external (native) memory per isolate. classes:true lists 
 |---|---|---:|---|
 | `classes` | boolean | no | List the top classes by heap usage. |
 | `limit` | integer | no | Number of classes (default 30). |
+
+## `profile_action`
+
+CPU profile of one action: runs tool (tap_widget, scroll_into_view, enter_text, execute_action_chain, ...) with arguments while sampling the UI isolate, then lists the app's functions by self and total time with file:line, and the hottest framework functions with the app code that called them. durationMs keeps sampling after the action (results that load later); without tool it samples whatever the app does. Use to find why an interaction is slow.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `tool` | string | no | The action tool to run, e.g. "tap_widget" or "execute_action_chain". |
+| `arguments` | object | no | Its arguments, e.g. {"key": "Load more"}. |
+| `durationMs` | integer | no | Keep sampling this long after the action returns, for work that lands later (a network response, an animation). Without tool: how long to sample (default 1000, max 10000). |
 
 ## `get_http_profile`
 

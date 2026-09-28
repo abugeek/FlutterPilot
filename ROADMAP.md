@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 63 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, §5.1); an app sees only those that work for it
+- 64 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -362,9 +362,14 @@ Highest value first. Each should answer a *why*, not just dump data.
    ancestors with their locations. Debug builds only (says so otherwise);
    SDK only (zero-code's `get_widget_tree` already carries `loc`). Findings
    #207–209, e2e check "inspect_widget names the source line".
-2. **CPU profile around an action:** `profile_action(action)` — start
-   `getCpuSamples`, run the tap/scroll, stop, return the top functions by
-   self time *in app code* (filter framework), with file:line.
+2. ~~**CPU profile around an action**~~ — done (2026-09-28):
+   `profile_action(tool, arguments, durationMs)` runs an action tool while
+   sampling the UI isolate (250 µs), then returns app functions by
+   self/total ms with file:line and the hottest framework functions with
+   the app caller. Samples FlutterPilot itself caused (reading the screen
+   after the action) are left out. Paths map to packages through the
+   app's `package_config.json` (the VM reports path deps as file paths).
+   Findings #210–213, e2e checks "profile_action …".
 3. **Jank explanation:** for janky frames, which widgets rebuilt and how long
    build/layout/paint took (timeline events + rebuild tracking readout).
 4. **Layout explorer:** constraints and sizes up the ancestor chain for a

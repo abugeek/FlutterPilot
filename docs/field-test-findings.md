@@ -343,7 +343,15 @@ keyboard forced on, and in Chrome:
 | 208 | inspect_widget at x,y | ✅ | a story title and a filter chip hit the RichText that Text builds inside the framework; the source is the app's `Text` (story_tile.dart:29, feed_screen.dart:31) with a note saying so. 2–3 ms |
 | 209 | inspect_widget errors | ✅ | a point outside the window, no arguments and an unknown key each say why (unknown key lists the visible targets). Ancestors capped at 8 (12 was ~0.9 KB and ran past the screen widget) |
 
-## Latency observed (debug mode, macOS, HN reader)
+## profile_action (ROADMAP §5.2), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 210 | FlutterPilot's own work in the profile | ❌→fixed | the SDK is a path dependency, so the VM reports its frames as plain file paths, not `package:`; the post-action tree walk (~20–36 ms) showed as the hottest code. Paths are now mapped to packages via the app's package_config.json and those samples are left out (and reported as such) |
+| 211 | planted hotspot | ✅ | a slow `_slowChecksum` in `StoryTile.build`: top app function `_slowChecksum lib/ui/story_tile.dart:91` (5.8 self / 8.8 total ms), `StoryTile.build` 8.8 total, `ListIterator.moveNext ← _slowChecksum` among the hottest. Reverted |
+| 212 | work that lands after the action | ❌→fixed | tap "Top" returns when the spinner shows; the stories (and their builds) arrive later, outside the window. `durationMs` now keeps sampling after the action |
+| 213 | errors and idle | ✅ | a non-action tool is refused with the list of action tools; no tool samples idle time ("no app function was sampled"). A 180 ms tap costs ~1 s to profile (getCpuSamples + line lookups) |
+ (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)

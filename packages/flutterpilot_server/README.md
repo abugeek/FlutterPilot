@@ -100,7 +100,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ## MCP Tools Reference
 
-63 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
+64 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
 iOS simulators with idb, 16 tools for apps without `flutterpilot_sdk`.
@@ -116,7 +116,7 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Rendering | `set_app_settings` (theme, locale, textScale, orientation, debug overlays) |
 | Errors & logs | `get_errors` (`report`), `get_flight_log`, `get_debug_logs` |
 | Code changes | `hot_reload` (`restart`) |
-| Performance | `profile_frame_budget`, `get_memory_details` (`classes`), `get_http_profile` |
+| Performance | `profile_frame_budget`, `profile_action` (CPU per action), `get_memory_details` (`classes`), `get_http_profile` |
 | State (Riverpod/Bloc) | `get_state`, `set_state` |
 | Network (Dio) | `get_network_logs`, `mock_http_response`, `simulate_network` |
 | Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |

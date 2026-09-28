@@ -123,7 +123,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 63 tools, of which an app sees only the ones that can work
+registrations): 64 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
@@ -156,7 +156,8 @@ culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
 (any `dart:io` client).
 
-**Performance** — `profile_frame_budget`, `get_memory_details`
+**Performance** — `profile_frame_budget`, `profile_action` (CPU
+profile of one tap/scroll, app functions with file:line), `get_memory_details`
 (`classes: true` for the top classes).
 
 **State & storage (plugins)** — Riverpod and Bloc `get_state` /
