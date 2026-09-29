@@ -119,9 +119,8 @@ current major. §1 is done.
   dead URI; the connect path now refreshes it.
 - README tool list rewritten without counts (it named four tools that no
   longer exist); `TOOLS.generated.md` is the reference.
-- **Still manual:** make `analyze-and-test`, `e2e-apple-web (macos|ios|web)`
-  and `e2e-android` required status
-  checks on `main` (GitHub → Settings → Branches).
+- `analyze-and-test`, `e2e-apple-web (macos|ios|web)` and `e2e-android`
+  are required status checks on `main` (2026-09-29).
 
 1. **Weak perf tools — fix or delete:**
    - `get_perf_metrics`: "FPS" on an idle app is meaningless → delete; point to
@@ -264,7 +263,7 @@ current major. §1 is done.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
    plugin-range check on Linux; `e2e_test.dart` on macOS, iOS simulator and
    Chrome (macos runner) and Android emulator (Linux + KVM); weekly cron.
-   Left: mark them as required checks on `main`.
+   All five are required checks on `main`.
 
 ## 3. Setup that "just works"
 
@@ -523,10 +522,11 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - **`ai_overlay_manager.dart`** — the "🤖 AI Tap" ripple. Verify it is *not*
   captured in `capture_screenshot` / `compare_screenshot` (would make visual
   diffs flaky) and not listed in widget trees or tappable elements.
-- **`operation_scheduler.dart` + `get_operation` / `cancel_operation` /
-  `async:true` / `operationDeadlineMs`** — a lot of machinery added to every
-  tool's schema (5 extra params each). Calls take milliseconds; measure whether
-  any agent ever needs async/cancel, otherwise delete and shrink every schema.
+- ~~**`operation_scheduler.dart` + `get_operation` / `async:true` /
+  `operationDeadlineMs`**~~ — done (2026-09-29): async, cancel and the
+  per-call deadline are gone (only six fast read tools had them; the slow
+  ones never did). The scheduler stays: mutations run in order and reads
+  wait for them; every call has a fixed 30 s deadline.
 - **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
   test on long lists, nested scrollables, horizontal lists, lazy lists where
   the target isn't built yet.
