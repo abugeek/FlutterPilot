@@ -8,12 +8,15 @@ class AiOverlayManager {
   static final Set<OverlayEntry> _live = {};
 
   /// Removes every ripple still on screen (screenshots call this first so
-  /// visual diffs never contain the badge).
-  static void clearNow() {
+  /// visual diffs never contain the badge). True if one was showing: it is
+  /// gone from the screen only after the next frame.
+  static bool clearNow() {
+    final any = _live.isNotEmpty;
     for (final e in _live.toList()) {
       e.remove();
     }
     _live.clear();
+    return any;
   }
 
   /// Displays an animated ripple effect and action badge at [position].

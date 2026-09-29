@@ -665,6 +665,28 @@ Future<void> main(List<String> args) async {
         {'name': 'home', 'threshold': 5},
         ['PASSED'],
       );
+      // A tap that changes nothing: its 🤖 badge (700 ms) is not in the picture.
+      await check('tap that changes nothing', 'tap_widget', {'key': 'card'});
+      await check(
+        'the tap badge is not in the screenshot',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 0.5},
+        ['PASSED'],
+      );
+      await check(
+        'open a dialog',
+        'tap_widget',
+        {'key': 'Dialog'},
+        ['A dialog'],
+      );
+      await check(
+        'a dialog is in the screenshot',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 5},
+        ['FAILED'],
+        true,
+      );
+      await check('close the dialog', 'tap_widget', {'key': 'Close dialog'});
       await check('assert_widget needs a check', 'assert_widget', {}, [
         'Say what to check',
       ], true);
@@ -993,6 +1015,33 @@ Future<void> main(List<String> args) async {
         {'key': 'Drawer item'},
         ['Tappable now', 'Send'],
       );
+      // ROADMAP §9: lazy lists. The page opens at Row ~400.
+      await check(
+        'open a long lazy list',
+        'tap_widget',
+        {'key': 'List'},
+        ['Route changed', 'ListPage'],
+      );
+      await check(
+        'a row the list has not built, above: "Row 3", not "Row 399"',
+        'tap_widget',
+        {'key': 'Row 3'},
+      );
+      await check('Row 3 was tapped', 'assert_widget', {
+        'text': 'picked Row_3',
+      });
+      await check('a row further down', 'tap_widget', {'key': 'Row 480'});
+      await check('Row 480 was tapped', 'assert_widget', {
+        'text': 'picked Row_480',
+      });
+      await check(
+        'a row that does not exist',
+        'scroll_into_view',
+        {'key': 'Row 9999'},
+        ['Widget not found'],
+        true,
+      );
+      await check('back from the list', 'press_key', {'key': 'back'}, ['Send']);
       await check(
         'a tap that does nothing says so',
         'tap_widget',
@@ -1768,10 +1817,32 @@ class _HomeState extends State<Home> {
           child: const Text('Crash'),
         ),
         TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ListPage()),
+          ),
+          child: const Text('List'),
+        ),
+        TextButton(
           onPressed: () => setState(() => _squeeze = !_squeeze),
           child: const Text('Squeeze'),
         ),
         TextButton(onPressed: _signIn, child: const Text('Sign in')),
+        // On the root navigator, above the page: in screenshots too.
+        TextButton(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('A dialog'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close dialog'),
+                ),
+              ],
+            ),
+          ),
+          child: const Text('Dialog'),
+        ),
         Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
           const SizedBox(width: 40, child: Row(children: [SizedBox(key: ValueKey('squeezed'), width: 90, height: 8)])),
@@ -1791,6 +1862,33 @@ class _HomeState extends State<Home> {
       );
     } catch (_) {}
   }
+}
+
+/// A lazy list opened near Row 400: "Row 3" is not built yet, and the rows
+/// on screen contain "Row 3" ("Row 399").
+class ListPage extends StatefulWidget {
+  const ListPage({super.key});
+  @override
+  State<ListPage> createState() => _ListPageState();
+}
+
+class _ListPageState extends State<ListPage> {
+  final _rows = ScrollController(initialScrollOffset: 22300);
+  String _picked = 'none';
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    // Underscores: the title must not match a row's label.
+    appBar: AppBar(title: Text('picked ${_picked.replaceAll(' ', '_')}')),
+    body: ListView.builder(
+      controller: _rows,
+      itemCount: 500,
+      itemBuilder: (_, i) => ListTile(
+        title: Text('Row $i'),
+        onTap: () => setState(() => _picked = 'Row $i'),
+      ),
+    ),
+  );
 }
 
 class DetailsPage extends StatelessWidget {

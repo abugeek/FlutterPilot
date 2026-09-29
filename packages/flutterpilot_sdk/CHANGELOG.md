@@ -1,5 +1,12 @@
 ## Unreleased
 
+- Scrolling to a widget (scroll_into_view, and before a tap) pages through
+  each list, including lazy, reversed, grid and nested horizontal lists,
+  instead of swiping; a partial text match no longer stops the search
+  ("Item 3" is not "Item 399"). `maxAttempts` is gone.
+- Screenshots (and the contrast audit) capture the whole window: dialogs,
+  menus and sheets on the root navigator were missing. The AI tap badge is
+  removed a frame before the capture.
 - Removed service extensions no FlutterPilot tool called: `getStreamLogs`,
   `clearStreamLogs`, `tapAt`, `jumpToScreen`, `getPerfMetrics`,
   `getDebugLogs`, `auditMemoryHealth`; and the `StreamInspector` and

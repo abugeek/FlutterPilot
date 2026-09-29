@@ -519,17 +519,26 @@ Findings #240–243.
 These exist and compile, but nobody has checked them against real behaviour.
 Review each the same way as PR #1 — keep, fix, or delete:
 
-- **`ai_overlay_manager.dart`** — the "🤖 AI Tap" ripple. Verify it is *not*
-  captured in `capture_screenshot` / `compare_screenshot` (would make visual
-  diffs flaky) and not listed in widget trees or tappable elements.
+- ~~**`ai_overlay_manager.dart`**~~ — done (2026-09-29): kept. Trees,
+  finders and tappable lists already skipped it. Screenshots left it out only
+  by accident: they captured the bottom page's repaint boundary, which also
+  left out every dialog, menu and sheet on the root navigator (and the debug
+  banner). They now capture the whole window, after the frame that takes the
+  badge off; the contrast audit reads the same pixels.
 - ~~**`operation_scheduler.dart` + `get_operation` / `async:true` /
   `operationDeadlineMs`**~~ — done (2026-09-29): async, cancel and the
   per-call deadline are gone (only six fast read tools had them; the slow
   ones never did). The scheduler stays: mutations run in order and reads
   wait for them; every call has a fixed 30 s deadline.
-- **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
-  test on long lists, nested scrollables, horizontal lists, lazy lists where
-  the target isn't built yet.
+- ~~**`scroll_simulator.dart`**~~ — done (2026-09-29): rewritten. On a
+  lab app (500-item list, list opened mid-way, horizontal rows in a vertical
+  list, reversed list, grid) the swipes reached only items already built:
+  everything else failed after 3–7 s, nested lists crashed, and "Item 3"
+  tapped "Item 399" (a partial match). It now pages each list's
+  ScrollPosition (both directions, then the lists across its axis), matches
+  whole text while searching, puts lists back when not found, and builds
+  without waiting for a frame while the window is hidden: 0.3–3 s, nested
+  ~5 s, not found ~2 s. `maxAttempts` is gone; the limit is 10 s.
 - ~~**`stream_inspector.dart`**~~ — done (2026-09-29): deleted, with six
   more SDK extensions no tool called (`tapAt`, `jumpToScreen`,
   `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` + `MemoryAuditor`).
