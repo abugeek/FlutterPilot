@@ -1097,6 +1097,80 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // ROADMAP §8: verify a feature against criteria, with evidence.
+    if (!zeroCode) {
+      await check(
+        'verify_feature starts',
+        'verify_feature',
+        {
+          'feature': 'Greeting',
+          'criteria': [
+            'Send greets the user by name',
+            'Send can be tapped twice',
+          ],
+        },
+        ['1. Send greets the user by name'],
+      );
+      await check('verify: criterion 1', 'verify_feature', {'criterion': 1});
+      await check('verify: mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 200,
+        'body': '{"ok":true}',
+      });
+      await check('verify: name', 'enter_text', {
+        'target': 'Name',
+        'text': 'Verify',
+      });
+      await check('verify: send', 'tap_widget', {'key': 'Send'});
+      await check(
+        'verify: greeting',
+        'assert_widget',
+        {'text': 'Hello, Verify (200)'},
+        const [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check(
+        'verify: criterion 2',
+        'verify_feature',
+        {'criterion': 2},
+        ['Criterion 1: ✅ PASS'],
+      );
+      await check('verify: send again, unchecked', 'tap_widget', {
+        'key': 'Send',
+      });
+      await check(
+        'verify_feature finish: pass needs a check',
+        'verify_feature',
+        {'finish': true},
+        [
+          'INCOMPLETE: 1 of 2 criteria passed, 1 not verified',
+          '⚠️ NOT VERIFIED Send can be tapped twice',
+          'report.md',
+        ],
+      );
+      final reports = Directory('$app/flutterpilot/reports');
+      final report = reports.existsSync()
+          ? reports
+                .listSync(recursive: true)
+                .whereType<File>()
+                .where((f) => f.path.endsWith('report.md'))
+                .firstOrNull
+          : null;
+      final ok =
+          report != null &&
+          report.readAsStringSync().contains(
+            '| 1 | Send greets the user by '
+            'name | ✅ PASS |',
+          ) &&
+          File('${report.parent.path}/criterion-1.png').existsSync();
+      if (!ok) failed++;
+      print(
+        '${ok ? '✅' : '❌'} the report and its screenshots are written'
+        '${ok ? '' : '\n   ${report?.readAsStringSync()}'}',
+      );
+    }
+
     // ROADMAP §7: a scenario brings its mocks back across a hot restart.
     if (!zeroCode) {
       await check('scenario: mock /ping', 'mock_http_response', {

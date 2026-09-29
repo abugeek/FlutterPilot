@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7); an app sees only those that work for it
+- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -461,9 +461,16 @@ Findings #240–243.
 
 ## 8. Longer-term vision
 
-- **Verify-a-feature macro:** given acceptance criteria in plain language,
-  the agent drives the flow and returns a pass/fail report with evidence
-  (diffs, screenshots, network log). This is FlutterPilot's reason to exist.
+- ~~**Verify-a-feature macro**~~ — done (2026-09-29): `verify_feature`.
+  The agent gives the criteria (optionally a scenario to start from), picks
+  each criterion in turn, drives and checks as usual; every action and check
+  is recorded against the current criterion, and closing one adds the HTTP
+  requests made meanwhile (dart:io profile), the app's new errors and a
+  screenshot. A pass needs a passing check, no failed check and no error
+  (overflows are warnings); driven but unchecked is NOT VERIFIED — the
+  agent's say-so is not evidence. `finish` writes
+  `flutterpilot/reports/<feature>-<time>/report.md` in the app. Findings
+  #244–247.
 - **Interop with the official Dart & Flutter MCP server:** don't duplicate
   analyze/test/pub/hot-reload basics; focus on live-app driving, runtime state
   and profiling. Consider sharing the Dart Tooling Daemon connection.

@@ -422,6 +422,15 @@ keyboard forced on, and in Chrome:
 | 242 | noisy "not saved" | ❌→fixed | saving listed `Instance of 'HnApi'`, `SharedPreferences` and an `AsyncLoading` future as "not saved"; now only real values it can't restore (the `ThemeMode` and `Feed` enums) |
 | 243 | e2e: mocks across the restart | ✅ | mock `/ping` 202, save, clear the mock, load: the restarted app has 1 mock active before anything calls it, and Send shows "Hello, Scenario (202)". hn_reader has no Dio: mocks are e2e-tested only |
 
+## Verify a feature (ROADMAP §8), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 244 | "Story filter", 3 criteria | ✅ | empty state for a word no story has (assert "No stories match") ✅, clearing brings stories back (wait_for Bookmark) ✅, dark theme in Settings driven but not checked ⚠️ NOT VERIFIED (the screenshot shows it dark: a picture is not a check). The first attempt at criterion 1 started on the Settings screen and failed; picking criterion 1 again replaced its evidence |
+| 245 | misleading reason | ❌→fixed | a failed `assert_widget` was blamed when `enter_text` had failed first (the filter field was not on screen): the reason now names the failed action before the check. Step lines lost the `[extensionError]` prefix, the agent-facing hints and passed checks' raw JSON |
+| 246 | network evidence | ✅ | "Switching to New loads the newest stories": `GET …/newstories.json → 200 (668 ms)` and one request per story (30); the report now lists 15 and "… and N more (k failed)" |
+| 247 | e2e | ✅ | the fixture (with its intentional overflow) passes "Send greets the user by name" (mock + field + Send + assert), an unchecked second criterion is NOT VERIFIED, report.md and criterion-1.png are written |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

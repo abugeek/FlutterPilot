@@ -25,6 +25,7 @@ import 'src/plugin_tools.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
+import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/zero_code.dart';
 
@@ -41,6 +42,7 @@ part 'src/tools/state_management_tools.dart';
 part 'src/tools/testing_tools.dart';
 part 'src/tools/test_generation_tools.dart';
 part 'src/tools/scenario_tools.dart';
+part 'src/tools/verification_tools.dart';
 part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
@@ -60,6 +62,10 @@ abstract class _FlutterPilotServerBase {
 
   /// Started when the connection drops; cleared when an app connects.
   NativeCrashWatch? _nativeCrash;
+
+  /// Between verify_feature(criteria) and verify_feature(finish): every
+  /// action and check is evidence for the current criterion.
+  Verification? _verification;
 
   /// Between generate_test(start) and generate_test(name): mocks are
   /// recorded too.
@@ -139,6 +145,12 @@ abstract class _FlutterPilotServerBase {
       try {
         var result = await callback(args, extra);
         if (result.isError) result = await _withNativeCrash(result);
+        _verification?.record(
+          name,
+          args,
+          result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
+          isError: result.isError == true,
+        );
         final images = result.content.whereType<ImageContent>();
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
@@ -258,6 +270,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _DevtoolsToolsMixin,
         _TestGenerationToolsMixin,
         _ScenarioToolsMixin,
+        _VerificationToolsMixin,
         _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
@@ -950,6 +963,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerDevtoolsTools();
     _registerTestGenerationTools();
     _registerScenarioTools();
+    _registerVerificationTools();
     _registerPluginIntegrationTools();
   }
 
