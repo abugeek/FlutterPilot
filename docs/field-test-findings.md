@@ -466,6 +466,12 @@ keyboard forced on, and in Chrome:
 | 261 | Android CI | ❌→fixed | failing on main since #17–#24 merged. Not the app: the emulator itself died mid-run (adb lost it, 9 GB free, no OOM kill) after its host GPU layer logged "Failed to find ColorBuffer"; google_apis 33, 34 and 35 all did, `-gpu guest` was ignored. The aosp_atd 34 image passes; the job blocks again. A failed run now says whether the app or the emulator died |
 | 262 | native crash on a slow Mac | ❌→fixed | the §5.8 check failed once on CI: the kernel's crash note came after 3 looks, and a slow `log show` (timeout) ended the watch. It keeps looking for 30 s; tools still wait for 3 looks only |
 
+## §9 review: code not yet proven in a real app
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 263 | async ops (`async:true`, `get_operation`, `operationId`, `operationDeadlineMs`) | 🗑️ removed | only 6 read tools (Dio logs, Hive, state...) carried the 3 parameters, and they answer in ms; the slow tools (profile_action, generate_test, leak cycles) never had them, and no field test or agent used them (#70: "rarely needed"). The mutation ordering and a fixed 30 s deadline stay. |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
