@@ -3,6 +3,10 @@
 - Screenshots (and the contrast audit) capture the whole window: dialogs,
   menus and sheets on the root navigator were missing. The AI tap badge is
   removed a frame before the capture.
+- Removed service extensions no FlutterPilot tool called: `getStreamLogs`,
+  `clearStreamLogs`, `tapAt`, `jumpToScreen`, `getPerfMetrics`,
+  `getDebugLogs`, `auditMemoryHealth`; and the `StreamInspector` and
+  `MemoryAuditor` classes behind them.
 
 ## 0.1.0
 

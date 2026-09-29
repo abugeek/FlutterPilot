@@ -471,6 +471,7 @@ keyboard forced on, and in Chrome:
 | # | Item | Result | Notes |
 |---|---|---|---|
 | 263 | async ops (`async:true`, `get_operation`, `operationId`, `operationDeadlineMs`) | 🗑️ removed | only 6 read tools (Dio logs, Hive, state...) carried the 3 parameters, and they answer in ms; the slow tools (profile_action, generate_test, leak cycles) never had them, and no field test or agent used them (#70: "rarely needed"). The mutation ordering and a fixed 30 s deadline stay. |
+| 264 | SDK extensions no tool calls | 🗑️ removed | `getStreamLogs`/`clearStreamLogs` (+ `StreamInspector`), `tapAt`, `jumpToScreen`, `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` (+ `MemoryAuditor`): registered in every app, reachable by no tool, their tools deleted earlier (§4.2). `sdk_extensions_used_test.dart` keeps it that way. |
 | 265 | screenshots of dialogs (and the 🤖 badge) | ❌→fixed | `capture_screenshot`/`compare_screenshot` captured the first repaint boundary: the bottom page. A `showDialog` (root navigator), or any popup in an app with one navigator, was missing, and the contrast audit measured a dialog's text against the page behind it. hn_reader's context menu showed only because it opens on a tab's nested navigator. The badge was left out by the same accident. Now the view's root layer, after a forced frame that removes the badge; e2e fails on the old capture ("a dialog is in the screenshot"). |
 
 ## Latency observed (debug mode, macOS, HN reader)

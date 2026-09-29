@@ -16,7 +16,6 @@ import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
-import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
 import 'src/redaction.dart';
 import 'src/restart_store.dart';
@@ -30,7 +29,6 @@ import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
 import 'src/source_locator.dart';
-import 'src/stream_inspector.dart';
 import 'src/test_recorder.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';
@@ -42,13 +40,11 @@ export 'src/frame_budget_profiler.dart';
 export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
 export 'src/keyboard_simulator.dart';
-export 'src/memory_auditor.dart';
 export 'src/navigation_tracker.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
 export 'src/settle_tracker.dart';
 export 'src/soft_keyboard.dart';
-export 'src/stream_inspector.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
 
@@ -705,24 +701,6 @@ class FlutterPilot {
   // ---------------------------------------------------------------------------
 
   static void registerServiceExtensions() {
-    // tapAt stays in the main file as it is a simple coordinate-based action
-    // that doesn't fit neatly into any extension group.
-    registerExtension('ext.flutterpilot.tapAt', (method, parameters) async {
-      final x = double.tryParse(parameters['x'] ?? '');
-      final y = double.tryParse(parameters['y'] ?? '');
-      if (x == null || y == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Invalid coords',
-        );
-      }
-      TestRecorder.add('tapAt', data: {'x': x, 'y': y});
-      await InteractionManager.tapAt(Offset(x, y));
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'success'}),
-      );
-    });
-
     // Register extension groups from part files.
     _WidgetExtensions.register();
     _NavigationExtensions.register();
