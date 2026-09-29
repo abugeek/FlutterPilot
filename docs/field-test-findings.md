@@ -475,6 +475,18 @@ keyboard forced on, and in Chrome:
 | 265 | screenshots of dialogs (and the 🤖 badge) | ❌→fixed | `capture_screenshot`/`compare_screenshot` captured the first repaint boundary: the bottom page. A `showDialog` (root navigator), or any popup in an app with one navigator, was missing, and the contrast audit measured a dialog's text against the page behind it. hn_reader's context menu showed only because it opens on a tab's nested navigator. The badge was left out by the same accident. Now the view's root layer, after a forced frame that removes the badge; e2e fails on the old capture ("a dialog is in the screenshot"). |
 | 266 | scrolling to a widget (`scroll_into_view`, tap_widget's auto-scroll) | ❌→fixed | lab app on macOS, window covered: before, only items already built were reached (Item 150/499, a list opened mid-way, a grid, a reversed list: not found after 3–7 s); a card in a horizontal row inside a vertical list crashed ("Null check operator"); "Item 3" tapped "Item 399" (only partial match on screen); a missing item took 6 s. After: all found (0.3–3 s; nested card ~5 s; not found 1.7–3 s), the exact item tapped. Frames on a covered window arrive every ~70 ms, so the search builds and lays out itself; skipping the frame's finalizeTree left scrolled-out rows inactive and threw from a scroll-metrics microtask (fixed). e2e fails on the old code ("Row 3"). |
 
+## CI flakiness (required checks failing at random)
+
+Failing checks over the last 30 CI runs (90 Apple/web e2e jobs; Android before #48 excluded):
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 267 | read before the frame (macOS `backspace edits the field`, 1×) | ❌→fixed | the key edited the field ("Pilo") but the response had no widget-tree diff: `pumpAndSettleAdaptive` waits for two frames but gave up after 80 ms (150 ms for press_key); a slow runner, or a covered window (~70 ms a frame), needs longer. Now 1 s (two frames still take ~32 ms normally), and frames are forced while the window is hidden. |
+| 268 | iOS: Dart Tooling Daemon discovery + doctor (7× each) | 🔎 diagnosed | always the first attempt on a fresh runner, never the retry, never locally (145/145 on an iPhone 17 simulator): the fresh server polls 20 s and finds no app. The e2e now prints `dart tooling-daemon --list --machine` (exit, time, output), the instance files and the daemons running when it fails. |
+| 269 | iOS: `profile_action` (10×), then `mocked response reached UI` / `network log has mocked call` (3×) | 🔎 diagnosed | "Service connection disposed" from `getCpuSamples` after ~58 s, or already at `getFlagList` after earlier steps took 15–28 s; the mock checks fail because profile_action is what taps Send. A failed check now prints what the server and the app logged meanwhile. |
+| 270 | iOS: `viewport is landscape` (4×) | 🔎 diagnosed | `set_app_settings(orientation)` returns, the simulator never rotates within 20 s; the app's log is now printed. |
+| 271 | iOS: keyboard (`a character is typed`, `arrow`, `select all`, 2×) | 🔎 diagnosed | the field lost focus between two keys (the key went to MaterialApp) on a runner where each step took 12–15 s: iOS closing the text input connection unfocuses a field. |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
