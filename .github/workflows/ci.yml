@@ -93,6 +93,15 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 60
+    # TEMPORARY: which emulator image survives the run (google_apis 34
+    # crashes in its host GPU layer mid-run). One is kept.
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - {api: 34, target: aosp_atd}
+          - {api: 35, target: google_apis}
+          - {api: 33, target: google_apis}
     steps:
       - uses: actions/checkout@v4
 
@@ -121,13 +130,9 @@ jobs:
       - name: End-to-end test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.image.api }}
           arch: x86_64
-          target: google_apis
+          target: ${{ matrix.image.target }}
           disable-animations: false
-          # The default (-gpu swiftshader_indirect) renders on the host,
-          # whose GPU layer crashed the whole emulator mid-run ("Failed to
-          # find ColorBuffer", then adb lost it); guest renders inside it.
-          emulator-options: -no-window -gpu guest -no-snapshot -noaudio -no-boot-anim
           # Retries once while the emulator lives; on failure prints why.
           script: cd packages/flutterpilot_server && sh tool/ci_android_e2e.sh
