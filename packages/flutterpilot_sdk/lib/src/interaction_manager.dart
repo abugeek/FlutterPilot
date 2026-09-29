@@ -80,32 +80,41 @@ class InteractionManager {
     return {'x': position.dx, 'y': position.dy};
   }
 
-  /// Timeout for settle calls made purely to read post-action state (route,
-  /// widget-tree diff) rather than to wait out a gesture's own animation.
-  /// [AiOverlayManager]'s decorative tap ripple keeps a real ticker running
-  /// for ~700ms, which would otherwise make every settle call pay close to
-  /// [pumpAndSettleAdaptive]'s full default timeout just waiting for cosmetic
-  /// UI — a functional rebuild from setState commits within 1-2 frames, so
-  /// this stays short on purpose.
-  static const Duration postMutationSettleTimeout = Duration(milliseconds: 150);
-
-  /// Adaptively waits for any active Flutter frame animations or microtasks to settle.
+  /// Waits for two frames: the one that builds what the action changed
+  /// (setState, a new route's first frame) and the one after it, so a read
+  /// that follows sees the new screen.
+  ///
+  /// [timeout] only guards against frames that never come: on a normal
+  /// machine two frames take ~32 ms. On a slow CI simulator they took over
+  /// 150 ms, and the response read the screen before the change (an empty
+  /// diff after a key press that edited the field).
   static Future<void> pumpAndSettleAdaptive({
-    Duration timeout = const Duration(milliseconds: 80),
-    Duration step = const Duration(milliseconds: 16),
+    Duration timeout = const Duration(seconds: 1),
   }) async {
     if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
       return;
     }
-    // Settle the immediate gesture pipeline and resulting setState/build
+    await waitForTwoFrames(timeout: timeout);
+  }
+
+  /// [pumpAndSettleAdaptive] without the shortcut for widget tests.
+  @visibleForTesting
+  static Future<void> waitForTwoFrames({
+    Duration timeout = const Duration(seconds: 1),
+  }) async {
+    final binding = WidgetsBinding.instance;
+    // Frames are off while the window is hidden: force them.
+    void request() => binding.framesEnabled
+        ? binding.scheduleFrame()
+        : binding.scheduleForcedFrame();
     final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    binding.addPostFrameCallback((_) {
+      binding.addPostFrameCallback((_) {
         if (!completer.isCompleted) completer.complete();
       });
-      WidgetsBinding.instance.scheduleFrame();
+      request();
     });
-    WidgetsBinding.instance.scheduleFrame();
+    request();
     await completer.future.timeout(timeout, onTimeout: () {});
   }
 

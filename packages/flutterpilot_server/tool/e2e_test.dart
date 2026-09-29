@@ -36,12 +36,70 @@ Future<void> main(List<String> args) async {
   final app = '${work.path}/fixture';
   Process? flutter, server;
   var failed = 0;
+  // What the server and the app logged: a failed check prints what they
+  // said while it ran, so a CI failure shows its cause.
+  final serverLog = <String>[];
+  final appLog = <String>[];
+  ({int server, int app}) mark() =>
+      (server: serverLog.length, app: appLog.length);
+  void explain(({int server, int app}) from) {
+    final said = serverLog
+        .skip(from.server)
+        .where((l) => !l.contains(' FINE ') && l.trim().isNotEmpty)
+        .toList();
+    final app = appLog.skip(from.app).toList();
+    for (final (name, lines) in [('server', said), ('app', app)]) {
+      if (lines.isEmpty) continue;
+      print('   $name said:');
+      for (final l in lines.skip(lines.length > 12 ? lines.length - 12 : 0)) {
+        print('   | ${l.length > 200 ? '${l.substring(0, 200)}…' : l}');
+      }
+    }
+  }
 
   Future<void> sh(String exe, List<String> a, {String? cwd}) async {
     final r = await Process.run(exe, a, workingDirectory: cwd);
     if (r.exitCode != 0) {
       throw 'FAILED: $exe ${a.join(' ')}\n${r.stdout}\n${r.stderr}';
     }
+  }
+
+  /// What the Dart Tooling Daemon side looked like when discovery failed.
+  Future<void> explainDtd() async {
+    final watch = Stopwatch()..start();
+    try {
+      final r = await Process.run('dart', [
+        'tooling-daemon',
+        '--list',
+        '--machine',
+      ]).timeout(const Duration(seconds: 30));
+      print(
+        '   dart tooling-daemon --list --machine: exit ${r.exitCode} in '
+                '${watch.elapsedMilliseconds} ms\n   | ${r.stdout}'
+            .trimRight(),
+      );
+      if ('${r.stderr}'.trim().isNotEmpty) print('   | stderr: ${r.stderr}');
+    } catch (e) {
+      print(
+        '   dart tooling-daemon --list: $e after ${watch.elapsedMilliseconds} ms',
+      );
+    }
+    final home = Platform.environment['HOME'] ?? '';
+    for (final dir in [
+      '$home/Library/Application Support/Dart/dtd',
+      '$home/.dart-tool/dtd',
+    ]) {
+      final d = Directory(dir);
+      if (d.existsSync()) {
+        print(
+          '   $dir: ${d.listSync().map((e) => e.path.split('/').last).join(', ')}',
+        );
+      }
+    }
+    final ps = await Process.run('pgrep', ['-fl', 'tooling-daemon']);
+    print(
+      '   daemons running: ${'${ps.stdout}'.trim().replaceAll('\n', '; ')}',
+    );
   }
 
   try {
@@ -93,9 +151,17 @@ Future<void> main(List<String> args) async {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-          if (!line.startsWith('[{')) return;
+          if (!line.startsWith('[{')) {
+            appLog.add(line);
+            return;
+          }
           for (final e in (jsonDecode(line) as List).cast<Map>()) {
             final params = e['params'] as Map?;
+            if (e['event'] == 'app.log' || e['event'] == 'daemon.logMessage') {
+              appLog.add('${params?['log'] ?? params?['message']}');
+            } else if (e['event'] == 'app.stop') {
+              appLog.add('app.stop ${params ?? ''}');
+            }
             if (e['event'] == 'app.debugPort' && !wsUri.isCompleted) {
               wsUri.complete(params!['wsUri'] as String);
               appId = params['appId'] as String?;
@@ -105,7 +171,10 @@ Future<void> main(List<String> args) async {
             }
           }
         });
-    flutter.stderr.transform(utf8.decoder).listen(stderr.write);
+    flutter.stderr.transform(utf8.decoder).listen((text) {
+      stderr.write(text);
+      appLog.addAll(const LineSplitter().convert(text));
+    });
     // A failed build ends flutter run; say so instead of waiting 20 minutes.
     unawaited(
       flutter.exitCode.then((code) {
@@ -126,7 +195,10 @@ Future<void> main(List<String> args) async {
       uri,
     ], workingDirectory: serverDir);
     final mcp = _Mcp(server);
-    server.stderr.transform(utf8.decoder).listen((_) {});
+    server.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(serverLog.add);
     await mcp.request('initialize', {
       'protocolVersion': '2024-11-05',
       'capabilities': {},
@@ -145,6 +217,7 @@ Future<void> main(List<String> args) async {
       Duration within = Duration.zero,
       int? maxBytes,
     ]) async {
+      final from = mark();
       final deadline = DateTime.now().add(within);
       String text;
       bool ok;
@@ -177,6 +250,7 @@ Future<void> main(List<String> args) async {
         '${ok ? '✅' : '❌'} $label (${text.length}b)'
         '${ok && !verbose ? '' : '\n   $shown'}',
       );
+      if (!ok) explain(from);
     }
 
     /// Like [check], but passes only if the text contains none of [absent].
@@ -186,6 +260,7 @@ Future<void> main(List<String> args) async {
       Map<String, dynamic> a,
       List<String> absent,
     ) async {
+      final from = mark();
       final res = await mcp.request('tools/call', {
         'name': tool,
         'arguments': a,
@@ -203,10 +278,12 @@ Future<void> main(List<String> args) async {
         '${ok ? '✅' : '❌'} $label (${text.length}b)'
         '${ok && !verbose ? '' : '\n   $text'}',
       );
+      if (!ok) explain(from);
     }
 
     /// Polls get_app_summary until its "Viewport: WxH" has the orientation.
     Future<void> expectViewport(String label, {required bool landscape}) async {
+      final from = mark();
       // Simulators on CI can take many seconds to rotate.
       final deadline = DateTime.now().add(const Duration(seconds: 20));
       var seen = '';
@@ -229,6 +306,7 @@ Future<void> main(List<String> args) async {
       }
       if (!ok) failed++;
       print('${ok ? '✅' : '❌'} $label ($seen)');
+      if (!ok) explain(from);
     }
 
     // Web apps have no CPU profile or dart:io HTTP profile: not listed.
@@ -1254,6 +1332,7 @@ Future<void> main(List<String> args) async {
           'app through the Dart Tooling Daemon'
           '${viaDtd == null ? '' : '\n   $viaDtd'}',
         );
+        if (viaDtd != null) await explainDtd();
         if (!zeroCode) {
           final doctor = await Process.run('dart', [
             'run',

@@ -588,9 +588,7 @@ extension _WidgetExtensions on FlutterPilot {
           key,
           modifiers: modifiers,
         );
-        await InteractionManager.pumpAndSettleAdaptive(
-          timeout: InteractionManager.postMutationSettleTimeout,
-        );
+        await InteractionManager.pumpAndSettleAdaptive();
         TestRecorder.add(
           'pressKey',
           data: {

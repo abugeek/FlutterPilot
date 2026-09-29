@@ -473,6 +473,18 @@ keyboard forced on, and in Chrome:
 | 263 | async ops (`async:true`, `get_operation`, `operationId`, `operationDeadlineMs`) | 🗑️ removed | only 6 read tools (Dio logs, Hive, state...) carried the 3 parameters, and they answer in ms; the slow tools (profile_action, generate_test, leak cycles) never had them, and no field test or agent used them (#70: "rarely needed"). The mutation ordering and a fixed 30 s deadline stay. |
 | 264 | SDK extensions no tool calls | 🗑️ removed | `getStreamLogs`/`clearStreamLogs` (+ `StreamInspector`), `tapAt`, `jumpToScreen`, `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` (+ `MemoryAuditor`): registered in every app, reachable by no tool, their tools deleted earlier (§4.2). `sdk_extensions_used_test.dart` keeps it that way. |
 
+## CI flakiness (required checks failing at random)
+
+Failing checks over the last 30 CI runs (90 Apple/web e2e jobs; Android before #48 excluded):
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 267 | read before the frame (macOS `backspace edits the field`, 1×) | ❌→fixed | the key edited the field ("Pilo") but the response had no widget-tree diff: `pumpAndSettleAdaptive` waits for two frames but gave up after 80 ms (150 ms for press_key); a slow runner, or a covered window (~70 ms a frame), needs longer. Now 1 s (two frames still take ~32 ms normally), and frames are forced while the window is hidden. |
+| 268 | iOS: Dart Tooling Daemon discovery + doctor (7× each) | 🔎 diagnosed | always the first attempt on a fresh runner, never the retry, never locally (145/145 on an iPhone 17 simulator): the fresh server polls 20 s and finds no app. The e2e now prints `dart tooling-daemon --list --machine` (exit, time, output), the instance files and the daemons running when it fails. |
+| 269 | iOS: `profile_action` (10×), then `mocked response reached UI` / `network log has mocked call` (3×) | 🔎 diagnosed | "Service connection disposed" from `getCpuSamples` after ~58 s, or already at `getFlagList` after earlier steps took 15–28 s; the mock checks fail because profile_action is what taps Send. A failed check now prints what the server and the app logged meanwhile. |
+| 270 | iOS: `viewport is landscape` (4×) | 🔎 diagnosed | `set_app_settings(orientation)` returns, the simulator never rotates within 20 s; the app's log is now printed. |
+| 271 | iOS: keyboard (`a character is typed`, `arrow`, `select all`, 2×) | 🔎 diagnosed | the field lost focus between two keys (the key went to MaterialApp) on a runner where each step took 12–15 s: iOS closing the text input connection unfocuses a field. |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
