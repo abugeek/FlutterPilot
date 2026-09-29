@@ -91,7 +91,6 @@ jobs:
 
   e2e-android:
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +122,11 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          # The Automated Test Device image. google_apis 33-35 crashed the
+          # whole emulator in its host GPU layer mid-run ("Failed to find
+          # ColorBuffer", then adb lost it) since 2026-09-28; ATD, built for
+          # headless CI, runs the e2e through.
+          target: aosp_atd
           disable-animations: false
-          # Emulators on hosted runners are slow; retry once, visibly.
-          script: cd packages/flutterpilot_server && (dart run tool/e2e_test.dart -d emulator-5554 || (echo "::warning::Android e2e failed once on this runner; retrying" && dart run tool/e2e_test.dart -d emulator-5554))
+          # Retries once while the emulator lives; on failure prints why.
+          script: cd packages/flutterpilot_server && sh tool/ci_android_e2e.sh

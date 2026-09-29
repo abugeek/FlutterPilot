@@ -262,6 +262,7 @@ class NativeCrashWatch {
     this.target, {
     this.reportsDir,
     this.reportWait = const Duration(seconds: 90),
+    this.crashLogWait = const Duration(seconds: 30),
   }) {
     _run();
   }
@@ -269,6 +270,9 @@ class NativeCrashWatch {
   final CrashTarget target;
   final String? reportsDir;
   final Duration reportWait;
+
+  /// How long to keep looking for the kernel's note of the crash.
+  final Duration crashLogWait;
 
   final _decided = Completer<void>();
   NativeCrash? _crash;
@@ -303,16 +307,24 @@ class NativeCrashWatch {
     if (target.operatingSystem == 'ios' && target.simulatorUdid == null) {
       return;
     }
-    // The log can lag a moment behind the connection closing.
+    // The log can lag behind the connection closing, by seconds on a busy
+    // machine (CI). Callers wait for the first few looks only; a crash
+    // seen later still reaches the next tool's error.
     var crashed = false;
-    for (var i = 0; i < 3 && !crashed; i++) {
+    final logDeadline = DateTime.now().add(crashLogWait);
+    for (var i = 0; !crashed && DateTime.now().isBefore(logDeadline); i++) {
       if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
-      crashed = await _kernelSawCrash(target.pid);
+      if (i == 3 && !_decided.isCompleted) _decided.complete();
+      try {
+        crashed = await _kernelSawCrash(target.pid);
+      } on TimeoutException {
+        // `log show` was slow: look again.
+      }
     }
     if (!crashed) return;
     final reason = await _exceptionFromAppleLog(target);
     _crash = NativeCrash(reason: reason, reportPending: true);
-    _decided.complete();
+    if (!_decided.isCompleted) _decided.complete();
 
     final deadline = DateTime.now().add(reportWait);
     while (DateTime.now().isBefore(deadline)) {

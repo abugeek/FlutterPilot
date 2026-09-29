@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutterpilot_server/src/native_crash.dart';
 import 'package:test/test.dart';
@@ -168,4 +169,19 @@ void main() {
     expect(text, startsWith('The app crashed in native code.\n*** '));
     expect(text, contains('still writing the crash report'));
   });
+
+  test(
+    'a process that did not crash: callers wait for the first looks only',
+    () async {
+      final watch = NativeCrashWatch(
+        CrashTarget(pid: pid, operatingSystem: 'macos', since: DateTime.now()),
+        crashLogWait: const Duration(seconds: 20),
+      );
+      final sw = Stopwatch()..start();
+      expect(await watch.current(wait: const Duration(seconds: 15)), isNull);
+      // Three looks at the log, not the whole 20 s window.
+      expect(sw.elapsed, lessThan(const Duration(seconds: 14)));
+    },
+    testOn: 'mac-os',
+  );
 }

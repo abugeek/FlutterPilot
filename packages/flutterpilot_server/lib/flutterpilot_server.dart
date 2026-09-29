@@ -29,6 +29,7 @@ import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
+import 'src/web_limits.dart';
 import 'src/zero_code.dart';
 
 export 'src/cli.dart' show runFlutterPilotServer;
@@ -1018,6 +1019,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         hasSdk: context.hasSdk,
         extensions: rpcs,
         buildMode: context.buildMode,
+        isWeb: context.isWeb,
       );
     } catch (_) {
       // Keep the current list; calls explain themselves.
@@ -1027,12 +1029,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// Lists only the tools that can work: without flutterpilot_sdk in the app
   /// (zero-code mode) that is [zeroCodeTools]; with it, a plugin's tools once
   /// the app registers that plugin ([pluginToolExtensions]). Before the check
-  /// ([hasSdk] null) everything. Native tools keep their own rule. Sends one
+  /// ([hasSdk] null) everything. Profile builds drop [debugOnlyTools], web
+  /// apps [webUnsupportedTools]. Native tools keep their own rule. Sends one
   /// tools/list_changed instead of one per tool.
   void updateToolVisibility({
     required bool? hasSdk,
     Set<String> extensions = const {},
     BuildMode? buildMode,
+    bool isWeb = false,
   }) {
     if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
     var changed = false;
@@ -1045,6 +1049,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             when buildMode == BuildMode.profile &&
                 debugOnlyTools.contains(name) =>
           false,
+        _ when isWeb && webUnsupportedTools.contains(name) => false,
         false => zeroCodeTools.contains(name),
         true when needs != null => needs.any(extensions.contains),
         _ => true,
@@ -1059,22 +1064,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       }
     }
     if (changed) server.sendToolListChanged();
-  }
-
-  /// For testing only.
-  void setDeviceContextForTesting(DeviceRuntimeContext context) {
-    _deviceContexts[context.deviceId] = context;
-  }
-
-  /// For testing only.
-  Future<CallToolResult> callToolForTesting(
-    String name,
-    Map<String, dynamic> arguments, {
-    RequestHandlerExtra? extra,
-  }) async {
-    final cb = _toolCallbacks[name];
-    if (cb == null) throw ArgumentError('Tool "$name" is not registered');
-    return cb(arguments, extra ?? _dummyExtra());
   }
 
   // ---------------------------------------------------------------------------
@@ -1980,22 +1969,3 @@ class _ExtensionResult {
     );
   }
 }
-
-class _DummyAbortSignal implements AbortSignal {
-  @override
-  bool get aborted => false;
-  @override
-  dynamic get reason => null;
-  @override
-  Stream<void> get onAbort => const Stream.empty();
-  @override
-  void throwIfAborted() {}
-}
-
-RequestHandlerExtra _dummyExtra() => RequestHandlerExtra(
-  signal: _DummyAbortSignal(),
-  requestId: 1,
-  sendNotification: (n, {relatedTask}) async {},
-  sendRequest: <T extends BaseResultData>(r, factory, opts) async =>
-      throw UnimplementedError(),
-);
