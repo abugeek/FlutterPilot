@@ -1133,6 +1133,97 @@ Future<void> main(List<String> args) async {
           'to .mcp.json drives the app'
           '${fromConfig == null ? '' : '\n   $fromConfig'}',
         );
+        // ROADMAP §8 interop: the official Dart MCP server beside it, for
+        // the code side only.
+        final dartEntry =
+            (jsonDecode(installed.readAsStringSync())
+                    as Map)['mcpServers']['dart']
+                as Map?;
+        if (dartEntry != null) {
+          final p = await Process.start(
+            dartEntry['command'] as String,
+            (dartEntry['args'] as List).cast<String>(),
+            workingDirectory: app,
+          );
+          p.stderr.drain<void>();
+          final m = _Mcp(
+            p,
+            onRequest: (method) => method == 'roots/list'
+                ? {
+                    'roots': [
+                      {'uri': Uri.directory(app).toString()},
+                    ],
+                  }
+                : null,
+          );
+          List<String> names = const [];
+          try {
+            await m.request('initialize', {
+              'protocolVersion': '2025-06-18',
+              'capabilities': {'roots': {}},
+              'clientInfo': {'name': 'e2e-dart', 'version': '1'},
+            });
+            m.notify('notifications/initialized');
+            final res = await m.request('tools/list', {});
+            names = [
+              for (final t
+                  in ((res['result'] as Map?)?['tools'] as List? ?? const []))
+                '${t['name']}',
+            ];
+          } finally {
+            p.kill();
+          }
+          const duplicates = [
+            'hot_reload',
+            'hot_restart',
+            'get_runtime_errors',
+            'widget_inspector',
+            'flutter_driver_command',
+            'dtd',
+          ];
+          final split =
+              names.contains('analyze_files') &&
+              !names.any(duplicates.contains);
+          if (!split) failed++;
+          print(
+            '${split ? '✅' : '❌'} the Dart MCP server "mcp install" added '
+            'has the analyzer and none of the running-app tools'
+            '${split ? '' : '\n   $names'}',
+          );
+        } else {
+          print('⏭ this SDK has no Dart MCP server: interop check skipped');
+        }
+      }
+      // A plain `flutter run` (or an IDE) writes no URI file: the app is
+      // found through the Dart Tooling Daemon it registers with.
+      final uriFile = File('$app/.dart_tool/flutterpilot_vm_uri');
+      final hidden = uriFile.renameSync('${uriFile.path}.hidden');
+      try {
+        final viaDtd = await summaryFromFreshServer(roots: [work.path]);
+        if (viaDtd != null) failed++;
+        print(
+          '${viaDtd == null ? '✅' : '❌'} without the URI file: finds the '
+          'app through the Dart Tooling Daemon'
+          '${viaDtd == null ? '' : '\n   $viaDtd'}',
+        );
+        if (!zeroCode) {
+          final doctor = await Process.run('dart', [
+            'run',
+            '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+            'doctor',
+            '-p',
+            app,
+          ]);
+          final report = '${doctor.stdout}${doctor.stderr}';
+          final ok = report.contains('✅ SDK registered in the running app');
+          if (!ok) failed++;
+          print(
+            '${ok ? '✅' : '❌'} doctor finds it the same way'
+            '${ok ? '' : '\n   $report'}',
+          );
+        }
+      } finally {
+        hidden.renameSync(uriFile.path);
       }
       elsewhere.deleteSync(recursive: true);
     } else {

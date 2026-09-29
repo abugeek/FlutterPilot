@@ -58,7 +58,8 @@ class McpInstallCommand extends Command<void> {
   final String description =
       "Adds the FlutterPilot server to the project's MCP config for Claude "
       'Code (.mcp.json), Cursor (.cursor/mcp.json) and VS Code '
-      '(.vscode/mcp.json). Other servers in those files are kept.';
+      '(.vscode/mcp.json), with the official Dart MCP server for the code '
+      'side. Other servers in those files are kept.';
 
   McpInstallCommand() {
     argParser
@@ -95,6 +96,14 @@ class McpInstallCommand extends Command<void> {
         help:
             'Build the server from this flutterpilot_server folder the way '
             'a pub.dev install does (tests).',
+      )
+      ..addFlag(
+        'dart',
+        defaultsTo: true,
+        help:
+            'Also add the official Dart MCP server ("dart mcp-server": '
+            'analyzer, symbols, pub), without its running-app tools, which '
+            'FlutterPilot has.',
       )
       ..addFlag(
         'allow-destructive',
@@ -146,11 +155,22 @@ class McpInstallCommand extends Command<void> {
       if (argResults!['allow-destructive'] as bool) '--allow-destructive',
     ];
 
+    final dart = argResults!['dart'] as bool && await _hasDartMcp()
+        ? Platform.resolvedExecutable
+        : null;
+    if (argResults!['dart'] as bool && dart == null) {
+      stdout.writeln(
+        'ℹ️ This Dart SDK has no "dart mcp-server": only FlutterPilot is added.',
+      );
+    }
     var failed = false;
     for (final client in clients) {
       final result = writeConfig(project, client, launch, extraArgs: extra);
       failed |= result.startsWith('❌');
       stdout.writeln(result);
+      if (dart != null && !result.startsWith('❌')) {
+        stdout.writeln(writeDartConfig(project, client, dart));
+      }
     }
     // Claude Code starts servers in the project folder, where the server
     // looks first: no -p, so one entry serves every project.
@@ -159,7 +179,9 @@ class McpInstallCommand extends Command<void> {
       '\nFor Claude Code in every project instead (user scope):\n'
       '  claude mcp add --scope user flutterpilot -- '
       '${[launch.command, ...args].map(_shellQuote).join(' ')}\n'
-      '\nNext: flutterpilot dev (runs the app so the server finds it).',
+      '${dart == null ? '' : '  claude mcp add --scope user dart -- ${_shellQuote(dart)} mcp-server --disable $dartMcpDisabled\n'}'
+      '\nNext: run the app (flutter run, flutterpilot dev or your IDE); the '
+      'server finds it.',
     );
     if (clients.contains(McpClient.claude)) {
       stdout.writeln(
@@ -207,6 +229,61 @@ class McpInstallCommand extends Command<void> {
     ],
   };
 
+  /// The Dart MCP server's feature categories FlutterPilot covers: hot
+  /// reload/restart, runtime errors, the widget inspector, Flutter Driver
+  /// and app launching (`flutter`), and its DTD/VM service connection
+  /// (`dart_tooling_daemon`). What stays is the code side: analyze_files,
+  /// lsp, pub, pub_dev_search and reading dependencies.
+  static const dartMcpDisabled = 'flutter,dart_tooling_daemon';
+
+  /// The official Dart MCP server's entry: it takes the project from the
+  /// client's workspace folders, so it has no path.
+  static Map<String, Object> dartEntry(McpClient client, String dart) => {
+    if (client == McpClient.vscode) 'type': 'stdio',
+    'command': dart,
+    'args': ['mcp-server', '--disable', dartMcpDisabled],
+  };
+
+  /// Adds the Dart MCP server as `dart` to [client]'s config, unless one
+  /// is there already (under any name): then says how to drop its tools
+  /// FlutterPilot duplicates.
+  static String writeDartConfig(
+    String project,
+    McpClient client,
+    String dart,
+  ) => _editServers(project, client, 'dart', dartEntry(client, dart), (
+    servers,
+  ) {
+    final entry = dartEntry(client, dart);
+    for (final MapEntry(:key, :value) in servers.entries) {
+      final args = value is Map ? value['args'] : null;
+      if (args is! List || !args.contains('mcp-server')) continue;
+      if (jsonEncode(value) == jsonEncode(entry)) {
+        return '✅ ${client.label}: Dart MCP server already set up.';
+      }
+      return 'ℹ️ ${client.label}: kept your Dart MCP server "$key". Its hot '
+          'reload, runtime errors, widget inspector and Flutter Driver tools '
+          'duplicate FlutterPilot\'s: add "--disable", "$dartMcpDisabled" to '
+          'its args to give the agent one of each.';
+    }
+    servers['dart'] = entry;
+    return '✅ ${client.label}: added the Dart MCP server (dart) in '
+        '${client.configPath}, without the tools FlutterPilot has.';
+  });
+
+  /// Whether this SDK has the Dart MCP server.
+  static Future<bool> _hasDartMcp() async {
+    try {
+      final r = await Process.run(Platform.resolvedExecutable, [
+        'mcp-server',
+        '--version',
+      ]).timeout(const Duration(seconds: 60));
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Adds or replaces the `flutterpilot` server in [client]'s config under
   /// [project], keeping everything else. Returns a line for the user.
   static String writeConfig(
@@ -215,8 +292,29 @@ class McpInstallCommand extends Command<void> {
     ServerLaunch launch, {
     List<String> extraArgs = const [],
   }) {
-    final file = File(p.join(project, client.configPath));
     final entry = serverEntry(client, project, launch, extraArgs: extraArgs);
+    return _editServers(project, client, 'flutterpilot', entry, (servers) {
+      final before = servers['flutterpilot'];
+      if (jsonEncode(before) == jsonEncode(entry)) {
+        return '✅ ${client.label}: ${client.configPath} already up to date.';
+      }
+      servers['flutterpilot'] = entry;
+      return '✅ ${client.label}: ${before == null ? 'added' : 'updated'} '
+          'flutterpilot in ${client.configPath}.';
+    });
+  }
+
+  /// Reads [client]'s config, lets [change] edit its servers and returns
+  /// its line; writes the file only if the servers changed. A file that
+  /// isn't plain JSON is left alone, with [entry] to add as [name] by hand.
+  static String _editServers(
+    String project,
+    McpClient client,
+    String name,
+    Map<String, Object> entry,
+    String Function(Map<String, dynamic> servers) change,
+  ) {
+    final file = File(p.join(project, client.configPath));
     Map<String, dynamic> config = {};
     if (file.existsSync()) {
       final text = file.readAsStringSync();
@@ -232,7 +330,7 @@ class McpInstallCommand extends Command<void> {
         return '❌ ${client.label}: ${client.configPath} is not plain JSON '
             '(comments?), left unchanged. Add this under '
             '"${client.serversKey}" yourself:\n'
-            '${const JsonEncoder.withIndent('  ').convert({'flutterpilot': entry})}';
+            '${const JsonEncoder.withIndent('  ').convert({name: entry})}';
       }
     }
     final servers = config[client.serversKey];
@@ -241,19 +339,17 @@ class McpInstallCommand extends Command<void> {
           '${client.configPath} is not an object, left unchanged.';
     }
     final map = Map<String, dynamic>.from((servers as Map?) ?? {});
-    final before = map['flutterpilot'];
-    if (jsonEncode(before) == jsonEncode(entry)) {
-      return '✅ ${client.label}: ${client.configPath} already up to date.';
+    final before = jsonEncode(map);
+    final result = change(map);
+    if (jsonEncode(map) != before) {
+      config[client.serversKey] = map;
+      file
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(
+          '${const JsonEncoder.withIndent('  ').convert(config)}\n',
+        );
     }
-    map['flutterpilot'] = entry;
-    config[client.serversKey] = map;
-    file
-      ..parent.createSync(recursive: true)
-      ..writeAsStringSync(
-        '${const JsonEncoder.withIndent('  ').convert(config)}\n',
-      );
-    return '✅ ${client.label}: ${before == null ? 'added' : 'updated'} '
-        'flutterpilot in ${client.configPath}.';
+    return result;
   }
 
   /// The flutterpilot_server package: from --local, or next to this CLI's
