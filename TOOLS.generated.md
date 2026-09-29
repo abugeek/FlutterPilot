@@ -2,18 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 67
+Tool count: 66
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
-
-## `get_operation`
-
-Result of an operation submitted with async:true: pending, or its result. cancel:true cancels it instead, if it has not started yet (a running call is allowed to finish).
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `operationId` | string | yes | The operation ID returned by the async submission. |
-| `cancel` | boolean | no | Cancel the queued operation instead of polling it. |
 
 ## `connect_app`
 
@@ -428,9 +419,6 @@ Recent Dio requests and responses: method, URL, status, error, body (truncated, 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `get_hive_contents`
 
@@ -438,9 +426,6 @@ Keys and values of the Hive boxes the app registered with HivePilotInspector.reg
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `exec_sql_query`
 
@@ -458,9 +443,6 @@ Returns all SharedPreferences keys and their typed values (String, int, double, 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | string | no | Set to "true" to reveal values for sensitive-looking keys. Default: redacted. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `set_shared_preference`
 
@@ -599,9 +581,6 @@ Rows of a Supabase table read with the app's own client (its session, so row-lev
 | `table` | string | no | Supabase table name (required). |
 | `limit` | string | no | Max rows to return (1–200, default 20). |
 | `filter` | string | no | Optional equality filter in "column=value" format, e.g. "user_id=abc123". |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `supabase_session`
 
@@ -628,9 +607,6 @@ Who is signed in to Firebase Auth in the app: uid (for Firestore paths like user
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `showSensitive` | boolean | no | Reveal email, display name and phone number. |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `query_firestore`
 
@@ -643,9 +619,6 @@ Read Firestore with the app's own connection and signed-in user (so security rul
 | `orderBy` | string | no | Field, optionally followed by "desc". |
 | `limit` | integer | no | 1–100, default 20. |
 | `source` | string | no | "server" (default) or "cache". |
-| `operationId` | string | no | Optional caller-supplied ID, enabling cancellation while queued. |
-| `operationDeadlineMs` | integer | no | Optional server deadline, clamped to 100–120000 ms. |
-| `async` | boolean | no | Return immediately with an operation ID; poll using get_operation. |
 
 ## `get_secure_storage`
 

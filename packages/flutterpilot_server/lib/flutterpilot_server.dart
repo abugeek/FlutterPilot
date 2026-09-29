@@ -20,7 +20,6 @@ import 'src/image_budget.dart';
 import 'src/memory_leaks.dart';
 import 'src/native_crash.dart';
 import 'src/device_runtime_context.dart';
-import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
@@ -221,9 +220,6 @@ abstract class _FlutterPilotServerBase {
     Map<String, dynamic> parameters,
   );
 
-  bool _cancelOperation(String operationId);
-  _BackgroundOperation? _getBackgroundOperation(String operationId);
-
   Future<_ExtensionResult> _callExtensionRaw(
     String extension,
     Map<String, dynamic> parameters,
@@ -330,9 +326,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   int _connectionGeneration = 0;
   int _nextOperationId = 0;
   final Map<String, DeviceRuntimeContext> _deviceContexts = {};
-  final Map<String, bool Function()> _operationCancellers = {};
-  final Map<String, _BackgroundOperation> _backgroundOperations = {};
-  static const int _maxBackgroundOperations = 100;
 
   FlutterPilotServer({
     String? vmServiceUri,
@@ -1153,24 +1146,10 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     Map<String, JsonSchema>? properties,
     String Function(Map<String, dynamic> json)? formatResult,
   }) {
-    final toolProperties = <String, JsonSchema>{
-      ...?properties,
-      'operationId': JsonSchema.string(
-        description:
-            'Optional caller-supplied ID, enabling cancellation while queued.',
-      ),
-      'operationDeadlineMs': JsonSchema.integer(
-        description: 'Optional server deadline, clamped to 100–120000 ms.',
-      ),
-      'async': JsonSchema.boolean(
-        description:
-            'Return immediately with an operation ID; poll using get_operation.',
-      ),
-    };
     _tool(
       name,
       description: description,
-      inputSchema: ToolInputSchema(properties: toolProperties),
+      inputSchema: ToolInputSchema(properties: {...?properties}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();
@@ -1234,56 +1213,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     context.connectionGeneration = context.connectionGeneration == 0
         ? _connectionGeneration
         : context.connectionGeneration;
-    final asyncRequested =
-        parameters['async'] == true ||
-        parameters['async']?.toString().toLowerCase() == 'true';
-    if (asyncRequested) {
-      final suppliedOperationId = parameters['operationId']?.toString();
-      final operationId =
-          suppliedOperationId == null || suppliedOperationId.isEmpty
-          ? 'op-${++_nextOperationId}'
-          : suppliedOperationId;
-      if (_backgroundOperations.containsKey(operationId)) {
-        return _ExtensionResult.error(
-          'Operation ID "$operationId" is already in use.',
-          ErrorCategory.validation,
-        ).withOperationId(operationId);
-      }
-      final asyncParameters = Map<String, dynamic>.from(parameters)
-        ..remove('async')
-        ..['operationId'] = operationId;
-      final background = _BackgroundOperation(operationId);
-      _backgroundOperations[operationId] = background;
-      while (_backgroundOperations.length > _maxBackgroundOperations) {
-        _backgroundOperations.remove(_backgroundOperations.keys.first);
-      }
-      final future = _callExtensionScheduled(
-        extension,
-        asyncParameters,
-        operationId,
-        context,
-      );
-      background.future = future;
-      future.then<void>(
-        (result) => background.result = result,
-        onError: (Object error, StackTrace stackTrace) {
-          background.result = _ExtensionResult.error(
-            error.toString(),
-            ErrorCategory.extensionError,
-          ).withOperationId(operationId);
-        },
-      );
-      return _ExtensionResult.success({
-        'status': 'accepted',
-        'operationId': operationId,
-      }).withOperationId(operationId);
-    }
-    final suppliedOperationId = parameters['operationId']?.toString();
-    final operationId =
-        suppliedOperationId == null || suppliedOperationId.isEmpty
-        ? 'op-${++_nextOperationId}'
-        : suppliedOperationId;
-    return _callExtensionScheduled(extension, parameters, operationId, context);
+    return _callExtensionScheduled(extension, parameters, context);
   }
 
   @override
@@ -1307,9 +1237,9 @@ Every action reports whether the route changed, a widget-tree diff and what is t
   Future<_ExtensionResult> _callExtensionScheduled(
     String extension,
     Map<String, dynamic> parameters,
-    String operationId,
     DeviceRuntimeContext context,
   ) async {
+    final operationId = 'op-${++_nextOperationId}';
     final mutating = !_isReadOnlyExtension(extension);
     final generation = context.connectionGeneration;
     final scheduler = context.scheduler;
@@ -1319,67 +1249,42 @@ Every action reports whether the route changed, a widget-tree diff and what is t
       '(device=${context.deviceId}, connection=${context.uri}, generation=$generation)',
     );
 
-    final scheduled = scheduler.scheduleCancellable(
+    final scheduled = scheduler.schedule(
       mutating: mutating,
       operation: () async {
         if (generation != context.connectionGeneration && generation != 0) {
           return _ExtensionResult.error(
-            'Operation $operationId became stale because the active app connection changed. Retry against the current device.',
+            'The app connection changed while this call waited. Retry '
+            'against the current device.',
             ErrorCategory.staleOperation,
-          ).withOperationId(operationId);
+          );
         }
-        final callParameters = Map<String, dynamic>.from(parameters)
-          ..remove('operationDeadlineMs')
-          ..remove('operationId');
         final result = await _callExtensionImmediate(
           extension,
-          callParameters,
+          parameters,
           context: context,
         );
         if (generation != context.connectionGeneration && !result.isError) {
           return _ExtensionResult.error(
-            'Operation $operationId completed against a stale app connection. Retry against the current device.',
+            'The app connection changed while this call ran. Retry against '
+            'the current device.',
             ErrorCategory.staleOperation,
-          ).withOperationId(operationId);
+          );
         }
-        return result.withOperationId(operationId);
+        return result;
       },
     );
-    _operationCancellers[operationId] = scheduled.cancel;
-    try {
-      return await scheduled.future.timeout(
-        _operationDeadline(parameters),
-        onTimeout: () => _ExtensionResult.error(
-          'Operation $operationId exceeded its server deadline. The queued '
-          'operation remains serialized; retry after checking app state.',
-          ErrorCategory.deadlineExceeded,
-        ).withOperationId(operationId),
-      );
-    } on OperationCancelledException {
-      return _ExtensionResult.error(
-        'Operation $operationId was cancelled before it started.',
-        ErrorCategory.cancelled,
-      ).withOperationId(operationId);
-    } finally {
-      _operationCancellers.remove(operationId);
-    }
-  }
-
-  @override
-  bool _cancelOperation(String operationId) =>
-      _operationCancellers[operationId]?.call() ?? false;
-
-  @override
-  _BackgroundOperation? _getBackgroundOperation(String operationId) =>
-      _backgroundOperations[operationId];
-
-  static Duration _operationDeadline(Map<String, dynamic> parameters) {
-    final requested = int.tryParse(
-      parameters['operationDeadlineMs']?.toString() ?? '',
+    return scheduled.timeout(
+      _operationDeadline,
+      onTimeout: () => _ExtensionResult.error(
+        'No answer from the app within ${_operationDeadline.inSeconds} s. '
+        'Check the app state before retrying: a change may still apply.',
+        ErrorCategory.deadlineExceeded,
+      ),
     );
-    final milliseconds = (requested ?? 30000).clamp(100, 120000);
-    return Duration(milliseconds: milliseconds);
   }
+
+  static const _operationDeadline = Duration(seconds: 30);
 
   static bool _isReadOnlyExtension(String extension) {
     return extension.startsWith('ext.flutterpilot.get') ||
@@ -1883,14 +1788,6 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 // Internal DTO for VM extension call results
 // ---------------------------------------------------------------------------
 
-class _BackgroundOperation {
-  _BackgroundOperation(this.operationId);
-
-  final String operationId;
-  Future<_ExtensionResult>? future;
-  _ExtensionResult? result;
-}
-
 /// Category of error returned by a tool call, enabling AI agents to decide
 /// whether to retry, call a different tool, or report the failure.
 enum ErrorCategory {
@@ -1920,9 +1817,6 @@ enum ErrorCategory {
 
   /// The server-side operation deadline elapsed before completion.
   deadlineExceeded,
-
-  /// The operation was cancelled before it started running.
-  cancelled,
 }
 
 class _ExtensionResult {
@@ -1930,32 +1824,13 @@ class _ExtensionResult {
   final String? errorMessage;
   final bool isError;
   final ErrorCategory? errorCategory;
-  final String? operationId;
   _ExtensionResult.success(this.data)
     : errorMessage = null,
       isError = false,
-      errorCategory = null,
-      operationId = null;
+      errorCategory = null;
   _ExtensionResult.error(this.errorMessage, [this.errorCategory])
     : data = null,
-      isError = true,
-      operationId = null;
-  _ExtensionResult._withOperationId(
-    this.data,
-    this.errorMessage,
-    this.isError,
-    this.errorCategory,
-    this.operationId,
-  );
-
-  _ExtensionResult withOperationId(String id) =>
-      _ExtensionResult._withOperationId(
-        data,
-        errorMessage,
-        isError,
-        errorCategory,
-        id,
-      );
+      isError = true;
 
   CallToolResult toCallToolResult() {
     final message = isError
