@@ -50,9 +50,7 @@ extension _NavigationExtensions on FlutterPilot {
         );
       }
       try {
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('navigate', {'route': route});
-        }
+        TestRecorder.add('skipped', data: {'what': 'navigate_to $route'});
         await _pushRoute(route);
         return ServiceExtensionResponse.result(
           json.encode({'status': 'success', 'route': route}),
@@ -102,9 +100,7 @@ extension _NavigationExtensions on FlutterPilot {
           // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
           popped = await WidgetsBinding.instance.handlePopRoute();
         }
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('pressBack', {});
-        }
+        if (popped) TestRecorder.add('back');
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -182,6 +178,7 @@ extension _NavigationExtensions on FlutterPilot {
       while (DateTime.now().isBefore(deadline)) {
         final element = PilotWidgetInspector.findElement(key);
         if (element != null) {
+          TestRecorder.add('waitFor', element: element);
           return ServiceExtensionResponse.result(
             json.encode({
               'status': 'found',
@@ -255,9 +252,7 @@ extension _NavigationExtensions on FlutterPilot {
       }
       try {
         await _pushRoute(url, deepLink: true);
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('simulateDeepLink', {'url': url});
-        }
+        TestRecorder.add('skipped', data: {'what': 'navigate_to $url'});
         return ServiceExtensionResponse.result(
           json.encode({'status': 'success', 'url': url}),
         );
@@ -348,9 +343,7 @@ extension _NavigationExtensions on FlutterPilot {
 
       // 2. Teleport to target screen
       try {
-        if (FlutterPilot._isRecording) {
-          FlutterPilot._recordAction('jumpToScreen', {'route': route});
-        }
+        TestRecorder.add('skipped', data: {'what': 'navigate_to $route'});
         await _pushRoute(route);
         return ServiceExtensionResponse.result(
           json.encode({

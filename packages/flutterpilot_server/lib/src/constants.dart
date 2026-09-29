@@ -13,17 +13,4 @@ abstract final class _Constants {
   static const Duration extensionCallTimeout = Duration(seconds: 15);
 
   // SQL injection prevention
-  static const Set<String> allowedSqlPrefixes = {
-    'SELECT',
-    'EXPLAIN',
-    'PRAGMA',
-    'WITH',
-  };
-  static const Set<String> dangerousPragmas = {
-    'PRAGMA JOURNAL_MODE',
-    'PRAGMA WAL',
-    'PRAGMA SYNCHRONOUS',
-    'PRAGMA FOREIGN_KEYS',
-    'PRAGMA WRITABLE_SCHEMA',
-  };
 }
