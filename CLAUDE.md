@@ -1,6 +1,6 @@
 # FlutterPilot AI Assistant Guidelines
 
-FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 64 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
+FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 67 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
 
 **Next work:** see `ROADMAP.md` (priorities, field-test method, known gotchas). Drive tools from a shell with `packages/flutterpilot_server/tool/fp_bridge.dart`.
 
@@ -8,7 +8,8 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 
 - **1-Command Setup**: Run `flutterpilot init` in any Flutter project root to auto-detect Riverpod/Bloc/Dio/Drift and configure packages.
 - **Check setup**: `flutterpilot doctor` checks SDK/plugin wiring, macOS entitlements, MCP config and (if running) what the app registered, with exact fixes.
-- **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code) with a compiled server.
+- **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code) with a compiled server, plus the official Dart MCP server (`dart mcp-server --disable flutter,dart_tooling_daemon`: its analyzer, `lsp` and pub; its hot reload/errors/inspector/driver duplicate ours).
+- **Finding the app**: a plain `flutter run`, an IDE launch or the Dart MCP server's `launch_app` is found through the Dart Tooling Daemon; `flutterpilot dev` also writes `.dart_tool/flutterpilot_vm_uri`.
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
 - **Zero-Code Mode**: Without `flutterpilot_sdk` the app can be inspected but not driven: only the tools that work are listed (summary, widget tree, screenshots, errors, logs, hot reload/restart, theme and debug-paint toggles, memory/HTTP profiles). `get_app_summary` says so; `flutterpilot init` adds taps, text entry, navigation and assertions.
@@ -20,7 +21,7 @@ When interacting with a Flutter app using FlutterPilot:
 ### 1. Orientation & Diagnostics
 - **First Step**: Call `get_app_summary` — route, the tappable elements on screen (labels + keys), errors, logs, and whether the app window is visible. `get_interactive_elements` gives the full tappable list.
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
-- **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. PII and passwords are automatically redacted.
+- **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. Password fields show as `•`; credentials in logs, URLs, network bodies, errors and credential-named state (`password=…`, `?api_key=…`, Bearer tokens, JWTs) are masked in every tool (docs/security-review.md).
 - **Where is this in the code?**: `inspect_widget(key: ...)` or `inspect_widget(x:, y:)` (a point from a screenshot) returns the file:line in the app's code that creates the widget — for a framework widget, the app widget that builds it — plus the app widgets above it. Use it before editing UI code (debug builds). `layout: true` adds each box's constraints and size up the ancestors and explains overflows (by how much, which children fill the Row) and 0-sized widgets (which ancestor gives max 0).
 - **On-screen only**: finders, assertions and trees ignore routes covered by another page and hidden tabs, so `assert_widget(text: ...)` never passes on something the user can't see.
 - **System alerts and backgrounding (iOS simulator, needs idb)**: permission alerts are not in the Flutter tree — `native_describe_screen` lists them with tap points and `native_tap` taps them (points). iOS suspends a backgrounded app; tools then say so at once, and `native_open_app` brings it back with its state.
@@ -41,7 +42,13 @@ When interacting with a Flutter app using FlutterPilot:
 ### 3. Fast Verification — assert_* over flutter test
 - For "did my change actually work" checks, use `assert_widget` against the *already-running* app: `assert_widget(text: ...)`, `assert_widget(key: ...)`, `assert_widget(key: ..., enabled: true|false)`, `assert_widget(type: ..., count: N)`. These run in milliseconds — no new process, no cold VM boot.
 - For async results, use `wait_for(key | route | animations | state | frames)` or `tap_widget(key, waitFor: ...)` instead of sleeping.
-- `audit_screen_health` is for layout/accessibility sweeps (combine with `set_app_settings(textScale: 2)` to catch overflows), not for confirming a single interaction.
+- `audit_screen_health` is for layout/accessibility sweeps (combine with `set_app_settings(textScale: 2)` to catch overflows, or `theme: "dark"` for contrast), not for confirming a single interaction. It reports overflows, small tap targets, controls a screen reader can't name (with the widget and file:line that adds the tap), text below WCAG contrast (measured from the rendered pixels), and the screen reader order with any jumps back up the screen.
+
+- **Regression test from a flow**: `generate_test(start: true)` restarts the app and records; do the flow with tap_widget/enter_text/press_key/assert_widget/wait_for/mock_http_response as usual; `generate_test(name: "checkout")` writes `integration_test/checkout_test.dart` (the app's `main()`, `find.byKey`/`find.text`/`find.byTooltip` finders, mocks as `DioPilotInterceptor.mock`, obscured text via `--dart-define`), runs it on the same device and reports pass, or the step it failed at. Minutes, not milliseconds: use it to keep a flow working, not to check one change.
+
+- **Start from a known state**: `scenario(save: "empty_cart", description: ...)` writes `flutterpilot/scenarios/empty_cart.json` in the app (route, SharedPreferences minus sensitive keys, active mocks, bool/number/String Riverpod/Bloc values); `scenario(load: "empty_cart")` replaces the preferences, hot-restarts with the mocks answering from the first request, goes to the route and sets the state. `scenario()` lists them. Files are meant to be checked in and edited. Loading preferences needs `--allow-destructive`; state is set behind the widgets (a TextField keeps its own text).
+
+- **Verify a feature against acceptance criteria**: `verify_feature(feature: "Login", criteria: ["A wrong password shows an error", ...], scenario: "logged_out")` (scenario optional), then for each `verify_feature(criterion: N)`, drive the app and check the outcome with `assert_widget`/`wait_for`/`compare_screenshot`; `verify_feature(finish: true)` returns the verdicts and writes `flutterpilot/reports/<feature>-<time>/report.md` (steps, HTTP requests, errors, a screenshot per criterion). A criterion passes only if a check passed, none failed and the app threw no error (layout overflows are listed as warnings); driven but unchecked is NOT VERIFIED. Picking a criterion again starts its evidence over.
 
 ### 4. Visual Regression Diff Engine
 - Establish golden baselines with `compare_screenshot(name: "...", save: true)`.
@@ -51,12 +58,13 @@ When interacting with a Flutter app using FlutterPilot:
 ### 5. Network Mocking & Conditioning (Dio plugin)
 - **Mock Responses**: `mock_http_response(urlPattern: "...", statusCode: 500, body: '{"error":"server_down"}')` to test failure handling without a backend; `mock_http_response(clear: true)` afterwards.
 - **Network Conditioning**: `simulate_network(condition: "slow_3g"|"fast_4g"|"offline"|"normal")`.
-- **Verify**: `get_network_logs` (Dio) or `get_http_profile` (any dart:io client: status, timing, sizes).
+- **Verify**: `get_network_logs` (Dio) or `get_http_profile` (any dart:io client: status, timing, sizes; `url` filters; `id: N` for one request's headers, bodies and connection timeline, credentials masked).
 
 ### 6. Performance (DevTools equivalents)
 - `profile_frame_budget` — p50/p90/p99 frame times, build vs raster split, jank count.
 - `profile_action(tool: "tap_widget", arguments: {...})` — CPU profile of one action: the app's functions by self/total time with file:line, and the hottest framework functions with the app code that called them. For frames over budget it adds build/layout/paint/raster times and which app widgets rebuilt (self time per widget type). FlutterPilot's own work is left out. Add `durationMs` to keep sampling after the action for results that load later.
 - `get_http_profile` — the DevTools Network tab.
+- **Trust profile builds for timings**: debug frames run several times slower (on hn_reader a feed switch took 219 ms of Dart and showed 2 janky frames in debug, 87 ms and none in profile). Launch with `flutter run --profile` (not the iOS simulator) to confirm jank; FlutterPilot connects the same way, the summary says "Build: profile", and the performance tools say which build their numbers come from. Profile builds have no hot reload (`hot_reload`, `generate_test`, `scenario` are not listed) and no file:line in `inspect_widget`; everything else works.
 - `get_memory_details` — heap usage; `classes: true` for the top classes. Leak check: `cycle: [{tool: "tap_widget", arguments: {key: "Open"}}, {tool: "press_key", arguments: {key: "back"}}], times: 5` returns the classes that keep instances from every round, where they're defined, and what keeps one alive (retaining path), and says when it's framework bookkeeping or FlutterPilot itself rather than the app.
 
 ### 7. Multi-Device Fleet Testing
@@ -66,6 +74,7 @@ When interacting with a Flutter app using FlutterPilot:
 
 ### 8. Crash Fix Loop
 1. When a crash occurs, call `get_errors` (`report: true` for the full crash report) — it includes the exception, your source frame (file:line) and, for layout errors, the culprit widget's location.
+   If the app died in native code (an Objective-C/Swift/Kotlin exception or a signal; macOS, iOS simulator, Android), any tool's "not running" error says so, with the exception message, then (the OS writes the report ~20 s later) the frames where it was thrown and the report path.
 2. Use `get_flight_log` for the event timeline leading up to it.
 3. Fix the Dart source, then `hot_reload` (`restart: true` for main()/static initializer/provider-definition changes).
 4. Reproduce the triggering steps and verify with `get_errors` and `assert_widget` (§3).

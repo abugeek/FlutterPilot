@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 64
+Tool count: 67
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -215,7 +215,7 @@ Waits (polling, never a blind sleep) for one condition: key — a widget/selecto
 
 ## `audit_screen_health`
 
-Lists layout overflows (the yellow-black stripes) and tap targets smaller than the platform minimum (48dp on phones, 24px on desktop/web) on the current screen, with their positions. Use after set_app_settings(textScale/locale) or a layout change.
+Layout and accessibility check of the current screen: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. Use after set_app_settings(textScale/locale/theme) or a UI change.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -539,13 +539,47 @@ Why an interaction is slow: runs tool (tap_widget, scroll_into_view, execute_act
 
 ## `get_http_profile`
 
-HTTP requests the app made through any dart:io client (the DevTools Network tab): method, URL, status, duration, request/response size, most recent first. clear:true empties the list for a clean baseline.
+HTTP requests the app made through any dart:io client (HttpClient, package:http, Dio; the DevTools Network tab): #number, method, URL, status, duration, sizes, most recent first; url filters. id: one request in full — headers, bodies (JSON, secrets masked), timing, redirects, error. clear:true empties the list for a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `clear` | boolean | no | Clear the recorded requests instead of listing them. |
 | `limit` | integer | no | Maximum number of requests to return, most recent first (default: 50). |
 | `status_filter` | integer | no | Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests. |
+| `url` | string | no | Only requests whose URL contains this text. |
+| `id` | integer | no | The #number of a request in the list: its headers, bodies and timing. |
+
+## `generate_test`
+
+Turns what you do in the app into an integration_test. start:true restarts the app (hot restart) and records from there: taps, text, keys, scrolls, drags, back, assert_widget, wait_for and mock_http_response, with the widgets found by key, text or tooltip. name:"checkout" then writes integration_test/checkout_test.dart, runs it on the same device and reports whether it passed (with the failure if not). Obscured text is passed with --dart-define, never written. Takes minutes: the test builds the app again.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `start` | boolean | no | Restart the app and start recording. |
+| `name` | string | no | Test name (letters, digits, _): stop recording, write and run the test. |
+| `run` | boolean | no | Run the written test (default true). |
+
+## `scenario`
+
+Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). save:"name" writes the route, SharedPreferences (sensitive keys left out), active mocked responses and simple Riverpod/Bloc values (bool/number/String). load:"name" replaces the preferences, hot-restarts with the mocks in place before the first request, sets the state and goes to the route (state is set behind the widgets: a TextField keeps its own text). No argument lists them. Loading preferences needs --allow-destructive.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `save` | string | no | Scenario name to write. |
+| `load` | string | no | Scenario name to apply. |
+| `description` | string | no | With save: what the scenario is for. |
+
+## `verify_feature`
+
+Checks a feature against acceptance criteria and writes a pass/fail report with evidence. Start with feature + criteria (plain sentences; scenario loads one first). Then for each: criterion:N, drive the app and check it with assert_widget, wait_for or compare_screenshot. A criterion passes only if a check passed and none failed and the app threw no error; driven but unchecked is "not verified". Each criterion gets the steps, the HTTP requests made, errors and a screenshot. finish:true writes flutterpilot/reports/<feature>-<time>/report.md in the app and returns the verdicts.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `feature` | string | no | What is verified. |
+| `criteria` | array | no | Acceptance criteria, one sentence each. |
+| `scenario` | string | no | With criteria: load this scenario first. |
+| `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
+| `finish` | boolean | no | Close the last criterion and write the report. |
 
 ## `get_supabase_auth`
 

@@ -100,7 +100,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ## MCP Tools Reference
 
-64 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
+67 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
 iOS simulators with idb, 16 tools for apps without `flutterpilot_sdk`.
@@ -112,12 +112,12 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Connection & fleet | `connect_app`, `register_device`, `switch_device`, `list_connected_devices`, `get_capabilities`, `get_operation` |
 | Seeing the app | `get_app_summary`, `get_widget_tree` (`diff`), `get_interactive_elements`, `get_widget_properties`, `inspect_widget` (source file:line, `layout`), `get_semantics_tree`, `capture_screenshot`, `get_navigation_stack` |
 | Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`, `navigate_to` |
-| Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` |
+| Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` (layout + accessibility: labels, contrast, reading order), `generate_test` (record a flow, write it as an integration_test, run it), `verify_feature` (acceptance criteria → pass/fail report with evidence) |
 | Rendering | `set_app_settings` (theme, locale, textScale, orientation, debug overlays) |
 | Errors & logs | `get_errors` (`report`), `get_flight_log`, `get_debug_logs` |
 | Code changes | `hot_reload` (`restart`) |
-| Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` |
-| State (Riverpod/Bloc) | `get_state`, `set_state` |
+| Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` (`id`: headers, bodies) |
+| State (Riverpod/Bloc) | `get_state`, `set_state`, `scenario` (save/load a named start state: route, preferences, mocks, state) |
 | Network (Dio) | `get_network_logs`, `mock_http_response`, `simulate_network` |
 | Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |
 | Backends | `get_supabase_auth`, `query_supabase_table`, `supabase_session`, `get_firebase_auth`, `query_firestore`, `get_connectivity` |
@@ -200,6 +200,13 @@ The server listens to the VM service. If your app crashes:
 2. Server sends `CRITICAL APP CRASH: SELF-HEAL REQUEST` to stderr
 3. Connected AI agent sees notification
 4. AI can analyze and apply fixes via hot reload
+
+If the app dies in native code (an Objective-C, Swift or Kotlin exception,
+or a signal), the next tool's error says so, with the exception message.
+About 20 s later, once the OS has written the crash report, it adds the
+frames where the exception was thrown and the report's path. This works for
+macOS, the iOS simulator and Android (`adb`); a physical iPhone keeps its
+crash reports.
 
 ---
 

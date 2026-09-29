@@ -55,7 +55,22 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) => p['restart'] == true
+      callback: (p, e) => _activeContext?.buildMode == BuildMode.profile
+          ? Future.value(
+              CallToolResult(
+                isError: true,
+                content: [
+                  TextContent(
+                    text:
+                        'This is a profile build: compiled ahead of time, so '
+                        'no hot reload or restart. Rebuild with "flutter run '
+                        '--profile" after editing, or use a debug build '
+                        '("flutter run") to iterate.',
+                  ),
+                ],
+              ),
+            )
+          : p['restart'] == true
           ? _callFlutterToolsService(
               p,
               'hotRestart',
