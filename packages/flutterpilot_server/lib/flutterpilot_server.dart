@@ -11,6 +11,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
+import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
@@ -586,6 +587,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       _nativeCrash = null;
       final vm = await _vmService!.getVM();
       activeContext.operatingSystem = vm.operatingSystem;
+      try {
+        activeContext.buildMode = buildModeFromFlags(
+          (await _vmService!.getFlagList()).flags ?? const [],
+        );
+        _scheduleToolVisibility();
+      } catch (_) {}
       await _updateNativeToolVisibility(vm.operatingSystem, pid: vm.pid);
       _crashTarget = vm.pid == null || vm.operatingSystem == null
           ? null
@@ -1004,7 +1011,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         rpcs.addAll((await vm.getIsolate(ref.id!)).extensionRPCs ?? const []);
       }
       if (!identical(context, _activeContext)) return;
-      updateToolVisibility(hasSdk: context.hasSdk, extensions: rpcs);
+      updateToolVisibility(
+        hasSdk: context.hasSdk,
+        extensions: rpcs,
+        buildMode: context.buildMode,
+      );
     } catch (_) {
       // Keep the current list; calls explain themselves.
     }
@@ -1018,6 +1029,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   void updateToolVisibility({
     required bool? hasSdk,
     Set<String> extensions = const {},
+    BuildMode? buildMode,
   }) {
     if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
     var changed = false;
@@ -1025,6 +1037,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (_nativeTools.containsKey(name)) continue;
       final needs = pluginToolExtensions[name];
       final usable = switch (hasSdk) {
+        // AOT: no hot reload, nor what is built on it.
+        _
+            when buildMode == BuildMode.profile &&
+                debugOnlyTools.contains(name) =>
+          false,
         false => zeroCodeTools.contains(name),
         true when needs != null => needs.any(extensions.contains),
         _ => true,

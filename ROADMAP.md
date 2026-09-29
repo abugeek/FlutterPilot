@@ -474,8 +474,19 @@ Findings #240–243.
 - **Interop with the official Dart & Flutter MCP server:** don't duplicate
   analyze/test/pub/hot-reload basics; focus on live-app driving, runtime state
   and profiling. Consider sharing the Dart Tooling Daemon connection.
-- **Profile-mode support** for trustworthy performance numbers (debug-mode
-  timings are inflated).
+- ~~**Profile-mode support**~~ — done (2026-09-29). The server reads the
+  build mode from the VM (`precompiled_mode`) on connect; the summary says
+  "Build: profile", `profile_action` / `profile_frame_budget` say which
+  build their numbers come from, and `hot_reload`, `generate_test` and
+  `scenario` are not listed for profile builds (hot_reload explains why if
+  called). SDK: source locations require a debug build (profile builds
+  report creation tracking on but record no locations or `debugCreator`),
+  and hit testing falls back to the element tree, so `inspect_widget(x, y,
+  layout: true)` and coordinate taps in recordings work in profile. On
+  hn_reader the same feed switch: debug 219 ms Dart, 2 janky frames, widget
+  builds 12.7 ms; profile 87 ms, none, 1.0 ms. Not covered: zero-code apps
+  in profile (the inspector extensions they rely on are debug-only), e2e in
+  profile. Findings #248–251.
 - **Parallel devices:** run the same flow on iOS + Android + web and diff
   results.
 - **Security review:** remote VM connections, redaction coverage (PII in

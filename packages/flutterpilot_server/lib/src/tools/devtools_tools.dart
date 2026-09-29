@@ -770,13 +770,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             'the user saw none of them.',
           );
         }
-        if (buildsBefore != null) {
-          buf.writeln(
-            'Debug build: times run several times slower than release '
-            '(widget build tracing adds some); confirm jank with '
-            '"flutter run --profile".',
-          );
-        }
+        buf.writeln(
+          context?.buildMode == BuildMode.profile
+              ? profileBuildNote
+              : debugBuildNote,
+        );
         if (actionResult != null) {
           final text = actionResult.content
               .whereType<TextContent>()
@@ -857,7 +855,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
               TextContent(
                 text:
                     'HTTP profile unavailable: ${res.errorMessage}\n'
-                    'Note: dart:io HTTP profiling is only available in debug builds.',
+                    'Note: dart:io HTTP profiling works in debug and profile '
+                    'builds, not release.',
               ),
             ],
           );

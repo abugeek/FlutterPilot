@@ -1,3 +1,4 @@
+import 'build_mode.dart';
 import 'dart:async';
 
 import 'package:vm_service/vm_service.dart';
@@ -40,6 +41,10 @@ class DeviceRuntimeContext {
 
   /// The VM's `operatingSystem` (`ios`, `android`, `macos`, ...).
   String? operatingSystem;
+
+  /// Debug or profile: what hot reload, source locations and timings can be
+  /// trusted to do. Null until connected.
+  BuildMode? buildMode;
 
   /// The app's last reported `AppLifecycleState` name (SDK apps only).
   String? lifecycle;

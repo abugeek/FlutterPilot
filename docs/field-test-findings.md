@@ -431,6 +431,15 @@ keyboard forced on, and in Chrome:
 | 246 | network evidence | ✅ | "Switching to New loads the newest stories": `GET …/newstories.json → 200 (668 ms)` and one request per story (30); the report now lists 15 and "… and N more (k failed)" |
 | 247 | e2e | ✅ | the fixture (with its intentional overflow) passes "Send greets the user by name" (mock + field + Send + assert), an unchecked second criterion is NOT VERIFIED, report.md and criterion-1.png are written |
 
+## Profile mode (ROADMAP §8), HN reader on macOS (`flutter run --profile`)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 248 | what works | ✅ | the SDK runs in profile builds: taps, text, assertions, summary, tree, screenshots, audit, state, frame budget, CPU profiles with file:line for app functions (AOT keeps them). hot_reload, generate_test and scenario (built on hot restart) are no longer listed there |
+| 249 | debug vs profile numbers | ✅ | `profile_action(tap_widget New, durationMs: 2500)`: debug 219.5 ms Dart on the UI isolate, 2 frames over budget, app widget builds 12.7 ms (IconButton ×10); profile 86.8 ms, none over budget, 1.0 ms. `profile_action` printed "Debug build: times run several times slower" on the profile build too (it assumed debug whenever a framework debug extension answered); now it says which build it is, and so do profile_frame_budget and the summary |
+| 250 | source lookups | ❌→fixed | `inspect_widget(key)` returned a type without file:line instead of its "needs a debug build" message (profile builds report widget creation tracking on, but record no locations), and `inspect_widget(x, y)` said "Nothing is drawn" (no `debugCreator` in profile). Source locations now need kDebugMode, and hit tests fall back to the element tree: `layout: true` by point works in profile |
+| 251 | app widgets in profile | ⚠️→kept | I relabelled profile rebuild lists "Widgets (app and framework)"; the debug/profile comparison showed the same app-created types and no framework internals in both, so profile builds do know the app's widgets (not where): reverted |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
