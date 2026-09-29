@@ -61,18 +61,5 @@ void main() {
       expect(PilotWidgetInspector.findElement('Details'), isNotNull);
       expect(PilotWidgetInspector.findElement('Home page'), isNull);
     });
-
-    testWidgets('MemoryAuditor audits image cache and warnings', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: Text('Hello'))),
-      );
-
-      final audit = MemoryAuditor.audit();
-      expect(audit['isHealthy'], isTrue);
-      expect(audit['imageCache'], isNotNull);
-      expect(audit['warningsCount'], equals(0));
-    });
   });
 }

@@ -530,8 +530,10 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
   test on long lists, nested scrollables, horizontal lists, lazy lists where
   the target isn't built yet.
-- **`stream_inspector.dart`** — nothing wires it; its tool is gone (§4.2),
-  the SDK code can go too.
+- ~~**`stream_inspector.dart`**~~ — done (2026-09-29): deleted, with six
+  more SDK extensions no tool called (`tapAt`, `jumpToScreen`,
+  `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` + `MemoryAuditor`).
+  A server test now fails when the SDK registers an extension no tool calls.
 - **`flight_recorder.dart`**, `get_flight_log` — useful only if §6 is built
   on top. (The recording tools were deleted in §4.2.)
 - **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS

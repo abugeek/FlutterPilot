@@ -1811,14 +1811,5 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
     });
-
-    // -- ext.flutterpilot.auditMemoryHealth ----------------------------------
-    registerExtension('ext.flutterpilot.auditMemoryHealth', (
-      method,
-      parameters,
-    ) async {
-      final audit = MemoryAuditor.audit();
-      return ServiceExtensionResponse.result(json.encode(audit));
-    });
   }
 }

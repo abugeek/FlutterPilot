@@ -471,6 +471,7 @@ keyboard forced on, and in Chrome:
 | # | Item | Result | Notes |
 |---|---|---|---|
 | 263 | async ops (`async:true`, `get_operation`, `operationId`, `operationDeadlineMs`) | 🗑️ removed | only 6 read tools (Dio logs, Hive, state...) carried the 3 parameters, and they answer in ms; the slow tools (profile_action, generate_test, leak cycles) never had them, and no field test or agent used them (#70: "rarely needed"). The mutation ordering and a fixed 30 s deadline stay. |
+| 264 | SDK extensions no tool calls | 🗑️ removed | `getStreamLogs`/`clearStreamLogs` (+ `StreamInspector`), `tapAt`, `jumpToScreen`, `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` (+ `MemoryAuditor`): registered in every app, reachable by no tool, their tools deleted earlier (§4.2). `sdk_extensions_used_test.dart` keeps it that way. |
 
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
