@@ -1,3 +1,10 @@
+## Unreleased
+
+- Scrolling to a widget (scroll_into_view, and before a tap) pages through
+  each list, including lazy, reversed, grid and nested horizontal lists,
+  instead of swiping; a partial text match no longer stops the search
+  ("Item 3" is not "Item 399"). `maxAttempts` is gone.
+
 ## 0.1.0
 
 - Initial release

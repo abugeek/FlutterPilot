@@ -56,19 +56,21 @@ extension _WidgetExtensions on FlutterPilot {
   /// and taps it. Shared by tap_widget and execute_action_chain so both
   /// resolve targets the same way. [error] is set unless status is 'ok'.
   static Future<({String status, String? error})> _tapTarget(
-    String target, {
-    int maxAttempts = 8,
-  }) async {
+    String target,
+  ) async {
     var element = PilotWidgetInspector.findElement(target);
     var scrolled = false;
-    if (element == null || !HitTestUtils.isElementHittable(element)) {
+    // A partial text match on screen ("Item 3" in "Item 399") is used only
+    // when no list holds an exact one.
+    bool look() =>
+        element == null ||
+        !HitTestUtils.isElementHittable(element) ||
+        PilotWidgetInspector.lastMatchPartial;
+    if (look()) {
       await FlutterPilot._waitForScreenSettled();
       element = PilotWidgetInspector.findElement(target);
-      if (element == null || !HitTestUtils.isElementHittable(element)) {
-        scrolled = await ScrollSimulator.scrollUntilVisible(
-          target,
-          maxAttempts: maxAttempts,
-        );
+      if (look()) {
+        scrolled = await ScrollSimulator.scrollUntilVisible(target);
         element = PilotWidgetInspector.findElement(target);
       }
     }
@@ -154,7 +156,7 @@ extension _WidgetExtensions on FlutterPilot {
         await FlutterPilot._waitForScreenSettled();
         element = PilotWidgetInspector.findElement(target);
       }
-      if (element == null) {
+      if (element == null || PilotWidgetInspector.lastMatchPartial) {
         await ScrollSimulator.scrollUntilVisible(target);
         element = PilotWidgetInspector.findElement(target);
       }
@@ -413,7 +415,6 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       final target = rawTarget;
-      final maxAttempts = int.tryParse(parameters['maxAttempts'] ?? '') ?? 8;
 
       if (target == null || target.isEmpty) {
         return ServiceExtensionResponse.error(
@@ -424,7 +425,7 @@ extension _WidgetExtensions on FlutterPilot {
 
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
-      final tapped = await _tapTarget(target, maxAttempts: maxAttempts);
+      final tapped = await _tapTarget(target);
       if (tapped.status != 'ok') {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -479,7 +480,9 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       var element = PilotWidgetInspector.findElement(target);
-      if (element == null || !HitTestUtils.isElementHittable(element)) {
+      if (element == null ||
+          !HitTestUtils.isElementHittable(element) ||
+          PilotWidgetInspector.lastMatchPartial) {
         await ScrollSimulator.scrollUntilVisible(target);
         element = PilotWidgetInspector.findElement(target);
       }
@@ -723,15 +726,17 @@ extension _WidgetExtensions on FlutterPilot {
           'Missing key or target parameter',
         );
       }
-      final maxAttempts = int.tryParse(parameters['maxAttempts'] ?? '') ?? 8;
-      final success = await ScrollSimulator.scrollUntilVisible(
-        target,
-        maxAttempts: maxAttempts,
-      );
+      // No exact match in any list: a partial one already on screen will do.
+      final success =
+          await ScrollSimulator.scrollUntilVisible(target) ||
+          switch (PilotWidgetInspector.findElement(target)) {
+            final e? => HitTestUtils.isElementHittable(e),
+            null => false,
+          };
       if (!success) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Could not scroll "$target" into visible view',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final shown = PilotWidgetInspector.findElement(target);
