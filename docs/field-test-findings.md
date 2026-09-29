@@ -450,6 +450,14 @@ keyboard forced on, and in Chrome:
 | 255 | shell bridge | ❌→fixed | `curl -H "Origin: https://evil.example" -H "Content-Type: text/plain" localhost:8765 -d '{"name":"get_app_summary"…}'` (what a web page can send without preflight) was answered; now 403, and scripts still work |
 | 256 | redactor false positives | ❌→fixed (unit) | the first name pattern hid "author", "passengers", "sessionCount"; `https://` swallowed the query string, so `api_key` in URLs escaped. Both fixed and tested in SDK and server copies |
 
+## Dart MCP interop (ROADMAP §8), the e2e fixture and hn_reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 257 | overlap with `dart mcp-server` 1.1.2 | ⚠️→fixed | listed its tools with the project as root: by default hot_reload, hot_restart, get_runtime_errors, widget_inspector and flutter_driver_command duplicate ours (theirs need a `dtd` connect first). `--disable flutter,dart_tooling_daemon` leaves analyze_files, lsp, pub, pub_dev_search, read_package_uris, rip_grep_packages, roots. `run_tests`/`dart_format`/`launch_app` are off unless enabled (their default, kept). `mcp install` now adds it that way |
+| 258 | a plain `flutter run` | ❌→fixed | hn_reader with its URI file hidden: before, "No running Flutter app found"; now a fresh `-p hn_reader` server finds it through the tooling daemon (`dart tooling-daemon --list`, 0.35 s, then `ConnectedApp.getVmServices`) and `get_app_summary` answers. `flutter run --machine` registers too (it prints `app.dtd`) |
+| 259 | symlinked temp folders | ❌→fixed | the first e2e run failed both DTD checks: the daemon records `/private/var/…`, the fixture is under `/var/…` (a link). Paths are resolved (nearest existing folder) before matching |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

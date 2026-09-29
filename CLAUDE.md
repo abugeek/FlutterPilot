@@ -8,7 +8,8 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 
 - **1-Command Setup**: Run `flutterpilot init` in any Flutter project root to auto-detect Riverpod/Bloc/Dio/Drift and configure packages.
 - **Check setup**: `flutterpilot doctor` checks SDK/plugin wiring, macOS entitlements, MCP config and (if running) what the app registered, with exact fixes.
-- **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code) with a compiled server.
+- **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code) with a compiled server, plus the official Dart MCP server (`dart mcp-server --disable flutter,dart_tooling_daemon`: its analyzer, `lsp` and pub; its hot reload/errors/inspector/driver duplicate ours).
+- **Finding the app**: a plain `flutter run`, an IDE launch or the Dart MCP server's `launch_app` is found through the Dart Tooling Daemon; `flutterpilot dev` also writes `.dart_tool/flutterpilot_vm_uri`.
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
 - **Zero-Code Mode**: Without `flutterpilot_sdk` the app can be inspected but not driven: only the tools that work are listed (summary, widget tree, screenshots, errors, logs, hot reload/restart, theme and debug-paint toggles, memory/HTTP profiles). `get_app_summary` says so; `flutterpilot init` adds taps, text entry, navigation and assertions.
