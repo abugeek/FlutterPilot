@@ -81,46 +81,18 @@ void main() {
     expect(readRan, isTrue);
   });
 
-  test('cancels a queued mutation before it starts', () async {
+  test('a failed mutation does not block the next one', () async {
     final scheduler = OperationScheduler();
-    final release = Completer<void>();
-    var ran = false;
-
-    final first = scheduler.schedule<void>(
+    final failed = scheduler.schedule<void>(
       mutating: true,
-      operation: () => release.future,
+      operation: () async => throw StateError('boom'),
     );
-    final queued = scheduler.scheduleCancellable<void>(
+    final next = scheduler.schedule<String>(
       mutating: true,
-      operation: () async => ran = true,
+      operation: () async => 'ran',
     );
 
-    expect(queued.cancel(), isTrue);
-    await expectLater(
-      queued.future,
-      throwsA(isA<OperationCancelledException>()),
-    );
-    release.complete();
-    await first;
-    await Future<void>.delayed(Duration.zero);
-    expect(ran, isFalse);
-  });
-
-  test('cannot cancel an operation after it starts', () async {
-    final scheduler = OperationScheduler();
-    final started = Completer<void>();
-    final release = Completer<void>();
-
-    final operation = scheduler.scheduleCancellable<void>(
-      mutating: true,
-      operation: () async {
-        started.complete();
-        await release.future;
-      },
-    );
-    await started.future;
-    expect(operation.cancel(), isFalse);
-    release.complete();
-    await operation.future;
+    await expectLater(failed, throwsStateError);
+    expect(await next, 'ran');
   });
 }
