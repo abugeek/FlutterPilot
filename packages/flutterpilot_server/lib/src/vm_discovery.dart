@@ -3,25 +3,28 @@ import 'dart:io';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 
+import 'dtd_discovery.dart';
+
 final _discoveryLog = Logger('VmDiscoveryService');
 
-/// Finds the VM Service URI of a running Flutter app from the file
+/// Finds the VM Service URI of a running Flutter app: from the file
 /// `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` writes
-/// (what `flutterpilot dev` passes).
+/// (what `flutterpilot dev` passes), or from the Dart Tooling Daemon that a
+/// plain `flutter run`, an IDE or the Dart MCP server's `launch_app`
+/// registers the app with ([DtdDiscovery]).
 ///
-/// A plain `flutter run` writes nothing and listens on a random port behind
-/// an auth code, so it can't be found; ports are not probed (any web server
-/// on 8080 would pass for a VM service).
+/// Ports are not probed (any web server on 8080 would pass for a VM
+/// service).
 class VmDiscoveryService {
   /// Relative path of the URI file inside a Flutter project.
   static const uriFile = '.dart_tool/flutterpilot_vm_uri';
 
   /// What makes an app findable, for "no app" messages.
   static const howToStart =
-      'Start the app with "flutterpilot dev" (or "flutter run '
-      '--vmservice-out-file=$uriFile") in its project folder or under the '
-      'workspace; FlutterPilot then finds it. A plain "flutter run" can\'t be '
-      'found: call connect_app(uri: ...) with the VM service URI it prints.';
+      'Start the app with "flutter run" (or "flutterpilot dev", your IDE, or '
+      "the Dart MCP server's launch_app) in its project folder or under the "
+      'workspace; FlutterPilot then finds it. Otherwise call '
+      'connect_app(uri: ...) with the VM service URI "flutter run" prints.';
 
   /// How deep below each root to look for a Flutter project (a workspace
   /// root is often a monorepo: `apps/mobile/`).
@@ -46,19 +49,37 @@ class VmDiscoveryService {
 
   /// Returns the URI of a running app found under [roots] — the most
   /// recently launched one when several are running — or null.
+  /// [dtdApps] defaults to asking the machine's tooling daemons.
   static Future<String?> discover({
     List<Directory> roots = const [],
     Duration timeout = const Duration(seconds: 1),
+    Future<List<DtdApp>> Function()? dtdApps,
   }) async {
-    final files = <File>[];
+    final found = <({String? uri, DateTime launched, String from})>[];
     for (final root in roots) {
-      files.addAll(findUriFiles(root));
+      for (final file in findUriFiles(root)) {
+        found.add((
+          uri: _read(file),
+          launched: _modified(file),
+          from: file.path,
+        ));
+      }
     }
-    files.sort((a, b) => _modified(b).compareTo(_modified(a)));
-    for (final file in files) {
-      final uri = _read(file);
+    if (roots.isNotEmpty) {
+      for (final app in await (dtdApps ?? DtdDiscovery.apps)()) {
+        if (!app.isUnder(roots, maxDepth: maxDepth)) continue;
+        found.add((
+          uri: app.uri,
+          launched: app.started,
+          from: 'the Dart Tooling Daemon for ${app.workspaceRoot}',
+        ));
+      }
+    }
+    found.sort((a, b) => b.launched.compareTo(a.launched));
+    for (final f in found) {
+      final uri = f.uri;
       if (uri != null && await _verifyVmUri(uri, timeout: timeout)) {
-        _discoveryLog.info('Discovered VM Service URI in ${file.path}');
+        _discoveryLog.info('Discovered VM Service URI in ${f.from}');
         return uri;
       }
     }

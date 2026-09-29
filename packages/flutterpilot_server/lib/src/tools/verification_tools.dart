@@ -186,7 +186,8 @@ mixin _VerificationToolsMixin
       final status = (r['response'] as Map?)?['statusCode'];
       final ms = durationMs(r);
       c.requests.add(
-        '${r['method']} ${r['uri']} → ${status ?? 'no response'}'
+        '${r['method']} ${Redaction.text('${r['uri']}')} → '
+        '${status ?? 'no response'}'
         '${ms == null ? '' : ' ($ms ms)'}',
       );
     }

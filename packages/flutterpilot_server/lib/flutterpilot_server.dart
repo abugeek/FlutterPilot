@@ -11,6 +11,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
+import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
@@ -22,6 +23,7 @@ import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
+import 'src/redaction.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
@@ -586,6 +588,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       _nativeCrash = null;
       final vm = await _vmService!.getVM();
       activeContext.operatingSystem = vm.operatingSystem;
+      activeContext.targetCPU = vm.targetCPU;
+      try {
+        activeContext.buildMode = buildModeFromFlags(
+          (await _vmService!.getFlagList()).flags ?? const [],
+        );
+        _scheduleToolVisibility();
+      } catch (_) {}
       await _updateNativeToolVisibility(vm.operatingSystem, pid: vm.pid);
       _crashTarget = vm.pid == null || vm.operatingSystem == null
           ? null
@@ -897,7 +906,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
-      'message': message,
+      // App output may print credentials (security review).
+      'message': Redaction.text(message),
     };
     _debugLogBuffer.add(entry);
     _debugLogBufferBytes += _entryBytes(entry);
@@ -1004,7 +1014,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         rpcs.addAll((await vm.getIsolate(ref.id!)).extensionRPCs ?? const []);
       }
       if (!identical(context, _activeContext)) return;
-      updateToolVisibility(hasSdk: context.hasSdk, extensions: rpcs);
+      updateToolVisibility(
+        hasSdk: context.hasSdk,
+        extensions: rpcs,
+        buildMode: context.buildMode,
+      );
     } catch (_) {
       // Keep the current list; calls explain themselves.
     }
@@ -1018,6 +1032,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   void updateToolVisibility({
     required bool? hasSdk,
     Set<String> extensions = const {},
+    BuildMode? buildMode,
   }) {
     if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
     var changed = false;
@@ -1025,6 +1040,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (_nativeTools.containsKey(name)) continue;
       final needs = pluginToolExtensions[name];
       final usable = switch (hasSdk) {
+        // AOT: no hot reload, nor what is built on it.
+        _
+            when buildMode == BuildMode.profile &&
+                debugOnlyTools.contains(name) =>
+          false,
         false => zeroCodeTools.contains(name),
         true when needs != null => needs.any(extensions.contains),
         _ => true,
@@ -1039,6 +1059,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       }
     }
     if (changed) server.sendToolListChanged();
+  }
+
+  /// For testing only.
+  void setDeviceContextForTesting(DeviceRuntimeContext context) {
+    _deviceContexts[context.deviceId] = context;
+  }
+
+  /// For testing only.
+  Future<CallToolResult> callToolForTesting(
+    String name,
+    Map<String, dynamic> arguments, {
+    RequestHandlerExtra? extra,
+  }) async {
+    final cb = _toolCallbacks[name];
+    if (cb == null) throw ArgumentError('Tool "$name" is not registered');
+    return cb(arguments, extra ?? _dummyExtra());
   }
 
   // ---------------------------------------------------------------------------
@@ -1596,6 +1632,12 @@ Every action reports whether the route changed, a widget-tree diff and what is t
           );
         }
       }
+      if (extension.startsWith('ext.dart.io.') && context?.isWeb == true) {
+        return _ExtensionResult.error(
+          'Extension "$extension" is not available on web: web apps use browser networking rather than dart:io.',
+          ErrorCategory.extensionError,
+        );
+      }
       return _ExtensionResult.error(
         'Extension "$extension" is not registered in the running Flutter app. '
         'Plugin extensions register only once the app runs the plugin\'s setup code '
@@ -1938,3 +1980,22 @@ class _ExtensionResult {
     );
   }
 }
+
+class _DummyAbortSignal implements AbortSignal {
+  @override
+  bool get aborted => false;
+  @override
+  dynamic get reason => null;
+  @override
+  Stream<void> get onAbort => const Stream.empty();
+  @override
+  void throwIfAborted() {}
+}
+
+RequestHandlerExtra _dummyExtra() => RequestHandlerExtra(
+  signal: _DummyAbortSignal(),
+  requestId: 1,
+  sendNotification: (n, {relatedTask}) async {},
+  sendRequest: <T extends BaseResultData>(r, factory, opts) async =>
+      throw UnimplementedError(),
+);

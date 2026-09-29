@@ -31,20 +31,6 @@ class DriftPilotInspector {
   static bool _initialized = false;
   static const int _maxResults = 1000;
 
-  static const Set<String> _allowedPrefixes = {
-    'SELECT',
-    'EXPLAIN',
-    'PRAGMA',
-    'WITH',
-  };
-  static const Set<String> _dangerousPragmas = {
-    'PRAGMA JOURNAL_MODE',
-    'PRAGMA WAL',
-    'PRAGMA SYNCHRONOUS',
-    'PRAGMA FOREIGN_KEYS',
-    'PRAGMA WRITABLE_SCHEMA',
-  };
-
   static void registerDatabase(String name, GeneratedDatabase db) {
     _databases[name] = db;
     if (!_initialized) {
@@ -65,30 +51,9 @@ class DriftPilotInspector {
   }
 
   /// Validates that SQL is a safe read-only statement.
-  static bool _isSafeReadOnly(String sql) {
-    // Strip SQL comments before validation to prevent comment-based injection
-    var cleaned = sql.replaceAll(RegExp(r'--[^\n]*'), '');
-    cleaned = cleaned.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
-    final normalized = cleaned
-        .trim()
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .toUpperCase();
-    if (normalized.isEmpty) return false;
-    // Block multi-statement injection
-    if (normalized.contains(';') &&
-        normalized.indexOf(';') < normalized.length - 1) {
-      return false;
-    }
-    // Block SELECT INTO
-    if (normalized.contains('SELECT') && normalized.contains(' INTO ')) {
-      return false;
-    }
-    // Block dangerous PRAGMAs
-    for (final p in _dangerousPragmas) {
-      if (normalized.startsWith(p)) return false;
-    }
-    return _allowedPrefixes.any((p) => normalized.startsWith(p));
-  }
+  /// Validates that SQL is a safe read-only statement (FlutterPilot's
+  /// shared check: prefix checks let `WITH … DELETE` through).
+  static bool _isSafeReadOnly(String sql) => FlutterPilot.isReadOnlySql(sql);
 
   /// Exposes [_isSafeReadOnly] for unit testing.
   @visibleForTesting
