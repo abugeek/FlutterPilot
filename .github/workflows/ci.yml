@@ -126,4 +126,6 @@ jobs:
           target: google_apis
           disable-animations: false
           # Emulators on hosted runners are slow; retry once, visibly.
-          script: cd packages/flutterpilot_server && (dart run tool/e2e_test.dart -d emulator-5554 || (echo "::warning::Android e2e failed once on this runner; retrying" && dart run tool/e2e_test.dart -d emulator-5554))
+          # On failure, the emulator's log says why the app died (crash,
+          # low-memory kill, ANR): the e2e only sees the connection drop.
+          script: cd packages/flutterpilot_server && (dart run tool/e2e_test.dart -d emulator-5554 || (echo "::warning::Android e2e failed once on this runner; retrying" && dart run tool/e2e_test.dart -d emulator-5554) || (adb logcat -d -b main,system,crash | grep -iE "flutter|fixture|lowmemory|lmkd|am_kill|FATAL|ANR|Process .* has died|signal" | tail -300; exit 1))

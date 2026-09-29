@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutterpilot_server/src/web_limits.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 
 /// End-to-end test of the real agent path:
@@ -230,7 +231,30 @@ Future<void> main(List<String> args) async {
       print('${ok ? '✅' : '❌'} $label ($seen)');
     }
 
+    // Web apps have no CPU profile or dart:io HTTP profile: not listed.
+    if (isWeb && !zeroCode) {
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      Set<String> listed;
+      do {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        listed =
+            ((await mcp.request('tools/list', {}))['result']['tools'] as List)
+                .map((t) => t['name'] as String)
+                .toSet();
+      } while (listed.any(webUnsupportedTools.contains) &&
+          DateTime.now().isBefore(deadline));
+      final hidden = !listed.any(webUnsupportedTools.contains);
+      if (!hidden) failed++;
+      print(
+        '${hidden ? '✅' : '❌'} web: ${webUnsupportedTools.join(', ')} not '
+        'listed',
+      );
+    }
+
     if (zeroCode) {
+      final expected = isWeb
+          ? zeroCodeTools.difference(webUnsupportedTools)
+          : zeroCodeTools;
       // The SDK check runs up to 5 s after connecting; then the list shrinks.
       final deadline = DateTime.now().add(const Duration(seconds: 20));
       Set<String> listed;
@@ -240,11 +264,10 @@ Future<void> main(List<String> args) async {
             ((await mcp.request('tools/list', {}))['result']['tools'] as List)
                 .map((t) => t['name'] as String)
                 .toSet();
-      } while (listed.length != zeroCodeTools.length &&
+      } while (listed.length != expected.length &&
           DateTime.now().isBefore(deadline));
       final listOk =
-          listed.length == zeroCodeTools.length &&
-          listed.containsAll(zeroCodeTools);
+          listed.length == expected.length && listed.containsAll(expected);
       if (!listOk) failed++;
       print(
         '${listOk ? '✅' : '❌'} only zero-code tools listed (${listed.length})',
