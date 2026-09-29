@@ -199,7 +199,8 @@ Future<void> main(List<String> args) async {
           !absent.any(text.contains);
       if (!ok) failed++;
       print(
-        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $text'}',
+        '${ok ? '✅' : '❌'} $label (${text.length}b)'
+        '${ok && !verbose ? '' : '\n   $text'}',
       );
     }
 
@@ -766,6 +767,25 @@ Future<void> main(List<String> args) async {
         {'target': 'PIN', 'text': 's3cret-pin'},
         ['s3cret-pin'],
       );
+      // Security review: no read tool shows what is in a password field.
+      for (final (tool, args) in [
+        ('get_widget_tree', <String, dynamic>{}),
+        ('get_widget_tree', <String, dynamic>{'diff': true}),
+        ('get_app_summary', <String, dynamic>{}),
+        ('get_interactive_elements', <String, dynamic>{}),
+        ('get_semantics_tree', <String, dynamic>{}),
+        ('get_widget_properties', <String, dynamic>{'key': 'PIN'}),
+        ('get_flight_log', <String, dynamic>{}),
+        ('get_debug_logs', <String, dynamic>{}),
+        ('press_key', <String, dynamic>{'key': 'x'}),
+      ]) {
+        await checkAbsent(
+          'password field hidden from $tool${args.isEmpty ? '' : ' $args'}',
+          tool,
+          args,
+          ['s3cret-pin'],
+        );
+      }
       // Back waits for the pop transition and reports the new screen.
       await check(
         'back',
@@ -781,6 +801,30 @@ Future<void> main(List<String> args) async {
         false,
         settle, // CI simulators can be slow to dismiss the keyboard and pop
       );
+      // Security review: secrets the app logs and sends stay hidden.
+      await check('turn on HTTP profiling', 'get_http_profile', {'limit': 1});
+      await check('sign in (logs and sends secrets)', 'tap_widget', {
+        'key': 'Sign in',
+      });
+      await Future<void>.delayed(const Duration(seconds: 3)); // the request
+      const secrets = [
+        'LOGSECRET1',
+        'LOGSECRET2',
+        'URLSECRET3',
+        'BODYSECRET4',
+        'HDRSECRET5',
+      ];
+      for (final (tool, args) in [
+        ('get_debug_logs', <String, dynamic>{}),
+        ('get_app_summary', <String, dynamic>{}),
+        ('get_flight_log', <String, dynamic>{}),
+        ('get_network_logs', <String, dynamic>{}),
+        ('get_http_profile', <String, dynamic>{'url': 'example.com/login'}),
+        ('get_http_profile', <String, dynamic>{'id': 1}),
+        ('get_errors', <String, dynamic>{}),
+      ]) {
+        await checkAbsent('secrets hidden from $tool', tool, args, secrets);
+      }
       // Settle timing (ROADMAP §3.13): each response describes the screen
       // the action led to, not the one mid-animation or before a late push.
       await check(
@@ -1502,12 +1546,26 @@ class _HomeState extends State<Home> {
           onPressed: () => setState(() => _squeeze = !_squeeze),
           child: const Text('Squeeze'),
         ),
+        TextButton(onPressed: _signIn, child: const Text('Sign in')),
         Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
           const SizedBox(width: 40, child: Row(children: [SizedBox(key: ValueKey('squeezed'), width: 90, height: 8)])),
       ]),
     ]),
   );
+
+  // Secrets in a log line, a URL, a header and a body: no tool may show
+  // them (the security review's redaction sweep).
+  Future<void> _signIn() async {
+    debugPrint('signing in with api_key=LOGSECRET1 password: LOGSECRET2');
+    try {
+      await dio.post(
+        'https://example.com/login?api_key=URLSECRET3&page=1',
+        data: {'user': 'pilot', 'password': 'BODYSECRET4'},
+        options: Options(headers: {'Authorization': 'Bearer HDRSECRET5'}),
+      );
+    } catch (_) {}
+  }
 }
 
 class DetailsPage extends StatelessWidget {

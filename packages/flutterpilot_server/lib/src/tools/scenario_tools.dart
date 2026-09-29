@@ -169,6 +169,12 @@ mixin _ScenarioToolsMixin
       if (res.isError || states is! Map) continue;
       final r = restorableStates(states.cast<String, dynamic>(), valueKey);
       state[type] = r.kept;
+      if (r.secret.isNotEmpty) {
+        notes.add(
+          'Left out (names that look like credentials): '
+          '${r.secret.join(', ')}.',
+        );
+      }
       if (r.skipped.isNotEmpty) {
         notes.add(
           'Not saved (set_state can only restore bool/number/String): '

@@ -489,8 +489,14 @@ Findings #240–243.
   profile. Findings #248–251.
 - **Parallel devices:** run the same flow on iOS + Android + web and diff
   results.
-- **Security review:** remote VM connections, redaction coverage (PII in
-  trees, logs, network bodies), destructive-operation gating.
+- ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
+  Fixed: obscured field text in widget properties/tree, credentials in
+  logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`
+  write bypasses (`WITH … DELETE`, writing PRAGMAs), the shell bridge
+  answering browsers, generate_test secrets on the command line. Remote
+  connections, destructive gating, secure storage and process launches
+  reviewed OK. An e2e sweep plants secrets in the fixture and checks every
+  read tool. Findings #252–256.
 - **Docs site + short demo** of the real loop (bug → mock → fix → verify).
 
 ---

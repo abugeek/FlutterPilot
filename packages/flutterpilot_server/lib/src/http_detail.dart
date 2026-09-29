@@ -5,6 +5,7 @@
 library;
 
 import 'dart:convert';
+import 'redaction.dart';
 
 /// Header names whose values are credentials.
 final _secretHeader = RegExp(
@@ -108,7 +109,7 @@ String formatRequestDetail(Map detail, {required int number}) {
   final status = response?['statusCode'];
   final ms = durationMs(detail);
   buf.writeln(
-    '#$number ${detail['method']} ${detail['uri']} → '
+    '#$number ${detail['method']} ${Redaction.text('${detail['uri']}')} → '
     '${status == null ? 'no response' : '$status ${response?['reasonPhrase'] ?? ''}'.trim()}'
     '${ms == null ? '' : ' in $ms ms'}',
   );

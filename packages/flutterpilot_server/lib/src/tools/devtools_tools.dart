@@ -942,7 +942,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         );
         for (final req in shown) {
           final method = req['method'] ?? '?';
-          final uri = req['uri'] ?? '?';
+          final uri = Redaction.text('${req['uri'] ?? '?'}');
           final response = req['response'] as Map?;
           final status =
               response?['statusCode']?.toString() ??

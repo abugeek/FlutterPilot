@@ -23,6 +23,7 @@ import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
+import 'src/redaction.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
@@ -904,7 +905,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
-      'message': message,
+      // App output may print credentials (security review).
+      'message': Redaction.text(message),
     };
     _debugLogBuffer.add(entry);
     _debugLogBufferBytes += _entryBytes(entry);
