@@ -114,7 +114,9 @@ class PilotWidgetInspector {
     if (widget is Text) {
       text = widget.data ?? widget.textSpan?.toPlainText() ?? '';
     } else if (widget is EditableText) {
-      text = widget.controller.text;
+      text = widget.obscureText
+          ? '•' * widget.controller.text.length
+          : widget.controller.text;
     } else if (_isButtonOrClickable(typeName) && children.isEmpty) {
       text = _extractDescendantText(element);
     }
@@ -746,7 +748,9 @@ class PilotWidgetInspector {
     } else if (widget is Tooltip) {
       text = widget.message ?? '';
     } else if (widget is EditableText) {
-      text = widget.controller.text;
+      text = widget.obscureText
+          ? '•' * widget.controller.text.length
+          : widget.controller.text;
     } else if (_isButtonOrClickable(typeName)) {
       text = _extractDescendantText(element);
     }

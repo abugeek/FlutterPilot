@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -15,8 +16,10 @@ class SourceLocator {
   static const int maxAncestors = 8;
 
   /// Whether the app records creation locations (debug builds only).
+  /// Profile builds can report tracking on, yet record no locations (and
+  /// no `debugCreator`): only debug builds have them.
   static bool get available =>
-      WidgetInspectorService.instance.isWidgetCreationTracked();
+      kDebugMode && WidgetInspectorService.instance.isWidgetCreationTracked();
 
   /// Where [element]'s widget is created, e.g. `lib/ui/tile.dart:42:7`.
   /// Null when the widget has no recorded location.
@@ -50,16 +53,30 @@ class SourceLocator {
     if (viewId == null) return null;
     final result = HitTestResult();
     binding.hitTestInView(result, position, viewId);
+    Map<RenderObject, Element>? owners;
     for (final entry in result.path) {
       final target = entry.target;
       if (target is! RenderObject || target is RenderView) continue;
       final creator = target.debugCreator;
-      if (creator is! DebugCreator) continue;
-      final element = creator.element;
-      if (_inOverlay(element)) continue;
+      // Profile builds set no debugCreator: find the owner in the tree.
+      final element = creator is DebugCreator
+          ? creator.element
+          : (owners ??= _renderObjectOwners())[target];
+      if (element == null || _inOverlay(element)) continue;
       return element;
     }
     return null;
+  }
+
+  static Map<RenderObject, Element> _renderObjectOwners() {
+    final owners = <RenderObject, Element>{};
+    void visit(Element e) {
+      if (e is RenderObjectElement) owners[e.renderObject] = e;
+      e.visitChildren(visit);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(visit);
+    return owners;
   }
 
   static bool _inOverlay(Element element) {

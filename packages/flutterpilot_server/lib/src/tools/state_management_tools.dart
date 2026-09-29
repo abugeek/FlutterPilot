@@ -3,31 +3,12 @@ part of '../../flutterpilot_server.dart';
 /// Tools for reading and injecting state (Riverpod, Bloc, SharedPreferences,
 /// Hive, Drift), and for simulating/mocking network conditions.
 mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
-  /// Returns `true` when [sql] is a read-only SQL statement safe for
-  /// untrusted execution against the app's Drift database.
-  static bool _isReadOnlySql(String sql) {
-    final normalized = sql.trim().replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
-    // Strip SQL comments before validation
-    final stripped = normalized
-        .replaceAll(RegExp(r'--.*$', multiLine: true), '')
-        .replaceAll(RegExp(r'/\*.*?\*/'), '')
-        .trim();
-    if (stripped.isEmpty) return false;
-    // Block multi-statement
-    if (stripped.contains(';') && stripped.indexOf(';') < stripped.length - 1) {
-      return false;
-    }
-    // Block SELECT INTO
-    if (stripped.contains('SELECT') && stripped.contains(' INTO ')) {
-      return false;
-    }
-    // Block dangerous PRAGMAs
-    for (final pragma in _Constants.dangerousPragmas) {
-      if (stripped.startsWith(pragma)) return false;
-    }
-    // Must start with allowed prefix
-    return _Constants.allowedSqlPrefixes.any((p) => stripped.startsWith(p));
-  }
+  /// A state's value as shown: hidden when its name looks like a
+  /// credential (authTokenProvider), tokens masked in any other.
+  static String _stateValue(String name, String value) =>
+      Redaction.sensitiveName.hasMatch(name)
+      ? '${Redaction.mask} (the name looks like a credential)'
+      : _clip(Redaction.text(value));
 
   /// A list provider prints every element; its first 200 chars say enough.
   static String _clip(String value) => value.length <= 200
@@ -63,7 +44,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           sections.add(
             states == null || states.isEmpty
                 ? '$type: nothing observed yet.'
-                : '$type:\n${states.entries.map((e) => '  ${e.key}: ${_clip('${e.value[valueKey]}')} (${e.value['type']})').join('\n')}',
+                : '$type:\n${states.entries.map((e) => '  ${e.key}: ${_stateValue('${e.key}', '${e.value[valueKey]}')} (${e.value['type']})').join('\n')}',
           );
         }
         if (sections.isEmpty) {
@@ -213,7 +194,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         final sql = p['sql']?.toString().trim() ?? '';
-        if (!_isReadOnlySql(sql)) {
+        if (!isReadOnlySqlStatement(sql)) {
           return CallToolResult(
             content: [
               TextContent(
@@ -393,21 +374,29 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) {
+      callback: (p, e) async {
         if (p['clear'] == true) {
-          return _callExtensionRaw('ext.flutterpilot.clearHttpMocks', {
-            if (p['urlPattern'] != null)
-              'urlPattern': p['urlPattern'].toString(),
-          }).then((res) => res.toCallToolResult());
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.clearHttpMocks',
+            {
+              if (p['urlPattern'] != null)
+                'urlPattern': p['urlPattern'].toString(),
+            },
+          );
+          if (!res.isError) {
+            await _noteTestStep({
+              'type': 'clearMocks',
+              'urlPattern': ?p['urlPattern']?.toString(),
+            });
+          }
+          return res.toCallToolResult();
         }
         if (p['urlPattern'] == null || p['statusCode'] == null) {
-          return Future.value(
-            CallToolResult(
-              isError: true,
-              content: [
-                TextContent(text: 'Pass urlPattern and statusCode (and body).'),
-              ],
-            ),
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'Pass urlPattern and statusCode (and body).'),
+            ],
           );
         }
         final mapped = {
@@ -416,10 +405,20 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'body': p['body']?.toString() ?? '',
           if (p['delayMs'] != null) 'delayMs': p['delayMs'].toString(),
         };
-        return _callExtensionRaw(
+        final res = await _callExtensionRaw(
           'ext.flutterpilot.addHttpMock',
           mapped,
-        ).then((res) => res.toCallToolResult());
+        );
+        if (!res.isError) {
+          await _noteTestStep({
+            'type': 'mock',
+            'urlPattern': mapped['urlPattern'],
+            'statusCode': int.tryParse('${p['statusCode']}') ?? 200,
+            'body': mapped['body'],
+            'delayMs': int.tryParse('${p['delayMs'] ?? 0}') ?? 0,
+          });
+        }
+        return res.toCallToolResult();
       },
     );
   }
