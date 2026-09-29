@@ -458,6 +458,14 @@ keyboard forced on, and in Chrome:
 | 258 | a plain `flutter run` | ❌→fixed | hn_reader with its URI file hidden: before, "No running Flutter app found"; now a fresh `-p hn_reader` server finds it through the tooling daemon (`dart tooling-daemon --list`, 0.35 s, then `ConnectedApp.getVmServices`) and `get_app_summary` answers. `flutter run --machine` registers too (it prints `app.dtd`) |
 | 259 | symlinked temp folders | ❌→fixed | the first e2e run failed both DTD checks: the daemon records `/private/var/…`, the fixture is under `/var/…` (a link). Paths are resolved (nearest existing folder) before matching |
 
+## Consolidating the stack into main (CI on all platforms)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 260 | web apps | ❌→fixed | profile_action (no CPU samples/VM timeline in the browser), get_http_profile (no dart:io) and get_memory_details cycle/classes (no allocation profile) failed with raw -32601 errors on web. The two tools are no longer listed for web apps (like debug-only tools in profile builds); the modes refuse in one line. e2e checks both lists on web |
+| 261 | Android CI | ❌→fixed | failing on main since #17–#24 merged. Not the app: the emulator itself died mid-run (adb lost it, 9 GB free, no OOM kill) after its host GPU layer logged "Failed to find ColorBuffer"; google_apis 33, 34 and 35 all did, `-gpu guest` was ignored. The aosp_atd 34 image passes; the job blocks again. A failed run now says whether the app or the emulator died |
+| 262 | native crash on a slow Mac | ❌→fixed | the §5.8 check failed once on CI: the kernel's crash note came after 3 looks, and a slow `log show` (timeout) ended the watch. It keeps looking for 30 s; tools still wait for 3 looks only |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

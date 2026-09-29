@@ -91,17 +91,7 @@ jobs:
 
   e2e-android:
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 60
-    # TEMPORARY: which emulator image survives the run (google_apis 34
-    # crashes in its host GPU layer mid-run). One is kept.
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - {api: 34, target: aosp_atd}
-          - {api: 35, target: google_apis}
-          - {api: 33, target: google_apis}
     steps:
       - uses: actions/checkout@v4
 
@@ -130,9 +120,13 @@ jobs:
       - name: End-to-end test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.image.api }}
+          api-level: 34
           arch: x86_64
-          target: ${{ matrix.image.target }}
+          # The Automated Test Device image. google_apis 33-35 crashed the
+          # whole emulator in its host GPU layer mid-run ("Failed to find
+          # ColorBuffer", then adb lost it) since 2026-09-28; ATD, built for
+          # headless CI, runs the e2e through.
+          target: aosp_atd
           disable-animations: false
           # Retries once while the emulator lives; on failure prints why.
           script: cd packages/flutterpilot_server && sh tool/ci_android_e2e.sh
