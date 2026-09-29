@@ -536,8 +536,10 @@ Review each the same way as PR #1 — keep, fix, or delete:
   whole text while searching, puts lists back when not found, and builds
   without waiting for a frame while the window is hidden: 0.3–3 s, nested
   ~5 s, not found ~2 s. `maxAttempts` is gone; the limit is 10 s.
-- **`stream_inspector.dart`** — nothing wires it; its tool is gone (§4.2),
-  the SDK code can go too.
+- ~~**`stream_inspector.dart`**~~ — done (2026-09-29): deleted, with six
+  more SDK extensions no tool called (`tapAt`, `jumpToScreen`,
+  `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` + `MemoryAuditor`).
+  A server test now fails when the SDK registers an extension no tool calls.
 - **`flight_recorder.dart`**, `get_flight_log` — useful only if §6 is built
   on top. (The recording tools were deleted in §4.2.)
 - **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS

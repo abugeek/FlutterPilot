@@ -52,7 +52,7 @@ class MyApp extends StatelessWidget {
 
 All extensions are registered in the `ext.flutterpilot.*` namespace and callable via the VM service or MCP server.
 
-### Inspection & State (18 Extensions)
+### Inspection & State
 
 | Extension | Parameters | Returns | Description |
 |-----------|-----------|---------|-------------|
@@ -63,7 +63,6 @@ All extensions are registered in the `ext.flutterpilot.*` namespace and callable
 | `inspectWidget` | `key` or `x`,`y` | `{widget, source: {type, loc}, ancestors}` | App file:line that creates a widget (debug builds) |
 | `captureScreenshot` | — | `base64-png` | PNG screenshot |
 | `getNavigationStack` | — | `{stack: [...]}` | Route stack (bottom → top) |
-| `getPerfMetrics` | — | `{fps, memory, frameTime}` | Performance metrics |
 | `getSemantics Tree` | — | `{root: {...}}` | Accessibility tree (VoiceOver/TalkBack) |
 | `getWidgetProperties` | `key` | `{text, isEnabled, isChecked, value, isFocused, bounds}` | Read any widget's state |
 | `assertWidgetEnabled` | `key` | `{enabled: true}` | Assert widget is interactive |
@@ -76,11 +75,10 @@ All extensions are registered in the `ext.flutterpilot.*` namespace and callable
 | `getSharedPreferences` | — | `{prefs: {...}}` | SharedPreferences key-value map (if plugin registered) |
 | `getBuildConfig` | — | `{pubspec: {...}}` | pubspec.yaml and build metadata |
 
-### UI Automation (18 Extensions)
+### UI Automation
 
 | Extension | Parameters | Returns | Description |
 |-----------|-----------|---------|-------------|
-| `tapAt` | `x, y` | `{success}` | Tap at screen coordinates |
 | `tapWidget` | `key` | `{success}` | Tap widget center by key |
 | `doubleTapWidget` | `key` | `{success}` | Double-tap widget by key |
 | `longPressWidget` | `key` | `{success}` | Long-press widget by key |

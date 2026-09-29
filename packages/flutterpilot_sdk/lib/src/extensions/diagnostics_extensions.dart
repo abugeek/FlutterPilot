@@ -7,10 +7,8 @@ part of '../../flutterpilot_sdk.dart';
 /// - `ping` — Health-check endpoint
 /// - `getCapabilities` — Registered SDK/plugin capability metadata
 /// - `getErrors` — Buffered error list
-/// - `getPerfMetrics` — FPS estimate
 /// - `getSemanticsTree` — Accessibility semantics tree
 /// - `captureScreenshot` — Base64-encoded PNG screenshot
-/// - `getDebugLogs` — In-memory console capture buffer
 /// - `clearDebugLogs` — Clear the console capture buffer
 /// - `pumpFrames` — Wait for N animation frames
 /// - `profiling` — Quiet the AI overlay during a profile; frame budget
@@ -84,19 +82,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
     registerExtension('ext.flutterpilot.getErrors', (method, parameters) async {
       return ServiceExtensionResponse.result(
         json.encode({'errors': ErrorInspector.errors}),
-      );
-    });
-
-    // -- ext.flutterpilot.getPerfMetrics --------------------------------------
-    registerExtension('ext.flutterpilot.getPerfMetrics', (
-      method,
-      parameters,
-    ) async {
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'fps': FlutterPilot._lastFps.toStringAsFixed(1),
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
       );
     });
 
@@ -203,28 +188,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
       }
     });
 
-    // -- ext.flutterpilot.getDebugLogs ----------------------------------------
-    registerExtension('ext.flutterpilot.getDebugLogs', (
-      method,
-      parameters,
-    ) async {
-      final levelFilter = parameters['level'];
-      final limit = int.tryParse(parameters['limit'] ?? '') ?? 100;
-      var entries = FlutterPilot._consoleBuffer.toList();
-      if (levelFilter != null && levelFilter.isNotEmpty) {
-        entries = entries.where((e) => e['level'] == levelFilter).toList();
-      }
-      if (entries.length > limit) {
-        entries = entries.sublist(entries.length - limit);
-      }
-      return ServiceExtensionResponse.result(
-        json.encode({
-          'logs': entries,
-          'total': FlutterPilot._consoleBuffer.length,
-        }),
-      );
-    });
-
     // -- ext.flutterpilot.clearDebugLogs --------------------------------------
     registerExtension('ext.flutterpilot.clearDebugLogs', (
       method,
@@ -276,27 +239,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'appVisible': FrameBudgetProfiler.appVisible,
         }),
       );
-    });
-
-    // -- ext.flutterpilot.getStreamLogs ---------------------------------------
-    registerExtension('ext.flutterpilot.getStreamLogs', (
-      method,
-      parameters,
-    ) async {
-      final channel = parameters['channel'];
-      final logs = StreamInspector.getEvents(channelFilter: channel);
-      return ServiceExtensionResponse.result(
-        json.encode({'logs': logs, 'count': logs.length}),
-      );
-    });
-
-    // -- ext.flutterpilot.clearStreamLogs -------------------------------------
-    registerExtension('ext.flutterpilot.clearStreamLogs', (
-      method,
-      parameters,
-    ) async {
-      StreamInspector.clear();
-      return ServiceExtensionResponse.result(json.encode({'cleared': true}));
     });
   }
 }

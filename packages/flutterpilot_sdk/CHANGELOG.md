@@ -4,6 +4,10 @@
   each list, including lazy, reversed, grid and nested horizontal lists,
   instead of swiping; a partial text match no longer stops the search
   ("Item 3" is not "Item 399"). `maxAttempts` is gone.
+- Removed service extensions no FlutterPilot tool called: `getStreamLogs`,
+  `clearStreamLogs`, `tapAt`, `jumpToScreen`, `getPerfMetrics`,
+  `getDebugLogs`, `auditMemoryHealth`; and the `StreamInspector` and
+  `MemoryAuditor` classes behind them.
 
 ## 0.1.0
 
