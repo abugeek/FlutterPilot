@@ -42,6 +42,12 @@ class DeviceRuntimeContext {
   /// The VM's `operatingSystem` (`ios`, `android`, `macos`, ...).
   String? operatingSystem;
 
+  /// The VM's `targetCPU` (`Web`, `x64`, `arm64`, ...).
+  String? targetCPU;
+
+  /// Whether this connection targets a web app (DWDS / browser).
+  bool get isWeb => targetCPU == 'Web' || operatingSystem == 'web';
+
   /// Debug or profile: what hot reload, source locations and timings can be
   /// trusted to do. Null until connected.
   BuildMode? buildMode;
