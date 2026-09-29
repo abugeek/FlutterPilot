@@ -466,6 +466,12 @@ keyboard forced on, and in Chrome:
 | 261 | Android CI | ❌→fixed | failing on main since #17–#24 merged. Not the app: the emulator itself died mid-run (adb lost it, 9 GB free, no OOM kill) after its host GPU layer logged "Failed to find ColorBuffer"; google_apis 33, 34 and 35 all did, `-gpu guest` was ignored. The aosp_atd 34 image passes; the job blocks again. A failed run now says whether the app or the emulator died |
 | 262 | native crash on a slow Mac | ❌→fixed | the §5.8 check failed once on CI: the kernel's crash note came after 3 looks, and a slow `log show` (timeout) ended the watch. It keeps looking for 30 s; tools still wait for 3 looks only |
 
+## §9 review: code not yet proven in a real app
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 265 | screenshots of dialogs (and the 🤖 badge) | ❌→fixed | `capture_screenshot`/`compare_screenshot` captured the first repaint boundary: the bottom page. A `showDialog` (root navigator), or any popup in an app with one navigator, was missing, and the contrast audit measured a dialog's text against the page behind it. hn_reader's context menu showed only because it opens on a tab's nested navigator. The badge was left out by the same accident. Now the view's root layer, after a forced frame that removes the badge; e2e fails on the old capture ("a dialog is in the screenshot"). |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

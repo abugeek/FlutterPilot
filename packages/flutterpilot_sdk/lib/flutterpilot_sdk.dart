@@ -25,6 +25,7 @@ import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/layout_explorer.dart';
+import 'src/screen_capture.dart';
 import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
@@ -947,7 +948,6 @@ class FlutterPilot {
   }
 
   static Future<Uint8List?> _captureScreenshot({double scale = 1.0}) async {
-    AiOverlayManager.clearNow();
     try {
       final basePixelRatio =
           WidgetsBinding
@@ -960,33 +960,10 @@ class FlutterPilot {
         0.2,
         basePixelRatio,
       );
-      RenderRepaintBoundary? boundary;
-      void findBoundary(RenderObject object) {
-        if (boundary != null) return;
-        if (object is RenderRepaintBoundary) {
-          boundary = object;
-          return;
-        }
-        object.visitChildren(findBoundary);
-      }
-
-      for (final rv in WidgetsBinding.instance.renderViews) {
-        findBoundary(rv);
-      }
-      if (boundary != null) {
-        if (boundary!.debugNeedsPaint) {
-          final completer = Completer<void>();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!completer.isCompleted) completer.complete();
-          });
-          WidgetsBinding.instance.scheduleFrame();
-          await completer.future.timeout(
-            const Duration(milliseconds: 100),
-            onTimeout: () {},
-          );
-        }
-        final image = await boundary!.toImage(pixelRatio: targetPixelRatio);
+      final image = await ScreenCapture.image(pixelRatio: targetPixelRatio);
+      if (image != null) {
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
         return byteData?.buffer.asUint8List();
       }
     } catch (e) {
