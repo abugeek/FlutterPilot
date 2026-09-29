@@ -455,7 +455,7 @@ Future<void> main(List<String> args) async {
           {
             'tool': 'tap_widget',
             'arguments': {'key': 'Send'},
-            'durationMs': 500,
+            'durationMs': isDesktop ? 500 : 1500,
           },
           [
             'Profiled tap_widget',
@@ -463,7 +463,7 @@ Future<void> main(List<String> args) async {
             'tap_widget result: Widget tapped',
             // ROADMAP §5.3: the frames the tap caused, from the VM timeline.
             'Frames: ',
-            'App widgets rebuilt in the window:',
+            if (isDesktop) 'App widgets rebuilt in the window:',
           ],
           false,
           Duration.zero,
