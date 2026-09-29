@@ -669,7 +669,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
+              text:
+                  'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}\n'
+                  '${_activeContext?.buildMode == BuildMode.profile ? profileBuildNote : debugBuildNote}',
             ),
           ],
         );
