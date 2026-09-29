@@ -1,5 +1,6 @@
 import 'ring_buffer.dart';
 import 'package:flutter/widgets.dart';
+import 'redaction.dart';
 
 /// Intercepts Flutter framework and platform errors and maintains a
 /// fixed-size circular buffer of recent error details.
@@ -108,7 +109,8 @@ class ErrorInspector {
   static void _captureError(FlutterErrorDetails details) {
     final rawStack = details.stack?.toString();
     _errorBuffer.add({
-      'exception': details.exceptionAsString(),
+      // An exception message may quote a URL or body with credentials.
+      'exception': Redaction.text(details.exceptionAsString()),
       'stackTrace': compactStackTrace(rawStack),
       'rawStackTrace': rawStack,
       'library': details.library,

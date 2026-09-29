@@ -82,6 +82,19 @@ class DioPilotInterceptor extends Interceptor {
     if (!_initialized) {
       _initialized = true;
       _registerExtensions();
+      // A scenario loaded with a hot restart: its mocks answer the app's
+      // very first requests.
+      final pending = FlutterPilot.takeRestartData('httpMocks');
+      if (pending is List) {
+        for (final m in pending.whereType<Map>()) {
+          mock(
+            '${m['urlPattern']}',
+            statusCode: (m['statusCode'] as num?)?.toInt() ?? 200,
+            body: '${m['body'] ?? ''}',
+            delayMs: (m['delayMs'] as num?)?.toInt() ?? 0,
+          );
+        }
+      }
     }
   }
 
@@ -106,7 +119,8 @@ class DioPilotInterceptor extends Interceptor {
             .map((e) => _sanitizeData(e, maxLen: maxLen))
             .toList();
       }
-      final str = data.toString();
+      // Text bodies (form data, raw JSON) may carry credentials too.
+      final str = FlutterPilot.redactText(data.toString());
       if (str.length > maxLen) {
         return '${str.substring(0, maxLen)}... [Truncated]';
       }
@@ -207,6 +221,20 @@ class DioPilotInterceptor extends Interceptor {
       );
     });
 
+    // -- ext.flutterpilot.getHttpMocks ----------------------------------------
+    registerExtension('ext.flutterpilot.getHttpMocks', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'mocks': [
+            for (final e in _mocks.entries) {'urlPattern': e.key, ...e.value},
+          ],
+        }),
+      );
+    });
+
     // -- ext.flutterpilot.clearHttpMocks ---------------------------------------
     registerExtension('ext.flutterpilot.clearHttpMocks', (
       method,
@@ -232,7 +260,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'request',
       'method': options.method,
-      'uri': options.uri.toString(),
+      'uri': FlutterPilot.redactText(options.uri.toString()),
       if (reqBody != null) 'body': reqBody,
       if (options.contentType != null) 'contentType': options.contentType,
       'timestamp': DateTime.now().toIso8601String(),
@@ -304,7 +332,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'response',
       'statusCode': response.statusCode,
-      'uri': response.requestOptions.uri.toString(),
+      'uri': FlutterPilot.redactText(response.requestOptions.uri.toString()),
       if (isMocked) 'mocked': true,
       if (resBody != null) 'body': resBody,
       'timestamp': DateTime.now().toIso8601String(),
@@ -318,8 +346,10 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'error',
       'statusCode': err.response?.statusCode,
-      'uri': err.requestOptions.uri.toString(),
-      'message': err.message,
+      'uri': FlutterPilot.redactText(err.requestOptions.uri.toString()),
+      'message': err.message == null
+          ? null
+          : FlutterPilot.redactText(err.message!),
       'errorType': err.type.name,
       if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),

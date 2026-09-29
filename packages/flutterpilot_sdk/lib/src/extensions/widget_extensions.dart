@@ -1279,6 +1279,13 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
       final result = SourceLocator.describe(element);
+      if (!SourceLocator.available) {
+        // Profile builds still know which widgets the app creates, not
+        // where.
+        result['note'] =
+            'Profile build: the app widgets, but no file:line (a debug '
+            'build, "flutter run", adds it).';
+      }
       if (layout) result.addAll(LayoutExplorer.describe(element));
       if (result['source'] == null && !layout) {
         result['error'] =

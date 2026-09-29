@@ -172,6 +172,24 @@ mixin _TestGenerationToolsMixin
       return CallToolResult(content: [TextContent(text: notes.join('\n'))]);
     }
     final started = DateTime.now();
+    // Obscured text goes in a file only this user can read, not on the
+    // command line where any process list shows it (security review).
+    Directory? secretDir;
+    File? secretFile;
+    if (secrets.isNotEmpty) {
+      secretDir = Directory.systemTemp.createTempSync('fp_secrets_');
+      secretFile = File('${secretDir.path}/defines.json')
+        ..writeAsStringSync(
+          jsonEncode({
+            for (var i = 0; i < secrets.length; i++)
+              'FP_SECRET_${i + 1}': secrets[i],
+          }),
+        );
+      if (!Platform.isWindows) {
+        await Process.run('chmod', ['700', secretDir.path]);
+        await Process.run('chmod', ['600', secretFile.path]);
+      }
+    }
     final ProcessResult result;
     try {
       result = await Process.run('flutter', [
@@ -179,11 +197,14 @@ mixin _TestGenerationToolsMixin
         relative,
         '-d',
         device,
-        for (var i = 0; i < secrets.length; i++)
-          '--dart-define=FP_SECRET_${i + 1}=${secrets[i]}',
+        if (secretFile != null) '--dart-define-from-file=${secretFile.path}',
       ], workingDirectory: app.root).timeout(const Duration(minutes: 15));
     } on TimeoutException {
       return fail('${notes.join('\n')}\nThe test run took over 15 minutes.');
+    } finally {
+      try {
+        secretDir?.deleteSync(recursive: true);
+      } catch (_) {}
     }
     final seconds = DateTime.now().difference(started).inSeconds;
     final output = '${result.stdout}\n${result.stderr}';

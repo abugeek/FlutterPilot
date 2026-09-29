@@ -40,6 +40,27 @@ extension _RecordingExtensions on FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.prepareRestart --------------------------------------
+    // Data for after the hot restart the server is about to do (a
+    // scenario's mocks), read by FlutterPilot.takeRestartData.
+    registerExtension('ext.flutterpilot.prepareRestart', (
+      method,
+      parameters,
+    ) async {
+      try {
+        RestartStore.save(
+          (json.decode(parameters['data'] ?? '{}') as Map)
+              .cast<String, dynamic>(),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Could not keep data across the restart: $e',
+        );
+      }
+      return ServiceExtensionResponse.result(json.encode({'saved': true}));
+    });
+
     // -- ext.flutterpilot.listCustomTools -------------------------------------
     registerExtension('ext.flutterpilot.listCustomTools', (
       method,

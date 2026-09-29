@@ -161,6 +161,59 @@ void main() {
     expect(McpInstallCommand.isConfigured(app.path), isTrue);
   });
 
+  test('adds the Dart MCP server without the tools FlutterPilot has', () async {
+    await install(['-c', 'claude', '-c', 'vscode']);
+    final dart = read('.mcp.json')['mcpServers']['dart'];
+    expect(dart['command'], Platform.resolvedExecutable);
+    expect(dart['args'], [
+      'mcp-server',
+      '--disable',
+      'flutter,dart_tooling_daemon',
+    ]);
+    expect(read('.vscode/mcp.json')['servers']['dart']['type'], 'stdio');
+  });
+
+  test('--no-dart adds only FlutterPilot', () async {
+    await install(['-c', 'claude', '--no-dart']);
+    expect(read('.mcp.json')['mcpServers'].keys, ['flutterpilot']);
+  });
+
+  test("keeps the user's own Dart MCP server and says what to disable", () {
+    File(p.join(app.path, '.mcp.json')).writeAsStringSync(
+      jsonEncode({
+        'mcpServers': {
+          'github': {
+            'command': 'docker',
+            'args': ['run', 'github-mcp-server'],
+          },
+          'dart-tools': {
+            'command': 'dart',
+            'args': ['mcp-server'],
+          },
+        },
+      }),
+    );
+    final result = McpInstallCommand.writeDartConfig(
+      app.path,
+      McpClient.claude,
+      '/sdk/dart',
+    );
+    expect(result, contains('kept your Dart MCP server "dart-tools"'));
+    expect(result, contains('"--disable", "flutter,dart_tooling_daemon"'));
+    expect(read('.mcp.json')['mcpServers'].keys, ['github', 'dart-tools']);
+    // Ours from an earlier install is up to date.
+    File(p.join(app.path, '.mcp.json')).deleteSync();
+    McpInstallCommand.writeDartConfig(app.path, McpClient.claude, '/sdk/dart');
+    expect(
+      McpInstallCommand.writeDartConfig(
+        app.path,
+        McpClient.claude,
+        '/sdk/dart',
+      ),
+      contains('already set up'),
+    );
+  });
+
   test('refuses a folder without pubspec.yaml', () async {
     File(p.join(app.path, 'pubspec.yaml')).deleteSync();
     expect(install([]), throwsA(isA<UsageException>()));

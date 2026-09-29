@@ -199,7 +199,8 @@ Future<void> main(List<String> args) async {
           !absent.any(text.contains);
       if (!ok) failed++;
       print(
-        '${ok ? '✅' : '❌'} $label (${text.length}b)${ok ? '' : '\n   $text'}',
+        '${ok ? '✅' : '❌'} $label (${text.length}b)'
+        '${ok && !verbose ? '' : '\n   $text'}',
       );
     }
 
@@ -441,33 +442,41 @@ Future<void> main(List<String> args) async {
       });
       // ROADMAP §5.2: the tap runs inside a CPU profile and still happens
       // (the next check sees its result on screen).
-      await check(
-        'profile_action profiles tap Send',
-        'profile_action',
-        {
-          'tool': 'tap_widget',
-          'arguments': {'key': 'Send'},
-          'durationMs': 500,
-        },
-        [
-          'Profiled tap_widget',
-          'running Dart on the UI isolate',
-          'tap_widget result: Widget tapped',
-          // ROADMAP §5.3: the frames the tap caused, from the VM timeline.
-          'Frames: ',
-          'App widgets rebuilt in the window:',
-        ],
-        false,
-        Duration.zero,
-        4096,
-      );
-      await check(
-        'profile_action refuses a non-action tool',
-        'profile_action',
-        {'tool': 'get_app_summary'},
-        ['runs an action tool'],
-        true,
-      );
+      if (isWeb) {
+        print(
+          '⏭ web VM does not support CPU/timeline profiling: '
+          'profile_action skipped',
+        );
+        await check('tap Send', 'tap_widget', {'key': 'Send'});
+      } else {
+        await check(
+          'profile_action profiles tap Send',
+          'profile_action',
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'Send'},
+            'durationMs': 500,
+          },
+          [
+            'Profiled tap_widget',
+            'running Dart on the UI isolate',
+            'tap_widget result: Widget tapped',
+            // ROADMAP §5.3: the frames the tap caused, from the VM timeline.
+            'Frames: ',
+            'App widgets rebuilt in the window:',
+          ],
+          false,
+          Duration.zero,
+          4096,
+        );
+        await check(
+          'profile_action refuses a non-action tool',
+          'profile_action',
+          {'tool': 'get_app_summary'},
+          ['runs an action tool'],
+          true,
+        );
+      }
       await check(
         'mocked response reached UI',
         'assert_widget',
@@ -766,6 +775,25 @@ Future<void> main(List<String> args) async {
         {'target': 'PIN', 'text': 's3cret-pin'},
         ['s3cret-pin'],
       );
+      // Security review: no read tool shows what is in a password field.
+      for (final (tool, args) in [
+        ('get_widget_tree', <String, dynamic>{}),
+        ('get_widget_tree', <String, dynamic>{'diff': true}),
+        ('get_app_summary', <String, dynamic>{}),
+        ('get_interactive_elements', <String, dynamic>{}),
+        ('get_semantics_tree', <String, dynamic>{}),
+        ('get_widget_properties', <String, dynamic>{'key': 'PIN'}),
+        ('get_flight_log', <String, dynamic>{}),
+        ('get_debug_logs', <String, dynamic>{}),
+        ('press_key', <String, dynamic>{'key': 'x'}),
+      ]) {
+        await checkAbsent(
+          'password field hidden from $tool${args.isEmpty ? '' : ' $args'}',
+          tool,
+          args,
+          ['s3cret-pin'],
+        );
+      }
       // Back waits for the pop transition and reports the new screen.
       await check(
         'back',
@@ -781,6 +809,34 @@ Future<void> main(List<String> args) async {
         false,
         settle, // CI simulators can be slow to dismiss the keyboard and pop
       );
+      // Security review: secrets the app logs and sends stay hidden.
+      if (!isWeb) {
+        await check('turn on HTTP profiling', 'get_http_profile', {'limit': 1});
+      }
+      await check('sign in (logs and sends secrets)', 'tap_widget', {
+        'key': 'Sign in',
+      });
+      await Future<void>.delayed(const Duration(seconds: 3)); // the request
+      const secrets = [
+        'LOGSECRET1',
+        'LOGSECRET2',
+        'URLSECRET3',
+        'BODYSECRET4',
+        'HDRSECRET5',
+      ];
+      for (final (tool, args) in [
+        ('get_debug_logs', <String, dynamic>{}),
+        ('get_app_summary', <String, dynamic>{}),
+        ('get_flight_log', <String, dynamic>{}),
+        ('get_network_logs', <String, dynamic>{}),
+        if (!isWeb) ...[
+          ('get_http_profile', <String, dynamic>{'url': 'example.com/login'}),
+          ('get_http_profile', <String, dynamic>{'id': 1}),
+        ],
+        ('get_errors', <String, dynamic>{}),
+      ]) {
+        await checkAbsent('secrets hidden from $tool', tool, args, secrets);
+      }
       // Settle timing (ROADMAP §3.13): each response describes the screen
       // the action led to, not the one mid-animation or before a late push.
       await check(
@@ -797,27 +853,33 @@ Future<void> main(List<String> args) async {
       );
       // ROADMAP §5.5: opening and closing the details page leaks nothing
       // of the app's.
-      await check(
-        'leak check: details page cycle keeps no app objects',
-        'get_memory_details',
-        {
-          'cycle': [
-            {
-              'tool': 'tap_widget',
-              'arguments': {'key': 'Details'},
-            },
-            {
-              'tool': 'press_key',
-              'arguments': {'key': 'back'},
-            },
-          ],
-          'times': 3,
-        },
-        ['Leak check: 3 rounds', 'No app class leaks per round'],
-        false,
-        Duration.zero,
-        4096,
-      );
+      if (isWeb) {
+        print(
+          '⏭ web VM does not support allocation profiles: leak check skipped',
+        );
+      } else {
+        await check(
+          'leak check: details page cycle keeps no app objects',
+          'get_memory_details',
+          {
+            'cycle': [
+              {
+                'tool': 'tap_widget',
+                'arguments': {'key': 'Details'},
+              },
+              {
+                'tool': 'press_key',
+                'arguments': {'key': 'back'},
+              },
+            ],
+            'times': 3,
+          },
+          ['Leak check: 3 rounds', 'No app class leaks per round'],
+          false,
+          Duration.zero,
+          4096,
+        );
+      }
       await check(
         'a drawer is read once it is open',
         'tap_widget',
@@ -842,43 +904,50 @@ Future<void> main(List<String> args) async {
       // shows in full (success or network error both have request headers).
       // Just before the hot reload: the fixture doesn't catch a 404, and the
       // reload clears that uncaught error for the checks after it.
-      await check('clear the HTTP profile', 'get_http_profile', {
-        'clear': true,
-      });
-      await check('clear the mock', 'mock_http_response', {'clear': true});
-      await check('send for real', 'tap_widget', {'key': 'Send'});
-      await check(
-        'get_http_profile lists it by number',
-        'get_http_profile',
-        {'url': 'example.com/ping'},
-        ['#1 [', 'GET https://example.com/ping'],
-        false,
-        const Duration(seconds: 15),
-      );
-      await check(
-        'get_http_profile id shows it in full',
-        'get_http_profile',
-        {'id': 1},
-        ['#1 GET https://example.com/ping', 'Request headers:'],
-        false,
-        Duration.zero,
-        8192,
-      );
-      // Back to the mocked state the reload checks below expect.
-      await check('mock /ping again', 'mock_http_response', {
-        'urlPattern': '/ping',
-        'statusCode': 200,
-        'body': '{"ok":true}',
-      });
-      await check('send mocked again', 'tap_widget', {'key': 'Send'});
-      await check(
-        'mocked response on screen again',
-        'assert_widget',
-        {'text': 'Hello, Pilot (200)'},
-        [],
-        false,
-        const Duration(seconds: 5),
-      );
+      if (isWeb) {
+        print(
+          '⏭ web apps use browser networking rather than dart:io: '
+          'HTTP profile check skipped',
+        );
+      } else {
+        await check('clear the HTTP profile', 'get_http_profile', {
+          'clear': true,
+        });
+        await check('clear the mock', 'mock_http_response', {'clear': true});
+        await check('send for real', 'tap_widget', {'key': 'Send'});
+        await check(
+          'get_http_profile lists it by number',
+          'get_http_profile',
+          {'url': 'example.com/ping'},
+          ['#1 [', 'GET https://example.com/ping'],
+          false,
+          const Duration(seconds: 15),
+        );
+        await check(
+          'get_http_profile id shows it in full',
+          'get_http_profile',
+          {'id': 1},
+          ['#1 GET https://example.com/ping', 'Request headers:'],
+          false,
+          Duration.zero,
+          8192,
+        );
+        // Back to the mocked state the reload checks below expect.
+        await check('mock /ping again', 'mock_http_response', {
+          'urlPattern': '/ping',
+          'statusCode': 200,
+          'body': '{"ok":true}',
+        });
+        await check('send mocked again', 'tap_widget', {'key': 'Send'});
+        await check(
+          'mocked response on screen again',
+          'assert_widget',
+          {'text': 'Hello, Pilot (200)'},
+          [],
+          false,
+          const Duration(seconds: 5),
+        );
+      }
 
       final main = File('$app/lib/main.dart');
       main.writeAsStringSync(
@@ -1089,12 +1158,224 @@ Future<void> main(List<String> args) async {
           'to .mcp.json drives the app'
           '${fromConfig == null ? '' : '\n   $fromConfig'}',
         );
+        // ROADMAP §8 interop: the official Dart MCP server beside it, for
+        // the code side only.
+        final dartEntry =
+            (jsonDecode(installed.readAsStringSync())
+                    as Map)['mcpServers']['dart']
+                as Map?;
+        if (dartEntry != null) {
+          final p = await Process.start(
+            dartEntry['command'] as String,
+            (dartEntry['args'] as List).cast<String>(),
+            workingDirectory: app,
+          );
+          p.stderr.drain<void>();
+          final m = _Mcp(
+            p,
+            onRequest: (method) => method == 'roots/list'
+                ? {
+                    'roots': [
+                      {'uri': Uri.directory(app).toString()},
+                    ],
+                  }
+                : null,
+          );
+          List<String> names = const [];
+          try {
+            await m.request('initialize', {
+              'protocolVersion': '2025-06-18',
+              'capabilities': {'roots': {}},
+              'clientInfo': {'name': 'e2e-dart', 'version': '1'},
+            });
+            m.notify('notifications/initialized');
+            final res = await m.request('tools/list', {});
+            names = [
+              for (final t
+                  in ((res['result'] as Map?)?['tools'] as List? ?? const []))
+                '${t['name']}',
+            ];
+          } finally {
+            p.kill();
+          }
+          const duplicates = [
+            'hot_reload',
+            'hot_restart',
+            'get_runtime_errors',
+            'widget_inspector',
+            'flutter_driver_command',
+            'dtd',
+          ];
+          final split =
+              names.contains('analyze_files') &&
+              !names.any(duplicates.contains);
+          if (!split) failed++;
+          print(
+            '${split ? '✅' : '❌'} the Dart MCP server "mcp install" added '
+            'has the analyzer and none of the running-app tools'
+            '${split ? '' : '\n   $names'}',
+          );
+        } else {
+          print('⏭ this SDK has no Dart MCP server: interop check skipped');
+        }
+      }
+      // A plain `flutter run` (or an IDE) writes no URI file: the app is
+      // found through the Dart Tooling Daemon it registers with.
+      final uriFile = File('$app/.dart_tool/flutterpilot_vm_uri');
+      final hidden = uriFile.renameSync('${uriFile.path}.hidden');
+      try {
+        final viaDtd = await summaryFromFreshServer(roots: [work.path]);
+        if (viaDtd != null) failed++;
+        print(
+          '${viaDtd == null ? '✅' : '❌'} without the URI file: finds the '
+          'app through the Dart Tooling Daemon'
+          '${viaDtd == null ? '' : '\n   $viaDtd'}',
+        );
+        if (!zeroCode) {
+          final doctor = await Process.run('dart', [
+            'run',
+            '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+            'doctor',
+            '-p',
+            app,
+          ]);
+          final report = '${doctor.stdout}${doctor.stderr}';
+          final ok = report.contains('✅ SDK registered in the running app');
+          if (!ok) failed++;
+          print(
+            '${ok ? '✅' : '❌'} doctor finds it the same way'
+            '${ok ? '' : '\n   $report'}',
+          );
+        }
+      } finally {
+        hidden.renameSync(uriFile.path);
       }
       elsewhere.deleteSync(recursive: true);
     } else {
       print(
         '⏭ no .dart_tool/flutterpilot_vm_uri on $device: roots check skipped',
       );
+    }
+
+    // ROADMAP §8: verify a feature against criteria, with evidence.
+    if (!zeroCode) {
+      await check(
+        'verify_feature starts',
+        'verify_feature',
+        {
+          'feature': 'Greeting',
+          'criteria': [
+            'Send greets the user by name',
+            'Send can be tapped twice',
+          ],
+        },
+        ['1. Send greets the user by name'],
+      );
+      await check('verify: criterion 1', 'verify_feature', {'criterion': 1});
+      await check('verify: mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 200,
+        'body': '{"ok":true}',
+      });
+      await check('verify: name', 'enter_text', {
+        'target': 'Name',
+        'text': 'Verify',
+      });
+      await check('verify: send', 'tap_widget', {'key': 'Send'});
+      await check(
+        'verify: greeting',
+        'assert_widget',
+        {'text': 'Hello, Verify (200)'},
+        const [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check(
+        'verify: criterion 2',
+        'verify_feature',
+        {'criterion': 2},
+        ['Criterion 1: ✅ PASS'],
+      );
+      await check('verify: send again, unchecked', 'tap_widget', {
+        'key': 'Send',
+      });
+      await check(
+        'verify_feature finish: pass needs a check',
+        'verify_feature',
+        {'finish': true},
+        [
+          'INCOMPLETE: 1 of 2 criteria passed, 1 not verified',
+          '⚠️ NOT VERIFIED Send can be tapped twice',
+          'report.md',
+        ],
+      );
+      final reports = Directory('$app/flutterpilot/reports');
+      final report = reports.existsSync()
+          ? reports
+                .listSync(recursive: true)
+                .whereType<File>()
+                .where((f) => f.path.endsWith('report.md'))
+                .firstOrNull
+          : null;
+      final ok =
+          report != null &&
+          report.readAsStringSync().contains(
+            '| 1 | Send greets the user by '
+            'name | ✅ PASS |',
+          ) &&
+          File('${report.parent.path}/criterion-1.png').existsSync();
+      if (!ok) failed++;
+      print(
+        '${ok ? '✅' : '❌'} the report and its screenshots are written'
+        '${ok ? '' : '\n   ${report?.readAsStringSync()}'}',
+      );
+    }
+
+    // ROADMAP §7: a scenario brings its mocks back across a hot restart.
+    if (!zeroCode) {
+      await check('scenario: mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 202,
+        'body': '{"ok":true}',
+      });
+      await check(
+        'scenario save writes the file',
+        'scenario',
+        {'save': 'accepted', 'description': 'ping answers 202'},
+        ['flutterpilot/scenarios/accepted.json', '1 mocked response(s)'],
+      );
+      if (isWeb) {
+        print(
+          '⏭ mocks do not survive a hot restart on web: '
+          'scenario load check skipped',
+        );
+      } else {
+        await check('scenario: clear the mock', 'mock_http_response', {
+          'clear': true,
+        });
+        await check(
+          'scenario load restarts with the mock active',
+          'scenario',
+          {'load': 'accepted'},
+          ['Loaded scenario "accepted"', 'active from the first request'],
+        );
+        await check('scenario: enter a name', 'enter_text', {
+          'target': 'Name',
+          'text': 'Scenario',
+        });
+        await check('scenario: send', 'tap_widget', {'key': 'Send'});
+        await check(
+          "the scenario's mock answered",
+          'assert_widget',
+          {'text': 'Hello, Scenario (202)'},
+          const [],
+          false,
+          const Duration(seconds: 5),
+        );
+      }
+      await check('scenario list', 'scenario', {}, [
+        '- accepted: ping answers 202',
+      ]);
     }
 
     // ROADMAP §6: record a flow, write it as an integration_test, run it.
@@ -1388,12 +1669,26 @@ class _HomeState extends State<Home> {
           onPressed: () => setState(() => _squeeze = !_squeeze),
           child: const Text('Squeeze'),
         ),
+        TextButton(onPressed: _signIn, child: const Text('Sign in')),
         Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
           const SizedBox(width: 40, child: Row(children: [SizedBox(key: ValueKey('squeezed'), width: 90, height: 8)])),
       ]),
     ]),
   );
+
+  // Secrets in a log line, a URL, a header and a body: no tool may show
+  // them (the security review's redaction sweep).
+  Future<void> _signIn() async {
+    debugPrint('signing in with api_key=LOGSECRET1 password: LOGSECRET2');
+    try {
+      await dio.post(
+        'https://example.com/login?api_key=URLSECRET3&page=1',
+        data: {'user': 'pilot', 'password': 'BODYSECRET4'},
+        options: Options(headers: {'Authorization': 'Bearer HDRSECRET5'}),
+      );
+    } catch (_) {}
+  }
 }
 
 class DetailsPage extends StatelessWidget {

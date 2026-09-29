@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 65
+Tool count: 67
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -558,6 +558,28 @@ Turns what you do in the app into an integration_test. start:true restarts the a
 | `start` | boolean | no | Restart the app and start recording. |
 | `name` | string | no | Test name (letters, digits, _): stop recording, write and run the test. |
 | `run` | boolean | no | Run the written test (default true). |
+
+## `scenario`
+
+Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). save:"name" writes the route, SharedPreferences (sensitive keys left out), active mocked responses and simple Riverpod/Bloc values (bool/number/String). load:"name" replaces the preferences, hot-restarts with the mocks in place before the first request, sets the state and goes to the route (state is set behind the widgets: a TextField keeps its own text). No argument lists them. Loading preferences needs --allow-destructive.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `save` | string | no | Scenario name to write. |
+| `load` | string | no | Scenario name to apply. |
+| `description` | string | no | With save: what the scenario is for. |
+
+## `verify_feature`
+
+Checks a feature against acceptance criteria and writes a pass/fail report with evidence. Start with feature + criteria (plain sentences; scenario loads one first). Then for each: criterion:N, drive the app and check it with assert_widget, wait_for or compare_screenshot. A criterion passes only if a check passed and none failed and the app threw no error; driven but unchecked is "not verified". Each criterion gets the steps, the HTTP requests made, errors and a screenshot. finish:true writes flutterpilot/reports/<feature>-<time>/report.md in the app and returns the verdicts.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `feature` | string | no | What is verified. |
+| `criteria` | array | no | Acceptance criteria, one sentence each. |
+| `scenario` | string | no | With criteria: load this scenario first. |
+| `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
+| `finish` | boolean | no | Close the last criterion and write the report. |
 
 ## `get_supabase_auth`
 
