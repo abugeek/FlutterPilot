@@ -160,10 +160,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: TextField(
-            controller: controller,
-            autofocus: true,
-          ),
+          body: TextField(controller: controller, autofocus: true),
         ),
       ),
     );

@@ -138,9 +138,12 @@ class DtdDiscovery {
     final appData = Platform.environment['APPDATA'];
     return [
       if (Platform.isMacOS && home.isNotEmpty)
-        Directory(p.join(home, 'Library', 'Application Support', 'Dart', 'dtd')),
+        Directory(
+          p.join(home, 'Library', 'Application Support', 'Dart', 'dtd'),
+        ),
       if (Platform.isLinux) ...[
-        if (xdg != null && xdg.isNotEmpty) Directory(p.join(xdg, 'dart', 'dtd')),
+        if (xdg != null && xdg.isNotEmpty)
+          Directory(p.join(xdg, 'dart', 'dtd')),
         if (home.isNotEmpty)
           Directory(p.join(home, '.local', 'share', 'dart', 'dtd')),
       ],

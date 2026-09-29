@@ -123,7 +123,8 @@ class KeyboardSimulator {
         _lastFocusedEditable!.mounted) {
       final primary = FocusManager.instance.primaryFocus;
       final type = primary?.context?.widget.runtimeType.toString();
-      final isRoot = primary == null ||
+      final isRoot =
+          primary == null ||
           primary.context == null ||
           primary is FocusScopeNode ||
           type == 'MaterialApp' ||
