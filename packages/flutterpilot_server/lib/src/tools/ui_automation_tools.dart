@@ -843,10 +843,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Lists layout overflows (the yellow-black stripes) and tap targets '
-          'smaller than the platform minimum (48dp on phones, 24px on '
-          'desktop/web) on the current screen, with their positions. Use '
-          'after set_app_settings(textScale/locale) or a layout change.',
+          'Layout and accessibility check of the current screen: layout '
+          'overflows, tap targets under the platform minimum (48dp phones, '
+          '24px desktop/web), controls a screen reader can\'t name (no '
+          'label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from '
+          'the rendered pixels), and where the screen reader order jumps back '
+          'up. Each with position and source file:line. Use after '
+          'set_app_settings(textScale/locale/theme) or a UI change.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -854,36 +857,59 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           {},
         );
         if (res.isError) return res.toCallToolResult();
-        final isHealthy = res.data?['isHealthy'] == true;
-        final overflowCount = res.data?['overflowCount'] ?? 0;
-        final a11yCount = res.data?['accessibilityIssueCount'] ?? 0;
-        final overflows = res.data?['overflows'] as List? ?? [];
-        final a11y = res.data?['accessibilityIssues'] as List? ?? [];
+        final data = res.data ?? const {};
+        List<dynamic> list(String key) => data[key] as List? ?? const [];
+        final overflows = list('overflows');
+        final targets = list('accessibilityIssues');
+        final unlabeled = list('unlabeled');
+        final contrast = list('lowContrast');
+        final jumps = list('readingOrderJumps');
+        final order = list('readingOrder');
+        final buffer = StringBuffer();
+        void section(
+          String title,
+          List<dynamic> items,
+          String Function(dynamic) line,
+        ) {
+          if (items.isEmpty) return;
+          buffer.writeln('$title (${items.length}):');
+          for (final item in items.take(12)) {
+            buffer.writeln('- ${line(item)}');
+          }
+          if (items.length > 12) {
+            buffer.writeln('- … ${items.length - 12} more');
+          }
+        }
 
-        if (isHealthy) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text: 'No layout overflows or undersized tap targets.',
-              ),
-            ],
+        section(
+          'Layout overflows',
+          overflows,
+          (o) => '${o['type']}: ${o['details']}',
+        );
+        section(
+          'Small tap targets',
+          targets,
+          (a) => '`${a['target']}` (${a['type']}): ${a['issue']}',
+        );
+        section('Controls without a label', unlabeled, (u) => '$u');
+        section('Low contrast text', contrast, (c) => '$c');
+        section('Reading order jumps', jumps, (j) => '$j');
+        if (buffer.isEmpty) {
+          buffer.writeln(
+            'No layout overflows, small tap targets, unlabeled controls, '
+            'low-contrast text or reading order jumps.',
           );
         }
-
-        final buffer = StringBuffer();
-        if (overflowCount > 0) {
-          buffer.writeln('Layout overflows ($overflowCount):');
-          for (final o in overflows) {
-            buffer.writeln('- ${o['type']}: ${o['details']}');
-          }
+        if (order.isNotEmpty) {
+          final shown = order.take(15).join(' → ');
+          buffer.writeln(
+            'Screen reader order (${order.length} controls): $shown'
+            '${order.length > 15 ? ' → …' : ''}',
+          );
         }
-        if (a11yCount > 0) {
-          buffer.writeln('Tap target issues ($a11yCount):');
-          for (final a in a11y) {
-            buffer.writeln('- `${a['target']}` (${a['type']}): ${a['issue']}');
-          }
+        if (data['semanticsNote'] != null) {
+          buffer.writeln(data['semanticsNote']);
         }
-
         return CallToolResult(
           content: [TextContent(text: buffer.toString().trim())],
         );

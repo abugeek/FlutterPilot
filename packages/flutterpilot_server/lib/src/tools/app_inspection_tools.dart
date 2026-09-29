@@ -657,7 +657,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       description:
           'Frame timings of the last 120 frames: p50/p90/p99 build, raster and '
           'total, jank count, and whether the UI thread (build/layout) or the '
-          'raster thread causes dropped frames.',
+          'raster thread causes dropped frames. profile_action explains '
+          'the slow frames of one interaction (phases, rebuilt widgets).',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
@@ -668,7 +669,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: 'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}',
+              text:
+                  'Frame Budget & Jank Profile:\n${jsonEncode(res.data)}\n'
+                  '${_activeContext?.buildMode == BuildMode.profile ? profileBuildNote : debugBuildNote}',
             ),
           ],
         );

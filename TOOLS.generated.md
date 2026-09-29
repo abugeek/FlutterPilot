@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 62
+Tool count: 67
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -77,7 +77,7 @@ Server and app setup: connection, which FlutterPilot plugins the app registered,
 
 ## `profile_frame_budget`
 
-Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames.
+Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames. profile_action explains the slow frames of one interaction (phases, rebuilt widgets).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -215,7 +215,7 @@ Waits (polling, never a blind sleep) for one condition: key — a widget/selecto
 
 ## `audit_screen_health`
 
-Lists layout overflows (the yellow-black stripes) and tap targets smaller than the platform minimum (48dp on phones, 24px on desktop/web) on the current screen, with their positions. Use after set_app_settings(textScale/locale) or a layout change.
+Layout and accessibility check of the current screen: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. Use after set_app_settings(textScale/locale/theme) or a UI change.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -367,6 +367,18 @@ One widget's state: type, text (Text/TextField content), isEnabled, isChecked (C
 | `key` | string | no | The ValueKey string of the widget to inspect. |
 | `target` | string | no | Same as key (either name works). |
 
+## `inspect_widget`
+
+Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds it) and the app widgets above it. layout:true adds the constraints and size of each box up its ancestors and explains overflows and 0-sized widgets (which children fill a Row, which ancestor gives max width 0). Use before editing UI code.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | Key, semantic selector or visible text. |
+| `target` | string | no | Same as key (either name works). |
+| `x` | number | no | X in logical pixels (top-left origin), with y. |
+| `y` | number | no | Y in logical pixels. |
+| `layout` | boolean | no | Also constraints and sizes up the ancestors, and why it overflows or is 0 wide. |
+
 ## `get_semantics_tree`
 
 What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint, role flags, checked/enabled/focused and rect. Use to check labels for accessibility; semanticsId works in tap_widget.
@@ -506,22 +518,68 @@ Checks the screen in the running app in milliseconds; an error result is a faile
 
 ## `get_memory_details`
 
-Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab) — compare before/after a screen to find leaks.
+Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab). Leak check: cycle (action tool calls that end where they started, e.g. open a screen then press back) runs times rounds; returns the classes that gained instances every round, where they are defined and what keeps one alive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `classes` | boolean | no | List the top classes by heap usage. |
 | `limit` | integer | no | Number of classes (default 30). |
+| `cycle` | array | no | Leak check: steps [{"tool": "tap_widget", "arguments": {"key": "Open"}}, {"tool": "press_key", "arguments": {"key": "back"}}] that return to the starting screen. |
+| `times` | integer | no | Leak check rounds after one warm-up (default 5). |
+
+## `profile_action`
+
+Why an interaction is slow: runs tool (tap_widget, scroll_into_view, execute_action_chain, ...) with arguments while profiling the app, then returns its functions by self/total CPU time with file:line, the hottest framework functions with the app code that called them, and for frames over budget their build/layout/paint/raster times and which app widgets rebuilt. durationMs keeps profiling after the action (results that load later); without tool it profiles whatever the app does.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `tool` | string | no | The action tool to run, e.g. "tap_widget" or "execute_action_chain". |
+| `arguments` | object | no | Its arguments, e.g. {"key": "Load more"}. |
+| `durationMs` | integer | no | Keep sampling this long after the action returns, for work that lands later (a network response, an animation). Without tool: how long to sample (default 1000, max 10000). |
 
 ## `get_http_profile`
 
-HTTP requests the app made through any dart:io client (the DevTools Network tab): method, URL, status, duration, request/response size, most recent first. clear:true empties the list for a clean baseline.
+HTTP requests the app made through any dart:io client (HttpClient, package:http, Dio; the DevTools Network tab): #number, method, URL, status, duration, sizes, most recent first; url filters. id: one request in full — headers, bodies (JSON, secrets masked), timing, redirects, error. clear:true empties the list for a clean baseline.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `clear` | boolean | no | Clear the recorded requests instead of listing them. |
 | `limit` | integer | no | Maximum number of requests to return, most recent first (default: 50). |
 | `status_filter` | integer | no | Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests. |
+| `url` | string | no | Only requests whose URL contains this text. |
+| `id` | integer | no | The #number of a request in the list: its headers, bodies and timing. |
+
+## `generate_test`
+
+Turns what you do in the app into an integration_test. start:true restarts the app (hot restart) and records from there: taps, text, keys, scrolls, drags, back, assert_widget, wait_for and mock_http_response, with the widgets found by key, text or tooltip. name:"checkout" then writes integration_test/checkout_test.dart, runs it on the same device and reports whether it passed (with the failure if not). Obscured text is passed with --dart-define, never written. Takes minutes: the test builds the app again.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `start` | boolean | no | Restart the app and start recording. |
+| `name` | string | no | Test name (letters, digits, _): stop recording, write and run the test. |
+| `run` | boolean | no | Run the written test (default true). |
+
+## `scenario`
+
+Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). save:"name" writes the route, SharedPreferences (sensitive keys left out), active mocked responses and simple Riverpod/Bloc values (bool/number/String). load:"name" replaces the preferences, hot-restarts with the mocks in place before the first request, sets the state and goes to the route (state is set behind the widgets: a TextField keeps its own text). No argument lists them. Loading preferences needs --allow-destructive.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `save` | string | no | Scenario name to write. |
+| `load` | string | no | Scenario name to apply. |
+| `description` | string | no | With save: what the scenario is for. |
+
+## `verify_feature`
+
+Checks a feature against acceptance criteria and writes a pass/fail report with evidence. Start with feature + criteria (plain sentences; scenario loads one first). Then for each: criterion:N, drive the app and check it with assert_widget, wait_for or compare_screenshot. A criterion passes only if a check passed and none failed and the app threw no error; driven but unchecked is "not verified". Each criterion gets the steps, the HTTP requests made, errors and a screenshot. finish:true writes flutterpilot/reports/<feature>-<time>/report.md in the app and returns the verdicts.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `feature` | string | no | What is verified. |
+| `criteria` | array | no | Acceptance criteria, one sentence each. |
+| `scenario` | string | no | With criteria: load this scenario first. |
+| `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
+| `finish` | boolean | no | Close the last criterion and write the report. |
 
 ## `get_supabase_auth`
 
