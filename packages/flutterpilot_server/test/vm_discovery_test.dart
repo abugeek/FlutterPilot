@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutterpilot_server/src/dtd_discovery.dart';
 import 'package:flutterpilot_server/src/vm_discovery.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -86,5 +87,113 @@ void main() {
 
   test('nothing found without roots', () async {
     expect(await VmDiscoveryService.discover(), isNull);
+  });
+
+  group('Dart Tooling Daemon', () {
+    DtdApp app(String workspace, {String? package, DateTime? started}) =>
+        DtdApp(
+          uri: liveUri,
+          workspaceRoot: p.join(tmp.path, workspace),
+          started: started ?? DateTime.now(),
+          package: package,
+        );
+
+    test('parses the daemon list and the app names', () {
+      final list = DtdDiscovery.parseInstances(
+        '[{"wsUri":"ws://127.0.0.1:1/a=","epoch":1790674145402,"pid":1,'
+        '"workspaceRoot":"/p/hn_reader"},{"wsUri":"ws://x","epoch":1,'
+        '"workspaceRoot":""}]',
+      );
+      expect(list, hasLength(1));
+      expect(list.single.workspaceRoot, '/p/hn_reader');
+      expect(list.single.started.millisecondsSinceEpoch, 1790674145402);
+      expect(DtdDiscovery.parseInstances('Found 1 instance'), isEmpty);
+
+      final flutter = DtdDiscovery.appFrom(
+        {
+          'uri': 'ws://127.0.0.1:2/b=/ws',
+          'name': 'Kind: Flutter - Device: macOS - Package: hn_reader',
+        },
+        '/p/hn_reader',
+        DateTime(2026),
+      )!;
+      expect(flutter.package, 'hn_reader');
+      expect(flutter.kind, 'Flutter');
+      // A Dart script run from the IDE is not an app to drive.
+      expect(
+        DtdDiscovery.appFrom(
+          {'uri': 'ws://x', 'name': 'Kind: Dart - Package: tool'},
+          '/p',
+          DateTime(2026),
+        ),
+        isNull,
+      );
+    });
+
+    test('finds an app started with a plain flutter run', () async {
+      expect(
+        await VmDiscoveryService.discover(
+          roots: [tmp],
+          dtdApps: () async => [app('apps/mobile')],
+        ),
+        liveUri,
+      );
+    });
+
+    test('matches a root given through a symlink', () {
+      // The DTD records resolved paths; macOS temp folders are links.
+      final link = Link(p.join(tmp.path, 'link'))
+        ..createSync(p.join(tmp.path, 'real'));
+      Directory(p.join(tmp.path, 'real', 'app')).createSync(recursive: true);
+      final real = DtdApp(
+        uri: liveUri,
+        workspaceRoot: Directory(
+          p.join(tmp.path, 'real', 'app'),
+        ).resolveSymbolicLinksSync(),
+        started: DateTime.now(),
+      );
+      expect(real.isUnder([Directory(link.path)]), isTrue);
+    });
+
+    test('ignores apps of other projects', () async {
+      final elsewhere = Directory.systemTemp.createTempSync('fp_other');
+      addTearDown(() => elsewhere.deleteSync(recursive: true));
+      expect(
+        await VmDiscoveryService.discover(
+          roots: [elsewhere],
+          dtdApps: () async => [app('mobile')],
+        ),
+        isNull,
+      );
+      // A root far above the project (a home folder) is not a workspace.
+      expect(app('a/b/c/d').isUnder([tmp]), isFalse);
+    });
+
+    test("an IDE's workspace above the project matches by package", () {
+      File(p.join(tmp.path, 'shop', 'pubspec.yaml'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('name: shop\n');
+      final shop = Directory(p.join(tmp.path, 'shop'));
+      expect(app('', package: 'shop').isUnder([shop]), isTrue);
+      expect(app('', package: 'blog').isUnder([shop]), isFalse);
+    });
+
+    test('the newest launch wins across URI files and daemons', () async {
+      final other = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      other.listen((r) => r.response.close());
+      addTearDown(() => other.close(force: true));
+      writeUri(
+        'a',
+        'ws://127.0.0.1:${other.port}/def=/ws',
+        modified: DateTime.now().subtract(const Duration(minutes: 5)),
+      );
+      expect(
+        await VmDiscoveryService.discover(
+          roots: [tmp],
+          dtdApps: () async => [app('b')],
+        ),
+        liveUri,
+      );
+    });
   });
 }

@@ -13,6 +13,10 @@ part of '../../flutterpilot_sdk.dart';
 /// - `getDebugLogs` — In-memory console capture buffer
 /// - `clearDebugLogs` — Clear the console capture buffer
 /// - `pumpFrames` — Wait for N animation frames
+/// - `profiling` — Quiet the AI overlay during a profile; frame budget
+/// The AI overlay setting while profile_action has it off.
+bool? _overlayBeforeProfiling;
+
 /// Kept alive once get_semantics_tree is first used.
 SemanticsHandle? _semanticsHandle;
 
@@ -38,7 +42,7 @@ extension _DiagnosticsExtensions on FlutterPilot {
           'status': 'ok',
           'currentRoute': NavigationTracker.currentRoute,
           'errorCount': ErrorInspector.errors.length,
-          'isRecording': FlutterPilot._isRecording,
+          'isRecording': TestRecorder.active,
           'widgetCount': root != null
               ? PilotWidgetInspector.countElements(root)
               : 0,
@@ -252,6 +256,26 @@ extension _DiagnosticsExtensions on FlutterPilot {
     ) async {
       final profile = FrameBudgetProfiler.getProfile();
       return ServiceExtensionResponse.result(json.encode(profile));
+    });
+
+    // -- ext.flutterpilot.profiling -------------------------------------------
+    // profile_action brackets its window with enabled:true/false: the AI tap
+    // overlay animates on every frame, and its rebuilds are not the app's.
+    registerExtension('ext.flutterpilot.profiling', (method, parameters) async {
+      if (parameters['enabled'] == 'true') {
+        _overlayBeforeProfiling ??= AiOverlayManager.enabled;
+        AiOverlayManager.enabled = false;
+        AiOverlayManager.clearNow();
+      } else if (_overlayBeforeProfiling != null) {
+        AiOverlayManager.enabled = _overlayBeforeProfiling!;
+        _overlayBeforeProfiling = null;
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'frameBudgetMs': FrameBudgetProfiler.frameBudgetMs,
+          'appVisible': FrameBudgetProfiler.appVisible,
+        }),
+      );
     });
 
     // -- ext.flutterpilot.getStreamLogs ---------------------------------------

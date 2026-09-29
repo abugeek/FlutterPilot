@@ -60,6 +60,17 @@ Future<void> main(List<String> args) async {
   final http = await HttpServer.bind(InternetAddress.loopbackIPv4, 8765);
   print('bridge ready on :8765');
   await for (final req in http) {
+    // Any web page can POST to localhost: browsers say where they come from
+    // (Origin, Sec-Fetch-*), curl and scripts don't. Refuse browsers, so a
+    // page can't drive the app (security review).
+    if (req.headers.value('origin') != null ||
+        req.headers.value('sec-fetch-mode') != null) {
+      req.response
+        ..statusCode = HttpStatus.forbidden
+        ..write('fp_bridge takes requests from local scripts, not browsers.\n')
+        ..close();
+      continue;
+    }
     final Map body;
     try {
       body = jsonDecode(await utf8.decodeStream(req)) as Map;

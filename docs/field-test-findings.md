@@ -343,6 +343,121 @@ keyboard forced on, and in Chrome:
 | 208 | inspect_widget at x,y | ✅ | a story title and a filter chip hit the RichText that Text builds inside the framework; the source is the app's `Text` (story_tile.dart:29, feed_screen.dart:31) with a note saying so. 2–3 ms |
 | 209 | inspect_widget errors | ✅ | a point outside the window, no arguments and an unknown key each say why (unknown key lists the visible targets). Ancestors capped at 8 (12 was ~0.9 KB and ran past the screen widget) |
 
+## profile_action (ROADMAP §5.2), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 210 | FlutterPilot's own work in the profile | ❌→fixed | the SDK is a path dependency, so the VM reports its frames as plain file paths, not `package:`; the post-action tree walk (~20–36 ms) showed as the hottest code. Paths are now mapped to packages via the app's package_config.json and those samples are left out (and reported as such) |
+| 211 | planted hotspot | ✅ | a slow `_slowChecksum` in `StoryTile.build`: top app function `_slowChecksum lib/ui/story_tile.dart:91` (5.8 self / 8.8 total ms), `StoryTile.build` 8.8 total, `ListIterator.moveNext ← _slowChecksum` among the hottest. Reverted |
+| 212 | work that lands after the action | ❌→fixed | tap "Top" returns when the spinner shows; the stories (and their builds) arrive later, outside the window. `durationMs` now keeps sampling after the action |
+| 213 | errors and idle | ✅ | a non-action tool is refused with the list of action tools; no tool samples idle time ("no app function was sampled"). A 180 ms tap costs ~1 s to profile (getCpuSamples + line lookups) |
+
+## Jank explanation in profile_action (ROADMAP §5.3), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 214 | no frames found | ❌→fixed | a real engine nests `Animator::BeginFrame` inside `VsyncProcessCallback` (the synthetic unit test had it at top level): "none drawn" while the spinner animated. Frames are now found anywhere in the span tree, and an `E` whose `B` predates the window no longer closes an unrelated span |
+| 215 | AI tap overlay in the frames | ❌→fixed | the ripple (AnimatedBuilder/Opacity/Text) rebuilt on every frame, ~1.3 ms each, listed as app rebuilds. `ext.flutterpilot.profiling` switches the overlay off for the window and restores it |
+| 216 | real jank, feed switch | ✅ | the frame the new list appears in: 28.7 ms UI (build 22.8 · layout 3.0), raster 0.5; IconButton ×10 7.0 ms, ListTile ×10 5.7 ms |
+| 217 | planted slow build | ✅ | `_slowChecksum` in `StoryTile.build`: one 81.4 ms frame (build 70.7), `StoryTile ×10 39.2 ms` first; the CPU section named `_slowChecksum lib/ui/story_tile.dart:91`. Reverted |
+
+## Layout explorer in inspect_widget (ROADMAP §5.4), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 218 | the known subtitle overflow (textScale 1.6) | ✅ | `inspect_widget(x, y, layout: true)` on the subtitle: "Row lib/ui/story_tile.dart:30:19 overflows by 60.6 px: its children need 732.6 px, it has 672", widest children the two Texts at :32 and :37 (not flexible); the Text line shows `w 0–∞` (a Row lets it be as wide as it likes). Matches get_errors' RenderFlex message |
+| 219 | children named RichText | ❌→fixed | the Row's children are the RichTexts Text builds; boxes are now named after the nearest app widget that owns them: `Text lib/ui/story_tile.dart:32:13 (RichText)` |
+| 220 | the suggested fix | ✅ | wrapping the Text at :32 in Flexible + ellipsis (temporarily, hot reload): the Text gets `w 0–368 Flexible(flex 1)` and no issue is reported. Reverted (the overflow stays as the known defect) |
+
+## Leak check in get_memory_details (ROADMAP §5.5), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 221 | planted leak (listener never removed) | ✅ | cycle open story → back, 5 rounds: `_ReadTrackerState lib/ui/story_screen.dart:129 +5 (1 → … → 6)`, kept alive: `_ReadTrackerState ← closure _onRead ← _List[6] ← ChangeNotifier._listeners ← static readEvents`. Reverted. ~3.4 s |
+| 222 | noise | ❌→fixed | the debug JIT's Code/ICData/Instructions and `_List` grew every round; framework classes are now listed only when they grow by the same amount each round and belong to a library |
+| 223 | path of an arbitrary instance | ❌→fixed | `getInstances` returned a live DateTime, not a leaked one, so the path pointed at Riverpod state. A confirming round now diffs instance identities; the path is taken from an instance that round created and GC kept; classes with none are dropped. It also showed a DateTime held by the SDK's `_agentActiveUntil`: instances FlutterPilot holds are reported as FlutterPilot's, not the app's |
+| 224 | clean app | ✅ | no app class leaks; `_RecognizerEventData` (+5/tap) and `GestureArenaEntry` (+1/tap) are labelled "held only by framework objects": gesture recognizers keep an entry per pointer id (Flutter never removes `_pointerToEventData` entries; `_entries`, flutter/flutter#117356) |
+
+## Network detail in get_http_profile (ROADMAP §5.6), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 225 | wrong duration | ❌→fixed | the list showed the top-level `endTime`, when the request finished *sending* (310 ms); the response ended at 529 ms. Durations now run to `response.endTime` |
+| 226 | request in full | ✅ | `get_http_profile(id: 1)` on the Show feed: `#1 GET …/showstories.json → 200 OK in 545 ms`, timeline "Connection established +317 ms … Waiting (TTFB) +544 ms" (connecting was most of it), both header sets and the JSON body. `url` filters; a filter matching nothing now says how many were recorded instead of "none recorded yet" |
+| 227 | e2e, unmocked request | ✅ | the fixture's Send through Dio without a mock appears as `#1 [404] GET https://example.com/ping` and in full with `id: 1`. The fixture doesn't catch Dio's 404, so the check runs just before the hot reload that clears the exception flag. Redaction of credentials (headers, JSON, form fields) is covered by unit tests only: no field-test app sends credentials |
+
+## Accessibility audit in audit_screen_health (ROADMAP §5.7), HN reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 228 | unlabeled stop per story | ✅ found | `GestureDetector(onSecondaryTapUp)` in `lib/ui/story_tile.dart:22` adds a tap action with no label over each ListTile: `Tappable ×6 at (0, 162), (0, 227), … 800×64 has no label … Code: GestureDetector lib/ui/story_tile.dart:22:12. It covers "1 World Labs…" (same box)`. Adding `excludeFromSemantics: true` (tried, then reverted) clears it (excludeFromSemantics leaves the gesture itself working) |
+| 229 | first versions of that line | ❌→fixed | positions were physical pixels (semantics transforms carry the device pixel ratio); the source was the title Text (hit test), then StoryTile (nearest app widget); the same node was listed 6 times. Now logical points, the render object that owns the node and adds the tap, grouped per source |
+| 230 | contrast missed after a theme switch | ❌→fixed | with a grey 400 subtitle (tried, then reverted), `audit_screen_health` 90 ms after `set_app_settings(theme: "light")` reported nothing: `AnimatedTheme` fades for 200 ms and the pixels were still dark. The audit now waits up to 1 s for animations, then reports `"74 pts · …" contrast 1.79:1 (#bdbdbd on #fff8f6) … Code: Text lib/ui/story_tile.dart:33:13`. The real app's colors pass in light and dark |
+| 231 | contrast lines per row | ❌→fixed | one line per list row; now one per code and colors (`… and 4 more like it`); the row over the tinted bar stays separate (1.61:1 on #fceae5). Reading order: 27 controls top to bottom, no jumps |
+
+## Native crash reason (ROADMAP §5.8), HN reader on macOS and the iOS simulator
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 232 | uncaught NSException | ✅ | raised in the running, unmodified app through lldb (`[[NSOperationQueue mainQueue] addOperationWithBlock:^{ [NSException raise:…] }]`, then detach). The next `get_errors`, 0.1–1.2 s later: "The app crashed in native code. *** Terminating app due to uncaught exception 'FPFieldTest', reason: '…'"; after the report: `EXC_CRASH (SIGABRT)`, frames, report path. Same on the iOS simulator (hn_reader on iPhone 17; the message from the simulator's log via `simctl spawn`). Frames there are only `main`: the block was lldb's; a real thrower's frames come first (checked on #161's Firebase report: `+[FIRInstallations validateAPIKey:] FIRInstallations.m:162`). Reproducing #161 itself needed editing firebase_app's key; not done |
+| 233 | report takes ~20 s | ❌→fixed | the first version waited 12 s for the `.ips` and found nothing: macOS wrote it 22 s after the crash (2 s on another run), and a normal exit also cost 11 s. Now the kernel's `name[pid] Corpse allowed` log line (only for crashes, ~1 s to query) answers at once; frames follow when the report is in. SIGTERM (normal exit): no note, 3 s once |
+| 234 | lost before onDone | ❌→fixed | in e2e a tool call hit the dead socket before the connection's `onDone`, which then skipped (not the live connection any more): no crash note. The watch now starts in `_scheduleReconnect`, however the loss was noticed |
+| 235 | not covered | ⚠️ gap | Android (`adb logcat -b crash`) unit-tested only: no emulator or adb here. A physical iPhone keeps its reports (`devicectl`). An app that crashes before FlutterPilot connected (Firebase in `main()` can be that fast) has no pid to match |
+
+## Test generation (ROADMAP §6), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 236 | hn_reader flow | ✅ | `generate_test(start)`, then Settings → Dark → assert "Theme" → System → Saved → Stories → filter "zzzz-no-match" → assert "No stories match"; `generate_test(name: "settings_and_filter")`: 8 steps, `find.text('Settings')`, `find.widgetWithText(TextField, 'Filter stories')`, passed on the first run in 22 s. The dev app (flutter run) kept running during the test run. The test file and the added `integration_test` dependency were then removed from hn_reader |
+| 237 | a failing test fails | ✅ | a copy expecting "No stories matchX" failed after the 10 s wait, at the step's line. The response first gave the last 30 lines of output; now "Failed at step 8, expect text (line 43)" and the framework's Expected/Actual |
+| 238 | e2e: mock + field + button | ✅ | recorded `mock_http_response(/ping, 201)`, `enter_text(Name)`, tap Send, `assert_widget("Hello, Recorded (201)")`: the test calls `DioPilotInterceptor.mock('/ping', statusCode: 201, …)` and passes on a fresh app (`package:fixture/main.dart`) |
+| 239 | generated source | ❌→fixed | unformatted (one 110-char line): the tool now runs `dart format` on it. Not field-tested: Android/iOS runs (the test reinstalls the app there; the response says to start it again), obscured fields (unit-tested: `--dart-define`, never written). Tests over live data (hn_reader's `story_<id>` keys, today's titles) fail tomorrow: the flow above avoids them |
+
+## Scenarios (ROADMAP §7), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 240 | save and load on hn_reader | ✅ | Settings → Dark, feed filter "AI", `scenario(save: "dark_ai_filter")`: `{"route": "/", "prefs": {"theme_mode": "dark"}, "state": {"riverpod": {"NotifierProvider<SearchNotifier, String>": "AI"}}}`. Back to System and no filter, then `load`: 0.9 s, `theme_mode` dark, the app dark (it reads the preference at startup, so the unsaveable `ThemeMode` enum came back anyway), the feed filtered to AI stories. Removed from hn_reader afterwards and the theme set back to system |
+| 241 | state behind the widgets | ⚠️ | the filter provider was "AI" but the filter field showed nothing: the TextField keeps its own controller. Said in the tool description; a scenario can't know which widgets copy which state |
+| 242 | noisy "not saved" | ❌→fixed | saving listed `Instance of 'HnApi'`, `SharedPreferences` and an `AsyncLoading` future as "not saved"; now only real values it can't restore (the `ThemeMode` and `Feed` enums) |
+| 243 | e2e: mocks across the restart | ✅ | mock `/ping` 202, save, clear the mock, load: the restarted app has 1 mock active before anything calls it, and Send shows "Hello, Scenario (202)". hn_reader has no Dio: mocks are e2e-tested only |
+
+## Verify a feature (ROADMAP §8), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 244 | "Story filter", 3 criteria | ✅ | empty state for a word no story has (assert "No stories match") ✅, clearing brings stories back (wait_for Bookmark) ✅, dark theme in Settings driven but not checked ⚠️ NOT VERIFIED (the screenshot shows it dark: a picture is not a check). The first attempt at criterion 1 started on the Settings screen and failed; picking criterion 1 again replaced its evidence |
+| 245 | misleading reason | ❌→fixed | a failed `assert_widget` was blamed when `enter_text` had failed first (the filter field was not on screen): the reason now names the failed action before the check. Step lines lost the `[extensionError]` prefix, the agent-facing hints and passed checks' raw JSON |
+| 246 | network evidence | ✅ | "Switching to New loads the newest stories": `GET …/newstories.json → 200 (668 ms)` and one request per story (30); the report now lists 15 and "… and N more (k failed)" |
+| 247 | e2e | ✅ | the fixture (with its intentional overflow) passes "Send greets the user by name" (mock + field + Send + assert), an unchecked second criterion is NOT VERIFIED, report.md and criterion-1.png are written |
+
+## Profile mode (ROADMAP §8), HN reader on macOS (`flutter run --profile`)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 248 | what works | ✅ | the SDK runs in profile builds: taps, text, assertions, summary, tree, screenshots, audit, state, frame budget, CPU profiles with file:line for app functions (AOT keeps them). hot_reload, generate_test and scenario (built on hot restart) are no longer listed there |
+| 249 | debug vs profile numbers | ✅ | `profile_action(tap_widget New, durationMs: 2500)`: debug 219.5 ms Dart on the UI isolate, 2 frames over budget, app widget builds 12.7 ms (IconButton ×10); profile 86.8 ms, none over budget, 1.0 ms. `profile_action` printed "Debug build: times run several times slower" on the profile build too (it assumed debug whenever a framework debug extension answered); now it says which build it is, and so do profile_frame_budget and the summary |
+| 250 | source lookups | ❌→fixed | `inspect_widget(key)` returned a type without file:line instead of its "needs a debug build" message (profile builds report widget creation tracking on, but record no locations), and `inspect_widget(x, y)` said "Nothing is drawn" (no `debugCreator` in profile). Source locations now need kDebugMode, and hit tests fall back to the element tree: `layout: true` by point works in profile |
+| 251 | app widgets in profile | ⚠️→kept | I relabelled profile rebuild lists "Widgets (app and framework)"; the debug/profile comparison showed the same app-created types and no framework internals in both, so profile builds do know the app's widgets (not where): reverted |
+
+## Security review (ROADMAP §8), the e2e fixture and hn_reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 252 | password field | ❌→fixed | with "s3cret-pin" typed into the fixture's obscured PIN field, 9 read tools were swept: `get_widget_properties(key: PIN)` returned `"text":"s3cret-pin"`; now `"••••••••••"`. The others were clean |
+| 253 | secrets the app logs and sends | ❌→fixed | the fixture's Sign in logs `api_key=LOGSECRET1 password: LOGSECRET2` and POSTs to `…/login?api_key=URLSECRET3` with `Bearer HDRSECRET5` and `{"password": "BODYSECRET4"}`. Before: the log line in get_debug_logs and the summary, the URL in get_network_logs. After: `api_key=<redacted> password: <redacted>`, `?api_key=<redacted>&page=1`, `authorization: •••`, body `"password":"•••"` in all six tools. The first sweep had HTTP profiling off, so get_http_profile "passed" on nothing: the sweep now turns it on first and prints what it saw with --verbose |
+| 254 | read-only SQL | ❌→fixed (unit) | `WITH x AS (SELECT 1) DELETE FROM users`, `PRAGMA main.journal_mode = DELETE`, `PRAGMA user_version = 5`, `PRAGMA optimize` passed the prefix check; one shared allowlist check now refuses them and still passes `SELECT replace(…)`, strings containing "DELETE" and `PRAGMA table_info(t)`. The existing sqflite/drift tests pass unchanged |
+| 255 | shell bridge | ❌→fixed | `curl -H "Origin: https://evil.example" -H "Content-Type: text/plain" localhost:8765 -d '{"name":"get_app_summary"…}'` (what a web page can send without preflight) was answered; now 403, and scripts still work |
+| 256 | redactor false positives | ❌→fixed (unit) | the first name pattern hid "author", "passengers", "sessionCount"; `https://` swallowed the query string, so `api_key` in URLs escaped. Both fixed and tested in SDK and server copies |
+
+## Dart MCP interop (ROADMAP §8), the e2e fixture and hn_reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 257 | overlap with `dart mcp-server` 1.1.2 | ⚠️→fixed | listed its tools with the project as root: by default hot_reload, hot_restart, get_runtime_errors, widget_inspector and flutter_driver_command duplicate ours (theirs need a `dtd` connect first). `--disable flutter,dart_tooling_daemon` leaves analyze_files, lsp, pub, pub_dev_search, read_package_uris, rip_grep_packages, roots. `run_tests`/`dart_format`/`launch_app` are off unless enabled (their default, kept). `mcp install` now adds it that way |
+| 258 | a plain `flutter run` | ❌→fixed | hn_reader with its URI file hidden: before, "No running Flutter app found"; now a fresh `-p hn_reader` server finds it through the tooling daemon (`dart tooling-daemon --list`, 0.35 s, then `ConnectedApp.getVmServices`) and `get_app_summary` answers. `flutter run --machine` registers too (it prints `app.dtd`) |
+| 259 | symlinked temp folders | ❌→fixed | the first e2e run failed both DTD checks: the daemon records `/private/var/…`, the fixture is under `/var/…` (a link). Paths are resolved (nearest existing folder) before matching |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

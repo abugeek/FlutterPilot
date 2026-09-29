@@ -11,13 +11,23 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
+import 'src/build_mode.dart';
+import 'src/cpu_profile.dart';
 import 'src/fleet_manager.dart';
+import 'src/frame_timeline.dart';
+import 'src/http_detail.dart';
 import 'src/image_budget.dart';
+import 'src/memory_leaks.dart';
+import 'src/native_crash.dart';
 import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
+import 'src/redaction.dart';
+import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
+import 'src/test_writer.dart';
+import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/zero_code.dart';
 
@@ -32,6 +42,9 @@ part 'src/tools/screenshot_tools.dart';
 part 'src/tools/self_heal_tools.dart';
 part 'src/tools/state_management_tools.dart';
 part 'src/tools/testing_tools.dart';
+part 'src/tools/test_generation_tools.dart';
+part 'src/tools/scenario_tools.dart';
+part 'src/tools/verification_tools.dart';
 part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
@@ -42,6 +55,33 @@ abstract class _FlutterPilotServerBase {
   /// Every registered tool by name, for showing only the usable ones.
   final Map<String, RegisteredTool> _allTools = {};
 
+  /// Every tool's callback by name, for tools that run another tool
+  /// (profile_action).
+  final Map<String, ToolFunction> _toolCallbacks = {};
+
+  /// Where the connected app runs, to find its crash report if it dies.
+  CrashTarget? _crashTarget;
+
+  /// Started when the connection drops; cleared when an app connects.
+  NativeCrashWatch? _nativeCrash;
+
+  /// Between verify_feature(criteria) and verify_feature(finish): every
+  /// action and check is evidence for the current criterion.
+  Verification? _verification;
+
+  /// Between generate_test(start) and generate_test(name): mocks are
+  /// recorded too.
+  bool _recordingTest = false;
+
+  /// Adds a step only the server sees (a mocked response) to the recording.
+  Future<void> _noteTestStep(Map<String, dynamic> step) async {
+    if (!_recordingTest) return;
+    await _callExtensionRaw('ext.flutterpilot.testRecording', {
+      'action': 'note',
+      'step': jsonEncode(step),
+    });
+  }
+
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
   /// "Tool execution failed." and log the reason where the agent can't see it.
@@ -50,7 +90,40 @@ abstract class _FlutterPilotServerBase {
     String? description,
     ToolInputSchema? inputSchema,
     required ToolFunction callback,
-  }) => _allTools[name] = server.registerTool(
+  }) {
+    _toolCallbacks[name] = callback;
+    return _allTools[name] = _registerTool(
+      name,
+      description: description,
+      inputSchema: inputSchema,
+      callback: callback,
+    );
+  }
+
+  /// A tool failing because the app is gone says why, when the OS
+  /// recorded a native crash (ROADMAP §5.8).
+  Future<CallToolResult> _withNativeCrash(CallToolResult result) async {
+    final crash = await _nativeCrash?.current();
+    if (crash == null) return result;
+    return CallToolResult(
+      isError: true,
+      content: [
+        ...result.content,
+        TextContent(
+          text:
+              '${crash.describe()}\nFix the cause, then start the app again '
+              '(flutter run); FlutterPilot reconnects by itself.',
+        ),
+      ],
+    );
+  }
+
+  RegisteredTool _registerTool(
+    String name, {
+    String? description,
+    ToolInputSchema? inputSchema,
+    required ToolFunction callback,
+  }) => server.registerTool(
     name,
     description: description,
     inputSchema: inputSchema,
@@ -72,7 +145,14 @@ abstract class _FlutterPilotServerBase {
         );
       }
       try {
-        final result = await callback(args, extra);
+        var result = await callback(args, extra);
+        if (result.isError) result = await _withNativeCrash(result);
+        _verification?.record(
+          name,
+          args,
+          result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
+          isError: result.isError == true,
+        );
         final images = result.content.whereType<ImageContent>();
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
@@ -190,6 +270,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _StateManagementToolsMixin,
         _TestingToolsMixin,
         _DevtoolsToolsMixin,
+        _TestGenerationToolsMixin,
+        _ScenarioToolsMixin,
+        _VerificationToolsMixin,
         _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
@@ -502,9 +585,25 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (found != null) _refreshToolVisibility();
     });
     try {
+      _nativeCrash = null;
       final vm = await _vmService!.getVM();
       activeContext.operatingSystem = vm.operatingSystem;
+      activeContext.targetCPU = vm.targetCPU;
+      try {
+        activeContext.buildMode = buildModeFromFlags(
+          (await _vmService!.getFlagList()).flags ?? const [],
+        );
+        _scheduleToolVisibility();
+      } catch (_) {}
       await _updateNativeToolVisibility(vm.operatingSystem, pid: vm.pid);
+      _crashTarget = vm.pid == null || vm.operatingSystem == null
+          ? null
+          : CrashTarget(
+              pid: vm.pid!,
+              operatingSystem: vm.operatingSystem!,
+              since: DateTime.now(),
+              simulatorUdid: _simulatorApp?.udid,
+            );
     } catch (_) {
       // Visibility is best-effort; the tools still explain themselves.
     }
@@ -559,6 +658,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   void _scheduleReconnect() {
+    // However the loss was noticed (the socket closing, or a call failing
+    // first), find out whether the app crashed; once per connection.
+    final target = _crashTarget;
+    if (target != null && _nativeCrash == null && !_disposed) {
+      _nativeCrash = NativeCrashWatch(target);
+    }
     if (_isReconnecting || _disposed) return;
     _isReconnecting = true;
     _vmService = null;
@@ -711,12 +816,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             } else if (event.extensionKind == 'ext.flutterpilot.lifecycle') {
               context.lifecycle = event.extensionData?.data['state']
                   ?.toString();
-            } else if (event.extensionKind == 'ext.flutterpilot.action') {
-              _appendEvent({
-                'type': 'action',
-                'timestamp': timestamp,
-                'data': event.extensionData?.data,
-              }, deviceId: context.deviceId);
             }
           } catch (e) {
             _log.warning('Error processing extension event: $e');
@@ -807,7 +906,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       'timestamp': timestamp,
       'level': level,
       'logger': logger,
-      'message': message,
+      // App output may print credentials (security review).
+      'message': Redaction.text(message),
     };
     _debugLogBuffer.add(entry);
     _debugLogBufferBytes += _entryBytes(entry);
@@ -871,6 +971,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerStateManagementTools();
     _registerTestingTools();
     _registerDevtoolsTools();
+    _registerTestGenerationTools();
+    _registerScenarioTools();
+    _registerVerificationTools();
     _registerPluginIntegrationTools();
   }
 
@@ -911,7 +1014,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         rpcs.addAll((await vm.getIsolate(ref.id!)).extensionRPCs ?? const []);
       }
       if (!identical(context, _activeContext)) return;
-      updateToolVisibility(hasSdk: context.hasSdk, extensions: rpcs);
+      updateToolVisibility(
+        hasSdk: context.hasSdk,
+        extensions: rpcs,
+        buildMode: context.buildMode,
+      );
     } catch (_) {
       // Keep the current list; calls explain themselves.
     }
@@ -925,6 +1032,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   void updateToolVisibility({
     required bool? hasSdk,
     Set<String> extensions = const {},
+    BuildMode? buildMode,
   }) {
     if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
     var changed = false;
@@ -932,6 +1040,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (_nativeTools.containsKey(name)) continue;
       final needs = pluginToolExtensions[name];
       final usable = switch (hasSdk) {
+        // AOT: no hot reload, nor what is built on it.
+        _
+            when buildMode == BuildMode.profile &&
+                debugOnlyTools.contains(name) =>
+          false,
         false => zeroCodeTools.contains(name),
         true when needs != null => needs.any(extensions.contains),
         _ => true,
@@ -946,6 +1059,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       }
     }
     if (changed) server.sendToolListChanged();
+  }
+
+  /// For testing only.
+  void setDeviceContextForTesting(DeviceRuntimeContext context) {
+    _deviceContexts[context.deviceId] = context;
+  }
+
+  /// For testing only.
+  Future<CallToolResult> callToolForTesting(
+    String name,
+    Map<String, dynamic> arguments, {
+    RequestHandlerExtra? extra,
+  }) async {
+    final cb = _toolCallbacks[name];
+    if (cb == null) throw ArgumentError('Tool "$name" is not registered');
+    return cb(arguments, extra ?? _dummyExtra());
   }
 
   // ---------------------------------------------------------------------------
@@ -1007,6 +1136,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 
 ## Performance
 - `profile_frame_budget` — p50/p90/p99 build/raster, jank
+- `profile_action(tool, arguments)` — CPU profile of one action: the app functions it ran (self/total ms, file:line), and for janky frames build/layout/paint/raster and the app widgets that rebuilt
 - `get_memory_details` (classes:true: top classes by heap) — compare before/after a screen for leaks
 
 ## Fixing
@@ -1502,6 +1632,12 @@ Every action reports whether the route changed, a widget-tree diff and what is t
           );
         }
       }
+      if (extension.startsWith('ext.dart.io.') && context?.isWeb == true) {
+        return _ExtensionResult.error(
+          'Extension "$extension" is not available on web: web apps use browser networking rather than dart:io.',
+          ErrorCategory.extensionError,
+        );
+      }
       return _ExtensionResult.error(
         'Extension "$extension" is not registered in the running Flutter app. '
         'Plugin extensions register only once the app runs the plugin\'s setup code '
@@ -1844,3 +1980,22 @@ class _ExtensionResult {
     );
   }
 }
+
+class _DummyAbortSignal implements AbortSignal {
+  @override
+  bool get aborted => false;
+  @override
+  dynamic get reason => null;
+  @override
+  Stream<void> get onAbort => const Stream.empty();
+  @override
+  void throwIfAborted() {}
+}
+
+RequestHandlerExtra _dummyExtra() => RequestHandlerExtra(
+  signal: _DummyAbortSignal(),
+  requestId: 1,
+  sendNotification: (n, {relatedTask}) async {},
+  sendRequest: <T extends BaseResultData>(r, factory, opts) async =>
+      throw UnimplementedError(),
+);

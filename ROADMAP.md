@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 63 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, §5.1); an app sees only those that work for it
+- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -277,9 +277,8 @@ current major. §1 is done.
    (8080 etc. — any web server passed for a VM service) and reading temp/json
    files nothing writes. "No app" errors say how to make the app findable.
    e2e: a server started in an empty folder finds the app only through roots.
-   **Left:** a plain `flutter run` / IDE launch writes no URI file and can't
-   be found. Next step: the Dart Tooling Daemon (IDEs run one; apps register
-   there via `ConnectedApp`), which needs its URI (VS Code/IntelliJ expose it).
+   A plain `flutter run` / IDE launch writes no URI file: found through the
+   Dart Tooling Daemon since §8's interop (below).
 2. **`flutterpilot mcp install`:** done. In the app folder it compiles the
    server (next to the CLI: a checkout or the `pub global activate` clone;
    `--local`, `--no-compile` for `dart run`) and adds `flutterpilot` to
@@ -362,65 +361,156 @@ Highest value first. Each should answer a *why*, not just dump data.
    ancestors with their locations. Debug builds only (says so otherwise);
    SDK only (zero-code's `get_widget_tree` already carries `loc`). Findings
    #207–209, e2e check "inspect_widget names the source line".
-2. **CPU profile around an action:** `profile_action(action)` — start
-   `getCpuSamples`, run the tap/scroll, stop, return the top functions by
-   self time *in app code* (filter framework), with file:line.
-3. **Jank explanation:** for janky frames, which widgets rebuilt and how long
-   build/layout/paint took (timeline events + rebuild tracking readout).
-4. **Layout explorer:** constraints and sizes up the ancestor chain for a
-   widget ("why does this Row overflow / why is this Expanded 0 wide").
-5. **Memory leak check:** navigate into/out of a screen N times, compare class
-   instance counts (or integrate `leak_tracker`), report retained classes.
-6. **Network detail:** `get_http_profile` request detail (headers, bodies) via
-   `getHttpProfileRequest`; works for any dart:io client, not only Dio.
-7. **Accessibility audit:** missing semantics labels on icon buttons, contrast
-   ratios, focus order — on top of the (now honest) tap-target check.
-8. **Native crash reason:** when the app dies outside Dart (an Objective-C,
-   Swift or Kotlin exception — e.g. Firebase's iOS SDK aborting on a
-   malformed API key, findings #161), the agent only sees "not running";
-   the reason is in the OS log. `get_native_crash_log` returns the last
-   uncaught native exception and its first frames: iOS simulator via
-   `xcrun simctl spawn <udid> log show` (the server already knows the udid
-   and bundle id, see `native_open_app`), macOS via
-   `~/Library/Logs/DiagnosticReports`, Android via `adb logcat -b crash`,
-   physical iPhone via `devicectl` crash reports. Also: when the connection
-   drops, check for a fresh crash and say so in the error instead of
-   "not running".
+2. ~~**CPU profile around an action**~~ — done (2026-09-28):
+   `profile_action(tool, arguments, durationMs)` runs an action tool while
+   sampling the UI isolate (250 µs), then returns app functions by
+   self/total ms with file:line and the hottest framework functions with
+   the app caller. Samples FlutterPilot itself caused (reading the screen
+   after the action) are left out. Paths map to packages through the
+   app's `package_config.json` (the VM reports path deps as file paths).
+   Findings #210–213, e2e checks "profile_action …".
+3. ~~**Jank explanation**~~ — done (2026-09-28), in `profile_action` (no new
+   tool): the VM timeline of the same window gives each frame's UI time
+   (build/layout/paint/compositing/post-frame), its raster time, and the
+   app widgets that rebuilt (`ext.flutter.profileUserWidgetBuilds`, self
+   time per type); frames over the display's budget are explained, the
+   rest summarised. The AI tap overlay is switched off while profiling
+   (it animates every frame). Findings #214–217.
+4. ~~**Layout explorer**~~ — done (2026-09-28), as `inspect_widget(...,
+   layout: true)` (no new tool): constraints and size of each render box
+   from the widget up (identical wrappers folded), flex fit, and issues
+   explained — a Row/Column overflow by how much and which children fill
+   it (named as the app wrote them: `Text lib/…:32 (RichText)`), a 0-wide
+   box and which ancestor gave it max 0. Works without source locations
+   (profile builds). Findings #218–220.
+5. ~~**Memory leak check**~~ — done (2026-09-29), as `get_memory_details(cycle,
+   times)` (no new tool): one warm-up, then GC'd allocation profiles after
+   each round; classes that gain instances every round (framework ones
+   only when steady and in a library — the debug JIT's Code/ICData grow
+   unevenly), confirmed by a last round whose new instances must survive
+   GC, with the retaining path of such an instance and who holds it (app,
+   framework only, or FlutterPilot itself). leak_tracker not needed.
+   Findings #221–224.
+6. ~~**Network detail**~~ — done (2026-09-29): `get_http_profile` numbers
+   requests (`#23`, position since the last clear), filters by `url`, and
+   `id: 23` returns one in full via `getHttpProfileRequest`: connection
+   timeline, redirects, error, request/response headers and bodies (JSON
+   compact, capped at 3000 chars, binary as a size). Credential headers and
+   secret-looking JSON/form fields are masked. The listed duration was the
+   time to *send* the request; it now runs to the end of the response.
+   Findings #225–227.
+7. ~~**Accessibility audit**~~ — done (2026-09-29), in `audit_screen_health`
+   (no new tool): from the semantics tree, tappable nodes with no
+   label/tooltip (grouped per source, attributed to the widget that adds
+   the tap action, with a hint when it covers a labeled control with the
+   same box); WCAG contrast of every on-screen text from the rendered
+   pixels (text color from its style when opaque; 4.5:1, large 3:1); the
+   screen reader order of the controls and where it jumps back up.
+   Findings #228–231.
+8. ~~**Native crash reason**~~ — done (2026-09-29), with no new tool: when
+   the connection drops, the next tool's error says whether the app
+   crashed and why. Apple (macOS apps, iOS simulator apps): the kernel logs
+   a crash at once (`name[pid] Corpse allowed`; a normal exit has none),
+   the uncaught NSException message comes from the app's log (`log show`,
+   in the simulator via `simctl spawn`), and ~20 s later the `.ips` report
+   in `~/Library/Logs/DiagnosticReports` adds the kind, the frames where it
+   was thrown (system frames on top skipped) and the report path. Android:
+   `adb logcat -b crash` (Kotlin/Java `FATAL EXCEPTION` or a native signal
+   with its abort message), unit-tested only (no emulator here). Not
+   covered: a physical iPhone (reports stay on the phone; `devicectl`), and
+   an app that dies before FlutterPilot connected (no pid to match).
+   Findings #232–235.
 
-## 6. Test generation done right
+## 6. ~~Test generation done right~~ — done (2026-09-29)
 
-The old generators were deleted because the output couldn't run. Rebuild only
-with a verification loop:
+`generate_test` (one tool): `start: true` hot-restarts the app and records
+from there, as the test starts from `main()`. The SDK records each action at
+the point it resolves its widget, with a `flutter_test` finder for that
+widget alone on screen (key, also on an ancestor drawn in the same box →
+unique text → tooltip → type with text → the same inside the nearest
+uniquely keyed ancestor → by type and position, flagged as fragile); a tap
+that had to scroll records `scrollUntilVisible` on the same Scrollable;
+coordinate taps become taps on the control drawn there. Assertions
+(`assert_widget`, `wait_for`) become waits and expects; mocked responses
+become `DioPilotInterceptor.mock` calls (new public API) in order;
+obscured text becomes `--dart-define` values, never written.
+`name: "x"` writes `integration_test/x_test.dart`, formats it, adds
+`integration_test` to dev_dependencies if missing, **runs it** on the same
+device (`flutter test -d`) and reports passed, or the step it failed at with
+the framework's message. Not replayed (listed in the response):
+`navigate_to`, `set_slider_value`, keys without a test equivalent. Not
+recorded: taps by the user's own hand. Findings #236–239.
 
-1. Record semantic actions (targets by key/text, not coordinates) plus the
-   assertions an agent made.
-2. Emit an `integration_test` using the app's real entrypoint (`main.dart`),
-   with `find.byKey` / `find.text` finders and the same postconditions.
-3. **Run it** (`flutter test integration_test/...`) and only report success
-   if it passes. Mocked network responses become test fixtures with bodies.
+## 7. ~~State time travel done right~~ — done (2026-09-29), as scenarios
 
-## 7. State time travel done right
-
-Deleted because nothing captured/restored state. A real version:
-- Riverpod: snapshot provider values and restore via overrides in a
-  re-created `ProviderContainer` (needs plugin support), or
-- Simpler and more honest: "reset to scenario" = hot restart + deep link +
-  seeded mocks/prefs, driven by a named scenario file checked into the app.
+The "simpler and more honest" version: `scenario` (one tool).
+`save: "name"` writes `flutterpilot/scenarios/<name>.json` in the app — the
+route (go_router location, else the top route), all SharedPreferences except
+sensitive keys, the active Dio mocks (new `ext.flutterpilot.getHttpMocks`),
+and the Riverpod/Bloc values `set_state` can put back (bool/number/String;
+plugins report values as `toString()`, so enums, lists and classes are
+listed as not saved). `load: "name"` replaces the preferences (needs
+`--allow-destructive`), leaves the mocks for after the restart in a file in
+the app's temp folder (`FlutterPilot.takeRestartData`; the Dio plugin applies
+them in `register()`, before the first request), hot-restarts, goes to the
+route and sets the state. No argument lists them. Not a snapshot of
+everything: provider values are set behind the widgets (a TextField keeps its
+own text), and databases, secure storage and files are not captured.
+Findings #240–243.
 
 ## 8. Longer-term vision
 
-- **Verify-a-feature macro:** given acceptance criteria in plain language,
-  the agent drives the flow and returns a pass/fail report with evidence
-  (diffs, screenshots, network log). This is FlutterPilot's reason to exist.
-- **Interop with the official Dart & Flutter MCP server:** don't duplicate
-  analyze/test/pub/hot-reload basics; focus on live-app driving, runtime state
-  and profiling. Consider sharing the Dart Tooling Daemon connection.
-- **Profile-mode support** for trustworthy performance numbers (debug-mode
-  timings are inflated).
+- ~~**Verify-a-feature macro**~~ — done (2026-09-29): `verify_feature`.
+  The agent gives the criteria (optionally a scenario to start from), picks
+  each criterion in turn, drives and checks as usual; every action and check
+  is recorded against the current criterion, and closing one adds the HTTP
+  requests made meanwhile (dart:io profile), the app's new errors and a
+  screenshot. A pass needs a passing check, no failed check and no error
+  (overflows are warnings); driven but unchecked is NOT VERIFIED — the
+  agent's say-so is not evidence. `finish` writes
+  `flutterpilot/reports/<feature>-<time>/report.md` in the app. Findings
+  #244–247.
+- ~~**Interop with the official Dart & Flutter MCP server**~~ — done
+  (2026-09-29). Checked against `dart mcp-server` 1.1.2 (Dart 3.13). Its
+  default tools overlap ours on hot reload/restart, runtime errors, the
+  widget inspector and Flutter Driver; `run_tests`, `dart_format`/`dart_fix`
+  and `launch_app` are off by default (its choice, kept). `flutterpilot mcp
+  install` adds it as `dart` with `--disable flutter,dart_tooling_daemon`:
+  the agent gets its analyzer, `lsp` and pub, and our running-app tools, one
+  of each. A Dart MCP server already configured is kept, with that advice.
+  The DTD, shared: `flutter run`, the IDEs and Dart's `launch_app` register
+  apps with a tooling daemon, so the server (and `doctor`) find apps through
+  `dart tooling-daemon --list` and `ConnectedApp.getVmServices` besides the
+  URI file — a plain `flutter run` works now. Daemons whose workspace is a
+  root, in one (3 levels) or above one (an IDE workspace: the package name
+  must match); the newest launch wins across both. e2e: with the URI file
+  hidden, a fresh server and doctor find the app; the installed Dart server
+  lists `analyze_files` and none of the running-app tools. Not covered: a
+  daemon's workspace far above the project without a pubspec name to match;
+  web apps through DTD. Findings #257–259.
+- ~~**Profile-mode support**~~ — done (2026-09-29). The server reads the
+  build mode from the VM (`precompiled_mode`) on connect; the summary says
+  "Build: profile", `profile_action` / `profile_frame_budget` say which
+  build their numbers come from, and `hot_reload`, `generate_test` and
+  `scenario` are not listed for profile builds (hot_reload explains why if
+  called). SDK: source locations require a debug build (profile builds
+  report creation tracking on but record no locations or `debugCreator`),
+  and hit testing falls back to the element tree, so `inspect_widget(x, y,
+  layout: true)` and coordinate taps in recordings work in profile. On
+  hn_reader the same feed switch: debug 219 ms Dart, 2 janky frames, widget
+  builds 12.7 ms; profile 87 ms, none, 1.0 ms. Not covered: zero-code apps
+  in profile (the inspector extensions they rely on are debug-only), e2e in
+  profile. Findings #248–251.
 - **Parallel devices:** run the same flow on iOS + Android + web and diff
   results.
-- **Security review:** remote VM connections, redaction coverage (PII in
-  trees, logs, network bodies), destructive-operation gating.
+- ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
+  Fixed: obscured field text in widget properties/tree, credentials in
+  logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`
+  write bypasses (`WITH … DELETE`, writing PRAGMAs), the shell bridge
+  answering browsers, generate_test secrets on the command line. Remote
+  connections, destructive gating, secure storage and process launches
+  reviewed OK. An e2e sweep plants secrets in the fixture and checks every
+  read tool. Findings #252–256.
 - **Docs site + short demo** of the real loop (bug → mock → fix → verify).
 
 ---

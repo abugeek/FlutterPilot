@@ -13,6 +13,12 @@ class FrameBudgetProfiler {
   );
   static bool _installed = false;
 
+  /// Whether the user can see the app (frames forced while hidden aren't).
+  static bool get appVisible => _appVisible;
+
+  /// One frame's time at the display's refresh rate.
+  static double get frameBudgetMs => _frameBudgetMs;
+
   static bool get _appVisible {
     // inactive = visible but not focused (desktop) — frames still render.
     final state = WidgetsBinding.instance.lifecycleState;
