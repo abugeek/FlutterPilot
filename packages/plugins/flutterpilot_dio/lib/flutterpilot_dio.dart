@@ -82,6 +82,19 @@ class DioPilotInterceptor extends Interceptor {
     if (!_initialized) {
       _initialized = true;
       _registerExtensions();
+      // A scenario loaded with a hot restart: its mocks answer the app's
+      // very first requests.
+      final pending = FlutterPilot.takeRestartData('httpMocks');
+      if (pending is List) {
+        for (final m in pending.whereType<Map>()) {
+          mock(
+            '${m['urlPattern']}',
+            statusCode: (m['statusCode'] as num?)?.toInt() ?? 200,
+            body: '${m['body'] ?? ''}',
+            delayMs: (m['delayMs'] as num?)?.toInt() ?? 0,
+          );
+        }
+      }
     }
   }
 
@@ -203,6 +216,20 @@ class DioPilotInterceptor extends Interceptor {
           'status': 'success',
           'urlPattern': urlPattern,
           'statusCode': statusCode,
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.getHttpMocks ----------------------------------------
+    registerExtension('ext.flutterpilot.getHttpMocks', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'mocks': [
+            for (final e in _mocks.entries) {'urlPattern': e.key, ...e.value},
+          ],
         }),
       );
     });

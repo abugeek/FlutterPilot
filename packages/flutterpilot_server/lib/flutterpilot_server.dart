@@ -22,6 +22,7 @@ import 'src/device_runtime_context.dart';
 import 'src/operation_scheduler.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
+import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
 import 'src/vm_discovery.dart';
@@ -39,6 +40,7 @@ part 'src/tools/self_heal_tools.dart';
 part 'src/tools/state_management_tools.dart';
 part 'src/tools/testing_tools.dart';
 part 'src/tools/test_generation_tools.dart';
+part 'src/tools/scenario_tools.dart';
 part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
@@ -255,6 +257,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _TestingToolsMixin,
         _DevtoolsToolsMixin,
         _TestGenerationToolsMixin,
+        _ScenarioToolsMixin,
         _PluginIntegrationToolsMixin {
   @override
   final McpServer server;
@@ -946,6 +949,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerTestingTools();
     _registerDevtoolsTools();
     _registerTestGenerationTools();
+    _registerScenarioTools();
     _registerPluginIntegrationTools();
   }
 

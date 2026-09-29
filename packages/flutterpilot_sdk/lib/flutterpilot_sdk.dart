@@ -18,6 +18,7 @@ import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
+import 'src/restart_store.dart';
 import 'src/ring_buffer.dart';
 import 'src/frame_budget_profiler.dart';
 import 'src/hit_test_utils.dart';
@@ -492,6 +493,7 @@ class FlutterPilot {
     // No VM service in release builds; skip the debugPrint/frame hooks too.
     if (kReleaseMode || _initialized) return;
     _initialized = true;
+    RestartStore.load();
 
     _setupModules();
     registerServiceExtensions();
@@ -635,6 +637,10 @@ class FlutterPilot {
   static void registerCustomTool(String name, Function callback) {
     _customTools[name] = callback;
   }
+
+  /// What the server left under [key] for after a hot restart (e.g. a
+  /// scenario's mocked responses, for the Dio plugin); null, or once only.
+  static Object? takeRestartData(String key) => RestartStore.take(key);
 
   /// Registers a state setter for a specific state-management [type].
   ///

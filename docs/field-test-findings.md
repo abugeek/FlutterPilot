@@ -413,6 +413,15 @@ keyboard forced on, and in Chrome:
 | 238 | e2e: mock + field + button | ✅ | recorded `mock_http_response(/ping, 201)`, `enter_text(Name)`, tap Send, `assert_widget("Hello, Recorded (201)")`: the test calls `DioPilotInterceptor.mock('/ping', statusCode: 201, …)` and passes on a fresh app (`package:fixture/main.dart`) |
 | 239 | generated source | ❌→fixed | unformatted (one 110-char line): the tool now runs `dart format` on it. Not field-tested: Android/iOS runs (the test reinstalls the app there; the response says to start it again), obscured fields (unit-tested: `--dart-define`, never written). Tests over live data (hn_reader's `story_<id>` keys, today's titles) fail tomorrow: the flow above avoids them |
 
+## Scenarios (ROADMAP §7), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 240 | save and load on hn_reader | ✅ | Settings → Dark, feed filter "AI", `scenario(save: "dark_ai_filter")`: `{"route": "/", "prefs": {"theme_mode": "dark"}, "state": {"riverpod": {"NotifierProvider<SearchNotifier, String>": "AI"}}}`. Back to System and no filter, then `load`: 0.9 s, `theme_mode` dark, the app dark (it reads the preference at startup, so the unsaveable `ThemeMode` enum came back anyway), the feed filtered to AI stories. Removed from hn_reader afterwards and the theme set back to system |
+| 241 | state behind the widgets | ⚠️ | the filter provider was "AI" but the filter field showed nothing: the TextField keeps its own controller. Said in the tool description; a scenario can't know which widgets copy which state |
+| 242 | noisy "not saved" | ❌→fixed | saving listed `Instance of 'HnApi'`, `SharedPreferences` and an `AsyncLoading` future as "not saved"; now only real values it can't restore (the `ThemeMode` and `Feed` enums) |
+| 243 | e2e: mocks across the restart | ✅ | mock `/ping` 202, save, clear the mock, load: the restarted app has 1 mock active before anything calls it, and Send shows "Hello, Scenario (202)". hn_reader has no Dio: mocks are e2e-tested only |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms

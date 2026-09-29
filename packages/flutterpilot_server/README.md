@@ -100,7 +100,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ## MCP Tools Reference
 
-65 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
+66 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
 iOS simulators with idb, 16 tools for apps without `flutterpilot_sdk`.
@@ -117,7 +117,7 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Errors & logs | `get_errors` (`report`), `get_flight_log`, `get_debug_logs` |
 | Code changes | `hot_reload` (`restart`) |
 | Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` (`id`: headers, bodies) |
-| State (Riverpod/Bloc) | `get_state`, `set_state` |
+| State (Riverpod/Bloc) | `get_state`, `set_state`, `scenario` (save/load a named start state: route, preferences, mocks, state) |
 | Network (Dio) | `get_network_logs`, `mock_http_response`, `simulate_network` |
 | Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |
 | Backends | `get_supabase_auth`, `query_supabase_table`, `supabase_session`, `get_firebase_auth`, `query_firestore`, `get_connectivity` |

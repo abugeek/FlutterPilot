@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-28
 
-- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6); an app sees only those that work for it
+- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -442,13 +442,22 @@ the framework's message. Not replayed (listed in the response):
 `navigate_to`, `set_slider_value`, keys without a test equivalent. Not
 recorded: taps by the user's own hand. Findings #236–239.
 
-## 7. State time travel done right
+## 7. ~~State time travel done right~~ — done (2026-09-29), as scenarios
 
-Deleted because nothing captured/restored state. A real version:
-- Riverpod: snapshot provider values and restore via overrides in a
-  re-created `ProviderContainer` (needs plugin support), or
-- Simpler and more honest: "reset to scenario" = hot restart + deep link +
-  seeded mocks/prefs, driven by a named scenario file checked into the app.
+The "simpler and more honest" version: `scenario` (one tool).
+`save: "name"` writes `flutterpilot/scenarios/<name>.json` in the app — the
+route (go_router location, else the top route), all SharedPreferences except
+sensitive keys, the active Dio mocks (new `ext.flutterpilot.getHttpMocks`),
+and the Riverpod/Bloc values `set_state` can put back (bool/number/String;
+plugins report values as `toString()`, so enums, lists and classes are
+listed as not saved). `load: "name"` replaces the preferences (needs
+`--allow-destructive`), leaves the mocks for after the restart in a file in
+the app's temp folder (`FlutterPilot.takeRestartData`; the Dio plugin applies
+them in `register()`, before the first request), hot-restarts, goes to the
+route and sets the state. No argument lists them. Not a snapshot of
+everything: provider values are set behind the widgets (a TextField keeps its
+own text), and databases, secure storage and files are not captured.
+Findings #240–243.
 
 ## 8. Longer-term vision
 

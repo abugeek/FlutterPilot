@@ -1097,6 +1097,46 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // ROADMAP §7: a scenario brings its mocks back across a hot restart.
+    if (!zeroCode) {
+      await check('scenario: mock /ping', 'mock_http_response', {
+        'urlPattern': '/ping',
+        'statusCode': 202,
+        'body': '{"ok":true}',
+      });
+      await check(
+        'scenario save writes the file',
+        'scenario',
+        {'save': 'accepted', 'description': 'ping answers 202'},
+        ['flutterpilot/scenarios/accepted.json', '1 mocked response(s)'],
+      );
+      await check('scenario: clear the mock', 'mock_http_response', {
+        'clear': true,
+      });
+      await check(
+        'scenario load restarts with the mock active',
+        'scenario',
+        {'load': 'accepted'},
+        ['Loaded scenario "accepted"', 'active from the first request'],
+      );
+      await check('scenario: enter a name', 'enter_text', {
+        'target': 'Name',
+        'text': 'Scenario',
+      });
+      await check('scenario: send', 'tap_widget', {'key': 'Send'});
+      await check(
+        "the scenario's mock answered",
+        'assert_widget',
+        {'text': 'Hello, Scenario (202)'},
+        const [],
+        false,
+        const Duration(seconds: 5),
+      );
+      await check('scenario list', 'scenario', {}, [
+        '- accepted: ping answers 202',
+      ]);
+    }
+
     // ROADMAP §6: record a flow, write it as an integration_test, run it.
     if (isDesktop && !zeroCode) {
       await check(
