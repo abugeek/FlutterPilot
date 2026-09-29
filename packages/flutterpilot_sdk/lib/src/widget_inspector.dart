@@ -182,7 +182,14 @@ class PilotWidgetInspector {
   /// Set when the last [findElement] refused an ambiguous query.
   static String? lastAmbiguity;
 
-  static Element? findElement(String query) {
+  /// Whether the last [findElement] matched only part of a text ("Item 3"
+  /// in "Item 399"), not a key, a whole text or a type.
+  static bool lastMatchPartial = false;
+
+  /// With [partial] false, text only matches whole: a lazy list being
+  /// searched for "Item 3" must not stop at "Item 399".
+  static Element? findElement(String query, {bool partial = true}) {
+    lastMatchPartial = false;
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
 
@@ -199,15 +206,19 @@ class PilotWidgetInspector {
       Element? currentScope = root;
       for (final part in parts) {
         if (currentScope == null) return null;
-        currentScope = _findSingleElementUnder(currentScope, part);
+        currentScope = _findSingleElementUnder(currentScope, part, partial);
       }
       return currentScope;
     }
 
-    return _findSingleElementUnder(root, cleanQuery);
+    return _findSingleElementUnder(root, cleanQuery, partial);
   }
 
-  static Element? _findSingleElementUnder(Element root, String query) {
+  static Element? _findSingleElementUnder(
+    Element root,
+    String query,
+    bool partial,
+  ) {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return null;
 
@@ -317,7 +328,7 @@ class PilotWidgetInspector {
               // Only an icon's name: IconButton['settings'] on a button
               // without a tooltip, beaten by a real label.
               consider(93);
-            } else if (text.contains(value)) {
+            } else if (partial && text.contains(value)) {
               consider(90);
             }
           }
@@ -336,7 +347,7 @@ class PilotWidgetInspector {
           if (text == q) consider(67);
         } else if (text == q) {
           consider(80);
-        } else if (text.contains(q)) {
+        } else if (partial && text.contains(q)) {
           consider(69);
         }
       }
@@ -360,7 +371,8 @@ class PilotWidgetInspector {
         if (widget is Text && widget.data != null) {
           if (widget.data!.toLowerCase() == queryToSearch.toLowerCase()) {
             consider(70);
-          } else if ((targetIndex != null || bestPriority < 60 + 5) &&
+          } else if (partial &&
+              (targetIndex != null || bestPriority < 60 + 5) &&
               widget.data!.toLowerCase().contains(
                 queryToSearch.toLowerCase(),
               )) {
@@ -370,11 +382,13 @@ class PilotWidgetInspector {
           final plain = widget.text.toPlainText();
           if (plain.toLowerCase() == queryToSearch.toLowerCase()) {
             consider(70);
-          } else if ((targetIndex != null || bestPriority < 60 + 5) &&
+          } else if (partial &&
+              (targetIndex != null || bestPriority < 60 + 5) &&
               plain.toLowerCase().contains(queryToSearch.toLowerCase())) {
             consider(60);
           }
-        } else if (widget is EditableText &&
+        } else if (partial &&
+            widget is EditableText &&
             (targetIndex != null || bestPriority < 60 + 5)) {
           if (widget.controller.text.toLowerCase().contains(
             queryToSearch.toLowerCase(),
@@ -390,7 +404,8 @@ class PilotWidgetInspector {
         final q = queryToSearch.toLowerCase();
         if (message == q) {
           consider(57);
-        } else if ((targetIndex != null || bestPriority < 50 + 5) &&
+        } else if (partial &&
+            (targetIndex != null || bestPriority < 50 + 5) &&
             (message?.contains(q) ?? false)) {
           consider(50);
         }
@@ -427,7 +442,8 @@ class PilotWidgetInspector {
         ? bestPriority - 5
         : bestPriority;
     lastAmbiguity = null;
-    final bestTexts = (raw == 90 || raw == 69 || raw == 60 || raw == 50)
+    final substringOnly = raw == 90 || raw == 69 || raw == 60 || raw == 50;
+    final bestTexts = substringOnly
         ? {for (final e in bestElements) _labelOf(e)}
         : const <String>{};
     if (bestTexts.length > 1) {
@@ -437,6 +453,7 @@ class PilotWidgetInspector {
           'Use the exact text, a key, or a Type[\'text\'] selector.';
       return null;
     }
+    lastMatchPartial = substringOnly && bestMatch != null;
     return bestMatch;
   }
 

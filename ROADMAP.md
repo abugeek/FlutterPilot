@@ -530,9 +530,15 @@ Review each the same way as PR #1 — keep, fix, or delete:
   per-call deadline are gone (only six fast read tools had them; the slow
   ones never did). The scheduler stays: mutations run in order and reads
   wait for them; every call has a fixed 30 s deadline.
-- **`scroll_simulator.dart`** (`scroll_into_view`, auto-scroll before tap) —
-  test on long lists, nested scrollables, horizontal lists, lazy lists where
-  the target isn't built yet.
+- ~~**`scroll_simulator.dart`**~~ — done (2026-09-29): rewritten. On a
+  lab app (500-item list, list opened mid-way, horizontal rows in a vertical
+  list, reversed list, grid) the swipes reached only items already built:
+  everything else failed after 3–7 s, nested lists crashed, and "Item 3"
+  tapped "Item 399" (a partial match). It now pages each list's
+  ScrollPosition (both directions, then the lists across its axis), matches
+  whole text while searching, puts lists back when not found, and builds
+  without waiting for a frame while the window is hidden: 0.3–3 s, nested
+  ~5 s, not found ~2 s. `maxAttempts` is gone; the limit is 10 s.
 - ~~**`stream_inspector.dart`**~~ — done (2026-09-29): deleted, with six
   more SDK extensions no tool called (`tapAt`, `jumpToScreen`,
   `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` + `MemoryAuditor`).

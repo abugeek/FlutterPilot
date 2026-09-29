@@ -205,10 +205,6 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'durationMs': JsonSchema.integer(
             description: 'Long-press duration (default 600).',
           ),
-          'maxAttempts': JsonSchema.integer(
-            description:
-                'Max scroll attempts if widget is off-screen (default: 8).',
-          ),
           'waitFor': JsonSchema.string(
             description:
                 'Key, selector or text of a widget expected to appear after the tap.',
@@ -498,8 +494,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'scroll_into_view',
       description:
-          'Scrolls the enclosing list until the widget (key, selector or '
-          'text) is on screen. tap_widget already does this before tapping.',
+          'Scrolls the lists on screen until the widget (key, selector or '
+          'text) is on screen, including items a lazy list has not built yet '
+          'and cards in a horizontal list inside a vertical one. tap_widget '
+          'already does this before tapping.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -508,10 +506,6 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'target': JsonSchema.string(
             description: 'Same as key (either name works).',
-          ),
-          'maxAttempts': JsonSchema.integer(
-            description:
-                'Max scroll attempts to locate the widget in lazy lists (default: 8).',
           ),
         },
       ),

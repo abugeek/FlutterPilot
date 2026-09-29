@@ -88,7 +88,6 @@ Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']"), semantic
 | `y` | number | no | Y in logical pixels. |
 | `gesture` | string | no | Default "tap". |
 | `durationMs` | integer | no | Long-press duration (default 600). |
-| `maxAttempts` | integer | no | Max scroll attempts if widget is off-screen (default: 8). |
 | `waitFor` | string | no | Key, selector or text of a widget expected to appear after the tap. |
 | `timeoutMs` | integer | no | How long to wait for waitFor (default 5000). |
 
@@ -126,13 +125,12 @@ Two-finger pinch on a widget or at x/y: scale > 1 zooms in, < 1 zooms out. Repor
 
 ## `scroll_into_view`
 
-Scrolls the enclosing list until the widget (key, selector or text) is on screen. tap_widget already does this before tapping.
+Scrolls the lists on screen until the widget (key, selector or text) is on screen, including items a lazy list has not built yet and cards in a horizontal list inside a vertical one. tap_widget already does this before tapping.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | The ValueKey string, semantic selector, or label of the widget to scroll into view. |
 | `target` | string | no | Same as key (either name works). |
-| `maxAttempts` | integer | no | Max scroll attempts to locate the widget in lazy lists (default: 8). |
 
 ## `swipe_widget`
 
