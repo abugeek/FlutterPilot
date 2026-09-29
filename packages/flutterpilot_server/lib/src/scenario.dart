@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'redaction.dart';
+
 /// A named app state to start from (ROADMAP §7): the route, stored
 /// preferences, mocked responses and simple provider/bloc values. Saved as
 /// `flutterpilot/scenarios/<name>.json` in the app, to check in and edit;
@@ -82,14 +84,18 @@ class Scenario {
 /// States a plugin reported (`name: {value, type}`) that set_state can put
 /// back: bool, numbers and strings. Plugins report values as `toString()`,
 /// so lists, maps and classes can't be read back faithfully.
-({Map<String, Object?> kept, List<String> skipped}) restorableStates(
-  Map<String, dynamic> states,
-  String valueKey,
-) {
+({Map<String, Object?> kept, List<String> skipped, List<String> secret})
+restorableStates(Map<String, dynamic> states, String valueKey) {
   final kept = <String, Object?>{};
   final skipped = <String>[];
+  // Scenario files are checked in: never a credential.
+  final secret = <String>[];
   for (final MapEntry(key: name, value: entry) in states.entries) {
     if (entry is! Map) continue;
+    if (Redaction.sensitiveName.hasMatch(name)) {
+      secret.add(name);
+      continue;
+    }
     final raw = '${entry[valueKey]}';
     final Object? value = switch ('${entry['type']}') {
       'bool' => raw == 'true',
@@ -111,5 +117,5 @@ class Scenario {
       kept[name] = value;
     }
   }
-  return (kept: kept, skipped: skipped);
+  return (kept: kept, skipped: skipped, secret: secret);
 }

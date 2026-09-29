@@ -422,6 +422,42 @@ keyboard forced on, and in Chrome:
 | 242 | noisy "not saved" | ❌→fixed | saving listed `Instance of 'HnApi'`, `SharedPreferences` and an `AsyncLoading` future as "not saved"; now only real values it can't restore (the `ThemeMode` and `Feed` enums) |
 | 243 | e2e: mocks across the restart | ✅ | mock `/ping` 202, save, clear the mock, load: the restarted app has 1 mock active before anything calls it, and Send shows "Hello, Scenario (202)". hn_reader has no Dio: mocks are e2e-tested only |
 
+## Verify a feature (ROADMAP §8), HN reader and the e2e fixture on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 244 | "Story filter", 3 criteria | ✅ | empty state for a word no story has (assert "No stories match") ✅, clearing brings stories back (wait_for Bookmark) ✅, dark theme in Settings driven but not checked ⚠️ NOT VERIFIED (the screenshot shows it dark: a picture is not a check). The first attempt at criterion 1 started on the Settings screen and failed; picking criterion 1 again replaced its evidence |
+| 245 | misleading reason | ❌→fixed | a failed `assert_widget` was blamed when `enter_text` had failed first (the filter field was not on screen): the reason now names the failed action before the check. Step lines lost the `[extensionError]` prefix, the agent-facing hints and passed checks' raw JSON |
+| 246 | network evidence | ✅ | "Switching to New loads the newest stories": `GET …/newstories.json → 200 (668 ms)` and one request per story (30); the report now lists 15 and "… and N more (k failed)" |
+| 247 | e2e | ✅ | the fixture (with its intentional overflow) passes "Send greets the user by name" (mock + field + Send + assert), an unchecked second criterion is NOT VERIFIED, report.md and criterion-1.png are written |
+
+## Profile mode (ROADMAP §8), HN reader on macOS (`flutter run --profile`)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 248 | what works | ✅ | the SDK runs in profile builds: taps, text, assertions, summary, tree, screenshots, audit, state, frame budget, CPU profiles with file:line for app functions (AOT keeps them). hot_reload, generate_test and scenario (built on hot restart) are no longer listed there |
+| 249 | debug vs profile numbers | ✅ | `profile_action(tap_widget New, durationMs: 2500)`: debug 219.5 ms Dart on the UI isolate, 2 frames over budget, app widget builds 12.7 ms (IconButton ×10); profile 86.8 ms, none over budget, 1.0 ms. `profile_action` printed "Debug build: times run several times slower" on the profile build too (it assumed debug whenever a framework debug extension answered); now it says which build it is, and so do profile_frame_budget and the summary |
+| 250 | source lookups | ❌→fixed | `inspect_widget(key)` returned a type without file:line instead of its "needs a debug build" message (profile builds report widget creation tracking on, but record no locations), and `inspect_widget(x, y)` said "Nothing is drawn" (no `debugCreator` in profile). Source locations now need kDebugMode, and hit tests fall back to the element tree: `layout: true` by point works in profile |
+| 251 | app widgets in profile | ⚠️→kept | I relabelled profile rebuild lists "Widgets (app and framework)"; the debug/profile comparison showed the same app-created types and no framework internals in both, so profile builds do know the app's widgets (not where): reverted |
+
+## Security review (ROADMAP §8), the e2e fixture and hn_reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 252 | password field | ❌→fixed | with "s3cret-pin" typed into the fixture's obscured PIN field, 9 read tools were swept: `get_widget_properties(key: PIN)` returned `"text":"s3cret-pin"`; now `"••••••••••"`. The others were clean |
+| 253 | secrets the app logs and sends | ❌→fixed | the fixture's Sign in logs `api_key=LOGSECRET1 password: LOGSECRET2` and POSTs to `…/login?api_key=URLSECRET3` with `Bearer HDRSECRET5` and `{"password": "BODYSECRET4"}`. Before: the log line in get_debug_logs and the summary, the URL in get_network_logs. After: `api_key=<redacted> password: <redacted>`, `?api_key=<redacted>&page=1`, `authorization: •••`, body `"password":"•••"` in all six tools. The first sweep had HTTP profiling off, so get_http_profile "passed" on nothing: the sweep now turns it on first and prints what it saw with --verbose |
+| 254 | read-only SQL | ❌→fixed (unit) | `WITH x AS (SELECT 1) DELETE FROM users`, `PRAGMA main.journal_mode = DELETE`, `PRAGMA user_version = 5`, `PRAGMA optimize` passed the prefix check; one shared allowlist check now refuses them and still passes `SELECT replace(…)`, strings containing "DELETE" and `PRAGMA table_info(t)`. The existing sqflite/drift tests pass unchanged |
+| 255 | shell bridge | ❌→fixed | `curl -H "Origin: https://evil.example" -H "Content-Type: text/plain" localhost:8765 -d '{"name":"get_app_summary"…}'` (what a web page can send without preflight) was answered; now 403, and scripts still work |
+| 256 | redactor false positives | ❌→fixed (unit) | the first name pattern hid "author", "passengers", "sessionCount"; `https://` swallowed the query string, so `api_key` in URLs escaped. Both fixed and tested in SDK and server copies |
+
+## Dart MCP interop (ROADMAP §8), the e2e fixture and hn_reader on macOS
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 257 | overlap with `dart mcp-server` 1.1.2 | ⚠️→fixed | listed its tools with the project as root: by default hot_reload, hot_restart, get_runtime_errors, widget_inspector and flutter_driver_command duplicate ours (theirs need a `dtd` connect first). `--disable flutter,dart_tooling_daemon` leaves analyze_files, lsp, pub, pub_dev_search, read_package_uris, rip_grep_packages, roots. `run_tests`/`dart_format`/`launch_app` are off unless enabled (their default, kept). `mcp install` now adds it that way |
+| 258 | a plain `flutter run` | ❌→fixed | hn_reader with its URI file hidden: before, "No running Flutter app found"; now a fresh `-p hn_reader` server finds it through the tooling daemon (`dart tooling-daemon --list`, 0.35 s, then `ConnectedApp.getVmServices`) and `get_app_summary` answers. `flutter run --machine` registers too (it prints `app.dtd`) |
+| 259 | symlinked temp folders | ❌→fixed | the first e2e run failed both DTD checks: the daemon records `/private/var/…`, the fixture is under `/var/…` (a link). Paths are resolved (nearest existing folder) before matching |
+
 ## Latency observed (debug mode, macOS, HN reader)
 - zero-code (plain app): summary 70–230 ms, tree 30–90 ms (full inspector tree: ~60–90 ms / 0.9 MB on HN reader), screenshot 45–130 ms (up to ~350 ms at 1.0x when it has to be cropped)
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
