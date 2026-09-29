@@ -125,5 +125,9 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: false
+          # The default (-gpu swiftshader_indirect) renders on the host,
+          # whose GPU layer crashed the whole emulator mid-run ("Failed to
+          # find ColorBuffer", then adb lost it); guest renders inside it.
+          emulator-options: -no-window -gpu guest -no-snapshot -noaudio -no-boot-anim
           # Retries once while the emulator lives; on failure prints why.
           script: cd packages/flutterpilot_server && sh tool/ci_android_e2e.sh
