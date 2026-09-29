@@ -18,6 +18,7 @@ import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/memory_auditor.dart';
 import 'src/navigation_tracker.dart';
+import 'src/redaction.dart';
 import 'src/restart_store.dart';
 import 'src/ring_buffer.dart';
 import 'src/frame_budget_profiler.dart';
@@ -850,7 +851,9 @@ class FlutterPilot {
       if (e is StatefulElement && e.state is EditableTextState) {
         try {
           final state = e.state as EditableTextState;
-          props['text'] = state.widget.controller.text;
+          props['text'] = state.widget.obscureText
+              ? '•' * state.widget.controller.text.length
+              : state.widget.controller.text;
           props['isFocused'] = state.widget.focusNode.hasFocus;
           if (!props.containsKey('isEnabled')) props['isEnabled'] = true;
           foundEditable = true;
@@ -892,11 +895,16 @@ class FlutterPilot {
     if (value.length > _maxDiagnosticStringLength) {
       value = '${value.substring(0, _maxDiagnosticStringLength)}…<truncated>';
     }
-    return value.replaceAll(
-      RegExp(r'(Bearer\s+)[A-Za-z0-9._~-]+', caseSensitive: false),
-      r'${1}<redacted>',
-    );
+    return Redaction.text(value);
   }
+
+  /// [text] with credentials masked (tokens, JWTs, `password=…`,
+  /// `?api_key=…`): what plugins run app data through before an agent
+  /// sees it.
+  static String redactText(String text) => Redaction.text(text);
+
+  /// Whether [sql] only reads (for plugins' `exec_sql_query`).
+  static bool isReadOnlySql(String sql) => isReadOnlySqlStatement(sql);
 
   static dynamic _safeJsonEncode(dynamic object, [int depth = 0, String? key]) {
     if (depth > 10) return '<max depth exceeded>';

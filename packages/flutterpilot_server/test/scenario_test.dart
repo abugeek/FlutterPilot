@@ -40,6 +40,7 @@ void main() {
   test('only states set_state can put back are kept', () {
     final r = restorableStates({
       'counterProvider': {'value': '3', 'type': 'int'},
+      'authTokenProvider': {'value': 'eyJabc', 'type': 'String'},
       'searchProvider': {'value': 'AI', 'type': 'String'},
       'onboardedProvider': {'value': 'true', 'type': 'bool'},
       'themeProvider': {'value': 'ThemeMode.dark', 'type': 'ThemeMode'},
@@ -56,5 +57,7 @@ void main() {
     });
     // Services and loading futures are not worth a mention.
     expect(r.skipped, ['themeProvider (ThemeMode)']);
+    // Scenario files are checked in: a credential never goes in one.
+    expect(r.secret, ['authTokenProvider']);
   });
 }

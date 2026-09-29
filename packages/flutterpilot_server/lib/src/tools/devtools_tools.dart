@@ -29,6 +29,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   ) async {
     CallToolResult fail(String text) =>
         CallToolResult(isError: true, content: [TextContent(text: text)]);
+    final context = await _deviceContextForParameters(params);
+    if (context?.isWeb == true) {
+      return fail(
+        'get_memory_details leak check is not available on web: allocation '
+        'profiles are not supported on web.',
+      );
+    }
     final steps = <({String tool, Map<String, dynamic> arguments})>[];
     for (final step in (params['cycle'] as List? ?? const [])) {
       final tool = step is Map ? step['tool'] : null;
@@ -55,7 +62,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       );
     }
     final times = ((params['times'] as num?)?.toInt() ?? 5).clamp(2, 20);
-    final context = await _deviceContextForParameters(params);
     final vm = context?.service;
     if (vm == null) {
       return fail(
@@ -86,7 +92,18 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
 
     Future<Map<String, ({String name, String? library, int instances})>>
     snapshot() async {
-      final profile = await vm.getAllocationProfile(isolateId, gc: true);
+      final AllocationProfile profile;
+      try {
+        profile = await vm.getAllocationProfile(isolateId, gc: true);
+      } on RPCError catch (e) {
+        if (e.code == -32601) {
+          throw StateError(
+            'get_memory_details leak check is not available on web: '
+            '${e.message}.',
+          );
+        }
+        rethrow;
+      }
       return {
         for (final m in profile.members ?? const <ClassHeapStats>[])
           if (m.classRef?.id != null)
@@ -112,13 +129,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         'it.',
       );
     }
-    final snapshots = [await snapshot()];
-    final heapBefore = await heapMb();
+    final List<Map<String, ({String name, String? library, int instances})>>
+    snapshots;
+    final double heapBefore;
     String? stopped;
-    for (var r = 1; r <= times; r++) {
-      stopped = await round('Round $r');
-      if (stopped != null) break;
-      snapshots.add(await snapshot());
+    try {
+      snapshots = [await snapshot()];
+      heapBefore = await heapMb();
+      for (var r = 1; r <= times; r++) {
+        stopped = await round('Round $r');
+        if (stopped != null) break;
+        snapshots.add(await snapshot());
+      }
+    } on StateError catch (e) {
+      return fail(e.message);
     }
     final heapAfter = await heapMb();
     final rounds = snapshots.length - 1;
@@ -215,11 +239,27 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     final heldByPilot = <GrowingClass>{};
     String? confirmStopped;
     if (rounds >= 2 && stopped == null && candidates.isNotEmpty) {
-      await vm.getAllocationProfile(isolateId, gc: true);
+      try {
+        await vm.getAllocationProfile(isolateId, gc: true);
+      } on RPCError catch (e) {
+        if (e.code == -32601) {
+          return fail('get_memory_details leak check is not available on web.');
+        }
+        rethrow;
+      }
       final before = {for (final c in candidates) c.id: await instancesOf(c)};
       confirmStopped = await round('Confirming round');
       if (confirmStopped == null) {
-        await vm.getAllocationProfile(isolateId, gc: true);
+        try {
+          await vm.getAllocationProfile(isolateId, gc: true);
+        } on RPCError catch (e) {
+          if (e.code == -32601) {
+            return fail(
+              'get_memory_details leak check is not available on web.',
+            );
+          }
+          rethrow;
+        }
         for (final c in candidates) {
           final old = before[c.id];
           final now = old == null ? null : await instancesOf(c);
@@ -416,6 +456,19 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     Future<CallToolResult> allocationProfile(
       Map<String, dynamic> params,
     ) async {
+      final context = await _deviceContextForParameters(params);
+      if (context?.isWeb == true) {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  'get_memory_details with classes is not available on web: '
+                  'allocation profiles are not supported on web.',
+            ),
+          ],
+        );
+      }
       final vmService = await _vmServiceForParameters(params);
       if (vmService == null) {
         return CallToolResult(
@@ -452,6 +505,23 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           buf.writeln('$name ${bytes}KB $instances');
         }
         return CallToolResult(content: [TextContent(text: buf.toString())]);
+      } on RPCError catch (e) {
+        if (e.code == -32601) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'get_memory_details with classes is not available on web: '
+                    '${e.message}.',
+              ),
+            ],
+          );
+        }
+        return CallToolResult(
+          content: [TextContent(text: 'Allocation profile failed: $e')],
+          isError: true,
+        );
       } catch (e) {
         return CallToolResult(
           content: [TextContent(text: 'Allocation profile failed: $e')],
@@ -590,6 +660,9 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           return fail('Tool "$tool" is not available.');
         }
         final context = await _deviceContextForParameters(params);
+        if (context?.isWeb == true) {
+          return fail('profile_action is not available on web.');
+        }
         final vm = context?.service;
         if (vm == null) {
           return fail(
@@ -600,196 +673,206 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         final isolateId = await _uiIsolateId(vm, context?.cachedMainIsolateId);
         if (isolateId == null) return fail('No Flutter isolate found.');
 
-        final flags = (await vm.getFlagList()).flags ?? const <Flag>[];
-        String? flag(String name) =>
-            flags.where((f) => f.name == name).firstOrNull?.valueAsString;
-        if (flag('profiler') == 'false') {
-          return fail(
-            'The Dart VM profiler is off in this app (started with '
-            '--no-profiler?). Relaunch with "flutter run".',
-          );
-        }
-        // Finer samples for short actions; restored afterwards.
-        final period = flag('profile_period');
-        var finer = false;
         try {
-          await vm.setFlag('profile_period', '250');
-          finer = true;
-        } catch (_) {}
-
-        // Frames: the timeline streams framework phases and engine frame
-        // events go to, per-widget build events for the app's widgets, and
-        // the AI tap overlay off (it animates on every frame). All restored.
-        final streams =
-            (await vm.getVMTimelineFlags()).recordedStreams ?? const <String>[];
-        final wanted = {...streams, 'Dart', 'Embedder', 'GC'}.toList();
-        var tracedStreams = false;
-        try {
-          if (wanted.length != streams.length) {
-            await vm.setVMTimelineFlags(wanted);
-            tracedStreams = true;
+          final flags = (await vm.getFlagList()).flags ?? const <Flag>[];
+          String? flag(String name) =>
+              flags.where((f) => f.name == name).firstOrNull?.valueAsString;
+          if (flag('profiler') == 'false') {
+            return fail(
+              'The Dart VM profiler is off in this app (started with '
+              '--no-profiler?). Relaunch with "flutter run".',
+            );
           }
-        } catch (_) {}
-        final buildsBefore = await _serviceFlag(
-          vm,
-          isolateId,
-          'ext.flutter.profileUserWidgetBuilds',
-        );
-        if (buildsBefore == false) {
-          await _serviceFlag(
+          // Finer samples for short actions; restored afterwards.
+          final period = flag('profile_period');
+          var finer = false;
+          try {
+            await vm.setFlag('profile_period', '250');
+            finer = true;
+          } catch (_) {}
+
+          // Frames: the timeline streams framework phases and engine frame
+          // events go to, per-widget build events for the app's widgets, and
+          // the AI tap overlay off (it animates on every frame). All restored.
+          final streams =
+              (await vm.getVMTimelineFlags()).recordedStreams ??
+              const <String>[];
+          final wanted = {...streams, 'Dart', 'Embedder', 'GC'}.toList();
+          var tracedStreams = false;
+          try {
+            if (wanted.length != streams.length) {
+              await vm.setVMTimelineFlags(wanted);
+              tracedStreams = true;
+            }
+          } catch (_) {}
+          final buildsBefore = await _serviceFlag(
             vm,
             isolateId,
             'ext.flutter.profileUserWidgetBuilds',
-            set: true,
           );
-        }
-        final quiet = await _callExtensionRaw('ext.flutterpilot.profiling', {
-          'enabled': 'true',
-        });
-        final budgetMs =
-            (quiet.data?['frameBudgetMs'] as num?)?.toDouble() ?? 1000 / 60;
-
-        final CpuSamples cpu;
-        List<Map<String, dynamic>> trace = const [];
-        String? traceError;
-        final watch = Stopwatch()..start();
-        CallToolResult? actionResult;
-        try {
-          final start = (await vm.getVMTimelineMicros()).timestamp!;
-          if (action != null) actionResult = await action(arguments, extra);
-          final extraMs = (params['durationMs'] as num?)?.toInt();
-          final ms = (extraMs ?? (action == null ? 1000 : 0)).clamp(0, 10000);
-          if (ms > 0) await Future<void>.delayed(Duration(milliseconds: ms));
-          final end = (await vm.getVMTimelineMicros()).timestamp!;
-          watch.stop();
-          cpu = await vm.getCpuSamples(isolateId, start, end - start);
-          try {
-            final timeline = await vm.getVMTimeline(
-              timeOriginMicros: start,
-              timeExtentMicros: end - start,
-            );
-            trace = [
-              for (final e in timeline.traceEvents ?? const <TimelineEvent>[])
-                if (e.json != null) e.json!,
-            ];
-          } catch (e) {
-            traceError = '$e';
-          }
-        } catch (e) {
-          return fail('CPU profiling failed: $e');
-        } finally {
-          await _callExtensionRaw('ext.flutterpilot.profiling', {
-            'enabled': 'false',
-          });
           if (buildsBefore == false) {
             await _serviceFlag(
               vm,
               isolateId,
               'ext.flutter.profileUserWidgetBuilds',
-              set: false,
+              set: true,
             );
           }
-          if (tracedStreams) {
-            try {
-              await vm.setVMTimelineFlags(streams);
-            } catch (_) {}
-          }
-          if (finer && period != null) {
-            try {
-              await vm.setFlag('profile_period', period);
-            } catch (_) {}
-          }
-        }
+          final quiet = await _callExtensionRaw('ext.flutterpilot.profiling', {
+            'enabled': 'true',
+          });
+          final budgetMs =
+              (quiet.data?['frameBudgetMs'] as num?)?.toDouble() ?? 1000 / 60;
 
-        final classifier = await _codeClassifier(vm, isolateId);
-        final profile = ActionProfile.analyze(cpu, classifier);
-        final lines = <int, int?>{};
-        Future<String> where(FunctionCost f) async {
-          final url = f.url;
-          if (url == null) return '';
-          final line = lines.containsKey(f.index)
-              ? lines[f.index]
-              : lines[f.index] = await _lineOf(
-                  vm,
-                  isolateId,
-                  cpu.functions![f.index].function,
-                );
-          return '${classifier.display(url)}${line == null ? '' : ':$line'}';
-        }
+          final CpuSamples cpu;
+          List<Map<String, dynamic>> trace = const [];
+          String? traceError;
+          final watch = Stopwatch()..start();
+          CallToolResult? actionResult;
+          try {
+            final start = (await vm.getVMTimelineMicros()).timestamp!;
+            if (action != null) actionResult = await action(arguments, extra);
+            final extraMs = (params['durationMs'] as num?)?.toInt();
+            final ms = (extraMs ?? (action == null ? 1000 : 0)).clamp(0, 10000);
+            if (ms > 0) await Future<void>.delayed(Duration(milliseconds: ms));
+            final end = (await vm.getVMTimelineMicros()).timestamp!;
+            watch.stop();
+            cpu = await vm.getCpuSamples(isolateId, start, end - start);
+            try {
+              final timeline = await vm.getVMTimeline(
+                timeOriginMicros: start,
+                timeExtentMicros: end - start,
+              );
+              trace = [
+                for (final e in timeline.traceEvents ?? const <TimelineEvent>[])
+                  if (e.json != null) e.json!,
+              ];
+            } catch (e) {
+              traceError = '$e';
+            }
+          } catch (e) {
+            return fail('CPU profiling failed: $e');
+          } finally {
+            await _callExtensionRaw('ext.flutterpilot.profiling', {
+              'enabled': 'false',
+            });
+            if (buildsBefore == false) {
+              await _serviceFlag(
+                vm,
+                isolateId,
+                'ext.flutter.profileUserWidgetBuilds',
+                set: false,
+              );
+            }
+            if (tracedStreams) {
+              try {
+                await vm.setVMTimelineFlags(streams);
+              } catch (_) {}
+            }
+            if (finer && period != null) {
+              try {
+                await vm.setFlag('profile_period', period);
+              } catch (_) {}
+            }
+          }
 
-        String ms(int samples) => profile.ms(samples).toStringAsFixed(1);
-        final label = tool == null
-            ? 'Sampled the app for ${watch.elapsedMilliseconds} ms'
-            : 'Profiled $tool(${jsonEncode(arguments)}): '
-                  '${watch.elapsedMilliseconds} ms wall';
-        final buf = StringBuffer(
-          '$label, '
-          '${ms(profile.dartSamples)} ms running Dart on the UI isolate '
-          '(${cpu.samplePeriod} µs samples).\n'
-          'App code: ${ms(profile.appSamples)} ms · framework and packages: '
-          '${ms(profile.dartSamples - profile.appSamples)} ms · '
-          'GC/VM/native: ${ms(profile.nativeSamples)} ms'
-          '${profile.flutterpilotSamples > 0 ? ' · FlutterPilot reading the screen (left out): ${ms(profile.flutterpilotSamples)} ms' : ''}.\n',
-        );
-        final app = profile.topApp(classifier);
-        if (app.isEmpty) {
-          buf.writeln(
-            'No app function was sampled: the app\'s own code did not run '
-            'long enough to be seen (each sample is ${cpu.samplePeriod} µs).',
+          final classifier = await _codeClassifier(vm, isolateId);
+          final profile = ActionProfile.analyze(cpu, classifier);
+          final lines = <int, int?>{};
+          Future<String> where(FunctionCost f) async {
+            final url = f.url;
+            if (url == null) return '';
+            final line = lines.containsKey(f.index)
+                ? lines[f.index]
+                : lines[f.index] = await _lineOf(
+                    vm,
+                    isolateId,
+                    cpu.functions![f.index].function,
+                  );
+            return '${classifier.display(url)}${line == null ? '' : ':$line'}';
+          }
+
+          String ms(int samples) => profile.ms(samples).toStringAsFixed(1);
+          final label = tool == null
+              ? 'Sampled the app for ${watch.elapsedMilliseconds} ms'
+              : 'Profiled $tool(${jsonEncode(arguments)}): '
+                    '${watch.elapsedMilliseconds} ms wall';
+          final buf = StringBuffer(
+            '$label, '
+            '${ms(profile.dartSamples)} ms running Dart on the UI isolate '
+            '(${cpu.samplePeriod} µs samples).\n'
+            'App code: ${ms(profile.appSamples)} ms · framework and packages: '
+            '${ms(profile.dartSamples - profile.appSamples)} ms · '
+            'GC/VM/native: ${ms(profile.nativeSamples)} ms'
+            '${profile.flutterpilotSamples > 0 ? ' · FlutterPilot reading the screen (left out): ${ms(profile.flutterpilotSamples)} ms' : ''}.\n',
           );
-        } else {
-          buf.writeln('App functions (self / total ms):');
-          for (final f in app) {
+          final app = profile.topApp(classifier);
+          if (app.isEmpty) {
             buf.writeln(
-              '  ${ms(f.self)} / ${ms(f.total)}  ${f.name}  ${await where(f)}',
+              'No app function was sampled: the app\'s own code did not run '
+              'long enough to be seen (each sample is ${cpu.samplePeriod} µs).',
+            );
+          } else {
+            buf.writeln('App functions (self / total ms):');
+            for (final f in app) {
+              buf.writeln(
+                '  ${ms(f.self)} / ${ms(f.total)}  ${f.name}  ${await where(f)}',
+              );
+            }
+          }
+          final hot = profile.topSelf();
+          if (hot.isNotEmpty) {
+            buf.writeln('Hottest functions by self time:');
+            for (final f in hot) {
+              final caller = f.topAppCaller;
+              final by = caller == null
+                  ? ''
+                  : ' ← ${profile.functions[caller].name} '
+                        '${await where(profile.functions[caller])}';
+              buf.writeln(
+                '  ${ms(f.self)}  ${f.name} (${f.url == null ? 'native' : classifier.display(f.url!)})$by',
+              );
+            }
+          }
+          buf.writeln(
+            traceError != null
+                ? 'Frames: the VM timeline could not be read ($traceError).'
+                : explainFrames(framesFromTimeline(trace), budgetMs: budgetMs),
+          );
+          if (quiet.data?['appVisible'] == false) {
+            buf.writeln(
+              'The app window is hidden: FlutterPilot forced these frames, '
+              'the user saw none of them.',
             );
           }
-        }
-        final hot = profile.topSelf();
-        if (hot.isNotEmpty) {
-          buf.writeln('Hottest functions by self time:');
-          for (final f in hot) {
-            final caller = f.topAppCaller;
-            final by = caller == null
-                ? ''
-                : ' ← ${profile.functions[caller].name} '
-                      '${await where(profile.functions[caller])}';
-            buf.writeln(
-              '  ${ms(f.self)}  ${f.name} (${f.url == null ? 'native' : classifier.display(f.url!)})$by',
+          buf.writeln(
+            context?.buildMode == BuildMode.profile
+                ? profileBuildNote
+                : debugBuildNote,
+          );
+          if (actionResult != null) {
+            final text = actionResult.content
+                .whereType<TextContent>()
+                .map((c) => c.text)
+                .join('\n');
+            final firstLines = text.split('\n').take(3).join('\n');
+            buf.write(
+              '\n$tool ${actionResult.isError == true ? 'failed' : 'result'}: '
+              '$firstLines',
             );
           }
-        }
-        buf.writeln(
-          traceError != null
-              ? 'Frames: the VM timeline could not be read ($traceError).'
-              : explainFrames(framesFromTimeline(trace), budgetMs: budgetMs),
-        );
-        if (quiet.data?['appVisible'] == false) {
-          buf.writeln(
-            'The app window is hidden: FlutterPilot forced these frames, '
-            'the user saw none of them.',
+          return CallToolResult(
+            isError: actionResult?.isError == true,
+            content: [TextContent(text: buf.toString().trim())],
           );
+        } on RPCError catch (e) {
+          if (e.code == -32601) {
+            return fail(
+              'profile_action is not available on web: ${e.message}.',
+            );
+          }
+          return fail('profile_action failed: $e');
         }
-        buf.writeln(
-          context?.buildMode == BuildMode.profile
-              ? profileBuildNote
-              : debugBuildNote,
-        );
-        if (actionResult != null) {
-          final text = actionResult.content
-              .whereType<TextContent>()
-              .map((c) => c.text)
-              .join('\n');
-          final firstLines = text.split('\n').take(3).join('\n');
-          buf.write(
-            '\n$tool ${actionResult.isError == true ? 'failed' : 'result'}: '
-            '$firstLines',
-          );
-        }
-        return CallToolResult(
-          isError: actionResult?.isError == true,
-          content: [TextContent(text: buf.toString().trim())],
-        );
       },
     );
 
@@ -827,6 +910,19 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (params, extra) async {
+        final context = await _deviceContextForParameters(params);
+        if (context?.isWeb == true) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'get_http_profile is not available on web: web apps use '
+                    'browser networking rather than dart:io.',
+              ),
+            ],
+          );
+        }
         if (params['clear'] == true) {
           await _enableHttpProfiling(params);
           final res = await _callExtensionRaw(
@@ -942,7 +1038,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         );
         for (final req in shown) {
           final method = req['method'] ?? '?';
-          final uri = req['uri'] ?? '?';
+          final uri = Redaction.text('${req['uri'] ?? '?'}');
           final response = req['response'] as Map?;
           final status =
               response?['statusCode']?.toString() ??

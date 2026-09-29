@@ -277,9 +277,8 @@ current major. §1 is done.
    (8080 etc. — any web server passed for a VM service) and reading temp/json
    files nothing writes. "No app" errors say how to make the app findable.
    e2e: a server started in an empty folder finds the app only through roots.
-   **Left:** a plain `flutter run` / IDE launch writes no URI file and can't
-   be found. Next step: the Dart Tooling Daemon (IDEs run one; apps register
-   there via `ConnectedApp`), which needs its URI (VS Code/IntelliJ expose it).
+   A plain `flutter run` / IDE launch writes no URI file: found through the
+   Dart Tooling Daemon since §8's interop (below).
 2. **`flutterpilot mcp install`:** done. In the app folder it compiles the
    server (next to the CLI: a checkout or the `pub global activate` clone;
    `--local`, `--no-compile` for `dart run`) and adds `flutterpilot` to
@@ -471,9 +470,24 @@ Findings #240–243.
   agent's say-so is not evidence. `finish` writes
   `flutterpilot/reports/<feature>-<time>/report.md` in the app. Findings
   #244–247.
-- **Interop with the official Dart & Flutter MCP server:** don't duplicate
-  analyze/test/pub/hot-reload basics; focus on live-app driving, runtime state
-  and profiling. Consider sharing the Dart Tooling Daemon connection.
+- ~~**Interop with the official Dart & Flutter MCP server**~~ — done
+  (2026-09-29). Checked against `dart mcp-server` 1.1.2 (Dart 3.13). Its
+  default tools overlap ours on hot reload/restart, runtime errors, the
+  widget inspector and Flutter Driver; `run_tests`, `dart_format`/`dart_fix`
+  and `launch_app` are off by default (its choice, kept). `flutterpilot mcp
+  install` adds it as `dart` with `--disable flutter,dart_tooling_daemon`:
+  the agent gets its analyzer, `lsp` and pub, and our running-app tools, one
+  of each. A Dart MCP server already configured is kept, with that advice.
+  The DTD, shared: `flutter run`, the IDEs and Dart's `launch_app` register
+  apps with a tooling daemon, so the server (and `doctor`) find apps through
+  `dart tooling-daemon --list` and `ConnectedApp.getVmServices` besides the
+  URI file — a plain `flutter run` works now. Daemons whose workspace is a
+  root, in one (3 levels) or above one (an IDE workspace: the package name
+  must match); the newest launch wins across both. e2e: with the URI file
+  hidden, a fresh server and doctor find the app; the installed Dart server
+  lists `analyze_files` and none of the running-app tools. Not covered: a
+  daemon's workspace far above the project without a pubspec name to match;
+  web apps through DTD. Findings #257–259.
 - ~~**Profile-mode support**~~ — done (2026-09-29). The server reads the
   build mode from the VM (`precompiled_mode`) on connect; the summary says
   "Build: profile", `profile_action` / `profile_frame_budget` say which
@@ -489,8 +503,14 @@ Findings #240–243.
   profile. Findings #248–251.
 - **Parallel devices:** run the same flow on iOS + Android + web and diff
   results.
-- **Security review:** remote VM connections, redaction coverage (PII in
-  trees, logs, network bodies), destructive-operation gating.
+- ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
+  Fixed: obscured field text in widget properties/tree, credentials in
+  logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`
+  write bypasses (`WITH … DELETE`, writing PRAGMAs), the shell bridge
+  answering browsers, generate_test secrets on the command line. Remote
+  connections, destructive gating, secure storage and process launches
+  reviewed OK. An e2e sweep plants secrets in the fixture and checks every
+  read tool. Findings #252–256.
 - **Docs site + short demo** of the real loop (bug → mock → fix → verify).
 
 ---

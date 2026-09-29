@@ -119,7 +119,8 @@ class DioPilotInterceptor extends Interceptor {
             .map((e) => _sanitizeData(e, maxLen: maxLen))
             .toList();
       }
-      final str = data.toString();
+      // Text bodies (form data, raw JSON) may carry credentials too.
+      final str = FlutterPilot.redactText(data.toString());
       if (str.length > maxLen) {
         return '${str.substring(0, maxLen)}... [Truncated]';
       }
@@ -259,7 +260,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'request',
       'method': options.method,
-      'uri': options.uri.toString(),
+      'uri': FlutterPilot.redactText(options.uri.toString()),
       if (reqBody != null) 'body': reqBody,
       if (options.contentType != null) 'contentType': options.contentType,
       'timestamp': DateTime.now().toIso8601String(),
@@ -331,7 +332,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'response',
       'statusCode': response.statusCode,
-      'uri': response.requestOptions.uri.toString(),
+      'uri': FlutterPilot.redactText(response.requestOptions.uri.toString()),
       if (isMocked) 'mocked': true,
       if (resBody != null) 'body': resBody,
       'timestamp': DateTime.now().toIso8601String(),
@@ -345,8 +346,10 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'error',
       'statusCode': err.response?.statusCode,
-      'uri': err.requestOptions.uri.toString(),
-      'message': err.message,
+      'uri': FlutterPilot.redactText(err.requestOptions.uri.toString()),
+      'message': err.message == null
+          ? null
+          : FlutterPilot.redactText(err.message!),
       'errorType': err.type.name,
       if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),
