@@ -296,6 +296,21 @@ extension _NavigationExtensions on FlutterPilot {
           platform == TargetPlatform.linux ||
           platform == TargetPlatform.windows;
       await SystemChrome.setPreferredOrientations(preferred);
+      if (!isDesktop) {
+        final view =
+            WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (DateTime.now().isBefore(deadline)) {
+          await InteractionManager.pumpAndSettleAdaptive();
+          if (view != null) {
+            final isLandscape =
+                view.physicalSize.width > view.physicalSize.height;
+            if (orientation == 'landscape' && isLandscape) break;
+            if (orientation == 'portrait' && !isLandscape) break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
       return ServiceExtensionResponse.result(
         json.encode({
           'status': isDesktop ? 'skipped' : 'success',

@@ -60,6 +60,14 @@ class KeyboardSimulator {
     ),
   };
 
+  static EditableTextState? _lastFocusedEditable;
+
+  /// Visible for testing: reset tracked focus.
+  @visibleForTesting
+  static void resetLastFocusedEditable() {
+    _lastFocusedEditable = null;
+  }
+
   /// Presses [keyName] once (down then up), optionally with [modifiers] held.
   ///
   /// When a text field has focus, returns its text and selection afterwards
@@ -106,7 +114,31 @@ class KeyboardSimulator {
       character = hasShift ? keyDef.character!.toUpperCase() : keyDef.character;
     }
 
-    final field = _focusedEditable();
+    var field = _focusedEditable();
+    // On slow CI runners (12-15 s per step), mobile platforms (like iOS) close
+    // the idle software text-input session, dropping primary focus back to root
+    // (MaterialApp). If no widget is focused, restore focus to the editable.
+    if (field == null &&
+        _lastFocusedEditable != null &&
+        _lastFocusedEditable!.mounted) {
+      final primary = FocusManager.instance.primaryFocus;
+      final type = primary?.context?.widget.runtimeType.toString();
+      final isRoot = primary == null ||
+          primary.context == null ||
+          primary is FocusScopeNode ||
+          type == 'MaterialApp' ||
+          type == 'CupertinoApp' ||
+          primary.context!.widget is FocusScope ||
+          primary.context!.widget is WidgetsApp ||
+          primary.context!.widget is Navigator;
+      if (isRoot) {
+        _lastFocusedEditable!.widget.focusNode.requestFocus();
+        field = _focusedEditable() ?? _lastFocusedEditable;
+      }
+    }
+    if (keyDef.logical == LogicalKeyboardKey.escape) {
+      _lastFocusedEditable = null;
+    }
     final before = field?.textEditingValue;
 
     for (final modifier in modifierDefs) {
@@ -238,7 +270,9 @@ class KeyboardSimulator {
     final context = FocusManager.instance.primaryFocus?.context;
     if (context == null) return null;
     if (context is StatefulElement && context.state is EditableTextState) {
-      return context.state as EditableTextState;
+      final state = context.state as EditableTextState;
+      _lastFocusedEditable = state;
+      return state;
     }
     EditableTextState? found;
     context.visitAncestorElements((element) {
@@ -248,6 +282,9 @@ class KeyboardSimulator {
       }
       return true;
     });
+    if (found != null) {
+      _lastFocusedEditable = found;
+    }
     return found;
   }
 
