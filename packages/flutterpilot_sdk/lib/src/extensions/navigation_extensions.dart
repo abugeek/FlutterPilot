@@ -306,59 +306,6 @@ extension _NavigationExtensions on FlutterPilot {
         }),
       );
     });
-
-    // -- ext.flutterpilot.jumpToScreen ----------------------------------------
-    registerExtension('ext.flutterpilot.jumpToScreen', (
-      method,
-      parameters,
-    ) async {
-      final route = parameters['route'];
-      final stateJson = parameters['state'];
-
-      if (route == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.invalidParams,
-          'Missing route parameter',
-        );
-      }
-
-      // 1. Inject seed state if provided
-      if (stateJson != null) {
-        try {
-          final dynamic stateData = json.decode(stateJson);
-          if (stateData is Map) {
-            for (final entry in stateData.entries) {
-              final parts = entry.key.toString().split(':');
-              if (parts.length >= 2) {
-                final type = parts[0];
-                final name = parts.sublist(1).join(':');
-                if (FlutterPilot._stateSetters.containsKey(type)) {
-                  await FlutterPilot._stateSetters[type]!(name, entry.value);
-                }
-              }
-            }
-          }
-        } catch (_) {}
-      }
-
-      // 2. Teleport to target screen
-      try {
-        TestRecorder.add('skipped', data: {'what': 'navigate_to $route'});
-        await _pushRoute(route);
-        return ServiceExtensionResponse.result(
-          json.encode({
-            'status': 'success',
-            'route': route,
-            'stateInjected': stateJson != null,
-          }),
-        );
-      } catch (e) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Jump to screen failed: $e',
-        );
-      }
-    });
   }
 }
 

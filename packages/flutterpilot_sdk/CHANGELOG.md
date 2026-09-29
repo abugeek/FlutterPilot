@@ -1,3 +1,10 @@
+## Unreleased
+
+- Removed service extensions no FlutterPilot tool called: `getStreamLogs`,
+  `clearStreamLogs`, `tapAt`, `jumpToScreen`, `getPerfMetrics`,
+  `getDebugLogs`, `auditMemoryHealth`; and the `StreamInspector` and
+  `MemoryAuditor` classes behind them.
+
 ## 0.1.0
 
 - Initial release
