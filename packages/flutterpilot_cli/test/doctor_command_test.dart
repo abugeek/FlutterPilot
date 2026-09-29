@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutterpilot_cli/flutterpilot_cli.dart';
+import 'package:flutterpilot_cli/src/dtd_discovery.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -146,10 +147,32 @@ void main() {
 
   test('runtime checks are skipped when the app is not running', () async {
     pubspec([]);
-    final checks = await DoctorCommand.checkRunningApp(app.path);
+    // An app a plain `flutter run` registered with its tooling daemon
+    // (here one that stopped) is tried too.
+    var asked = 0;
+    Future<List<DtdApp>> daemons() async {
+      asked++;
+      return [
+        DtdApp(
+          uri: 'ws://127.0.0.1:2/y=/ws',
+          workspaceRoot: app.path,
+          started: DateTime.now(),
+        ),
+      ];
+    }
+
+    final checks = await DoctorCommand.checkRunningApp(
+      app.path,
+      dtdApps: daemons,
+    );
     expect(checks.single.warn, isTrue);
+    expect(checks.single.fix, contains('flutter run'));
     write('.dart_tool/flutterpilot_vm_uri', 'ws://127.0.0.1:1/x=/ws');
-    final stale = await DoctorCommand.checkRunningApp(app.path);
+    final stale = await DoctorCommand.checkRunningApp(
+      app.path,
+      dtdApps: daemons,
+    );
     expect(stale.single.title, contains('stopped'));
+    expect(asked, 2);
   });
 }

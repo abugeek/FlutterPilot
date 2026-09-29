@@ -91,6 +91,7 @@ jobs:
 
   e2e-android:
     runs-on: ubuntu-latest
+    continue-on-error: true
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4

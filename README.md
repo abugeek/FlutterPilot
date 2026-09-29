@@ -25,9 +25,10 @@ flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPil
 # 3. Add the FlutterPilot server to your agent's MCP config (.mcp.json for
 #    Claude Code, .cursor/mcp.json, .vscode/mcp.json — the ones the project
 #    uses; --client to choose). Compiles the server; other servers are kept.
+#    Also adds the official Dart MCP server for the code side (--no-dart to skip).
 flutterpilot mcp install
 
-# 4. Run the app so the server finds it:
+# 4. Run the app; the server finds it (flutter run, your IDE, or):
 flutterpilot dev
 
 # Something missing? Checks the setup and the running app, prints fixes:
@@ -43,8 +44,8 @@ theme and debug-paint toggles, memory and HTTP profiles. Driving the app
 (taps, text entry, navigation, assertions) needs the SDK (Option A); without
 it those tools are not listed.
 ```bash
-# Run any vanilla Flutter app, writing its VM service URI where FlutterPilot looks:
-flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri
+# Run any vanilla Flutter app (the server finds it through the Dart Tooling Daemon):
+flutter run
 
 # Start the MCP server (finds the app in the current folder, the MCP client's
 # workspace folders, or -p <app folder>):
@@ -113,8 +114,9 @@ Use absolute paths; `-p` is your Flutter app's root:
   }
   ```
 - Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../build/flutterpilot_server -p /ABSOLUTE/PATH/your_flutter_app`
-- Run the app with `flutter run --vmservice-out-file=.dart_tool/flutterpilot_vm_uri` (or `flutterpilot dev`) so the server finds it.
-- `-p` is optional when the client shares its workspace folders (MCP roots) and the app is in one of them, up to 3 levels deep (monorepos); with several apps running, the most recently launched wins. A plain `flutter run` can't be found — pass its URI to `connect_app`.
+- Run the app with `flutter run`, from your IDE, or with `flutterpilot dev`: the server finds it through the Dart Tooling Daemon they register it with, or the URI file `flutterpilot dev` writes (`--vmservice-out-file=.dart_tool/flutterpilot_vm_uri`). Otherwise pass the URI `flutter run` prints to `connect_app`.
+- `-p` is optional when the client shares its workspace folders (MCP roots) and the app is in one of them, up to 3 levels deep (monorepos); with several apps running, the most recently launched wins.
+- **With the official Dart MCP server** (`dart mcp-server`): `mcp install` adds it as `dart` with `--disable flutter,dart_tooling_daemon`, so the agent gets one of each — Dart's analyzer, symbols (`lsp`) and pub, FlutterPilot's running-app tools (its hot reload, runtime errors, widget inspector and Flutter Driver overlap FlutterPilot's). A Dart MCP server you already have is kept, with that advice.
 - Rebuild the executable after pulling server changes.
 
 ## 📋 What You Get
@@ -123,7 +125,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 64 tools, of which an app sees only the ones that can work
+registrations): 67 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
@@ -131,7 +133,8 @@ you'll use most:
 **Orientation** — `get_app_summary` (call first: route, tappable elements,
 errors, logs, window visibility), `get_interactive_elements`,
 `get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
-`inspect_widget` (the file:line that draws a widget), `capture_screenshot`.
+`inspect_widget` (the file:line that draws a widget; `layout: true` for why
+it overflows or is 0 wide), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
@@ -143,7 +146,8 @@ now, new errors — so you rarely need a follow-up read.
 
 **Verifying** — `assert_widget` (text, key, enabled, type + count),
 `wait_for` (widget, route, animations, state, frames), `compare_screenshot`
-(`save: true` for the baseline), `audit_screen_health`.
+(`save: true` for the baseline), `audit_screen_health` (overflows, tap
+targets, unlabeled controls, text contrast, screen reader order).
 
 **Navigation & environment** — `navigate_to` (deep links, go_router
 push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,
@@ -154,11 +158,12 @@ culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
 
 **Network** — `mock_http_response` (`clear: true` to remove),
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
-(any `dart:io` client).
+(any `dart:io` client; `id` for one request's headers and bodies).
 
 **Performance** — `profile_frame_budget`, `profile_action` (CPU
-profile of one tap/scroll, app functions with file:line), `get_memory_details`
-(`classes: true` for the top classes).
+profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`
+(`classes: true` for the top classes; `cycle` + `times` for a leak check
+with retaining paths).
 
 **State & storage (plugins)** — Riverpod and Bloc `get_state` /
 `set_state`, go_router (in the navigation tools),

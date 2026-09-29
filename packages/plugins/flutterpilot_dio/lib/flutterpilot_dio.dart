@@ -53,10 +53,48 @@ class DioPilotInterceptor extends Interceptor {
   }
 
   /// Explicitly registers Dio capabilities with FlutterPilot.
+  /// Answers requests whose URL contains [urlPattern] with [statusCode] and
+  /// [body] (JSON is decoded) instead of the network. What
+  /// `mock_http_response` sets, and what tests generated from it call.
+  static void mock(
+    String urlPattern, {
+    required int statusCode,
+    required String body,
+    int delayMs = 0,
+  }) {
+    _mocks[urlPattern] = {
+      'statusCode': statusCode,
+      'body': body,
+      'delayMs': delayMs.clamp(0, _maxDelayMs),
+    };
+  }
+
+  /// Removes the mock for [urlPattern], or all of them.
+  static void clearMocks([String? urlPattern]) {
+    if (urlPattern != null) {
+      _mocks.remove(urlPattern);
+    } else {
+      _mocks.clear();
+    }
+  }
+
   static void register() {
     if (!_initialized) {
       _initialized = true;
       _registerExtensions();
+      // A scenario loaded with a hot restart: its mocks answer the app's
+      // very first requests.
+      final pending = FlutterPilot.takeRestartData('httpMocks');
+      if (pending is List) {
+        for (final m in pending.whereType<Map>()) {
+          mock(
+            '${m['urlPattern']}',
+            statusCode: (m['statusCode'] as num?)?.toInt() ?? 200,
+            body: '${m['body'] ?? ''}',
+            delayMs: (m['delayMs'] as num?)?.toInt() ?? 0,
+          );
+        }
+      }
     }
   }
 
@@ -81,7 +119,8 @@ class DioPilotInterceptor extends Interceptor {
             .map((e) => _sanitizeData(e, maxLen: maxLen))
             .toList();
       }
-      final str = data.toString();
+      // Text bodies (form data, raw JSON) may carry credentials too.
+      final str = FlutterPilot.redactText(data.toString());
       if (str.length > maxLen) {
         return '${str.substring(0, maxLen)}... [Truncated]';
       }
@@ -172,11 +211,7 @@ class DioPilotInterceptor extends Interceptor {
         0,
         _maxDelayMs,
       );
-      _mocks[urlPattern] = {
-        'statusCode': statusCode,
-        'body': body,
-        'delayMs': delayMs,
-      };
+      mock(urlPattern, statusCode: statusCode, body: body, delayMs: delayMs);
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
@@ -186,17 +221,26 @@ class DioPilotInterceptor extends Interceptor {
       );
     });
 
+    // -- ext.flutterpilot.getHttpMocks ----------------------------------------
+    registerExtension('ext.flutterpilot.getHttpMocks', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'mocks': [
+            for (final e in _mocks.entries) {'urlPattern': e.key, ...e.value},
+          ],
+        }),
+      );
+    });
+
     // -- ext.flutterpilot.clearHttpMocks ---------------------------------------
     registerExtension('ext.flutterpilot.clearHttpMocks', (
       method,
       parameters,
     ) async {
-      final urlPattern = parameters['urlPattern'];
-      if (urlPattern != null) {
-        _mocks.remove(urlPattern);
-      } else {
-        _mocks.clear();
-      }
+      clearMocks(parameters['urlPattern']);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', 'remaining': _mocks.length}),
       );
@@ -216,7 +260,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'request',
       'method': options.method,
-      'uri': options.uri.toString(),
+      'uri': FlutterPilot.redactText(options.uri.toString()),
       if (reqBody != null) 'body': reqBody,
       if (options.contentType != null) 'contentType': options.contentType,
       'timestamp': DateTime.now().toIso8601String(),
@@ -288,7 +332,7 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'response',
       'statusCode': response.statusCode,
-      'uri': response.requestOptions.uri.toString(),
+      'uri': FlutterPilot.redactText(response.requestOptions.uri.toString()),
       if (isMocked) 'mocked': true,
       if (resBody != null) 'body': resBody,
       'timestamp': DateTime.now().toIso8601String(),
@@ -302,8 +346,10 @@ class DioPilotInterceptor extends Interceptor {
     _addLog({
       'type': 'error',
       'statusCode': err.response?.statusCode,
-      'uri': err.requestOptions.uri.toString(),
-      'message': err.message,
+      'uri': FlutterPilot.redactText(err.requestOptions.uri.toString()),
+      'message': err.message == null
+          ? null
+          : FlutterPilot.redactText(err.message!),
       'errorType': err.type.name,
       if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),

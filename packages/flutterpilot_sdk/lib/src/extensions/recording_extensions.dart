@@ -3,35 +3,62 @@ part of '../../flutterpilot_sdk.dart';
 /// Recording and custom tool service extensions.
 ///
 /// Registers the following `ext.flutterpilot.*` service extensions:
-/// - `startRecording` — Begin recording user interactions
-/// - `stopRecording` — Stop recording and return captured actions
+/// - `testRecording` — Record actions and assertions for a generated test
 /// - `listCustomTools` — List registered custom tools
 /// - `callCustomTool` — Invoke a custom tool by name
 /// - `getFlightLog` — Read full timeline from continuous FlightRecorder
 /// - `clearFlightLog` — Reset the flight recorder buffer
 extension _RecordingExtensions on FlutterPilot {
   static void register() {
-    // -- ext.flutterpilot.startRecording --------------------------------------
-    registerExtension('ext.flutterpilot.startRecording', (
+    // -- ext.flutterpilot.testRecording ---------------------------------------
+    // action=start: record from now on; read: the steps so far (and whether
+    // recording is on: a hot restart loses them); note: append a step the
+    // server knows about (a mocked response); stop: end recording.
+    registerExtension('ext.flutterpilot.testRecording', (
       method,
       parameters,
     ) async {
-      FlutterPilot._isRecording = true;
-      FlutterPilot._recordedActions.clear();
+      switch (parameters['action']) {
+        case 'start':
+          TestRecorder.start();
+        case 'note':
+          if (TestRecorder.active) {
+            TestRecorder.steps.add(
+              (json.decode(parameters['step'] ?? '{}') as Map)
+                  .cast<String, dynamic>(),
+            );
+          }
+        case 'stop':
+          TestRecorder.active = false;
+      }
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'started'}),
+        json.encode({
+          'active': TestRecorder.active,
+          'steps': TestRecorder.steps,
+          'secrets': TestRecorder.secrets,
+        }),
       );
     });
 
-    // -- ext.flutterpilot.stopRecording ---------------------------------------
-    registerExtension('ext.flutterpilot.stopRecording', (
+    // -- ext.flutterpilot.prepareRestart --------------------------------------
+    // Data for after the hot restart the server is about to do (a
+    // scenario's mocks), read by FlutterPilot.takeRestartData.
+    registerExtension('ext.flutterpilot.prepareRestart', (
       method,
       parameters,
     ) async {
-      FlutterPilot._isRecording = false;
-      return ServiceExtensionResponse.result(
-        json.encode({'actions': FlutterPilot._recordedActions.toList()}),
-      );
+      try {
+        RestartStore.save(
+          (json.decode(parameters['data'] ?? '{}') as Map)
+              .cast<String, dynamic>(),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Could not keep data across the restart: $e',
+        );
+      }
+      return ServiceExtensionResponse.result(json.encode({'saved': true}));
     });
 
     // -- ext.flutterpilot.listCustomTools -------------------------------------

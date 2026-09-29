@@ -7,6 +7,7 @@ import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 import 'package:yaml/yaml.dart';
 
+import '../dtd_discovery.dart';
 import 'init_command.dart';
 import 'mcp_command.dart';
 
@@ -249,43 +250,49 @@ class DoctorCommand extends Command<void> {
         : DoctorCheck.ok('MCP config: ${configured.join(', ')}');
   }
 
-  /// Connects to the app `flutterpilot dev` started (its URI file) and
-  /// checks what registered.
-  static Future<List<DoctorCheck>> checkRunningApp(String project) async {
+  /// Connects to the running app — from its URI file (`flutterpilot dev`),
+  /// else from the Dart Tooling Daemon a plain `flutter run` or an IDE
+  /// registers it with — and checks what registered.
+  static Future<List<DoctorCheck>> checkRunningApp(
+    String project, {
+    Future<List<DtdApp>> Function()? dtdApps,
+  }) async {
     final file = File(p.join(project, '.dart_tool', 'flutterpilot_vm_uri'));
-    const start =
-        'flutterpilot dev (or flutter run '
-        '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri)';
-    if (!file.existsSync()) {
-      return [
-        const DoctorCheck.warn(
-          'App not running (or started without its URI file): runtime '
-          'checks skipped',
-          start,
-        ),
-      ];
-    }
-    final uri = _wsUri(file.readAsStringSync().trim());
-    VmService? vm;
-    try {
-      vm = await vmServiceConnectUri(uri).timeout(const Duration(seconds: 3));
-      final extensions = <String>{};
-      for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
-        final isolate = await vm.getIsolate(ref.id!);
-        extensions.addAll(isolate.extensionRPCs ?? const []);
+    const start = 'flutter run, flutterpilot dev or your IDE';
+    final fromDtd =
+        (await (dtdApps ?? DtdDiscovery.apps)())
+            .where((a) => a.isUnder([Directory(project)], maxDepth: 0))
+            .toList()
+          ..sort((a, b) => b.started.compareTo(a.started));
+    final uris = [
+      if (file.existsSync()) _wsUri(file.readAsStringSync().trim()),
+      for (final app in fromDtd) app.uri,
+    ];
+    for (final uri in uris) {
+      VmService? vm;
+      try {
+        vm = await vmServiceConnectUri(uri).timeout(const Duration(seconds: 3));
+        final extensions = <String>{};
+        for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+          final isolate = await vm.getIsolate(ref.id!);
+          extensions.addAll(isolate.extensionRPCs ?? const []);
+        }
+        return checkExtensions(project, extensions);
+      } catch (_) {
+        // Stopped: try the next.
+      } finally {
+        await vm?.dispose();
       }
-      return checkExtensions(project, extensions);
-    } catch (_) {
-      return [
-        const DoctorCheck.warn(
-          'App not running: .dart_tool/flutterpilot_vm_uri names an app that '
-          'stopped; runtime checks skipped',
-          start,
-        ),
-      ];
-    } finally {
-      await vm?.dispose();
     }
+    return [
+      DoctorCheck.warn(
+        file.existsSync()
+            ? 'App not running: .dart_tool/flutterpilot_vm_uri names an app '
+                  'that stopped; runtime checks skipped'
+            : 'App not running: runtime checks skipped',
+        start,
+      ),
+    ];
   }
 
   /// Runtime checks from the running app's registered [extensions].
