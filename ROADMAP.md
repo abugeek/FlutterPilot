@@ -519,9 +519,12 @@ Findings #240–243.
 These exist and compile, but nobody has checked them against real behaviour.
 Review each the same way as PR #1 — keep, fix, or delete:
 
-- **`ai_overlay_manager.dart`** — the "🤖 AI Tap" ripple. Verify it is *not*
-  captured in `capture_screenshot` / `compare_screenshot` (would make visual
-  diffs flaky) and not listed in widget trees or tappable elements.
+- ~~**`ai_overlay_manager.dart`**~~ — done (2026-09-29): kept. Trees,
+  finders and tappable lists already skipped it. Screenshots left it out only
+  by accident: they captured the bottom page's repaint boundary, which also
+  left out every dialog, menu and sheet on the root navigator (and the debug
+  banner). They now capture the whole window, after the frame that takes the
+  badge off; the contrast audit reads the same pixels.
 - ~~**`operation_scheduler.dart` + `get_operation` / `async:true` /
   `operationDeadlineMs`**~~ — done (2026-09-29): async, cancel and the
   per-call deadline are gone (only six fast read tools had them; the slow

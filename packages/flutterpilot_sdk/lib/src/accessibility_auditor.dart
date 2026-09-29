@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'ai_overlay_manager.dart';
+import 'screen_capture.dart';
 import 'source_locator.dart';
 
 /// Accessibility checks beyond tap-target size (ROADMAP §5.7), from what a
@@ -293,30 +294,17 @@ class AccessibilityAuditor {
         DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
-    RenderRepaintBoundary? boundary;
-    void find(RenderObject o) {
-      if (boundary != null) return;
-      if (o is RenderRepaintBoundary) {
-        boundary = o;
-        return;
-      }
-      o.visitChildren(find);
-    }
-
-    for (final view in RendererBinding.instance.renderViews) {
-      find(view);
-    }
-    final b = boundary;
-    if (b == null || !b.hasSize) return null;
     try {
-      final image = await b.toImage();
+      final image = await ScreenCapture.image();
+      if (image == null) return null;
       final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
       if (data == null) return null;
       return ScreenPixels(
         data.buffer.asUint8List(),
         image.width,
         image.height,
-        b.localToGlobal(Offset.zero),
+        Offset.zero,
       );
     } catch (_) {
       return null;

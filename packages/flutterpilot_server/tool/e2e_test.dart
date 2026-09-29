@@ -587,6 +587,28 @@ Future<void> main(List<String> args) async {
         {'name': 'home', 'threshold': 5},
         ['PASSED'],
       );
+      // A tap that changes nothing: its 🤖 badge (700 ms) is not in the picture.
+      await check('tap that changes nothing', 'tap_widget', {'key': 'card'});
+      await check(
+        'the tap badge is not in the screenshot',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 0.5},
+        ['PASSED'],
+      );
+      await check(
+        'open a dialog',
+        'tap_widget',
+        {'key': 'Dialog'},
+        ['A dialog'],
+      );
+      await check(
+        'a dialog is in the screenshot',
+        'compare_screenshot',
+        {'name': 'home', 'threshold': 5},
+        ['FAILED'],
+        true,
+      );
+      await check('close the dialog', 'tap_widget', {'key': 'Close dialog'});
       await check('assert_widget needs a check', 'assert_widget', {}, [
         'Say what to check',
       ], true);
@@ -1726,6 +1748,22 @@ class _HomeState extends State<Home> {
           child: const Text('Squeeze'),
         ),
         TextButton(onPressed: _signIn, child: const Text('Sign in')),
+        // On the root navigator, above the page: in screenshots too.
+        TextButton(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('A dialog'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close dialog'),
+                ),
+              ],
+            ),
+          ),
+          child: const Text('Dialog'),
+        ),
         Text('Key: $_lastKey x${_keyDowns[_lastKey] ?? 0}'),
         if (_squeeze)
           const SizedBox(width: 40, child: Row(children: [SizedBox(key: ValueKey('squeezed'), width: 90, height: 8)])),
