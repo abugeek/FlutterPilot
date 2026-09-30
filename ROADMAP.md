@@ -9,9 +9,9 @@ tools that always work beat many tools that sometimes work.
 
 ---
 
-## 0. State as of 2026-09-28
+## 0. State as of 2026-09-30
 
-- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8); an app sees only those that work for it
+- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -543,13 +543,17 @@ Review each the same way as PR #1 — keep, fix, or delete:
   more SDK extensions no tool called (`tapAt`, `jumpToScreen`,
   `getPerfMetrics`, `getDebugLogs`, `auditMemoryHealth` + `MemoryAuditor`).
   A server test now fails when the SDK registers an extension no tool calls.
-- **`flight_recorder.dart`**, `get_flight_log` — useful only if §6 is built
-  on top. (The recording tools were deleted in §4.2.)
-- **`native_automation_tools.dart`** (`native_tap` etc., needs `idb`, iOS
-  simulator only) — test on a simulator or hide on other platforms.
-- **Plugin write tools** that make real network calls (`supabase_session`,
-  `log_analytics_event`, `record_crashlytics_error`, ...) — keep behind
-  `--allow-destructive` and verify they're labeled as such.
+- ~~**`flight_recorder.dart`**, `get_flight_log`~~ — done (2026-09-30):
+  deleted. On hn_reader it saw only raw pointer-downs (no routes, keys or
+  text) and froze after the first error; §6 was built without it. Found
+  on the way: `navigate_to` to an unknown go_router route said it arrived
+  and our listener threw in the app; now refused with the app's routes.
+  Findings #273–274.
+- ~~**`native_automation_tools.dart`**~~ — done in §2.2 (iOS only, field-tested).
+- ~~**Plugin write tools**~~ — checked (2026-09-30): `supabase_session`,
+  `set_secure_storage_key`, `set_shared_preference` need
+  `--allow-destructive` and say so; the Firebase write tools are gone
+  (§2.1). Finding #275.
 - **Example app** (`examples/flutter_pilot_example`) — 12 demo screens incl.
   `chaos_screen.dart` and `animation_lab_screen.dart` referencing removed or
   untested features. It's a showcase, not a test; trim it to what the tools

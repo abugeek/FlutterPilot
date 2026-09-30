@@ -14,7 +14,6 @@ import 'src/accessibility_auditor.dart';
 import 'src/ai_overlay_manager.dart';
 import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
-import 'src/flight_recorder.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
 import 'src/redaction.dart';
@@ -35,7 +34,6 @@ import 'src/widget_inspector.dart';
 
 export 'src/app_settings_override.dart';
 export 'src/error_inspector.dart';
-export 'src/flight_recorder.dart';
 export 'src/frame_budget_profiler.dart';
 export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
@@ -515,20 +513,12 @@ class FlutterPilot {
   static void _setupModules() {
     // Navigation
     NavigationTracker.onStateChange = (source, name, value) {
-      FlightRecorder.recordRoute(name, {
-        'source': source,
-        'value': _safeJsonEncode(value),
-      });
       logStateChange(source, name, value);
     };
 
     // Errors
     ErrorInspector.initialize();
     ErrorInspector.onErrorCaptured = (details) {
-      FlightRecorder.recordError(
-        details.exceptionAsString(),
-        details.stack?.toString(),
-      );
       final exception = details.exceptionAsString();
       postEvent('ext.flutterpilot.error', {
         'exception': exception,
@@ -540,12 +530,6 @@ class FlutterPilot {
             ? 'warning'
             : 'error',
       });
-    };
-
-    // Interactions
-    InteractionManager.initialize();
-    InteractionManager.onPointerDown = (info) {
-      FlightRecorder.recordGesture('tapAt', info);
     };
   }
 

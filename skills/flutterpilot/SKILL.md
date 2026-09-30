@@ -1,6 +1,6 @@
 ---
 name: flutterpilot
-description: Inspect, drive and debug a running Flutter app through FlutterPilot's MCP tools — widget tree and screenshots, taps and text by key/selector/visible text, assertions, state injection, crash reports and flight log, visual regression, network mocking, performance profiling.
+description: Inspect, drive and debug a running Flutter app through FlutterPilot's MCP tools — widget tree and screenshots, taps and text by key/selector/visible text, assertions, state injection, crash reports, visual regression, network mocking, performance profiling.
 ---
 
 # FlutterPilot Agent Skill
@@ -12,7 +12,7 @@ This skill guides AI coding agents (Antigravity, Claude, Cursor, Copilot, Cline,
 - **One call instead of several**: `tap_widget(waitFor: ...)`, `fill_form(submitWith: ...)` and `execute_action_chain` run multi-step actions in one turn.
 - **Subtree scoping**: `get_widget_tree(rootKey: "form_id")` returns only one dialog or form.
 - **State Injection**: Seeding Riverpod/Bloc state directly (`set_state`).
-- **Crash Flight Recording**: Rolling crash timelines (`get_flight_log`) and crash reports with the failing source location (`get_errors(report: true)`).
+- **Crash Reports**: the exception, the failing source location, route and recent requests (`get_errors(report: true)`).
 - **Memory & Allocation Inspections**: Checking heap capacity, used bytes, and top Dart classes (`get_memory_details`, `classes: true`).
 - **Visual regression**: `compare_screenshot(name, save: true)`, then `compare_screenshot(name)` — changed % and a diff image with changes in magenta.
 
@@ -101,8 +101,5 @@ call_tool("get_http_profile", {"limit": 20})
 
 // Inspect deduplicated recent errors
 call_tool("get_errors", {})
-
-// Retrieve 30s rolling flight timeline
-call_tool("get_flight_log", {})
 ```
 

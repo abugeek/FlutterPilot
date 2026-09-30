@@ -114,7 +114,7 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`, `navigate_to` |
 | Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` (layout + accessibility: labels, contrast, reading order), `generate_test` (record a flow, write it as an integration_test, run it), `verify_feature` (acceptance criteria → pass/fail report with evidence) |
 | Rendering | `set_app_settings` (theme, locale, textScale, orientation, debug overlays) |
-| Errors & logs | `get_errors` (`report`), `get_flight_log`, `get_debug_logs` |
+| Errors & logs | `get_errors` (`report`), `get_debug_logs` |
 | Code changes | `hot_reload` (`restart`) |
 | Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` (`id`: headers, bodies) |
 | State (Riverpod/Bloc) | `get_state`, `set_state`, `scenario` (save/load a named start state: route, preferences, mocks, state) |

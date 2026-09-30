@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 import 'package:go_router/go_router.dart';
@@ -81,12 +81,8 @@ class GoRouterPilotInspector {
     };
     _router = router;
     NavigationTracker.customNavigateHandler = (route) async {
-      try {
-        router.go(route);
-        return true;
-      } catch (_) {
-        return false;
-      }
+      await navigateChecked(router, 'go', route);
+      return true;
     };
     NavigationTracker.customPopHandler = () async {
       try {
@@ -117,12 +113,70 @@ class GoRouterPilotInspector {
     _registered = false;
   }
 
+  /// Runs a go/push/replace and throws when [location] matches no route.
+  /// go_router then shows its error page; the app is put back where it was,
+  /// so the agent is not told it arrived.
+  @visibleForTesting
+  static Future<void> navigateChecked(
+    GoRouter router,
+    String action,
+    String location,
+  ) async {
+    final before = router.routerDelegate.currentConfiguration.uri.toString();
+    switch (action) {
+      case 'push':
+        unawaited(router.push<Object?>(location));
+      case 'replace':
+        router.replace<Object?>(location);
+      default:
+        router.go(location);
+    }
+    // An async redirect lands the new configuration by the next frame.
+    WidgetsBinding.instance.scheduleFrame();
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+    } catch (_) {}
+    final now = router.routerDelegate.currentConfiguration;
+    final last = now.matches.isEmpty ? null : now.matches.last;
+    // A push to an unknown route adds an error page on top of the stack.
+    final pushedError = last is ImperativeRouteMatch && last.matches.isError;
+    if (!now.isError && !pushedError) return;
+    if (pushedError) {
+      router.pop();
+    } else {
+      router.go(before);
+    }
+    throw StateError(
+      'No route matches "$location". Routes: '
+      '${routePaths(router.configuration.routes).join(', ')}',
+    );
+  }
+
+  /// Full paths of [routes] and their children, as `navigate_to` takes them.
+  @visibleForTesting
+  static List<String> routePaths(List<RouteBase> routes, [String parent = '']) {
+    String join(String path) => path.startsWith('/')
+        ? path
+        : parent.endsWith('/')
+        ? '$parent$path'
+        : '$parent/$path';
+    return [
+      for (final route in routes)
+        if (route is GoRoute) ...[
+          join(route.path),
+          ...routePaths(route.routes, join(route.path)),
+        ] else
+          ...routePaths(route.routes, parent),
+    ];
+  }
+
   static void _listenRouteChanges() {
     _routerListener = () {
       final router = _router;
       if (router != null) {
         _navigationHistory.add({
-          'location': router.state.uri.toString(),
+          // Not router.state: it throws while go_router shows its error page.
+          'location': router.routerDelegate.currentConfiguration.uri.toString(),
           'timestamp': DateTime.now().toIso8601String(),
         });
         while (_navigationHistory.length > _maxHistory) {
@@ -245,9 +299,8 @@ class GoRouterPilotInspector {
       try {
         switch (action) {
           case 'push':
-            router.push(location!);
           case 'replace':
-            router.replace(location!);
+            await navigateChecked(router, action, location!);
           case 'pop':
             if (router.canPop()) {
               router.pop();
@@ -259,7 +312,7 @@ class GoRouterPilotInspector {
             }
           case 'go':
           default:
-            router.go(location!);
+            await navigateChecked(router, 'go', location!);
         }
         return ServiceExtensionResponse.result(
           json.encode({

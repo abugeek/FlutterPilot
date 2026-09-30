@@ -911,7 +911,6 @@ Future<void> main(List<String> args) async {
         ('get_interactive_elements', <String, dynamic>{}),
         ('get_semantics_tree', <String, dynamic>{}),
         ('get_widget_properties', <String, dynamic>{'key': 'PIN'}),
-        ('get_flight_log', <String, dynamic>{}),
         ('get_debug_logs', <String, dynamic>{}),
         ('press_key', <String, dynamic>{'key': 'x'}),
       ]) {
@@ -955,7 +954,6 @@ Future<void> main(List<String> args) async {
       for (final (tool, args) in [
         ('get_debug_logs', <String, dynamic>{}),
         ('get_app_summary', <String, dynamic>{}),
-        ('get_flight_log', <String, dynamic>{}),
         ('get_network_logs', <String, dynamic>{}),
         if (!isWeb) ...[
           ('get_http_profile', <String, dynamic>{'url': 'example.com/login'}),

@@ -1106,7 +1106,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 - `audit_screen_health` — overflows and small tap targets (with `set_app_settings(textScale: 2)`)
 
 ## Reading state
-- `get_errors` (report:true: full crash report), `get_flight_log`, `get_debug_logs` (clear:true)
+- `get_errors` (report:true: full crash report), `get_debug_logs` (clear:true)
 - `get_navigation_stack` — routes (go_router: params, routes:true, history:true)
 - `get_state` / `set_state` — Riverpod and Bloc (plugins)
 - `get_network_logs`, `mock_http_response`, `simulate_network` — Dio plugin
