@@ -483,6 +483,12 @@ keyboard forced on, and in Chrome:
 | 279 | checkboxes by screen reader label | ❌→fixed | 15 rows listed as "Checkbox" ×15; `toggle_checkbox(key: "Done: Buy milk")` (its `semanticLabel`) → not found. Finders and the tappable list now read Semantics labels the app wrote (Checkbox/Image `semanticLabel`, `Semantics(label:)` in app code), not the framework's own ("Dismiss" on a drawer's scrim). Profile builds have no creation locations, so there they are still unnamed. |
 | 280 | unknown tool arguments | 🔎 open | `get_network_logs(clear: true)` (no such parameter) answered with the logs, cleared nothing and said nothing. |
 
+## §1 re-check (hn_reader, macOS, 2026-10-01)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 284 | `set_state` on an enum state | ❌→fixed | `set_state(name: "Feed", value: "new")` answered `type 'String' is not a subtype of type 'Feed' of 'newState'`: an enum can't be built from JSON without reflection, and the description only promised an explanation for class states. Now: "NotifierProvider<FeedNotifier, Feed> holds a Feed (Feed.top); a JSON value (String) can't be converted to it … for an enum state, drive the UI". An int now sets a double state (the Bloc plugin already did). The other §1 items (1–9) checked out: see ROADMAP §1. |
+
 ## CI flakiness (required checks failing at random)
 
 Failing checks over the last 30 CI runs (90 Apple/web e2e jobs; Android before #48 excluded):
