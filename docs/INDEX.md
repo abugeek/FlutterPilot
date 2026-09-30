@@ -83,8 +83,8 @@ FlutterPilot documentation is organized into focused guides:
 
 #### See example code
 → Go to [examples/](../examples/)
-- Example Flutter app with FlutterPilot
-- Demonstrates all major features
+- A small todo app wired for FlutterPilot
+- A walkthrough driving it with the tools
 
 ---
 

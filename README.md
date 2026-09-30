@@ -419,8 +419,8 @@ await mcp.call('get_semantics_tree');
 - **[SDK API Reference](packages/flutterpilot_sdk/README.md)** — Service extensions, custom tools, state injection
 - **[Server & Tools Guide](packages/flutterpilot_server/README.md)** — Tool descriptions, MCP config, prerequisites
 - **[Contributing Guide](CONTRIBUTING.md)** — Development setup, code style, architecture details
-- **[Example App](examples/flutter_pilot_example)** — Full demo with Riverpod, Bloc, Dio, Hive
-- **[Tool Reference](TOOLS.md)** — Detailed per-tool documentation with examples
+- **[Example App](examples/flutter_pilot_example)** — a small todo app (Dio, Riverpod, go_router, shared_preferences) and a walkthrough of the bug → mock → fix → verify loop
+- **[Tool Reference](TOOLS.generated.md)** — every tool and parameter, generated from the server
 
 ---
 

@@ -411,6 +411,21 @@ class PilotWidgetInspector {
         }
       }
 
+      // Its screen reader label: Checkbox(semanticLabel:) builds one, as
+      // do Image and Semantics(label:) around a custom control.
+      if ((targetIndex != null || bestPriority < 57 + 5) &&
+          widget is Semantics) {
+        final label = widget.properties.label?.toLowerCase();
+        final q = queryToSearch.toLowerCase();
+        if (label == q) {
+          consider(57);
+        } else if (partial &&
+            (targetIndex != null || bestPriority < 50 + 5) &&
+            (label?.contains(q) ?? false)) {
+          consider(50);
+        }
+      }
+
       // Priority 40: Type Exact Match
       if ((targetIndex != null || bestPriority < 40 + 5) &&
           typeName.toLowerCase() == queryToSearch.toLowerCase()) {
@@ -641,15 +656,21 @@ class PilotWidgetInspector {
       if (v != null && v.isNotEmpty) parts.add(v);
     }
 
-    void extract(Element e) {
+    // [fromApp]: below a widget the app created. Semantics labels count
+    // only there (Checkbox(semanticLabel:), Semantics(label:) in app code),
+    // not the framework's own ("Dismiss" on a drawer's scrim).
+    void extract(Element e, [bool fromApp = false]) {
       if (skip.contains(e)) return;
       final w = e.widget;
+      fromApp = fromApp || debugIsWidgetLocalCreation(w);
       if (w is Text) {
         add(w.data ?? w.textSpan?.toPlainText());
         return;
       } else if (w is RichText) {
         add(w.text.toPlainText());
         return;
+      } else if (w is Semantics && fromApp) {
+        add(w.properties.label);
       } else if (w is Tooltip) {
         add(w.message);
       } else if (w is IconButton) {
@@ -664,7 +685,7 @@ class PilotWidgetInspector {
         }
         return; // its child RichText is just the private-use glyph character
       }
-      e.visitScreenChildren(extract);
+      e.visitScreenChildren((c) => extract(c, fromApp));
     }
 
     extract(element);

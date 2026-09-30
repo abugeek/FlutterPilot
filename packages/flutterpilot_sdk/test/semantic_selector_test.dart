@@ -242,5 +242,46 @@ void main() {
       expect(labels, containsAll(['Delete', 'add']));
       expect(labels, isNot(contains('Delete delete')));
     });
+    // A list of rows with a checkbox each: listed as "Checkbox" fifteen
+    // times, and "Done: Buy milk" found nothing.
+    testWidgets('names controls by their screen reader label', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                for (final title in ['Buy milk', 'Walk the dog'])
+                  Checkbox(
+                    value: false,
+                    semanticLabel: 'Done: $title',
+                    onChanged: (_) {},
+                  ),
+                Semantics(
+                  label: 'Volume',
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: const SizedBox(width: 48, height: 48),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final milk = PilotWidgetInspector.findElement('Done: Buy milk');
+      expect(
+        milk?.findAncestorWidgetOfExactType<Checkbox>()?.semanticLabel,
+        'Done: Buy milk',
+      );
+      expect(PilotWidgetInspector.findElement('Volume'), isNotNull);
+      final texts = [
+        for (final e in PilotWidgetInspector.getInteractiveElements())
+          e['text'],
+      ];
+      expect(texts, containsAll(['Done: Buy milk', 'Done: Walk the dog']));
+    });
   });
 }

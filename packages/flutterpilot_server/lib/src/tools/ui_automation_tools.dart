@@ -519,7 +519,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       'swipe_widget',
       description:
           'Swipes on a widget up/down/left/right: scroll a list, dismiss a '
-          'card, open a drawer. Reports what changed.',
+          'card, open a drawer, pull to refresh (down on a list at its top). '
+          'Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -552,7 +553,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: _formatActionDelta(res.data, verb: 'Swipe complete'),
+              text: _formatActionDelta(
+                res.data,
+                verb: res.data?['pullToRefresh'] == true
+                    ? 'Pulled to refresh'
+                    : 'Swipe complete',
+              ),
             ),
           ],
         );

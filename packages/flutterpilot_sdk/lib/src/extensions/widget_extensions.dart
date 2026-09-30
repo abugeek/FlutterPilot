@@ -840,8 +840,7 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       final target = parameters['key'] ?? parameters['target'];
       final direction = parameters['direction'] ?? 'up';
-      final distance =
-          double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
+      var distance = double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
       if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
@@ -862,7 +861,25 @@ extension _WidgetExtensions on FlutterPilot {
           'No layout for widget: $target',
         );
       }
-      final start = ro.localToGlobal(ro.size.center(Offset.zero));
+      var start = ro.localToGlobal(ro.size.center(Offset.zero));
+      // Pull to refresh: down in a RefreshIndicator whose list is at its
+      // top. Apple's bouncing physics overscrolls less the further it goes:
+      // a 300 px pull in a 500 px list never armed the indicator.
+      final indicator = direction == 'down'
+          ? element.findAncestorStateOfType<RefreshIndicatorState>()
+          : null;
+      final atTop = Scrollable.maybeOf(element)?.position.extentBefore == 0;
+      final pullToRefresh = indicator != null && atTop;
+      if (pullToRefresh) {
+        // From the top of the list, so the pull stays on screen.
+        final box = indicator.context.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize) {
+          start = Offset(start.dx, box.localToGlobal(Offset.zero).dy + 8);
+          if (box.size.height * 0.85 > distance) {
+            distance = box.size.height * 0.85;
+          }
+        }
+      }
       final Offset end;
       switch (direction) {
         case 'up':
@@ -893,7 +910,11 @@ extension _WidgetExtensions on FlutterPilot {
         watchQuiet: false,
       );
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', ...after}),
+        json.encode({
+          'status': 'success',
+          if (pullToRefresh) 'pullToRefresh': true,
+          ...after,
+        }),
       );
     });
 
