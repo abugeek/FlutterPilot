@@ -592,17 +592,6 @@ extension _WidgetExtensions on FlutterPilot {
           modifiers: modifiers,
         );
         await InteractionManager.pumpAndSettleAdaptive();
-        if (field != null) {
-          final curContext = FocusManager.instance.primaryFocus?.context;
-          if (curContext is Element) {
-            focused = curContext.widget;
-            curContext.visitAncestorElements((a) {
-              if (!debugIsWidgetLocalCreation(a.widget)) return true;
-              focused = a.widget;
-              return false;
-            });
-          }
-        }
         TestRecorder.add(
           'pressKey',
           data: {

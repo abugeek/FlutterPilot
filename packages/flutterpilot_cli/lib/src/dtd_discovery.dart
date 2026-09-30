@@ -104,96 +104,16 @@ class DtdDiscovery {
       return _cached!;
     }
     final found = <DtdApp>[];
-    final diskInstances = instancesFromDisk();
-    final instances = diskInstances.isNotEmpty
-        ? diskInstances
-        : parseInstances(await _listInstances(timeout));
-    for (final instance in instances) {
+    for (final instance in parseInstances(await _listInstances(timeout))) {
       final services = await _vmServices(instance.wsUri, timeout);
       for (final s in services) {
         final app = appFrom(s, instance.workspaceRoot, instance.started);
         if (app != null) found.add(app);
       }
     }
-    // If files on disk were stale (dead daemons), fall back to querying dart.
-    if (found.isEmpty && diskInstances.isNotEmpty) {
-      for (final instance in parseInstances(await _listInstances(timeout))) {
-        final services = await _vmServices(instance.wsUri, timeout);
-        for (final s in services) {
-          final app = appFrom(s, instance.workspaceRoot, instance.started);
-          if (app != null) found.add(app);
-        }
-      }
-    }
     _cached = found;
     _cachedAt = DateTime.now();
     return found;
-  }
-
-  /// Known directories where DTD instances write their connection files.
-  static List<Directory> get _instanceDirs {
-    final home = Platform.environment['HOME'] ?? '';
-    final xdg = Platform.environment['XDG_DATA_HOME'];
-    final localAppData = Platform.environment['LOCALAPPDATA'];
-    final appData = Platform.environment['APPDATA'];
-    return [
-      if (Platform.isMacOS && home.isNotEmpty)
-        Directory(
-          p.join(home, 'Library', 'Application Support', 'Dart', 'dtd'),
-        ),
-      if (Platform.isLinux) ...[
-        if (xdg != null && xdg.isNotEmpty)
-          Directory(p.join(xdg, 'dart', 'dtd')),
-        if (home.isNotEmpty)
-          Directory(p.join(home, '.local', 'share', 'dart', 'dtd')),
-      ],
-      if (Platform.isWindows) ...[
-        if (localAppData != null && localAppData.isNotEmpty)
-          Directory(p.join(localAppData, 'Dart', 'dtd')),
-        if (appData != null && appData.isNotEmpty)
-          Directory(p.join(appData, 'Dart', 'dtd')),
-      ],
-      if (!Platform.isWindows && home.isNotEmpty)
-        Directory(p.join(home, '.dart-tool', 'dtd')),
-    ];
-  }
-
-  /// Reads instances directly from the DTD state files on disk without
-  /// spawning a process.
-  static List<({String wsUri, String workspaceRoot, DateTime started})>
-  instancesFromDisk([List<Directory>? dirs]) {
-    final search = dirs ?? _instanceDirs;
-    final instances =
-        <({String wsUri, String workspaceRoot, DateTime started})>[];
-    final seen = <String>{};
-    for (final dir in search) {
-      try {
-        if (!dir.existsSync()) continue;
-        for (final entry in dir.listSync()) {
-          if (entry is! File) continue;
-          try {
-            final content = entry.readAsStringSync();
-            final decoded = jsonDecode(content);
-            if (decoded is Map &&
-                decoded['wsUri'] is String &&
-                decoded['workspaceRoot'] is String &&
-                (decoded['workspaceRoot'] as String).isNotEmpty) {
-              final wsUri = decoded['wsUri'] as String;
-              if (seen.add(wsUri)) {
-                instances.add((
-                  wsUri: wsUri,
-                  workspaceRoot: decoded['workspaceRoot'] as String,
-                  started: DateTime.fromMillisecondsSinceEpoch(
-                    decoded['epoch'] is int ? decoded['epoch'] as int : 0,
-                  ),
-                ));
-              }
-            }
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }
-    return instances;
   }
 
   /// The `--list --machine` output: one entry per daemon.
@@ -266,7 +186,7 @@ class DtdDiscovery {
         'tooling-daemon',
         '--list',
         '--machine',
-      ], runInShell: Platform.isWindows).timeout(const Duration(seconds: 15));
+      ], runInShell: Platform.isWindows).timeout(timeout * 3);
       return r.exitCode == 0 ? '${r.stdout}' : '';
     } catch (_) {
       return ''; // no dart, or one without the tooling daemon

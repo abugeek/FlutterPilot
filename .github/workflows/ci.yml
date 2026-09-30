@@ -51,6 +51,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # First, so the simulator's first-boot work overlaps the setup below.
+      - name: Pick device
+        run: |
+          case "${{ matrix.target }}" in
+            macos) echo "DEVICE=macos" >> "$GITHUB_ENV" ;;
+            web) echo "DEVICE=chrome" >> "$GITHUB_ENV" ;;
+            ios)
+              UDID=$(xcrun simctl list devices available -j \
+                | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+              xcrun simctl boot "$UDID"
+              echo "BOOTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+              echo "DEVICE=$UDID" >> "$GITHUB_ENV" ;;
+          esac
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -61,17 +75,11 @@ jobs:
       - name: Bootstrap
         run: melos bootstrap
 
-      - name: Pick device
-        run: |
-          case "${{ matrix.target }}" in
-            macos) echo "DEVICE=macos" >> "$GITHUB_ENV" ;;
-            web) echo "DEVICE=chrome" >> "$GITHUB_ENV" ;;
-            ios)
-              UDID=$(xcrun simctl list devices available -j \
-                | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
-              xcrun simctl boot "$UDID"
-              echo "DEVICE=$UDID" >> "$GITHUB_ENV" ;;
-          esac
+      # A new simulator indexes for minutes after boot; checks run meanwhile
+      # timed out or lost the app (docs/field-test-findings.md #272).
+      - name: Wait for the simulator's first-boot work
+        if: matrix.target == 'ios'
+        run: sh packages/flutterpilot_server/tool/ci_wait_simulator_idle.sh "$DEVICE" "$BOOTED_AT"
 
       # Hosted iOS simulators are slow enough to occasionally drop the VM
       # service connection; retry once and leave a visible warning.

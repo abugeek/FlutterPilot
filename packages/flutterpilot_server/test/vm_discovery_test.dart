@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutterpilot_server/src/dtd_discovery.dart';
@@ -97,6 +98,70 @@ void main() {
           started: started ?? DateTime.now(),
           package: package,
         );
+
+    test(
+      'report says what each daemon answered and why an app counts',
+      () async {
+        // A daemon answering ConnectedApp.getVmServices with one app, or an
+        // error (no ConnectedApp service).
+        Future<HttpServer> daemon(Object reply) async {
+          final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+          server.listen((r) async {
+            final ws = await WebSocketTransformer.upgrade(r);
+            await ws.first;
+            ws.add(
+              jsonEncode({'jsonrpc': '2.0', 'id': '1', ...?reply as Map?}),
+            );
+            await ws.close();
+          });
+          return server;
+        }
+
+        final withApp = await daemon({
+          'result': {
+            'vmServices': [
+              {
+                'uri': liveUri,
+                'name': 'Kind: Flutter - Device: iPhone - Package: fixture',
+              },
+            ],
+          },
+        });
+        final broken = await daemon({
+          'error': {'code': -32601, 'message': 'Unknown method'},
+        });
+        Directory(p.join(tmp.path, 'fixture')).createSync();
+        final listing = jsonEncode([
+          for (final (server, root) in [
+            (withApp, 'fixture'),
+            (broken, 'other'),
+          ])
+            {
+              'wsUri': 'ws://127.0.0.1:${server.port}/t=',
+              'workspaceRoot': p.join(tmp.path, root),
+              'epoch': 0,
+            },
+        ]);
+        try {
+          final lines = await DtdDiscovery.report([tmp], listing: listing);
+          expect(
+            lines.join('\n'),
+            contains('fixture at $liveUri: under roots'),
+          );
+          expect(lines.join('\n'), contains(': true'));
+          expect(lines.join('\n'), contains('Unknown method'));
+          expect(
+            await DtdDiscovery.report([
+              Directory(p.join(tmp.path, 'x')),
+            ], listing: listing),
+            contains(endsWith(': false')),
+          );
+        } finally {
+          await withApp.close(force: true);
+          await broken.close(force: true);
+        }
+      },
+    );
 
     test('parses the daemon list and the app names', () {
       final list = DtdDiscovery.parseInstances(

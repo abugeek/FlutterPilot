@@ -148,12 +148,13 @@ void main() {
   });
 
   testWidgets('reports nothing when no text field has focus', (tester) async {
-    KeyboardSimulator.resetLastFocusedEditable();
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     expect(await KeyboardSimulator().pressKey('escape'), isNull);
   });
 
-  testWidgets('restores focus to last editable when focus dropped to root', (
+  // A field the app (or a tap elsewhere, or Enter) unfocused stays
+  // unfocused: the key goes nowhere rather than into the field it left.
+  testWidgets('a key after the field lost focus does not edit it', (
     tester,
   ) async {
     final controller = TextEditingController(text: 'Pilo');
@@ -166,24 +167,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     final simulator = KeyboardSimulator();
+    expect((await simulator.pressKey('backspace'))!['text'], 'Pil');
 
-    // Verify initial focus is on the field.
-    var field = await simulator.pressKey('backspace');
-    expect(controller.text, 'Pil');
-    expect(field!['text'], 'Pil');
-
-    // Simulate mobile OS idle session closing: primary focus drops to root.
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pump();
-    expect(
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText,
-      isFalse,
-    );
 
-    // Typing a character should restore focus to the editable field.
-    field = await simulator.pressKey('o');
-    expect(controller.text, 'Pilo');
-    expect(field!['text'], 'Pilo');
-    expect(field['changed'], isTrue);
+    expect(await simulator.pressKey('o'), isNull);
+    expect(controller.text, 'Pil');
   });
 }
