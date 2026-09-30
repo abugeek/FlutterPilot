@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutterpilot_server/src/dtd_discovery.dart';
 import 'package:flutterpilot_server/src/web_limits.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 
@@ -96,10 +97,14 @@ Future<void> main(List<String> args) async {
         );
       }
     }
-    final ps = await Process.run('pgrep', ['-fl', 'tooling-daemon']);
+    // `dart tooling-daemon` or its snapshot, dart_tooling_daemon.
+    final ps = await Process.run('pgrep', ['-fl', 'tooling.daemon']);
     print(
       '   daemons running: ${'${ps.stdout}'.trim().replaceAll('\n', '; ')}',
     );
+    for (final line in await DtdDiscovery.report([work])) {
+      print('   | $line');
+    }
   }
 
   try {

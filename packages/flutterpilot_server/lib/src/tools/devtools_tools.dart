@@ -638,6 +638,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             '--no-profiler?). Relaunch with "flutter run".',
           );
         }
+        // Finer samples for short actions; restored afterwards.
+        final period = flag('profile_period');
+        var finer = false;
+        try {
+          await vm.setFlag('profile_period', '250');
+          finer = true;
+        } catch (_) {}
 
         // Frames: the timeline streams framework phases and engine frame
         // events go to, per-widget build events for the app's widgets, and
@@ -714,6 +721,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           if (tracedStreams) {
             try {
               await vm.setVMTimelineFlags(streams);
+            } catch (_) {}
+          }
+          if (finer && period != null) {
+            try {
+              await vm.setFlag('profile_period', period);
             } catch (_) {}
           }
         }
