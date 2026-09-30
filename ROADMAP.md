@@ -568,7 +568,7 @@ Review each the same way as PR #1 — keep, fix, or delete:
 ## 10. ~~Performance targets~~ — met (2026-10-01)
 
 Debug mode, macOS, `../hn_reader` with its window hidden; `e2e_test.dart`
-asserts them ("budget: …", medians of 5 calls; 3× on CI and other devices).
+asserts them ("budget: …", medians of 5 calls; 3× + 100 ms on CI and other devices).
 
 | Operation | Was | Now | Target |
 |---|---|---|---|
