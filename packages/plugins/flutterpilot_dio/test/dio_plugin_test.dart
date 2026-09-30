@@ -212,4 +212,38 @@ void main() {
       });
     });
   });
+
+  group('mocked responses reach the app like real ones', () {
+    // A real Dio: requests answered by the mock never leave the process.
+    Dio dio() =>
+        Dio(BaseOptions(baseUrl: 'https://api.example.com'))
+          ..interceptors.add(DioPilotInterceptor());
+
+    tearDown(DioPilotInterceptor.clearMocks);
+
+    test('a mocked 500 throws a bad-response DioException', () async {
+      DioPilotInterceptor.mock(
+        '/todos',
+        statusCode: 500,
+        body: '{"error":"server_down"}',
+      );
+      await expectLater(
+        dio().get<List<dynamic>>('/todos'),
+        throwsA(
+          isA<DioException>()
+              .having((e) => e.type, 'type', DioExceptionType.badResponse)
+              .having((e) => e.response?.statusCode, 'status', 500)
+              .having((e) => e.response?.data, 'data', {
+                'error': 'server_down',
+              }),
+        ),
+      );
+    });
+
+    test('a mocked 200 resolves with its body', () async {
+      DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1, 2]');
+      final response = await dio().get<List<dynamic>>('/todos');
+      expect(response.data, [1, 2]);
+    });
+  });
 }

@@ -288,13 +288,28 @@ class DioPilotInterceptor extends Interceptor {
         decodedBody = mock['body'];
       }
       options.extra['flutterpilot_mocked'] = true;
+      final response = Response<dynamic>(
+        requestOptions: options,
+        statusCode: mock['statusCode'] as int,
+        data: decodedBody,
+        extra: {'flutterpilot_mocked': true},
+      );
+      // A status the app's Dio rejects (5xx, 404 by default) must fail the
+      // way the server's would: resolve() skips validateStatus, and the app
+      // got a "successful" 500 with the error body as its data.
+      if (!options.validateStatus(response.statusCode)) {
+        handler.reject(
+          DioException.badResponse(
+            statusCode: response.statusCode!,
+            requestOptions: options,
+            response: response,
+          ),
+          true, // run onError so the mocked failure is logged too
+        );
+        return;
+      }
       handler.resolve(
-        Response(
-          requestOptions: options,
-          statusCode: mock['statusCode'] as int,
-          data: decodedBody,
-          extra: {'flutterpilot_mocked': true},
-        ),
+        response,
         true, // run onResponse so mocked responses are logged too
       );
       return;
@@ -351,6 +366,7 @@ class DioPilotInterceptor extends Interceptor {
           ? null
           : FlutterPilot.redactText(err.message!),
       'errorType': err.type.name,
+      if (err.response?.extra['flutterpilot_mocked'] == true) 'mocked': true,
       if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),
     });

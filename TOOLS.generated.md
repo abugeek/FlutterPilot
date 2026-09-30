@@ -134,7 +134,7 @@ Scrolls the lists on screen until the widget (key, selector or text) is on scree
 
 ## `swipe_widget`
 
-Swipes on a widget up/down/left/right: scroll a list, dismiss a card, open a drawer. Reports what changed.
+Swipes on a widget up/down/left/right: scroll a list, dismiss a card, open a drawer, pull to refresh (down on a list at its top). Reports what changed.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

@@ -554,10 +554,12 @@ Review each the same way as PR #1 — keep, fix, or delete:
   `set_secure_storage_key`, `set_shared_preference` need
   `--allow-destructive` and say so; the Firebase write tools are gone
   (§2.1). Finding #275.
-- **Example app** (`examples/flutter_pilot_example`) — 12 demo screens incl.
-  `chaos_screen.dart` and `animation_lab_screen.dart` referencing removed or
-  untested features. It's a showcase, not a test; trim it to what the tools
-  still do, or replace it with the e2e fixture.
+- ~~**Example app**~~ — done (2026-10-01): replaced by a small todo app
+  (Dio, Riverpod, go_router, shared_preferences) with a widget test and a
+  walkthrough in its README, run through the bridge. It found three bugs:
+  mocked error statuses reached the app as successes, `swipe_widget` never
+  pulled to refresh on Apple physics (§1.8's open item), and controls named
+  only by `semanticLabel` couldn't be found. Findings #276–280.
 
 ## 10. Performance targets
 
