@@ -1337,7 +1337,9 @@ extension _WidgetExtensions on FlutterPilot {
           rootQuery: rootQuery,
         );
         PilotWidgetInspector.lastCapturedTree = tree;
-        return ServiceExtensionResponse.result(json.encode({'tree': tree}));
+        return ServiceExtensionResponse.result(
+          json.encode({'tree': PilotWidgetInspector.treeForOutput(tree)}),
+        );
       } catch (e) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

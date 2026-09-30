@@ -11,6 +11,10 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'src/app_nap_stub.dart'
+    if (dart.library.ffi) 'src/app_nap_ffi.dart'
+    as app_nap;
+
 import 'src/accessibility_auditor.dart';
 import 'src/ai_overlay_manager.dart';
 import 'src/app_settings_override.dart';
@@ -90,24 +94,47 @@ void _applyProjectRoot(String? root) {
 }
 
 DateTime _agentActiveUntil = DateTime(0);
+DateTime _agentBusyUntil = DateTime(0);
 Timer? _forcedFrames;
+int _pumpTicks = 0;
+
+/// Whether the forced-frame pump (16 ms ticks) renders on this [tick]: every
+/// tick (60 Hz) while an agent call is recent ([busy]) or an animation is
+/// ticking, every 6th (~10 Hz) otherwise — a hidden app waiting for the
+/// agent's next call costs a sixth of the CPU and still shows late results
+/// (a response, a debounced setState) within 100 ms.
+@visibleForTesting
+bool pumpRendersTick(int tick, {required bool busy, required bool animating}) =>
+    busy || animating || tick % 6 == 0;
 
 Future<void> _ensureFreshFrame() async {
   final binding = SchedulerBinding.instance;
-  _agentActiveUntil = DateTime.now().add(const Duration(seconds: 30));
+  final now = DateTime.now();
+  final wasSlow = now.isAfter(_agentBusyUntil);
+  _agentActiveUntil = now.add(const Duration(seconds: 30));
+  _agentBusyUntil = now.add(const Duration(seconds: 2));
   // Keep frames flowing while the agent works so taps settle and animations run.
   final alreadyPumping = _forcedFrames != null;
+  if (!alreadyPumping) app_nap.beginActivity();
   _forcedFrames ??= Timer.periodic(const Duration(milliseconds: 16), (t) {
-    if (DateTime.now().isAfter(_agentActiveUntil)) {
+    final now = DateTime.now();
+    if (now.isAfter(_agentActiveUntil)) {
       t.cancel();
       _forcedFrames = null;
+      app_nap.endActivity();
     } else if (!binding.framesEnabled &&
-        binding.schedulerPhase == SchedulerPhase.idle) {
+        binding.schedulerPhase == SchedulerPhase.idle &&
+        pumpRendersTick(
+          ++_pumpTicks,
+          busy: now.isBefore(_agentBusyUntil),
+          // Tickers still register frame callbacks while frames are off.
+          animating: binding.transientCallbackCount > 0,
+        )) {
       binding.scheduleForcedFrame();
     }
   });
-  // While pumping, the screen is at most one frame old: no need to wait.
-  if (binding.framesEnabled || alreadyPumping) return;
+  // While pumping fast, the screen is at most one frame old: no need to wait.
+  if (binding.framesEnabled || (alreadyPumping && !wasSlow)) return;
   binding.scheduleForcedFrame();
   await binding.endOfFrame.timeout(
     const Duration(milliseconds: 250),

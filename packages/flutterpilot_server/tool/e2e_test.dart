@@ -428,6 +428,49 @@ Future<void> main(List<String> args) async {
         4096,
       );
 
+      // Performance budgets (ROADMAP §10): the median of 5 calls, as the
+      // client sees it. Exact on a local macOS run; CI runners and other
+      // devices get 3× (the numbers are printed either way).
+      final slack = device == 'macos' && Platform.environment['CI'] == null
+          ? 1
+          : 3;
+      for (final (label, tool, args, ms, bytes) in [
+        ('trivial read', 'get_navigation_stack', <String, dynamic>{}, 20, null),
+        ('trivial read', 'get_errors', <String, dynamic>{}, 20, null),
+        ('find a widget', 'assert_widget', {'text': 'Version A'}, 20, null),
+        ('widget tree', 'get_widget_tree', <String, dynamic>{}, 60, 8192),
+        ('app summary', 'get_app_summary', <String, dynamic>{}, 80, null),
+        ('tap + post-action state', 'tap_widget', {'key': 'count'}, 200, null),
+      ]) {
+        final times = <int>[];
+        var size = 0;
+        var error = false;
+        for (var i = 0; i < 5; i++) {
+          final watch = Stopwatch()..start();
+          final res = await mcp.request('tools/call', {
+            'name': tool,
+            'arguments': args,
+          });
+          times.add(watch.elapsedMilliseconds);
+          final result = res['result'] as Map?;
+          error |= res['error'] != null || result?['isError'] == true;
+          size = ((result?['content'] as List?) ?? [])
+              .map((c) => c['text'] ?? '')
+              .join('\n')
+              .length;
+        }
+        times.sort();
+        final median = times[2];
+        final ok =
+            !error && median <= ms * slack && (bytes == null || size <= bytes);
+        if (!ok) failed++;
+        print(
+          '${ok ? '✅' : '❌'} budget: $label ($tool) ${median}ms '
+          '(≤ ${ms * slack}), ${size}b${bytes == null ? '' : ' (≤ $bytes)'}'
+          '${error ? ' — returned an error' : ''}',
+        );
+      }
+
       // Platform-specific tools are listed only where they can work.
       final listed =
           ((await mcp.request('tools/list', {}))['result']['tools'] as List)
@@ -519,12 +562,12 @@ Future<void> main(List<String> args) async {
         Duration.zero,
         16384,
       );
-      // ROADMAP §5.1: the Send button is created on line 89 of the fixture.
+      // ROADMAP §5.1: the Send button is created on line 90 of the fixture.
       await check(
         'inspect_widget names the source line',
         'inspect_widget',
         {'key': 'Send'},
-        ['lib/main.dart:89:', 'Home lib/main.dart:'],
+        ['lib/main.dart:90:', 'Home lib/main.dart:'],
         false,
         Duration.zero,
         2048,
@@ -1716,6 +1759,7 @@ class _HomeState extends State<Home> {
   String _menu = '';
   String _zoomed = 'zoom 1.0';
   bool _squeeze = false;
+  int _taps = 0;
   final _keyDowns = <String, int>{};
   String _lastKey = '';
 
@@ -1828,6 +1872,11 @@ class _HomeState extends State<Home> {
         TextButton(
           onPressed: () => setState(() => _squeeze = !_squeeze),
           child: const Text('Squeeze'),
+        ),
+        TextButton(
+          key: const ValueKey('count'),
+          onPressed: () => setState(() => _taps++),
+          child: Text('Tapped $_taps'),
         ),
         TextButton(onPressed: _signIn, child: const Text('Sign in')),
         // On the root navigator, above the page: in screenshots too.
