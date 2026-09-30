@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'ai_overlay_manager.dart';
 
-/// Manages user-interaction tracking and programmatic gesture simulation.
+/// Simulates gestures for the action tools.
 ///
 /// Dispatches genuine Flutter pointer events with full lifecycle:
 /// `PointerAddedEvent` -> `PointerDownEvent` -> (Moves) -> `PointerUpEvent` -> `PointerRemovedEvent`.
@@ -13,72 +12,12 @@ import 'ai_overlay_manager.dart';
 /// Each gesture uses unique pointer IDs and explicit device channels to prevent
 /// Flutter gesture arena corruption.
 class InteractionManager {
-  /// Optional callback invoked on every `PointerDownEvent`.
-  static void Function(Map<String, dynamic> info)? onPointerDown;
-
-  static bool _initialized = false;
   static int _nextPointerId = 1;
 
   static const int _kTouchDeviceId = 1;
   static const int _kSecondTouchDeviceId = 2;
   static const int _kMouseDeviceId = 3;
   static const Duration _kEventDelay = Duration(milliseconds: 10);
-
-  /// Installs a global pointer route that intercepts all
-  /// [PointerDownEvent]s and resolves the tapped widget.
-  static void initialize() {
-    if (_initialized) return;
-    _initialized = true;
-    GestureBinding.instance.pointerRouter.addGlobalRoute((PointerEvent event) {
-      if (event is PointerDownEvent) {
-        final info = _resolveWidgetAt(event.position);
-        onPointerDown?.call(info);
-      }
-    });
-  }
-
-  /// Resolves the most meaningful widget at [position] using hit-testing.
-  static Map<String, dynamic> _resolveWidgetAt(Offset position) {
-    final result = HitTestResult();
-    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    if (view == null) {
-      return {'x': position.dx, 'y': position.dy};
-    }
-    WidgetsBinding.instance.hitTestInView(result, position, view.viewId);
-
-    Element? bestElement;
-    for (final entry in result.path) {
-      final ro = entry.target;
-      if (ro is RenderObject) {
-        void findElement(Element element) {
-          if (bestElement != null) return;
-          if (element.renderObject == ro) {
-            if (element.widget.key != null ||
-                element.widget is Text ||
-                element.widget.runtimeType.toString().contains('Button')) {
-              bestElement = element;
-            }
-          } else {
-            element.visitChildren(findElement);
-          }
-        }
-
-        final root = WidgetsBinding.instance.rootElement;
-        if (root != null) findElement(root);
-      }
-      if (bestElement != null) break;
-    }
-
-    if (bestElement != null) {
-      return {
-        'x': position.dx,
-        'y': position.dy,
-        'key': bestElement!.widget.key?.toString(),
-        'type': bestElement!.widget.runtimeType.toString(),
-      };
-    }
-    return {'x': position.dx, 'y': position.dy};
-  }
 
   /// Waits for two frames: the one that builds what the action changed
   /// (setState, a new route's first frame) and the one after it, so a read

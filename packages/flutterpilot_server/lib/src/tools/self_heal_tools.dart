@@ -1,44 +1,8 @@
 part of '../../flutterpilot_server.dart';
 
-/// Tools for self-heal status, crash flight recorder, reproduction tests, diagnostics, and hot reload/restart.
+/// Tools for self-heal status, reproduction tests, diagnostics, and hot reload/restart.
 mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   void _registerSelfHealTools() {
-    _tool(
-      'get_flight_log',
-      description:
-          'Timeline of the last 30-60 s: taps, route changes, state changes '
-          'and network requests, oldest first. Use to see what led up to an '
-          'error. clear:true empties it instead.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'clear': JsonSchema.boolean(
-            description: 'Clear the timeline instead of reading it.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        if (p['clear'] == true) {
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.clearFlightLog',
-            {},
-          );
-          return res.isError
-              ? res.toCallToolResult()
-              : CallToolResult(
-                  content: [TextContent(text: 'Flight log cleared.')],
-                );
-        }
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getFlightLog',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [TextContent(text: 'Flight log: ${json.encode(res.data)}')],
-        );
-      },
-    );
-
     _tool(
       'hot_reload',
       description:

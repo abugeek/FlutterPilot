@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 66
+Tool count: 65
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -375,14 +375,6 @@ What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint,
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `maxDepth` | integer | no | Maximum tree depth (default 50). |
-
-## `get_flight_log`
-
-Timeline of the last 30-60 s: taps, route changes, state changes and network requests, oldest first. Use to see what led up to an error. clear:true empties it instead.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `clear` | boolean | no | Clear the timeline instead of reading it. |
 
 ## `hot_reload`
 

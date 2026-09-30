@@ -6,8 +6,6 @@ part of '../../flutterpilot_sdk.dart';
 /// - `testRecording` — Record actions and assertions for a generated test
 /// - `listCustomTools` — List registered custom tools
 /// - `callCustomTool` — Invoke a custom tool by name
-/// - `getFlightLog` — Read full timeline from continuous FlightRecorder
-/// - `clearFlightLog` — Reset the flight recorder buffer
 extension _RecordingExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.testRecording ---------------------------------------
@@ -94,27 +92,6 @@ extension _RecordingExtensions on FlutterPilot {
           'Error: $e',
         );
       }
-    });
-
-    // -- ext.flutterpilot.getFlightLog ----------------------------------------
-    registerExtension('ext.flutterpilot.getFlightLog', (
-      method,
-      parameters,
-    ) async {
-      return ServiceExtensionResponse.result(
-        json.encode(FlightRecorder.getFlightLogJson()),
-      );
-    });
-
-    // -- ext.flutterpilot.clearFlightLog --------------------------------------
-    registerExtension('ext.flutterpilot.clearFlightLog', (
-      method,
-      parameters,
-    ) async {
-      FlightRecorder.clear();
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'cleared'}),
-      );
     });
   }
 }

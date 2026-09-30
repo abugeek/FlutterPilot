@@ -102,8 +102,7 @@ class CrashReport {
       buffer.writeln('\n## Last requests\n${network.join('\n')}');
     }
     buffer.writeln(
-      '\nFix the app frame above, hot_reload, and repeat the steps '
-      '(get_flight_log shows them).',
+      '\nFix the app frame above, hot_reload, and repeat the steps.',
     );
     return buffer.toString();
   }

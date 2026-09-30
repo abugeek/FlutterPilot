@@ -125,7 +125,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 66 tools, of which an app sees only the ones that can work
+registrations): 65 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
@@ -154,7 +154,7 @@ push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,
 text scale, orientation, debug overlays), `hot_reload` (`restart: true`).
 
 **Errors** — `get_errors` (`report: true`: exception, your source line,
-culprit widget, recent actions), `get_debug_logs`, `get_flight_log`.
+culprit widget, route, recent requests), `get_debug_logs`.
 
 **Network** — `mock_http_response` (`clear: true` to remove),
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
