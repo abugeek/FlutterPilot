@@ -96,12 +96,39 @@ abstract class _FlutterPilotServerBase {
     ToolInputSchema? inputSchema,
     required ToolFunction callback,
   }) {
-    _toolCallbacks[name] = callback;
+    // An argument the tool doesn't have was dropped without a word:
+    // get_network_logs(clear: true) answered with the logs and cleared
+    // nothing (field test #280). Checked here so the tools that run other
+    // tools (profile_action, run_on_devices, a leak-check cycle) refuse too.
+    final properties = inputSchema?.properties?.keys ?? const <String>[];
+    Future<CallToolResult> checked(
+      Map<String, dynamic> args,
+      RequestHandlerExtra extra,
+    ) async {
+      final unknown = unknownToolArguments(args.keys, [
+        ...properties,
+        'deviceId', // refused with its own message in _registerTool
+      ]);
+      if (unknown.isEmpty) return callback(args, extra);
+      return CallToolResult(
+        isError: true,
+        content: [
+          TextContent(
+            text:
+                '$name has no ${unknown.map((a) => '"$a"').join(', ')} '
+                'parameter${unknown.length == 1 ? '' : 's'}; nothing was '
+                'done. ${properties.isEmpty ? 'It takes no arguments.' : 'It takes: ${properties.join(', ')}.'}',
+          ),
+        ],
+      );
+    }
+
+    _toolCallbacks[name] = checked;
     return _allTools[name] = _registerTool(
       name,
       description: description,
       inputSchema: inputSchema,
-      callback: callback,
+      callback: checked,
     );
   }
 
