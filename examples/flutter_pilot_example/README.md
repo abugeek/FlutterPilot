@@ -74,8 +74,24 @@ keeps them (see the root README).
 5. `navigate_to(route: "/settings")`, `toggle_checkbox(key: "Dark mode")`,
    `get_shared_preferences` → `{"dark_mode": true}`.
 
+## Walkthrough: no connection (a fix made with FlutterPilot)
+
+1. `simulate_network(condition: "offline")`, then
+   `swipe_widget(key: "todo_1", direction: "down")` → the diff showed
+   `Text["Couldn't load todos"]`: the same message as any other failure, so
+   a user couldn't tell the problem was on their side.
+2. `inspect_widget(key: "Couldn't load todos")` → `lib/screens.dart:126`
+   in `_LoadError`.
+3. The fix: a request that got no answer (`connectionError`,
+   `connectionTimeout`) now says "You're offline. Check your connection and
+   retry." After `hot_reload`, `assert_widget(text: "You're offline. …")`
+   passed; with `simulate_network(condition: "normal")` Retry brings the list
+   back, and a mocked 500 still shows "(HTTP 500)".
+
+The recording, with screenshots, is the demo in [`site/`](../../site/index.html).
+
 ## Tests
 
 `flutter test` runs [`test/app_test.dart`](test/app_test.dart) against a fake
-API: filtering, adding (with validation), the error screen and Retry, and
-dark mode being saved.
+API: filtering, adding (with validation), the error screen and Retry, the
+offline message, and dark mode being saved.

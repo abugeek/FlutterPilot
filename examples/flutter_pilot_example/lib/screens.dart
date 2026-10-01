@@ -116,15 +116,22 @@ class _LoadError extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = error is DioException
-        ? (error as DioException).response?.statusCode
-        : null;
+    final dio = error is DioException ? error as DioException : null;
+    final status = dio?.response?.statusCode;
+    // No answer at all: say so, the user can fix that one.
+    final offline = switch (dio?.type) {
+      DioExceptionType.connectionError ||
+      DioExceptionType.connectionTimeout => true,
+      _ => false,
+    };
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            status == null
+            offline
+                ? "You're offline. Check your connection and retry."
+                : status == null
                 ? "Couldn't load todos"
                 : "Couldn't load todos (HTTP $status)",
           ),

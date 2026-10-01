@@ -9,9 +9,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeApi implements TodoApi {
   int? failWith;
+  bool offline = false;
 
   @override
   Future<List<Todo>> fetchTodos() async {
+    if (offline) {
+      throw DioException.connectionError(
+        requestOptions: RequestOptions(path: '/todos'),
+        reason: 'No route to host',
+      );
+    }
     if (failWith case final status?) {
       final request = RequestOptions(path: '/todos');
       throw DioException(
@@ -100,6 +107,17 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(find.text('Buy milk'), findsOneWidget);
+  });
+
+  testWidgets('no connection says so, not just that loading failed', (
+    tester,
+  ) async {
+    api.offline = true;
+    await pumpApp(tester);
+    expect(
+      find.text("You're offline. Check your connection and retry."),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dark mode is saved', (tester) async {
