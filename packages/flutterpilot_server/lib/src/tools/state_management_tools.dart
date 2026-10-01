@@ -75,7 +75,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'Sets a Riverpod provider or Bloc/Cubit state in memory: name + '
           'value, or several at once with states. Names come from get_state; '
           'type is inferred. Works for bool/number/String/List/Map states; '
-          'for class-typed states it explains why not — drive the UI instead.',
+          'for enum or class states it explains why not — drive the UI instead.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(

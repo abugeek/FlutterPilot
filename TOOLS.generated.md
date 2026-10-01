@@ -394,7 +394,7 @@ Current values of the app's Riverpod providers and Blocs/Cubits (name: value (ty
 
 ## `set_state`
 
-Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several at once with states. Names come from get_state; type is inferred. Works for bool/number/String/List/Map states; for class-typed states it explains why not — drive the UI instead.
+Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several at once with states. Names come from get_state; type is inferred. Works for bool/number/String/List/Map states; for enum or class states it explains why not — drive the UI instead.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

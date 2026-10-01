@@ -126,48 +126,35 @@ current major. §1 is done.
 - `analyze-and-test`, `e2e-apple-web (macos|ios|web)` and `e2e-android`
   are required status checks on `main` (2026-09-29).
 
-1. **Weak perf tools — fix or delete:**
-   - `get_perf_metrics`: "FPS" on an idle app is meaningless → delete; point to
-     `profile_frame_budget` + `get_memory_details`.
-   - `get_gc_stats`: returns heap only, no GC data → delete (or read real GC
-     counts from `getIsolate().extensionRPCs`/`getAllocationProfile(gc: true)`).
-   - `audit_memory_health`: only checks the image cache → either implement the
-     real check (decoded image size vs displayed size, via
-     `debugInvertOversizedImages`/`ImageCache.currentSizeBytes` per image) or delete.
-   - `enable_widget_rebuild_tracking`: no way to read counts → implement a readout
-     (`ext.flutter.inspector.trackRebuildDirtyWidgets` + `Flutter.RebuiltWidgets`
-     events, aggregated per creation location) or delete.
-2. **Consistent parameters.** Today: `key` / `target` / `selector` / `rootKey`
-   / `expect` / `dbName`, and booleans typed as strings. Pick one noun
-   (`target`), accept old names as aliases for a release, fix schemas.
-   Merge `wait_for_widget` into `wait_for_condition`.
-3. **State tools:** `set_riverpod_state` needs `--allow-destructive` although it
-   only touches memory — allow it by default (keep the flag for storage/DB).
-   Accept plain values, not only JSON-encoded. Match provider names loosely
-   (`FeedNotifier` → `NotifierProvider<FeedNotifier, Feed>`) and list
-   candidates on a miss (`wait_for_state` has the same problem).
-4. **`exec_sql_query`** claims to auto-detect the database but fails without
-   `dbName` even when exactly one is registered.
-5. **Dio plugin:** log request/response bodies (truncated + redacted) and the
-   error message on failures; mark mocked responses; the 50-entry cap is
-   flooded by N+1 request patterns → group or raise it. Its tool description
-   promises payloads it doesn't return.
-6. **Plugin registration timing:** plugins register extensions only when first
-   constructed (lazy `Dio()`, lazy DI) → tools say "not registered". Give
-   plugins an explicit `register()` called at startup, consistent across all
-   plugins, and have `flutterpilot init` print it.
-7. **Response size budget:** `get_latest_crash_report` is ~41 KB (raw + compact
-   stacks + full tree). Target < 4 KB. Add a size assertion to e2e for the
-   top tools (summary, tree, crash report, action responses).
-8. Small bugs: `get_widget_properties` reports TextField `isEnabled:false`;
-   `list_connected_devices` is empty for an auto-discovered app;
-   `set_device_rotation` says "success" on desktop; `jump_to_screen` says
-   "state injected" when none was passed; the tappable list captured during a
-   page/menu transition shows the old screen (wait for route animations in
-   `getPostActionState`); pull-to-refresh via `swipe_widget` unverified.
-9. **Docs sweep:** `TOOLS.md` (hand-written) duplicates `TOOLS.generated.md`
-   and drifts — delete it or generate it. README still advertises old
-   category counts.
+Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
+
+1. ~~**Weak perf tools**~~ — removed (§4.2, §9): `get_perf_metrics`,
+   `get_gc_stats`, `audit_memory_health`, `enable_widget_rebuild_tracking`.
+   Their jobs: `profile_frame_budget`, `profile_action` (rebuilt widgets),
+   `get_memory_details`.
+2. ~~**Consistent parameters**~~ — done: one `key` noun with aliases
+   (`param_aliases.dart`, accepted by the schemas); `wait_for` replaced
+   `wait_for_widget`/`wait_for_condition`.
+3. ~~**State tools**~~ — done: `set_state` (Riverpod/Bloc) needs no
+   `--allow-destructive`, takes plain values and matches names loosely
+   ("Feed" → `NotifierProvider<FeedNotifier, Feed>`). Enum states (`Feed`,
+   `ThemeMode`) failed with a raw cast error; now the message says the
+   state is an enum and to drive the UI, and an int sets a double state
+   (finding #284).
+4. ~~**`exec_sql_query`**~~ — done: with one database registered it needs
+   no name (hn_reader's sqflite bookmarks).
+5. ~~**Dio plugin**~~ — done: bodies (truncated, redacted), errors and
+   mocked responses in `get_network_logs`.
+6. ~~**Plugin registration timing**~~ — done: every plugin has a static
+   `register()`, and `init` wires it.
+7. ~~**Response size budget**~~ — done: `get_errors(report: true)` is
+   ≤ 2 KB in e2e; summary and tree are budgeted there too (§10).
+8. ~~**Small bugs**~~ — done or gone: TextField `isEnabled` is right;
+   `list_connected_devices` lists the auto-discovered app as `default`;
+   `set_device_rotation` and `jump_to_screen` were removed; responses wait
+   for transitions (item 13); pull to refresh fixed in #57.
+9. ~~**Docs sweep**~~ — done: `TOOLS.md` deleted (`TOOLS.generated.md`
+   is generated); the README's last tool-category count removed.
 
 10. **Self-heal is alarmist and heavy:** done. Layout overflows are
     warnings (SDK `severity`), not uncaught exceptions: no flag, no

@@ -190,8 +190,8 @@ Android emulator, Chrome), one active device at a time.
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │          flutterpilot_server (modular)               │
-│  • Versioned MCP tools with full schemas + parameter descriptions│
-│  • Organized into 9 tool categories (part files)      │
+│  • MCP tools grouped by area (lib/src/tools/)        │
+│  • Each app is shown only the tools that work        │
 │  • Auto crash detection → AI notification            │
 │  • VM Service bridge with auto-reconnect             │
 └──────────────────────┬──────────────────────────────┘

@@ -110,8 +110,22 @@ base class RiverpodPilotObserver extends ProviderObserver {
         final dynamic dynamicProvider = provider;
         final dynamic notifier = container.read(dynamicProvider.notifier);
 
+        final Object? current = notifier.state;
+        if (current is double && parsedValue is int) {
+          parsedValue = parsedValue.toDouble();
+        }
         try {
           notifier.state = parsedValue;
+        } on TypeError {
+          // An enum or class can't be built from a JSON value (no
+          // reflection in Flutter), so say what to do instead.
+          throw Exception(
+            '$resolvedName holds a ${current.runtimeType} ($current); a JSON '
+            'value (${parsedValue.runtimeType}) can\'t be converted to it. '
+            'set_state works for bool/num/String/List/Map states — for '
+            '${current is Enum ? 'an enum' : 'a class'} state, drive the UI '
+            '(the widget that changes it) instead.',
+          );
         } catch (e) {
           throw Exception(
             'Provider "$resolvedName" (type: ${notifier.runtimeType}) does not support direct state injection: $e',
