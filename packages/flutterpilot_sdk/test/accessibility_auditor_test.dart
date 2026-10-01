@@ -44,6 +44,30 @@ void main() {
     expect(order, [startsWith('button (no label)'), startsWith('"Share"')]);
   });
 
+  testWidgets('a merged label is read once, with its button', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () {},
+            icon: const Icon(Icons.add),
+            label: const Text('Add todo'),
+          ),
+          body: Center(
+            child: FilledButton(onPressed: () {}, child: const Text('Retry')),
+          ),
+        ),
+      ),
+    );
+    final handle = tester.ensureSemantics();
+    await tester.pump();
+    final result = (await tester.runAsync(AccessibilityAuditor.audit))!;
+    AccessibilityAuditor.debugReleaseSemantics();
+    handle.dispose();
+    final order = (result['readingOrder'] as List).cast<String>();
+    expect(order, [startsWith('"Retry"'), startsWith('"Add todo"')]);
+  });
+
   testWidgets('a gesture wrapper over a labeled tile is a silent stop', (
     tester,
   ) async {
