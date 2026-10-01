@@ -7,6 +7,8 @@
 
 **FlutterPilot** is an MCP (Model Context Protocol) toolkit that gives AI agents runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, network chaos mocking, visual regression diffing, and AI-native development workflows.
 
+> **See it work:** [`site/index.html`](site/index.html) walks through a recorded session on the example app (a missing offline message found, located, fixed with hot reload and checked, with the real tool output and before/after screenshots).
+
 > **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with a broad, versioned tool set for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage. Call `get_capabilities` to discover the exact runtime set.
 
 ## 🚀 Quick Start (Choose Your Workflow)

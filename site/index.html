@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlutterPilot</title>
+<meta name="description" content="Let your coding agent drive your running Flutter app: inspect it, tap and type, mock the network, find the code behind a widget, hot reload, and check the result — over MCP.">
+<style>
+  :root {
+    --bg: #fbfbfa; --surface: #ffffff; --ink: #1b1d22; --muted: #5d636e;
+    --line: #e3e5e8; --accent: #3355cc; --accent-soft: #e8edfb;
+    --code-bg: #f3f4f6; --ok: #1f7a46; --bad: #b3261e;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121317; --surface: #1a1c21; --ink: #e7e9ee; --muted: #9aa1ad;
+      --line: #2b2e36; --accent: #8ea8ff; --accent-soft: #1f2640;
+      --code-bg: #1f2228; --ok: #6fd39a; --bad: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); }
+  main { max-width: 860px; margin: 0 auto; padding: 0 16px 64px; }
+  a { color: var(--accent); }
+  header { padding: 56px 0 24px; }
+  h1 { font-size: 2.4rem; line-height: 1.15; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.5rem; margin: 56px 0 12px; letter-spacing: -0.01em; }
+  h3 { font-size: 1.05rem; margin: 0 0 6px; }
+  p { margin: 0 0 14px; }
+  .lede { font-size: 1.15rem; color: var(--muted); max-width: 640px; }
+  .nav { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px; font-size: .95rem; }
+  code, pre { font-family: var(--mono); font-size: .86rem; }
+  :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+        padding: 12px 14px; overflow-x: auto; margin: 0 0 14px; line-height: 1.5; }
+  .call { color: var(--accent); }
+  .ms { color: var(--muted); }
+  .ok { color: var(--ok); }
+  .bad { color: var(--bad); }
+  ol.steps { list-style: none; padding: 0; margin: 0; counter-reset: step; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 44px; margin: 0 0 28px; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0;
+        width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft);
+        color: var(--accent); font-weight: 600; display: grid; place-items: center; font-size: .9rem; }
+  figure { margin: 0 0 14px; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 18px; }
+  .shots img { width: 100%; height: auto; display: block; border-radius: 8px; border: 1px solid var(--line); }
+  figcaption { font-size: .85rem; color: var(--muted); margin-top: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px;
+          border-radius: 0 8px 8px 0; margin: 0 0 14px; font-size: .95rem; }
+  footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+  @media (max-width: 640px) {
+    h1 { font-size: 1.9rem; }
+    .shots, .grid { grid-template-columns: 1fr; }
+    ol.steps > li { padding-left: 38px; }
+  }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>FlutterPilot</h1>
+  <p class="lede">Let your coding agent use your running Flutter app the way you would:
+  look at the screen, tap and type, break the network on purpose, find the code
+  behind a widget, hot reload, and check that the fix works. Over MCP, against
+  the app you already have running.</p>
+  <nav class="nav">
+    <a href="#demo">Demo</a>
+    <a href="#setup">Set up</a>
+    <a href="#tools">What it covers</a>
+    <a href="https://github.com/abugeek/FlutterPilot">GitHub</a>
+    <a href="https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md">All tools</a>
+  </nav>
+</header>
+
+<section id="demo">
+  <h2>A real loop: find it, fix it, prove it</h2>
+  <p>Recorded on the repository's example todo app on macOS. Every call and
+  response below is what the tools actually returned; only long lists are cut
+  (<code>…</code>). The question: what does the app show when there is no
+  network?</p>
+
+  <ol class="steps">
+    <li>
+      <h3>Look at the app</h3>
+      <pre><span class="call">get_app_summary()</span>  <span class="ms">13 ms</span>
+• Route: / (Depth: 1)
+• Uncaught Errors (0): None
+• Tappable Elements (25):
+  - [ChoiceChip] "All" (286, 64)
+  - [ListTile] "delectus aut autem" (0, 106) [key: todo_1]
+  - [Checkbox] "Done: delectus aut autem" (16, 110)
+  …</pre>
+    </li>
+
+    <li>
+      <h3>Take the network away, pull to refresh</h3>
+      <pre><span class="call">simulate_network(condition: "offline")</span>  <span class="ms">1 ms</span>
+<span class="call">swipe_widget(key: "todo_1", direction: "down")</span>  <span class="ms">650 ms</span>
+Pulled to refresh. Route unchanged (/). Widget tree: +7 / -36 / ~0.
+  + _LoadError
+  + Text["Couldn't load todos"]
+Tappable now (6): "All", "Open", "Done", "Retry", "Settings", "Add todo [add_todo]"</pre>
+      <p>The response already says what happened; no screenshot needed to
+      know. But the message is the same one a server error gives, so a user
+      can't tell that the fix is on their side.</p>
+    </li>
+
+    <li>
+      <h3>Find the code</h3>
+      <pre><span class="call">inspect_widget(key: "Couldn't load todos")</span>  <span class="ms">5 ms</span>
+{"source": {"type": "Text", "loc": "lib/screens.dart:126:11"},
+ "ancestors": ["Column lib/screens.dart:123:14", "Center lib/screens.dart:122:12",
+               "_LoadError lib/screens.dart:63:43", …]}</pre>
+    </li>
+
+    <li>
+      <h3>Fix it and hot reload</h3>
+      <p>In <code>_LoadError</code>, a request that got no answer at all now says so:</p>
+      <pre>final offline = switch (dio?.type) {
+  DioExceptionType.connectionError ||
+  DioExceptionType.connectionTimeout =&gt; true,
+  _ =&gt; false,
+};
+…
+offline
+    ? "You're offline. Check your connection and retry."
+    : status == null ? "Couldn't load todos" : "Couldn't load todos (HTTP $status)",</pre>
+      <pre><span class="call">hot_reload()</span>  <span class="ms">138 ms</span>
+Hot reload applied.</pre>
+    </li>
+
+    <li>
+      <h3>Prove it, without restarting anything</h3>
+      <pre><span class="call">assert_widget(text: "You're offline. Check your connection and retry.")</span>  <span class="ms">3 ms</span>
+<span class="ok">{"status": "passed"}</span></pre>
+      <div class="shots">
+        <figure>
+          <img src="img/offline-before.jpg" width="800" height="600" alt="The todo app with no network, before the fix: the message only says Couldn't load todos, above a Retry button.">
+          <figcaption>Before: the same message as any other failure.</figcaption>
+        </figure>
+        <figure>
+          <img src="img/offline-after.jpg" width="800" height="600" alt="After the fix: the message says You're offline. Check your connection and retry.">
+          <figcaption>After: the user knows what to do.</figcaption>
+        </figure>
+      </div>
+    </li>
+
+    <li>
+      <h3>Check nothing else broke</h3>
+      <pre><span class="call">simulate_network(condition: "normal")</span>
+<span class="call">tap_widget(key: "Retry", waitFor: "todo_1")</span>  <span class="ms">518 ms</span>
+Widget tapped "Retry"; then appeared "todo_1". Route unchanged (/).
+
+<span class="call">mock_http_response(urlPattern: "/todos", statusCode: 500, body: '{"error":"server_down"}')</span>
+<span class="call">swipe_widget(key: "todo_1", direction: "down")</span>  <span class="ms">624 ms</span>
+  + Text["Couldn't load todos (HTTP 500)"]
+<span class="call">assert_widget(text: "Couldn't load todos (HTTP 500)")</span>  <span class="ms">1 ms</span>
+<span class="ok">{"status": "passed"}</span></pre>
+      <p>The fix is now a widget test in the example
+      (<code>no connection says so, not just that loading failed</code>), so it
+      stays fixed.</p>
+    </li>
+  </ol>
+
+  <div class="note">The whole recording was 15 tool calls (this page shows the
+  ones that matter) and 2.8 seconds of tool time, with no app restart. The same flow can run on an iPhone, Android and web at once with
+  <code>run_on_devices</code>, which then lists how the screens differ.</div>
+</section>
+
+<section id="setup">
+  <h2>Set up</h2>
+  <p>In your Flutter project:</p>
+  <pre># the CLI (from a checkout until the packages are on pub.dev)
+dart pub global activate --source path ./packages/flutterpilot_cli
+
+# adds the SDK and the plugins your app uses (Riverpod, Bloc, Dio, Drift, …)
+flutterpilot init
+
+# writes the MCP config for Claude Code, Cursor or VS Code
+flutterpilot mcp install
+
+# run the app however you like; the server finds it
+flutter run
+
+# something not working? it checks everything and prints the fix
+flutterpilot doctor</pre>
+  <p>No changes to the app at all? The server still connects to any debug
+  build and gives you the widget tree, screenshots, errors with source lines,
+  logs, hot reload and memory/HTTP profiles. Taps, text entry and assertions
+  need the SDK.</p>
+</section>
+
+<section id="tools">
+  <h2>What it covers</h2>
+  <p>66 tools; an app only sees the ones that work for it (a plugin's tools
+  appear when the app uses that plugin). The full list with parameters is in
+  <a href="https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md">TOOLS.generated.md</a>.</p>
+  <div class="grid">
+    <div class="card"><h3>See the app</h3><p>Summary of the screen, widget tree of your own widgets, screenshots, errors with your source line, logs.</p></div>
+    <div class="card"><h3>Use it</h3><p>Tap, type, keys, scroll, swipe, drag, forms. Each action answers with what changed on screen.</p></div>
+    <div class="card"><h3>Check it</h3><p>Assertions and waits in milliseconds, visual diffs, feature checks against acceptance criteria with a report.</p></div>
+    <div class="card"><h3>Break the network</h3><p>Mock responses, go offline or slow, read requests with bodies (secrets masked).</p></div>
+    <div class="card"><h3>Find the code</h3><p>The file and line that creates any widget, and why a layout overflows.</p></div>
+    <div class="card"><h3>Performance</h3><p>Frame budget, a CPU profile of one action, memory leak checks with what keeps an object alive.</p></div>
+    <div class="card"><h3>Accessibility</h3><p>Unlabeled controls, small tap targets, contrast measured from pixels, screen reader order.</p></div>
+    <div class="card"><h3>Keep it working</h3><p>Turn a flow into an integration test, save and load app states, run one flow on several devices.</p></div>
+  </div>
+</section>
+
+<footer>
+  FlutterPilot is open source.
+  <a href="https://github.com/abugeek/FlutterPilot">Source, roadmap and issues on GitHub</a>.
+</footer>
+</main>
+</body>
+</html>

@@ -522,7 +522,14 @@ Findings #240–243.
   connections, destructive gating, secure storage and process launches
   reviewed OK. An e2e sweep plants secrets in the fixture and checks every
   read tool. Findings #252–256.
-- **Docs site + short demo** of the real loop (bug → mock → fix → verify).
+- ~~**Docs site + short demo**~~ — done (2026-10-01): `site/index.html`, one
+  self-contained page: the loop recorded on the example app (offline →
+  pull to refresh → a message that doesn't say why → `inspect_widget` →
+  fix → `hot_reload` → `assert_widget`; 15 calls, 2.8 s of tool time), real
+  responses and before/after screenshots, setup, what the tools cover.
+  `.github/workflows/pages.yml` publishes `site/` when run by hand, once
+  Pages is enabled (Settings → Pages → Source: GitHub Actions). Exploring
+  the example for it found #291 (audit). Finding #292.
 
 ---
 
