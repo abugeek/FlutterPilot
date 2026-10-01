@@ -40,6 +40,15 @@ Future<void> runFlutterPilotServer(List<String> args) async {
           'Used to find the app flutter run started there. '
           'Defaults to the current working directory.',
     )
+    ..addFlag(
+      'static-tools',
+      help:
+          'List every tool from the start and never change the list. For MCP '
+          "clients that don't refresh it after tools/list_changed (they would "
+          'keep a stale list); a tool that cannot work on the connected app '
+          'says why when called.',
+      negatable: false,
+    )
     ..addOption(
       'log-level',
       help: 'Log level (fine, info, warning, severe).',
@@ -69,6 +78,7 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     allowRemoteConnections: allowRemote,
     remoteAccessToken: remoteToken,
     projectRoot: projectRoot,
+    staticTools: results['static-tools'] as bool,
   );
 
   // Handle graceful shutdown

@@ -55,6 +55,8 @@ const _pinnedDevice = #flutterpilotPinnedDevice;
 
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
+  bool get staticTools;
+
   /// Every registered tool by name, for showing only the usable ones.
   final Map<String, RegisteredTool> _allTools = {};
 
@@ -333,13 +335,25 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   int _nextOperationId = 0;
   final Map<String, DeviceRuntimeContext> _deviceContexts = {};
 
+  /// Lists every tool from the start and never changes the list
+  /// (`--static-tools`): for MCP clients that don't fetch it again after
+  /// `tools/list_changed` and would keep a stale one. A tool that can't
+  /// work on the connected app says why when called. The docs generator
+  /// sets FLUTTERPILOT_LIST_ALL_TOOLS for the same list.
+  @override
+  final bool staticTools;
+
   FlutterPilotServer({
     String? vmServiceUri,
     this.allowDestructive = false,
     this.allowRemoteConnections = false,
     this.remoteAccessToken,
     Directory? projectRoot,
-  }) : _vmServiceUri = vmServiceUri,
+    bool staticTools = false,
+  }) : staticTools =
+           staticTools ||
+           Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null,
+       _vmServiceUri = vmServiceUri,
        _explicitProjectRoot = projectRoot,
        server = McpServer(
          Implementation(name: 'FlutterPilot', version: '0.1.0'),
@@ -959,8 +973,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerUiAutomationTools();
     _registerNativeAutomationTools();
     // Hidden until a connection shows they can work (iOS + idb/xcrun).
-    // The docs generator sets FLUTTERPILOT_LIST_ALL_TOOLS to see them all.
-    if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] == null) {
+    if (!staticTools) {
       for (final tool in _nativeTools.values) {
         tool.disable();
       }
@@ -1043,7 +1056,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     BuildMode? buildMode,
     bool isWeb = false,
   }) {
-    if (Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null) return;
+    if (staticTools) return;
     var changed = false;
     for (final MapEntry(key: name, value: tool) in _allTools.entries) {
       if (_nativeTools.containsKey(name)) continue;

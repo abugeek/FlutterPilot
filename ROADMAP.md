@@ -245,15 +245,15 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    `switch_device` is the one way to target a device. Register checks the
    app is running and accepts the `http://` URI `flutter run` prints; list
    shows platform / app / SDK / "not running"; a failed switch stays on the
-   current device. e2e checks register/list/switch/refusals. Left: running
-   the same flow on several devices at once (§8 "Parallel devices").
+   current device. e2e checks register/list/switch/refusals. Running the
+   same flow on several devices at once: done (§8 "Parallel devices").
 5. **VS Code extension:** removed. It had never worked: it sent `tools/call`
    without the MCP `initialize` handshake (every call rejected), found the
    server via a path that exists only inside this repo, polled tools that
    don't exist (`get_bloc_state`), had no icon and no tests, and ran a
    private server the AI agent never talks to. VS Code agents use the
-   `.vscode/mcp.json` config in the README; §3.2 (`flutterpilot mcp
-   install`) should write it. Not yet verified inside VS Code itself.
+   `.vscode/mcp.json` config in the README, which §3.2 (`flutterpilot mcp
+   install`) writes. Not yet verified inside VS Code itself.
 6. **CI:** done (`.github/workflows/ci.yml`): format + analyze + tests +
    plugin-range check on Linux; `e2e_test.dart` on macOS, iOS simulator and
    Chrome (macos runner) and Android emulator (Linux + KVM); weekly cron.
@@ -282,7 +282,13 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    `claude mcp add` line (no `-p`: Claude Code starts servers in the project).
    `init` ends with it, `dev` suggests it when no config has FlutterPilot.
    e2e starts the server exactly as `.mcp.json` says and drives the app.
-   Not yet verified inside Cursor / VS Code themselves.
+   Since 2026-10-01 also Codex (`.codex/config.toml`, TOML), Gemini CLI,
+   Antigravity, Zed, opencode, Junie, Kiro and Roo Code, each in its
+   documented format (finding #300); the entry is printed for clients with
+   only a user-level config. `--static-tools` for clients that don't
+   refresh the tool list. Checked with the CLIs themselves: opencode
+   (connected), Codex and Gemini CLI (entry read). Not yet verified inside
+   Cursor, VS Code, Antigravity, Zed, Junie, Kiro or Roo Code themselves.
 3. **Publish to pub.dev:** ready; the upload itself is the owner's step
    (see `RELEASING.md`). All 15 packages pass `pub publish --dry-run` with
    0 warnings (`tool/publish_check.dart`, publish order; the plugins get a

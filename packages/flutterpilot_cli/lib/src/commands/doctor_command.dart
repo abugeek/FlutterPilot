@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
@@ -208,11 +207,9 @@ class DoctorCommand extends Command<void> {
     for (final client in McpClient.values) {
       final file = File(p.join(project, client.configPath));
       if (!file.existsSync()) continue;
-      Object? entry;
+      final ServerLaunch? launch;
       try {
-        entry =
-            ((jsonDecode(file.readAsStringSync()) as Map)[client.serversKey]
-                as Map?)?['flutterpilot'];
+        launch = McpInstallCommand.installedLaunch(project, client);
       } catch (_) {
         // JSONC: can't read it, but it mentions us.
         if (file.readAsStringSync().contains('"flutterpilot"')) {
@@ -220,18 +217,12 @@ class DoctorCommand extends Command<void> {
         }
         continue;
       }
-      if (entry is! Map) continue;
-      final command = entry['command'];
-      final args = (entry['args'] as List?)?.cast<Object?>() ?? const [];
+      if (launch == null) continue;
       // `dart run <script>` or a compiled server: the file must exist.
-      final server = command is String && p.basename(command).startsWith('dart')
-          ? args.whereType<String>().firstWhere(
-              (a) => a.endsWith('.dart'),
-              orElse: () => '',
-            )
-          : command;
-      if (server is String &&
-          server.isNotEmpty &&
+      final server = p.basename(launch.command).startsWith('dart')
+          ? launch.args.firstWhere((a) => a.endsWith('.dart'), orElse: () => '')
+          : launch.command;
+      if (server.isNotEmpty &&
           p.isAbsolute(server) &&
           !File(server).existsSync()) {
         return DoctorCheck.fail(

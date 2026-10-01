@@ -95,6 +95,131 @@ void main() {
     ]);
   });
 
+  test('writes the documented shape for every other client', () async {
+    await install(['-c', 'all', '--no-dart']);
+    final entry = {
+      'command': Platform.resolvedExecutable,
+      'args': ['run', serverScript, '-p', p.normalize(app.path)],
+    };
+    for (final (path, key) in [
+      ('.gemini/settings.json', 'mcpServers'),
+      ('.agents/mcp_config.json', 'mcpServers'),
+      ('.zed/settings.json', 'context_servers'),
+      ('.junie/mcp/mcp.json', 'mcpServers'),
+      ('.kiro/settings/mcp.json', 'mcpServers'),
+      ('.roo/mcp.json', 'mcpServers'),
+    ]) {
+      expect(read(path)[key]['flutterpilot'], entry, reason: path);
+    }
+    // opencode: one command list, and a type.
+    expect(read('opencode.json')['mcp']['flutterpilot'], {
+      'type': 'local',
+      'command': [Platform.resolvedExecutable, ...entry['args']! as List],
+      'enabled': true,
+    });
+    // Codex: a TOML table.
+    expect(
+      File(p.join(app.path, '.codex', 'config.toml')).readAsStringSync(),
+      '[mcp_servers.flutterpilot]\n'
+      'command = ${jsonEncode(Platform.resolvedExecutable)}\n'
+      'args = ${jsonEncode(entry['args'])}\n',
+    );
+    for (final client in McpClient.values) {
+      expect(
+        McpInstallCommand.installedLaunch(app.path, client)?.command,
+        Platform.resolvedExecutable,
+        reason: client.name,
+      );
+    }
+  });
+
+  test('Codex: keeps the rest of config.toml; reinstall is a no-op', () {
+    final file = File(p.join(app.path, '.codex', 'config.toml'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        '# mine\n'
+        'model = "gpt-5"\n'
+        '\n'
+        '[mcp_servers.flutterpilot]\n'
+        'command = "/old/server"\n'
+        'args = []\n'
+        '\n'
+        '[mcp_servers.flutterpilot.env]\n'
+        'A = "1"\n'
+        '\n'
+        '[mcp_servers.docs]\n'
+        "command = 'npx'\n"
+        'args = [\n'
+        '  "-y",\n'
+        '  "docs-mcp",\n'
+        ']\n',
+      );
+    expect(
+      McpInstallCommand.writeConfig(app.path, McpClient.codex, launch),
+      contains('updated'),
+    );
+    expect(
+      file.readAsStringSync(),
+      '# mine\n'
+      'model = "gpt-5"\n'
+      '\n'
+      '[mcp_servers.docs]\n'
+      "command = 'npx'\n"
+      'args = [\n'
+      '  "-y",\n'
+      '  "docs-mcp",\n'
+      ']\n'
+      '\n'
+      '[mcp_servers.flutterpilot]\n'
+      'command = "/bin/fp"\n'
+      'args = ["-p",${jsonEncode(app.path)}]\n',
+    );
+    expect(
+      McpInstallCommand.writeConfig(app.path, McpClient.codex, launch),
+      contains('already up to date'),
+    );
+    // The Dart MCP server goes in next to it, once.
+    expect(
+      McpInstallCommand.writeDartConfig(app.path, McpClient.codex, '/sdk/dart'),
+      contains('added the Dart MCP server'),
+    );
+    expect(file.readAsStringSync(), contains('[mcp_servers.dart]\n'));
+    expect(
+      McpInstallCommand.writeDartConfig(app.path, McpClient.codex, '/sdk/dart'),
+      contains('already set up'),
+    );
+    expect(
+      '[mcp_servers.dart]'.allMatches(file.readAsStringSync()),
+      hasLength(1),
+    );
+  });
+
+  test('opencode.jsonc is left alone, with the entry to add', () {
+    final file = File(p.join(app.path, 'opencode.jsonc'))
+      ..writeAsStringSync('{\n  // mine\n}\n');
+    final result = McpInstallCommand.writeConfig(
+      app.path,
+      McpClient.opencode,
+      launch,
+    );
+    expect(result, startsWith('❌'));
+    expect(result, contains('"type": "local"'));
+    expect(file.readAsStringSync(), contains('// mine'));
+    expect(File(p.join(app.path, 'opencode.json')).existsSync(), isFalse);
+  });
+
+  test('detects the newer clients by their folders', () {
+    for (final dir in ['.codex', '.gemini', '.zed', '.kiro']) {
+      Directory(p.join(app.path, dir)).createSync();
+    }
+    expect(McpInstallCommand.detectClients(app.path), [
+      McpClient.codex,
+      McpClient.gemini,
+      McpClient.zed,
+      McpClient.kiro,
+    ]);
+  });
+
   test('defaults to the clients the project uses, else Claude Code', () {
     expect(McpInstallCommand.detectClients(app.path), [McpClient.claude]);
     Directory(p.join(app.path, '.vscode')).createSync();
