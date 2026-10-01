@@ -9,7 +9,6 @@ import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
-import 'package:vm_service/vm_service_io.dart';
 
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
@@ -533,7 +532,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     );
 
     try {
-      _vmService = await vmServiceConnectUri(_vmServiceUri!);
+      _vmService = await connectVmService(_vmServiceUri!);
     } catch (_) {
       // The app was most likely restarted on a new port: rediscover it
       // instead of retrying a dead URI forever.
@@ -551,7 +550,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       }
       _log.info('App restarted; rediscovered VM Service.');
       _vmServiceUri = discovered;
-      _vmService = await vmServiceConnectUri(discovered);
+      _vmService = await connectVmService(discovered);
     }
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
@@ -1265,7 +1264,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     context.uri = uri;
     VmService? service;
     try {
-      service = await vmServiceConnectUri(
+      service = await connectVmService(
         uri,
       ).timeout(_Constants.vmServiceTimeout);
       final vm = await service.getVM();
