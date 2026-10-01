@@ -1487,6 +1487,19 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     final stringArgs = parameters is Map<String, String>
         ? parameters
         : {for (final e in parameters.entries) e.key: e.value.toString()};
+    // An action is sent once: when the app is slow to answer (a first text
+    // entry on a CI simulator took 18 s), sending it again would tap or type
+    // twice. It gets the whole operation deadline instead. A read is asked
+    // again after the shorter timeout.
+    final readOnly = _isReadOnlyExtension(extension);
+    final callTimeout = readOnly
+        ? _Constants.extensionCallTimeout
+        : _operationDeadline;
+    final actionTimedOut = _ExtensionResult.error(
+      'No answer from the app within ${callTimeout.inSeconds} s. The action '
+      'may or may not have run — check with get_app_summary before retrying.',
+      ErrorCategory.timeout,
+    );
 
     // Fast-path: use cached isolate ID if available
     if (cachedIsolateId != null) {
@@ -1502,7 +1515,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
                 stringArgs,
               ),
             )
-            .timeout(_Constants.extensionCallTimeout);
+            .timeout(callTimeout);
         if (response.json != null) {
           if (response.json!['error'] != null) {
             return _ExtensionResult.error(
@@ -1530,6 +1543,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
           );
         }
       } on TimeoutException {
+        if (!readOnly) return actionTimedOut;
         // Fall back to full isolate refresh
       } catch (e) {
         _log.fine(
@@ -1555,7 +1569,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
                   stringArgs,
                 ),
               )
-              .timeout(_Constants.extensionCallTimeout);
+              .timeout(callTimeout);
           if (response.json != null) {
             if (response.json!['error'] != null) {
               return _ExtensionResult.error(
@@ -1582,6 +1596,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
             ErrorCategory.extensionError,
           );
         } on TimeoutException {
+          if (!readOnly) return actionTimedOut;
           return _ExtensionResult.error(
             'Extension call timed out. The app may be unresponsive.',
             ErrorCategory.timeout,

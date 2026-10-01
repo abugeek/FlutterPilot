@@ -598,6 +598,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       description:
           'What a screen reader (VoiceOver/TalkBack) gets: per node id, '
           'label, value, hint, role flags, checked/enabled/focused and rect. '
+          'Only what is set is listed: a missing flag is false, isChecked '
+          'appears on checkable nodes, isEnabled only when false. '
           'Use to check labels for accessibility; semanticsId works in '
           'tap_widget.',
       inputSchema: ToolInputSchema(

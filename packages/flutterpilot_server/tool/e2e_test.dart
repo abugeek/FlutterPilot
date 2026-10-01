@@ -31,6 +31,7 @@ Future<void> main(List<String> args) async {
   final isDesktop = const {'macos', 'linux', 'windows'}.contains(device);
   final isWeb = device == 'chrome' || device == 'web-server';
   final isMobile = !isDesktop && !isWeb;
+  final isIos = isMobile && !device.startsWith('emulator');
   final repo = Directory.fromUri(Platform.script.resolve('../../..')).path;
   final serverDir = '${repo}packages/flutterpilot_server';
   final work = Directory.systemTemp.createTempSync('fp_e2e_');
@@ -428,12 +429,16 @@ Future<void> main(List<String> args) async {
         4096,
       );
 
-      // Performance budgets (ROADMAP §10): the median of 5 calls, as the
-      // client sees it. Exact on a local macOS run; CI runners and other
+      // Performance budgets (ROADMAP §10): the median of 5 calls after 2
+      // untimed ones, as the client sees it. Exact on a local macOS run; CI runners and other
       // devices get 3× + 100 ms (an Android emulator's trivial read took
-      // 64 ms once: noise, not a regression). Printed either way.
-      final exact = device == 'macos' && Platform.environment['CI'] == null;
-      int limit(int ms) => exact ? ms : ms * 3 + 100;
+      // 64 ms once: noise, not a regression). The hosted iOS simulator gets
+      // 10×: over 16 CI runs the tap's median was 105–637 ms (limit 700), and
+      // once 1614, on unchanged code. Printed either way, with every call's
+      // time and the error when it fails.
+      final onCi = Platform.environment['CI'] != null;
+      final exact = device == 'macos' && !onCi;
+      int limit(int ms) => exact ? ms : ms * (isIos && onCi ? 10 : 3) + 100;
       for (final (label, tool, args, ms, bytes) in [
         ('trivial read', 'get_navigation_stack', <String, dynamic>{}, 20, null),
         ('trivial read', 'get_errors', <String, dynamic>{}, 20, null),
@@ -444,31 +449,39 @@ Future<void> main(List<String> args) async {
       ]) {
         final times = <int>[];
         var size = 0;
-        var error = false;
-        for (var i = 0; i < 5; i++) {
+        String? error;
+        final from = mark();
+        // The first calls after launch run unoptimized code (a tap: 1–2 s,
+        // field test "Latency observed"); the budget is for the ones after.
+        for (var i = -2; i < 5; i++) {
           final watch = Stopwatch()..start();
           final res = await mcp.request('tools/call', {
             'name': tool,
             'arguments': args,
           });
+          if (i < 0) continue;
           times.add(watch.elapsedMilliseconds);
           final result = res['result'] as Map?;
-          error |= res['error'] != null || result?['isError'] == true;
-          size = ((result?['content'] as List?) ?? [])
+          final text = ((result?['content'] as List?) ?? [])
               .map((c) => c['text'] ?? '')
-              .join('\n')
-              .length;
+              .join('\n');
+          if (res['error'] != null) error = '${res['error']}';
+          if (result?['isError'] == true) error = text;
+          size = text.length;
         }
-        times.sort();
-        final median = times[2];
+        final median = (times.toList()..sort())[2];
         final ok =
-            !error && median <= limit(ms) && (bytes == null || size <= bytes);
+            error == null &&
+            median <= limit(ms) &&
+            (bytes == null || size <= bytes);
         if (!ok) failed++;
         print(
           '${ok ? '✅' : '❌'} budget: $label ($tool) ${median}ms '
           '(≤ ${limit(ms)}), ${size}b${bytes == null ? '' : ' (≤ $bytes)'}'
-          '${error ? ' — returned an error' : ''}',
+          '${ok ? '' : '\n   the 5 calls: ${times.join(', ')} ms'}'
+          '${error == null ? '' : '\n   returned an error: $error'}',
         );
+        if (!ok) explain(from);
       }
 
       // Parallel devices (ROADMAP §8): a second copy of the fixture (the
@@ -531,7 +544,6 @@ Future<void> main(List<String> args) async {
           ((await mcp.request('tools/list', {}))['result']['tools'] as List)
               .map((t) => t['name'] as String)
               .toSet();
-      final isIos = isMobile && !device.startsWith('emulator');
       final nativeOk = isIos
           ? listed.contains('native_screenshot')
           : !listed.any((n) => n.startsWith('native_'));
@@ -926,6 +938,29 @@ Future<void> main(List<String> args) async {
       // Errors (ROADMAP §3.10): a layout overflow is a bug to fix, not a
       // crash; an uncaught exception is flagged, with a small report that
       // points at the source line.
+      //
+      // The flag is app-wide. An exception from earlier in the run says
+      // nothing about the overflow: on the CI iOS simulator the fixture's
+      // AlertDialog once threw as it opened ('padding.isNonNegative': the
+      // simulator reported negative view insets). Shown, not counted.
+      final earlier =
+          ((await mcp.request('tools/call', {
+                        'name': 'get_errors',
+                        'arguments': <String, dynamic>{},
+                      }))['result']?['content']
+                      as List? ??
+                  [])
+              .map((c) => c['text'] ?? '')
+              .join('\n');
+      final threwEarlier = earlier.contains('since the last hot reload');
+      if (threwEarlier) {
+        print(
+          '${Platform.environment['CI'] == null ? '⚠️ ' : '::warning::'}'
+          'an uncaught exception before the overflow check; "an overflow is '
+          'not an uncaught exception" is skipped',
+        );
+        print('   ${earlier.replaceAll('\n', '\n   ')}');
+      }
       await check('overflow the layout', 'tap_widget', {'key': 'Squeeze'});
       await check(
         'overflow is listed with its widget and line',
@@ -945,12 +980,14 @@ Future<void> main(List<String> args) async {
         Duration.zero,
         4096,
       );
-      await checkAbsent(
-        'an overflow is not an uncaught exception',
-        'get_errors',
-        {},
-        ['since the last hot reload'],
-      );
+      if (!threwEarlier) {
+        await checkAbsent(
+          'an overflow is not an uncaught exception',
+          'get_errors',
+          {},
+          ['since the last hot reload'],
+        );
+      }
       await check('undo the overflow', 'tap_widget', {'key': 'Squeeze'});
       await check('throw from a button', 'tap_widget', {'key': 'Crash'});
       await check(

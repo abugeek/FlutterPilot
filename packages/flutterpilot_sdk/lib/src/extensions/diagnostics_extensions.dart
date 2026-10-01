@@ -18,6 +18,54 @@ bool? _overlayBeforeProfiling;
 /// Kept alive once get_semantics_tree is first used.
 SemanticsHandle? _semanticsHandle;
 
+/// One node of get_semantics_tree's answer, with its children down to
+/// [maxDepth].
+@visibleForTesting
+Map<String, dynamic> debugSemanticsNodeToMap(
+  SemanticsNode node, {
+  int maxDepth = 50,
+  int depth = 0,
+}) {
+  final children = <Map<String, dynamic>>[];
+  if (depth < maxDepth) {
+    node.visitChildren((child) {
+      children.add(
+        debugSemanticsNodeToMap(child, maxDepth: maxDepth, depth: depth + 1),
+      );
+      return true;
+    });
+  }
+  // ignore: deprecated_member_use
+  bool f(SemanticsFlag flag) => node.hasFlag(flag);
+  // Only what is set: most nodes have no text and no flags, and nine
+  // `false`s per node were most of the response.
+  return {
+    'id': node.id,
+    if (node.label.isNotEmpty) 'label': node.label,
+    if (node.value.isNotEmpty) 'value': node.value,
+    if (node.hint.isNotEmpty) 'hint': node.hint,
+    if (node.tooltip.isNotEmpty) 'tooltip': node.tooltip,
+    if (f(SemanticsFlag.isButton)) 'isButton': true,
+    if (f(SemanticsFlag.isTextField)) 'isTextField': true,
+    if (f(SemanticsFlag.hasCheckedState))
+      'isChecked': f(SemanticsFlag.isChecked),
+    if (f(SemanticsFlag.hasEnabledState) && !f(SemanticsFlag.isEnabled))
+      'isEnabled': false,
+    if (f(SemanticsFlag.isFocused)) 'isFocused': true,
+    if (f(SemanticsFlag.isImage)) 'isImage': true,
+    if (f(SemanticsFlag.isSlider)) 'isSlider': true,
+    if (f(SemanticsFlag.isLink)) 'isLink': true,
+    if (f(SemanticsFlag.isLiveRegion)) 'isLiveRegion': true,
+    'rect': {
+      'l': node.rect.left.toStringAsFixed(1),
+      't': node.rect.top.toStringAsFixed(1),
+      'r': node.rect.right.toStringAsFixed(1),
+      'b': node.rect.bottom.toStringAsFixed(1),
+    },
+    if (children.isNotEmpty) 'children': children,
+  };
+}
+
 extension _DiagnosticsExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.getAppSnapshot --------------------------------------
@@ -97,44 +145,6 @@ extension _DiagnosticsExtensions on FlutterPilot {
 
       final maxDepth = int.tryParse(parameters['maxDepth'] ?? '') ?? 50;
 
-      Map<String, dynamic> nodeToMap(SemanticsNode node, int depth) {
-        final children = <Map<String, dynamic>>[];
-        if (depth < maxDepth) {
-          node.visitChildren((child) {
-            children.add(nodeToMap(child, depth + 1));
-            return true;
-          });
-        }
-        // ignore: unused_local_variable
-        final flags = node.flagsCollection;
-        // ignore: deprecated_member_use
-        bool f(SemanticsFlag flag) => node.hasFlag(flag);
-        return {
-          'id': node.id,
-          'label': node.label.isEmpty ? null : node.label,
-          'value': node.value.isEmpty ? null : node.value,
-          'hint': node.hint.isEmpty ? null : node.hint,
-          'tooltip': node.tooltip.isEmpty ? null : node.tooltip,
-          'isButton': f(SemanticsFlag.isButton),
-          'isTextField': f(SemanticsFlag.isTextField),
-          'isChecked': f(SemanticsFlag.isChecked),
-          'isEnabled':
-              !f(SemanticsFlag.hasEnabledState) || f(SemanticsFlag.isEnabled),
-          'isFocused': f(SemanticsFlag.isFocused),
-          'isImage': f(SemanticsFlag.isImage),
-          'isSlider': f(SemanticsFlag.isSlider),
-          'isLink': f(SemanticsFlag.isLink),
-          'isLiveRegion': f(SemanticsFlag.isLiveRegion),
-          'rect': {
-            'l': node.rect.left.toStringAsFixed(1),
-            't': node.rect.top.toStringAsFixed(1),
-            'r': node.rect.right.toStringAsFixed(1),
-            'b': node.rect.bottom.toStringAsFixed(1),
-          },
-          if (children.isNotEmpty) 'children': children,
-        };
-      }
-
       // Flutter only builds semantics while an accessibility client asks for
       // them (none on desktop / without a screen reader). Turn them on once.
       if (_semanticsHandle == null) {
@@ -159,7 +169,9 @@ extension _DiagnosticsExtensions on FlutterPilot {
         );
       }
       return ServiceExtensionResponse.result(
-        json.encode({'tree': nodeToMap(root, 0)}),
+        json.encode({
+          'tree': debugSemanticsNodeToMap(root, maxDepth: maxDepth),
+        }),
       );
     });
 
