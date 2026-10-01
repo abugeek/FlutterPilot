@@ -76,6 +76,9 @@ class AccessibilityAuditor {
   static List<_Node> _inTraversalOrder(SemanticsNode root) {
     final out = <_Node>[];
     void visit(SemanticsNode node) {
+      // A node merged into its parent (an extended FAB's label, a
+      // MergeSemantics group) is read as part of it, not on its own.
+      if (node.isMergedIntoParent) return;
       final data = node.getSemanticsData();
       if (data.flagsCollection.isHidden) return;
       if (node != root && !node.isInvisible) {
