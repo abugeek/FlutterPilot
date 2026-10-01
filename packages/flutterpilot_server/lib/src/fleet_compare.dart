@@ -15,6 +15,9 @@ class DeviceRun {
   String? route;
   List<String> tappable = const [];
 
+  /// Logical screen size, e.g. "800×600": a bigger screen shows more rows.
+  String? screen;
+
   /// Errors the app captured during the steps, and the newest one.
   int errors = 0;
   String? lastError;
@@ -35,6 +38,8 @@ class DeviceRun {
       for (final e in (snapshot['interactiveElements'] as List?) ?? const [])
         if (e is Map) '${e['text'] ?? e['key'] ?? e['type']}',
     ];
+    final viewport = snapshot['viewport'];
+    if (viewport is Map) screen = '${viewport['width']}×${viewport['height']}';
     final after = snapshot['errorCount'] as int?;
     final before = _errorsBefore;
     errors = after != null && before != null ? after - before : 0;
@@ -128,6 +133,14 @@ String describeFleetRun(
         'tappable on $devices only: '
         '${labels.take(8).map((t) => '"$t"').join(', ')}'
         '${labels.length > 8 ? ' (+${labels.length - 8} more)' : ''}',
+      );
+    }
+    // A list's rows below the fold differ with the screen size.
+    final screens = {for (final r in reached) r.screen};
+    if (byDevices.isNotEmpty && screens.length > 1 && !screens.contains(null)) {
+      diffs.add(
+        'screen sizes differ (a bigger one shows more rows): '
+        '${reached.map((r) => '${r.device} ${r.screen}').join(', ')}',
       );
     }
   }
