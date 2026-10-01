@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 
 /// What a device's VM service reports about the app running there.
@@ -46,13 +47,23 @@ String? normalizeVmServiceUri(String raw) {
   return uri.toString().replaceFirst(RegExp(r'\?$'), '');
 }
 
+/// Connects to the VM service at [uri], without vm_service's keep-alive.
+///
+/// Since 15.1.0 `vmServiceConnectUri` pings every 15 s and closes the
+/// connection when no pong comes back within another 15 s. A slow hot
+/// reload or a busy simulator stalls flutter's DDS for longer than that
+/// while the app is still there: on CI the connection was "lost" 30 s into
+/// such a step. A connection that is really gone closes by itself.
+Future<VmService> connectVmService(String uri) =>
+    vmServiceConnectUri(uri, pingInterval: null);
+
 /// Connects to [uri] just long enough to see what runs there. Throws when
 /// nothing answers within [timeout].
 Future<DeviceInfo> probeDevice(
   String uri, {
   Duration timeout = const Duration(seconds: 3),
 }) async {
-  final vm = await vmServiceConnectUri(uri).timeout(timeout);
+  final vm = await connectVmService(uri).timeout(timeout);
   try {
     return await () async {
       final info = await vm.getVM();

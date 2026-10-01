@@ -432,13 +432,10 @@ Future<void> main(List<String> args) async {
       // Performance budgets (ROADMAP §10): the median of 5 calls after 2
       // untimed ones, as the client sees it. Exact on a local macOS run; CI runners and other
       // devices get 3× + 100 ms (an Android emulator's trivial read took
-      // 64 ms once: noise, not a regression). The hosted iOS simulator gets
-      // 10×: over 16 CI runs the tap's median was 105–637 ms (limit 700), and
-      // once 1614, on unchanged code. Printed either way, with every call's
-      // time and the error when it fails.
-      final onCi = Platform.environment['CI'] != null;
-      final exact = device == 'macos' && !onCi;
-      int limit(int ms) => exact ? ms : ms * (isIos && onCi ? 10 : 3) + 100;
+      // 64 ms once: noise, not a regression). Printed either way, with every
+      // call's time and the error when it fails.
+      final exact = device == 'macos' && Platform.environment['CI'] == null;
+      int limit(int ms) => exact ? ms : ms * 3 + 100;
       for (final (label, tool, args, ms, bytes) in [
         ('trivial read', 'get_navigation_stack', <String, dynamic>{}, 20, null),
         ('trivial read', 'get_errors', <String, dynamic>{}, 20, null),
@@ -1524,16 +1521,35 @@ Future<void> main(List<String> args) async {
       // found through the Dart Tooling Daemon it registers with.
       final uriFile = File('$app/.dart_tool/flutterpilot_vm_uri');
       final hidden = uriFile.renameSync('${uriFile.path}.hidden');
-      try {
-        final viaDtd = await summaryFromFreshServer(roots: [work.path]);
-        if (viaDtd != null) failed++;
+      // The daemon keeps its own connection to the app (vm_service's 15 s
+      // keep-alive) and forgets the app when that closes: on a stalled CI
+      // simulator it then lists no app, and nothing can be found through it.
+      final daemon = await DtdDiscovery.report([work]);
+      final forgotten = daemon.any((l) => l.contains('"vmServices":[]'));
+      if (forgotten) {
         print(
-          '${viaDtd == null ? '✅' : '❌'} without the URI file: finds the '
-          'app through the Dart Tooling Daemon'
-          '${viaDtd == null ? '' : '\n   $viaDtd'}',
+          '${Platform.environment['CI'] == null ? '⚠️ ' : '::warning::'}'
+          'the Dart Tooling Daemon no longer lists the app; the two '
+          'discovery checks through it are skipped',
         );
+        for (final line in daemon) {
+          print('   | $line');
+        }
+      }
+      try {
+        final viaDtd = forgotten
+            ? null
+            : await summaryFromFreshServer(roots: [work.path]);
+        if (viaDtd != null) failed++;
+        if (!forgotten) {
+          print(
+            '${viaDtd == null ? '✅' : '❌'} without the URI file: finds the '
+            'app through the Dart Tooling Daemon'
+            '${viaDtd == null ? '' : '\n   $viaDtd'}',
+          );
+        }
         if (viaDtd != null) await explainDtd();
-        if (!zeroCode) {
+        if (!zeroCode && !forgotten) {
           final doctor = await Process.run('dart', [
             'run',
             '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
