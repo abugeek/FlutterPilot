@@ -35,7 +35,7 @@ Future<void> main(List<String> args) async {
   final serverDir = '${repo}packages/flutterpilot_server';
   final work = Directory.systemTemp.createTempSync('fp_e2e_');
   final app = '${work.path}/fixture';
-  Process? flutter, server;
+  Process? flutter, server, copy;
   var failed = 0;
   // What the server and the app logged: a failed check prints what they
   // said while it ran, so a CI failure shows its cause.
@@ -469,6 +469,61 @@ Future<void> main(List<String> args) async {
           '(≤ ${limit(ms)}), ${size}b${bytes == null ? '' : ' (≤ $bytes)'}'
           '${error ? ' — returned an error' : ''}',
         );
+      }
+
+      // Parallel devices (ROADMAP §8): a second copy of the fixture (the
+      // debug app flutter run built, started directly) is another device.
+      // It has no taps yet, so after the same tap the counters differ.
+      if (device == 'macos') {
+        copy = await Process.start(
+          '$app/build/macos/Build/Products/Debug/fixture.app/Contents/MacOS/fixture',
+          [],
+        );
+        final copyUri = Completer<String>();
+        copy.stdout
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .listen((l) {
+              final m = RegExp(r'listening on (http\S+)').firstMatch(l);
+              if (m != null && !copyUri.isCompleted) {
+                copyUri.complete(m.group(1));
+              }
+            });
+        await check(
+          'register a second copy of the app',
+          'register_device',
+          {
+            'id': 'copy',
+            'uri': await copyUri.future.timeout(
+              const Duration(seconds: 60),
+              onTimeout: () => 'ws://127.0.0.1:1/none=/ws',
+            ),
+          },
+          ['Registered "copy"'],
+        );
+        await check(
+          'run_on_devices runs one flow on both and shows the difference',
+          'run_on_devices',
+          {
+            'steps': [
+              {
+                'tool': 'tap_widget',
+                'arguments': {'key': 'count'},
+              },
+              {
+                'tool': 'assert_widget',
+                'arguments': {'text': 'Version A'},
+              },
+            ],
+          },
+          [
+            'on 2 devices',
+            '1. tap_widget (key: "count"): ✅ all',
+            '2. assert_widget (text: "Version A"): ✅ all',
+            'tappable on copy only: "Tapped 1"',
+          ],
+        );
+        copy.kill();
       }
 
       // Platform-specific tools are listed only where they can work.
@@ -1660,6 +1715,7 @@ Future<void> main(List<String> args) async {
     failed++;
     print('❌ $e');
   } finally {
+    copy?.kill();
     server?.kill();
     flutter?.kill();
     work.deleteSync(recursive: true);

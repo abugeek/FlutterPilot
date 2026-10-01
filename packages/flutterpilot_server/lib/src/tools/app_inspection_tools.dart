@@ -2,6 +2,26 @@ part of '../../flutterpilot_server.dart';
 
 /// Tools for inspecting application state, errors, events, config, and logs.
 mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
+  /// Tools run_on_devices runs: they reach the app only through its own
+  /// device's connection.
+  static const _fleetStepTools = {
+    'tap_widget',
+    'enter_text',
+    'press_key',
+    'scroll_into_view',
+    'swipe_widget',
+    'drag_widget',
+    'toggle_checkbox',
+    'set_slider_value',
+    'fill_form',
+    'execute_action_chain',
+    'navigate_to',
+    'assert_widget',
+    'wait_for',
+    'mock_http_response',
+    'simulate_network',
+  };
+
   String get _activeDeviceId => _fleetManager.activeDeviceId ?? 'default';
 
   List<Map<String, dynamic>> get _activeDebugLogs => _debugLogBuffer
@@ -142,6 +162,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         }
         final previous = _fleetManager.registerDevice(id, uri);
         if (previous != null) await _renameDeviceContext(previous, id);
+        // Lists run_on_devices before the agent can call it.
+        await _refreshToolVisibility();
         final active = _fleetManager.activeDeviceId;
         // Connect when this is now the active device (the first one, or the
         // active one re-registered after a restart).
@@ -156,6 +178,113 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                   '${active == id ? 'It is the active device.' : 'Active device: "$active"; call switch_device(id: "$id") to target it.'}',
             ),
           ],
+        );
+      },
+    );
+
+    _tool(
+      'run_on_devices',
+      description:
+          'Runs the same steps on several registered devices at once (e.g. '
+          'iPhone, Android and web) and compares them: which steps passed '
+          'where, and how the final screens differ (route, tappable '
+          'elements, errors). Each device stops at its first failed step. '
+          'Use it to check a flow works on every platform in one call.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'steps': JsonSchema.array(
+            items: JsonSchema.object(),
+            description:
+                'Tool calls run in order on each device, e.g. [{"tool": '
+                '"tap_widget", "arguments": {"key": "Log in"}}, {"tool": '
+                '"assert_widget", "arguments": {"text": "Welcome"}}]. '
+                'Tools: ${(_fleetStepTools.toList()..sort()).join(', ')}.',
+          ),
+          'devices': JsonSchema.array(
+            items: JsonSchema.string(),
+            description:
+                'Registered device names (list_connected_devices); '
+                'default: all of them.',
+          ),
+        },
+        required: ['steps'],
+      ),
+      callback: (p, e) async {
+        CallToolResult error(String text) =>
+            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        final steps = <({String tool, Map<String, dynamic> arguments})>[];
+        for (final s in (p['steps'] as List?) ?? const []) {
+          final tool = s is Map ? s['tool']?.toString() : null;
+          if (tool == null ||
+              !_fleetStepTools.contains(tool) ||
+              !_toolCallbacks.containsKey(tool)) {
+            return error(
+              'Step ${steps.length + 1}: "$tool" can\'t run on devices. '
+              'Tools: ${(_fleetStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
+            );
+          }
+          steps.add((
+            tool: tool,
+            arguments: Map<String, dynamic>.from(
+              (s as Map)['arguments'] as Map? ?? const {},
+            ),
+          ));
+        }
+        if (steps.isEmpty) return error('steps is empty.');
+        final ids = [
+          for (final d in (p['devices'] as List?) ?? _fleetManager.deviceIds)
+            d.toString(),
+        ];
+        final unknown = ids.where((d) => _fleetManager.uriFor(d) == null);
+        if (unknown.isNotEmpty || ids.length < 2) {
+          return error(
+            '${unknown.isNotEmpty ? 'Not registered: ${unknown.join(', ')}. ' : ''}'
+            'run_on_devices needs at least two registered devices '
+            '(registered: ${_fleetManager.deviceIds.join(', ')}). Add one '
+            'with register_device(id, uri).',
+          );
+        }
+        final runs = await Future.wait([
+          for (final id in ids)
+            runZoned(() async {
+              final run = DeviceRun(id);
+              final before = await _callExtensionRaw(
+                'ext.flutterpilot.getAppSnapshot',
+                {},
+              );
+              if (!before.isError) run.readBaseline(before.data!);
+              for (final step in steps) {
+                final res = await _toolCallbacks[step.tool]!(
+                  Map.of(step.arguments),
+                  e,
+                );
+                final text = res.content
+                    .whereType<TextContent>()
+                    .map((c) => c.text)
+                    .join('\n');
+                run.steps.add((ok: res.isError != true, text: text));
+                if (res.isError == true) break;
+              }
+              final snapshot = await _callExtensionRaw(
+                'ext.flutterpilot.getAppSnapshot',
+                {},
+              );
+              if (snapshot.isError) {
+                if (run.steps.every((s) => !s.ok)) {
+                  run.unreachable = snapshot.errorMessage;
+                }
+              } else {
+                run.readSnapshot(snapshot.data!);
+              }
+              return run;
+            }, zoneValues: {_pinnedDevice: id}),
+        ]);
+        final failed = runs.any(
+          (r) => r.unreachable != null || r.steps.any((s) => !s.ok),
+        );
+        return CallToolResult(
+          isError: failed,
+          content: [TextContent(text: describeFleetRun(steps, runs))],
         );
       },
     );

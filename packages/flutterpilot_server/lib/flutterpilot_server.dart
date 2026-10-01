@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service_io.dart';
 
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
+import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
 import 'src/http_detail.dart';
@@ -49,6 +50,9 @@ part 'src/tools/plugin_integration_tools.dart';
 part 'src/tools/ui_automation_tools.dart';
 
 final _log = logging.Logger('FlutterPilotServer');
+
+/// Zone key run_on_devices sets to send each call to one device.
+const _pinnedDevice = #flutterpilotPinnedDevice;
 
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
@@ -208,6 +212,9 @@ abstract class _FlutterPilotServerBase {
 
   /// Runtime state of the active device, once connected.
   DeviceRuntimeContext? get _activeContext;
+
+  /// Recomputes which tools are listed (after the fleet changes).
+  Future<void> _refreshToolVisibility();
 
   bool _isAllowedConnectionUri(String rawUri);
 
@@ -980,6 +987,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       name: tool.description ?? '',
   };
 
+  /// The registered devices (tests add some without running apps).
+  FleetManager get fleet => _fleetManager;
+
   /// Names of the tools currently listed to MCP clients.
   Iterable<String> get listedToolNames =>
       _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
@@ -998,6 +1008,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   /// Reads which extensions the active app has registered and lists the tools
   /// that can work with them.
+  @override
   Future<void> _refreshToolVisibility() async {
     final context = _activeContext;
     final vm = context?.service;
@@ -1023,7 +1034,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// (zero-code mode) that is [zeroCodeTools]; with it, a plugin's tools once
   /// the app registers that plugin ([pluginToolExtensions]). Before the check
   /// ([hasSdk] null) everything. Profile builds drop [debugOnlyTools], web
-  /// apps [webUnsupportedTools]. Native tools keep their own rule. Sends one
+  /// apps [webUnsupportedTools]; run_on_devices waits for a second
+  /// registered device. Native tools keep their own rule. Sends one
   /// tools/list_changed instead of one per tool.
   void updateToolVisibility({
     required bool? hasSdk,
@@ -1037,6 +1049,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       if (_nativeTools.containsKey(name)) continue;
       final needs = pluginToolExtensions[name];
       final usable = switch (hasSdk) {
+        // Comparing devices needs two of them.
+        _ when name == 'run_on_devices' && _fleetManager.deviceIds.length < 2 =>
+          false,
         // AOT: no hot reload, nor what is built on it.
         _
             when buildMode == BuildMode.profile &&
@@ -1081,7 +1096,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 text: '''# FlutterPilot — AI Agent Guide
 
 You are connected to a live Flutter app via FlutterPilot. Every tool
-targets the active device (see list_connected_devices / switch_device).
+targets the active device (see list_connected_devices / switch_device);
+run_on_devices runs the same steps on every registered device and compares.
 
 ## First steps
 1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility
@@ -1220,6 +1236,10 @@ Every action reports whether the route changed, a widget-tree diff and what is t
   Future<DeviceRuntimeContext?> _deviceContextForParameters(
     Map<String, dynamic> parameters,
   ) async {
+    final pinned = Zone.current[_pinnedDevice] as String?;
+    if (pinned != null && pinned != _fleetManager.activeDeviceId) {
+      return _pinnedContext(pinned);
+    }
     final deviceId = _fleetManager.activeDeviceId ?? 'default';
     if (_vmService == null) await _connectWithUri();
     if (_vmService == null) return _deviceContexts[deviceId];
@@ -1227,6 +1247,43 @@ Every action reports whether the route changed, a widget-tree diff and what is t
       deviceId: deviceId,
       uri: _vmServiceUri ?? '',
     ))..service ??= _vmService;
+  }
+
+  /// A registered device other than the active one, on its own
+  /// connection (run_on_devices drives several at once); the active
+  /// device's connection and event streams are left alone.
+  Future<DeviceRuntimeContext?> _pinnedContext(String id) async {
+    final uri = _fleetManager.uriFor(id);
+    if (uri == null) return null;
+    final context = _deviceContexts[id] ??= DeviceRuntimeContext(
+      deviceId: id,
+      uri: uri,
+    );
+    if (context.service != null && context.uri == uri) return context;
+    await context.dispose();
+    context.uri = uri;
+    VmService? service;
+    try {
+      service = await vmServiceConnectUri(
+        uri,
+      ).timeout(_Constants.vmServiceTimeout);
+      final vm = await service.getVM();
+      context
+        ..operatingSystem = vm.operatingSystem
+        ..targetCPU = vm.targetCPU
+        ..connectionGeneration = _connectionGeneration
+        ..hasSdk = await _waitForSdkExtensions(service);
+      try {
+        context.buildMode = buildModeFromFlags(
+          (await service.getFlagList()).flags ?? const [],
+        );
+      } catch (_) {}
+      context.service = service;
+    } catch (_) {
+      // No service: the call says the device is not running.
+      await service?.dispose();
+    }
+    return context;
   }
 
   @override
@@ -1395,8 +1452,12 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     DeviceRuntimeContext? context,
   }) async {
     final vmService = context?.service ?? _vmService;
+    // The global cache is the active device's isolate, not another one's.
     String? cachedIsolateId =
-        context?.cachedMainIsolateId ?? _cachedMainIsolateId;
+        context?.cachedMainIsolateId ??
+        (context == null || identical(context, _activeContext)
+            ? _cachedMainIsolateId
+            : null);
     void cacheIsolate(String? isolateId) {
       if (context != null) {
         context.cachedMainIsolateId = isolateId;

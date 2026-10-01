@@ -106,7 +106,12 @@ class ErrorInspector {
     return compacted.isNotEmpty ? compacted.join('\n') : rawStack;
   }
 
+  /// Errors captured since start, including those the buffer dropped:
+  /// comparing two reads tells how many an action caused.
+  static int capturedCount = 0;
+
   static void _captureError(FlutterErrorDetails details) {
+    capturedCount++;
     final rawStack = details.stack?.toString();
     _errorBuffer.add({
       // An exception message may quote a URL or body with credentials.

@@ -339,6 +339,8 @@ class FlutterPilot {
           'diagnosis': frameProfile['diagnosis'],
       },
       'recentErrors': recentErrors.take(5).toList(),
+      'errorCount': ErrorInspector.capturedCount,
+      'lastError': ?recentErrors.lastOrNull?['exception'],
       'recentLogs': recentLogs,
     };
   }

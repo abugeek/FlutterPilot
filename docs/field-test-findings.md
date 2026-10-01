@@ -489,6 +489,14 @@ keyboard forced on, and in Chrome:
 |---|---|---|---|
 | 284 | `set_state` on an enum state | ❌→fixed | `set_state(name: "Feed", value: "new")` answered `type 'String' is not a subtype of type 'Feed' of 'newState'`: an enum can't be built from JSON without reflection, and the description only promised an explanation for class states. Now: "NotifierProvider<FeedNotifier, Feed> holds a Feed (Feed.top); a JSON value (String) can't be converted to it … for an enum state, drive the UI". An int now sets a double state (the Bloc plugin already did). The other §1 items (1–9) checked out: see ROADMAP §1. |
 
+## §8 parallel devices (hn_reader: iPhone 17 simulator + macOS, 2026-10-01)
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 285 | `run_on_devices` (new) | ✅ | wait_for → tap "Best" → wait_for on iphone + mac in parallel: 1.7–1.9 s, both passed; "new errors: iphone 13 (last: A RenderFlex overflowed by 132 pixels on the right.)" — the story subtitle Row on a 402 pt wide screen. A failing assert shows each device's reason in one line. Three devices (a stale copy started from the build folder): 400 ms; its tab labels ("Stories" vs "Stories Tab 1 of 3", an older SDK) listed as "tappable on mac2 only". |
+| 286 | errors in the comparison | ❌→fixed | the first version counted `recentErrors` from the snapshot: the iPhone's launch-time overflows (5) showed as the flow's. The SDK's snapshot now has `errorCount` (all captured, past the 10-entry buffer) and `lastError`; the report counts the difference before/after, and nothing for an SDK without it. "Only on X" for tappables was misleading with 3 devices (an element on 2 of 3 read as "only on" each); now grouped by the devices that have it. |
+| 287 | register_device → run_on_devices | ❌→fixed | e2e called run_on_devices right after registering the second device: "Tool 'run_on_devices' is disabled" — the list was refreshed in the background. register_device now waits for it. |
+
 ## CI flakiness (required checks failing at random)
 
 Failing checks over the last 30 CI runs (90 Apple/web e2e jobs; Android before #48 excluded):
