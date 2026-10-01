@@ -74,10 +74,28 @@ All devices agree: same steps passed, same final screen.''');
     expect(text, isNot(contains('All devices agree')));
   });
 
+  test('names the screen sizes when the tappable lists differ', () {
+    DeviceRun sized(String device, String screen, List<String> rows) =>
+        run(device, tappable: rows)..screen = screen;
+    final text = describeFleetRun(steps, [
+      sized('mac', '800×600', ['Row 1']),
+      sized('web', '1200×668', ['Row 1', 'Row 2']),
+    ]);
+    expect(text, contains('- tappable on web only: "Row 2"'));
+    expect(
+      text,
+      contains(
+        '- screen sizes differ (a bigger one shows more rows): '
+        'mac 800×600, web 1200×668',
+      ),
+    );
+  });
+
   test('reads the snapshot the SDK returns', () {
     final r = DeviceRun('macos')
       ..readSnapshot({
         'route': {'current': '/saved'},
+        'viewport': {'width': 402, 'height': 874},
         'interactiveElements': [
           {'type': 'IconButton', 'text': 'Bookmark'},
           {'type': 'ListTile', 'key': 'story_1'},
@@ -86,6 +104,7 @@ All devices agree: same steps passed, same final screen.''');
         'errorCount': 7,
       });
     expect(r.route, '/saved');
+    expect(r.screen, '402×874');
     expect(r.tappable, ['Bookmark', 'story_1', 'FloatingActionButton']);
     // No baseline (an older SDK): no count rather than a wrong one.
     expect(r.errors, 0);

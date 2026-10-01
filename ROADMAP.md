@@ -504,8 +504,11 @@ Findings #240–243.
   4 steps in 1.7 s; the "Best" feed raised 13 overflow errors on the
   iPhone only. With a third (stale) build: 400 ms, and its older tab labels
   showed up as a difference. e2e (macOS): a second copy of the fixture
-  started from its built app. Not covered: Android and web field tests;
-  zero-code devices (the step tools need the SDK). Findings #285–287.
+  started from its built app. Web: the example todo app on macOS + Chrome
+  ran the 500-mock → pull-to-refresh → assert → Retry flow in ~1 s; a
+  bigger screen showing more rows is named as such (#288). Not covered:
+  an Android field test (the disk was full); zero-code devices (the step
+  tools need the SDK). Findings #285–288.
 - ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
   Fixed: obscured field text in widget properties/tree, credentials in
   logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`
