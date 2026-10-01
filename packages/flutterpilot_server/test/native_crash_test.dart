@@ -121,6 +121,28 @@ void main() {
     expect(exceptionFromLog('nothing here'), isNull);
   });
 
+  group('crashSeenInLog', () {
+    test('the kernel line (macOS up to 27.0)', () {
+      expect(
+        crashSeenInLog(
+          '2026-09-29 10:00:01.000 Df kernel[0:1] fixture[13892] Corpse '
+          'allowed 1 of 5',
+          13892,
+        ),
+        isTrue,
+      );
+    });
+
+    test('ReportCrashService (macOS 27.0.1)', () {
+      const log =
+          '2026-10-01 12:41:13.326 Df ReportCrashService[14443:1a161] '
+          'Parsing corpse data for pid 13892';
+      expect(crashSeenInLog(log, 13892), isTrue);
+      expect(crashSeenInLog(log, 1389), isFalse);
+      expect(crashSeenInLog('Timestamp  Ty Process[PID:TID]', 13892), isFalse);
+    });
+  });
+
   group('parseLogcatCrash', () {
     test('a Kotlin exception of this process', () {
       const log = '''

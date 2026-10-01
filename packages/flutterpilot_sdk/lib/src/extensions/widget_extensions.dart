@@ -232,6 +232,28 @@ extension _WidgetExtensions on FlutterPilot {
     return 'Widget not found matching: "$target". HINT: Call get_interactive_elements() or get_widget_tree() to inspect available widgets.';
   }
 
+  /// After a pull to refresh, waits (up to [timeout]) until no progress
+  /// indicator shows: the refresh's result is what the caller pulled for.
+  /// With Android's clamping physics the indicator first animates into
+  /// place and only then calls onRefresh, so a screen read right after the
+  /// release still showed the old list (the response said "loading").
+  static Future<void> _waitForRefresh({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      return;
+    }
+    final watch = Stopwatch()..start();
+    var quietFrames = 0;
+    while (watch.elapsed < timeout && quietFrames < 3) {
+      await SchedulerBinding.instance.endOfFrame.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () {},
+      );
+      quietFrames = FlutterPilot._progressShowing() ? 0 : quietFrames + 1;
+    }
+  }
+
   /// How long an action that changed nothing is watched for a late effect.
   static const _quietWatch = Duration(milliseconds: 500);
 
@@ -904,6 +926,7 @@ extension _WidgetExtensions on FlutterPilot {
       final routeBefore = NavigationTracker.currentRoute;
       final treeBefore = PilotWidgetInspector.captureWidgetTree();
       await InteractionManager.swipeFromTo(start, end);
+      if (pullToRefresh) await _waitForRefresh();
       final after = await _afterAction(
         routeBefore: routeBefore,
         treeBefore: treeBefore,

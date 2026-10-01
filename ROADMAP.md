@@ -53,6 +53,9 @@ tools that always work beat many tools that sometimes work.
 - **Hot reload can't re-run global/static initializers or change registered
   service-extension closures** → SDK changes and provider definitions need
   `hot_restart`. In-app mocks/state reset on restart.
+- **macOS 27.0.1 crash log:** the kernel no longer logs `name[pid]
+  Corpse allowed`; ReportCrashService's "Parsing corpse data for pid N"
+  is what says a process crashed (`native_crash.dart`, both are read).
 - **App Nap (macOS):** a hidden/covered app is throttled to background
   priority after a while — every call 2–3× slower. The SDK holds an
   `NSProcessInfo` activity while an agent is active (`src/app_nap_ffi.dart`);
@@ -506,9 +509,11 @@ Findings #240–243.
   showed up as a difference. e2e (macOS): a second copy of the fixture
   started from its built app. Web: the example todo app on macOS + Chrome
   ran the 500-mock → pull-to-refresh → assert → Retry flow in ~1 s; a
-  bigger screen showing more rows is named as such (#288). Not covered:
-  an Android field test (the disk was full); zero-code devices (the step
-  tools need the SDK). Findings #285–288.
+  bigger screen showing more rows is named as such (#288). Android
+  (emulator, API 36) + macOS: the walkthrough plus adding a todo, 10 steps
+  in 2.9 s, after a fix — pull to refresh now answers with the refresh's
+  result (#289). Not covered: zero-code devices (the step tools need the
+  SDK). Findings #285–290.
 - ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
   Fixed: obscured field text in widget properties/tree, credentials in
   logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`
