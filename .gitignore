@@ -17,6 +17,8 @@ ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 macos/Pods/
 macos/Flutter/
+linux/flutter/
+windows/flutter/
 
 # Coverage
 coverage/

@@ -965,6 +965,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       for (final tool in _nativeTools.values) {
         tool.disable();
       }
+      _allTools['run_on_devices']?.disable();
     }
     _registerNavigationTools();
     _registerScreenshotTools();
