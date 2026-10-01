@@ -53,6 +53,10 @@ tools that always work beat many tools that sometimes work.
 - **Hot reload can't re-run global/static initializers or change registered
   service-extension closures** → SDK changes and provider definitions need
   `hot_restart`. In-app mocks/state reset on restart.
+- **App Nap (macOS):** a hidden/covered app is throttled to background
+  priority after a while — every call 2–3× slower. The SDK holds an
+  `NSProcessInfo` activity while an agent is active (`src/app_nap_ffi.dart`);
+  when timing something, check `ps -o pri -p <pid>` (4 = napped).
 - **macOS sandbox:** apps need `com.apple.security.network.client` in both
   entitlement files or all HTTP fails with `errno = 1`. `flutterpilot init`
   adds it; `flutterpilot doctor` checks it.
@@ -561,22 +565,24 @@ Review each the same way as PR #1 — keep, fix, or delete:
   pulled to refresh on Apple physics (§1.8's open item), and controls named
   only by `semanticLabel` couldn't be found. Findings #276–280.
 
-## 10. Performance targets
+## 10. ~~Performance targets~~ — met (2026-10-01)
 
-Measured in debug mode on macOS (see `docs/field-test-findings.md`). Keep
-these as budgets, add assertions to e2e:
+Debug mode, macOS, `../hn_reader` with its window hidden; `e2e_test.dart`
+asserts them ("budget: …", medians of 5 calls; 3× + 100 ms on CI and other devices).
 
-| Operation | Now | Target |
-|---|---|---|
-| Trivial read (nav stack, errors) | 15–30 ms | < 20 ms |
-| `get_widget_tree` (HN feed) | 40–120 ms, ~14 KB | < 60 ms, < 8 KB |
-| `get_app_summary` | 100–180 ms, ~1–2 KB | < 80 ms |
-| `tap_widget` incl. post-action state | 300–450 ms | < 200 ms |
-| `findElement` | ~10 ms | < 10 ms |
+| Operation | Was | Now | Target |
+|---|---|---|---|
+| Trivial read (nav stack, errors) | 15–30 ms | 1–2 ms | < 20 ms |
+| `get_widget_tree` (HN feed) | 40–120 ms, ~14 KB | 5 ms, 6.9 KB | < 60 ms, < 8 KB |
+| `get_app_summary` | 100–180 ms, ~1–2 KB | 5 ms, ~1.5 KB | < 80 ms |
+| `tap_widget` incl. post-action state | 300–450 ms | ~155 ms | < 200 ms |
+| `findElement` (`assert_widget`) | ~10 ms | 1 ms | < 10 ms |
 
-Known costs: post-action state captures the tree twice and lists interactive
-elements (hit-testing each); the forced-frame pump runs at 60 Hz for 30 s after
-the last call while the window is hidden (CPU cost; consider 20–30 Hz).
+The old numbers were mostly macOS App Nap throttling the hidden app; the SDK
+now holds an activity while an agent is active (findings #281–283). The
+frame pump runs at 60 Hz only for 2 s after a call or while an animation
+ticks (~10 Hz otherwise: ~5% CPU instead of ~20%). A tap that changes nothing
+still takes ~500 ms (it watches for a late effect, by design).
 
 ## Where things are
 

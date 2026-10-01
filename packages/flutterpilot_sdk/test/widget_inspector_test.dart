@@ -34,6 +34,74 @@ void main() {
       expect(treeString, contains('submit_button'));
     });
 
+    testWidgets('tree keys are shown as written, without [<\'…\'>]', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Column(
+            children: [
+              ElevatedButton(
+                key: const Key('submit_button'),
+                onPressed: () {},
+                child: const Text('Submit'),
+              ),
+              const KeyedSubtree(key: ValueKey(1), child: Text('Slot')),
+            ],
+          ),
+        ),
+      );
+      final keys = <Object?>[];
+      void visit(Map<String, dynamic> n) {
+        if (n['key'] != null) keys.add(n['key']);
+        for (final c in (n['children'] as List?) ?? const []) {
+          visit(c as Map<String, dynamic>);
+        }
+      }
+
+      visit(PilotWidgetInspector.captureWidgetTree());
+      expect(keys, ['submit_button', '1']);
+    });
+
+    test('get_widget_tree output: rects, parent-sized ones and Text '
+        'selectors left out', () {
+      final out = PilotWidgetInspector.treeForOutput({
+        'type': 'Scaffold',
+        'layout': {'x': 0, 'y': 0, 'w': 800, 'h': 600},
+        'children': [
+          {
+            'type': 'Padding',
+            'layout': {'x': 0, 'y': 0, 'w': 800, 'h': 600},
+            'children': [
+              {
+                'type': 'IconButton',
+                'selector': "IconButton['Save']",
+                'layout': {'x': 10, 'y': 20, 'w': 40, 'h': 40},
+              },
+              {'type': 'Text', 'selector': "Text['Hi']", 'text': 'Hi'},
+            ],
+          },
+        ],
+      });
+      expect(out, {
+        'type': 'Scaffold',
+        'rect': [0, 0, 800, 600],
+        'children': [
+          {
+            'type': 'Padding',
+            'children': [
+              {
+                'type': 'IconButton',
+                'selector': "IconButton['Save']",
+                'rect': [10, 20, 40, 40],
+              },
+              {'type': 'Text', 'text': 'Hi'},
+            ],
+          },
+        ],
+      });
+    });
+
     testWidgets('a toggled switch shows up in the tree diff', (tester) async {
       Future<Map<String, dynamic>> treeWith(bool on) async {
         await tester.pumpWidget(

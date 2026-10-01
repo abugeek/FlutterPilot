@@ -79,6 +79,43 @@ class PilotWidgetInspector {
         {'type': 'Empty'};
   }
 
+  /// [tree] as get_widget_tree returns it: bounds as `rect: [x, y, w, h]`,
+  /// left out where they equal the parent's (wrappers that fill it), and no
+  /// selector on a Text (it only repeats the text). Diffs compare the tree
+  /// as captured, not this.
+  static Map<String, dynamic> treeForOutput(
+    Map<String, dynamic> tree, [
+    List<int>? parentRect,
+  ]) {
+    final layout = tree['layout'];
+    final rect = layout is Map
+        ? [
+            for (final k in const ['x', 'y', 'w', 'h']) layout[k] as int,
+          ]
+        : null;
+    final sameAsParent =
+        rect != null &&
+        parentRect != null &&
+        rect.indexed.every((e) => parentRect[e.$1] == e.$2);
+    final out = <String, dynamic>{};
+    for (final MapEntry(:key, :value) in tree.entries) {
+      switch (key) {
+        case 'layout':
+          if (!sameAsParent) out['rect'] = rect;
+        case 'selector' when tree['type'] == 'Text' && tree['text'] != null:
+          break;
+        case 'children':
+          out[key] = [
+            for (final c in value as List)
+              treeForOutput(c as Map<String, dynamic>, rect ?? parentRect),
+          ];
+        default:
+          out[key] = value;
+      }
+    }
+    return out;
+  }
+
   /// Summary tree, like DevTools: keeps widgets created by the app's own code,
   /// keyed widgets and Text; flattens framework/package internals into their
   /// parent. Depth counts kept nodes only, so app widgets are always reached.
@@ -95,9 +132,8 @@ class PilotWidgetInspector {
     final userKey =
         key != null &&
         key is! GlobalKey &&
-        (local ||
-            (key is ValueKey && (key.value is String || key.value is num)));
-    final keyStr = userKey ? key.toString() : null;
+        (local || (key is ValueKey && key.value is String));
+    final keyStr = userKey ? _extractCleanKey(key) : null;
     final keep = keyStr != null || widget is Text || local;
 
     final childDepth = keep ? depth + 1 : depth;

@@ -294,7 +294,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       'get_widget_tree',
       description:
           'The app\'s own widgets on screen (DevTools summary tree) with keys, '
-          'text, selectors and bounds; layout wrappers are pruned unless '
+          'text, selectors and bounds (rect: [x, y, w, h], left out when '
+          'the same as the parent\'s); layout wrappers are pruned unless '
           'compact is false. rootKey scopes it to one subtree (a dialog, a '
           'form). diff:true returns only what changed since the previous call.',
       inputSchema: ToolInputSchema(
