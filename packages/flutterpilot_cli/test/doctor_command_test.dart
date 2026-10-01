@@ -117,6 +117,32 @@ void main() {
       }),
     );
     expect(DoctorCommand.checkMcpConfig(app.path).ok, isTrue);
+    // Codex's TOML and opencode's command list are read too.
+    File(p.join(app.path, '.mcp.json')).deleteSync();
+    write(
+      '.codex/config.toml',
+      '[mcp_servers.flutterpilot]\ncommand = "/nope/server"\nargs = []\n',
+    );
+    expect(
+      DoctorCommand.checkMcpConfig(app.path).title,
+      contains('Codex: .codex/config.toml starts /nope/server'),
+    );
+    File(p.join(app.path, '.codex', 'config.toml')).deleteSync();
+    write(
+      'opencode.json',
+      jsonEncode({
+        'mcp': {
+          'flutterpilot': {
+            'type': 'local',
+            'command': [Platform.resolvedExecutable, 'run', 'x'],
+          },
+        },
+      }),
+    );
+    expect(
+      DoctorCommand.checkMcpConfig(app.path).title,
+      'MCP config: opencode',
+    );
   });
 
   test('runtime: SDK and each plugin must have registered', () {

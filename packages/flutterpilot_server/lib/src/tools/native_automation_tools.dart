@@ -30,6 +30,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _simulatorApp = ios && pid != null ? await _findSimulatorApp(pid) : null;
     final idb = ios && _idb != null;
     final xcrun = ios && await _onPath('xcrun');
+    if (staticTools) return;
     for (final MapEntry(key: name, value: tool) in _nativeTools.entries) {
       final usable = switch (name) {
         'native_screenshot' => xcrun,

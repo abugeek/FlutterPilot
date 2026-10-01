@@ -12,4 +12,16 @@ void main() {
     server.updateToolVisibility(hasSdk: true);
     expect(server.listedToolNames, contains('run_on_devices'));
   });
+
+  // For clients that don't refresh the list after tools/list_changed.
+  test('--static-tools lists every tool and keeps the list', () {
+    final server = FlutterPilotServer(
+      vmServiceUri: 'ws://localhost:8888',
+      staticTools: true,
+    );
+    final all = server.listedToolNames.toSet();
+    expect(all, containsAll(['run_on_devices', 'native_tap', 'get_state']));
+    server.updateToolVisibility(hasSdk: false, isWeb: true);
+    expect(server.listedToolNames.toSet(), all);
+  });
 }

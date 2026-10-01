@@ -24,9 +24,10 @@ dart pub global activate --source path ./packages/flutterpilot_cli
 #    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
 flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPilot
 
-# 3. Add the FlutterPilot server to your agent's MCP config (.mcp.json for
-#    Claude Code, .cursor/mcp.json, .vscode/mcp.json — the ones the project
-#    uses; --client to choose). Compiles the server; other servers are kept.
+# 3. Add the FlutterPilot server to your agent's MCP config (Claude Code,
+#    Cursor, VS Code, Codex, Gemini CLI, Antigravity, Zed, opencode, Junie,
+#    Kiro, Roo Code — the ones the project uses; --client to choose, see
+#    "MCP Setup"). Compiles the server; other servers are kept.
 #    Also adds the official Dart MCP server for the code side (--no-dart to skip).
 flutterpilot mcp install
 
@@ -78,9 +79,40 @@ void main() {
 
 ## 🔌 MCP Setup (any IDE)
 
-`flutterpilot mcp install` (in the app folder) does all of this for Claude
-Code, Cursor and VS Code and prints the `claude mcp add` line for user scope.
-Run it again after pulling FlutterPilot changes — it recompiles the server.
+FlutterPilot is a local (stdio) MCP server: any client that can start one can
+use it. It has no HTTP transport, so agents that only take a remote MCP URL
+can't.
+
+`flutterpilot mcp install` (in the app folder) writes the project's config
+for the clients below — the ones the project already uses, or `--client
+<name>` (repeatable; `--client all`). Run it again after pulling FlutterPilot
+changes — it recompiles the server.
+
+| `--client` | Client | File it writes | Checked |
+|---|---|---|---|
+| `claude` | Claude Code | `.mcp.json` | the e2e drives an app through it |
+| `opencode` | opencode | `opencode.json` (`mcp`, `type: local`) | `opencode mcp list`: connected |
+| `codex` | Codex CLI / IDE | `.codex/config.toml` (`[mcp_servers.flutterpilot]`) | `codex mcp list` reads the entry; Codex uses a project config only in a trusted project |
+| `gemini` | Gemini CLI | `.gemini/settings.json` | `gemini mcp list` reads the entry; it starts project servers only in a trusted folder |
+| `cursor` | Cursor | `.cursor/mcp.json` | format from its docs; not tried in the app |
+| `vscode` | VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`, `type: stdio`) | format from its docs; not tried in the app |
+| `antigravity` | Antigravity | `.agents/mcp_config.json` | format from its docs; not tried in the app |
+| `zed` | Zed | `.zed/settings.json` (`context_servers`) | format from its docs; not tried in the app |
+| `junie` | JetBrains Junie | `.junie/mcp/mcp.json` | format from its docs; not tried in the app |
+| `kiro` | Kiro | `.kiro/settings/mcp.json` | format from its docs; not tried in the app |
+| `roo` | Roo Code | `.roo/mcp.json` | format from its docs; not tried in the app |
+
+Clients with only a user-level config (Claude Desktop's
+`claude_desktop_config.json`, Windsurf, Cline) and anything else: `mcp
+install` prints the entry to paste. A config file with comments (JSONC) is
+left alone, with the entry to add.
+
+If your client doesn't fetch the tool list again when the server says it
+changed (FlutterPilot lists a plugin's tools once the app registers the
+plugin), add `--static-tools` (`flutterpilot mcp install --static-tools`):
+every tool is listed from the start, and one that can't work on the
+connected app says why when called.
+
 By hand:
 
 Build the server once (fast startup, no `dart` on the IDE's PATH needed):

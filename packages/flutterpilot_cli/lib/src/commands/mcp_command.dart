@@ -13,36 +13,64 @@ class McpCommand extends Command<void> {
 
   @override
   final String description =
-      'Connects AI clients (Claude Code, Cursor, VS Code) to the FlutterPilot MCP server.';
+      'Connects AI clients (Claude Code, Cursor, VS Code, Codex, Gemini CLI, '
+      'Antigravity, Zed, opencode, Junie, Kiro, Roo Code) to the FlutterPilot '
+      'MCP server.';
 
   McpCommand() {
     addSubcommand(McpInstallCommand());
   }
 }
 
-/// An MCP client whose project-scoped config `mcp install` writes.
+/// An MCP client whose project-scoped config `mcp install` writes. Each
+/// row is that client's documented format (checked 2026-10-01); clients
+/// with only a user-level config (Claude Desktop, Windsurf, Cline) get the
+/// entry printed instead.
 enum McpClient {
-  claude('Claude Code', '.mcp.json', 'mcpServers'),
-  cursor('Cursor', '.cursor/mcp.json', 'mcpServers'),
-  vscode('VS Code', '.vscode/mcp.json', 'servers');
+  claude('Claude Code', '.mcp.json', 'mcpServers', [
+    '.mcp.json',
+    '.claude',
+    'CLAUDE.md',
+  ]),
+  cursor('Cursor', '.cursor/mcp.json', 'mcpServers', ['.cursor']),
+  vscode('VS Code', '.vscode/mcp.json', 'servers', ['.vscode']),
+  codex('Codex', '.codex/config.toml', 'mcp_servers', ['.codex']),
+  gemini('Gemini CLI', '.gemini/settings.json', 'mcpServers', [
+    '.gemini',
+    'GEMINI.md',
+  ]),
+  antigravity('Antigravity', '.agents/mcp_config.json', 'mcpServers', [
+    '.agents',
+  ]),
+  zed('Zed', '.zed/settings.json', 'context_servers', ['.zed']),
+  opencode('opencode', 'opencode.json', 'mcp', [
+    'opencode.json',
+    'opencode.jsonc',
+    '.opencode',
+  ]),
+  junie('JetBrains Junie', '.junie/mcp/mcp.json', 'mcpServers', ['.junie']),
+  kiro('Kiro', '.kiro/settings/mcp.json', 'mcpServers', ['.kiro']),
+  roo('Roo Code', '.roo/mcp.json', 'mcpServers', ['.roo']);
 
-  const McpClient(this.label, this.configPath, this.serversKey);
+  const McpClient(this.label, this.configPath, this.serversKey, this.markers);
   final String label;
   final String configPath;
 
-  /// VS Code calls the map `servers`; the others `mcpServers`.
+  /// The map of servers: VS Code calls it `servers`, Zed `context_servers`,
+  /// opencode `mcp`, Codex the `[mcp_servers.<name>]` tables; the others
+  /// `mcpServers`.
   final String serversKey;
 
+  /// Files or folders that show a project uses this client.
+  final List<String> markers;
+
+  /// Codex keeps its config in TOML; the others in JSON.
+  bool get isToml => this == codex;
+
   /// Whether [project] already uses this client.
-  bool detectedIn(String project) => switch (this) {
-    claude => [
-      '.mcp.json',
-      '.claude',
-      'CLAUDE.md',
-    ].any((f) => FileSystemEntity.typeSync(p.join(project, f)) != .notFound),
-    cursor => Directory(p.join(project, '.cursor')).existsSync(),
-    vscode => Directory(p.join(project, '.vscode')).existsSync(),
-  };
+  bool detectedIn(String project) => markers.any(
+    (f) => FileSystemEntity.typeSync(p.join(project, f)) != .notFound,
+  );
 }
 
 /// The command line that starts the server.
@@ -56,10 +84,11 @@ class McpInstallCommand extends Command<void> {
 
   @override
   final String description =
-      "Adds the FlutterPilot server to the project's MCP config for Claude "
-      'Code (.mcp.json), Cursor (.cursor/mcp.json) and VS Code '
-      '(.vscode/mcp.json), with the official Dart MCP server for the code '
-      'side. Other servers in those files are kept.';
+      "Adds the FlutterPilot server to the project's MCP config for the "
+      'clients it uses (Claude Code, Cursor, VS Code, Codex, Gemini CLI, '
+      'Antigravity, Zed, opencode, Junie, Kiro, Roo Code; --client picks), '
+      'with the official Dart MCP server for the code side. Other servers '
+      'in those files are kept. Prints the entry for any other client.';
 
   McpInstallCommand() {
     argParser
@@ -72,10 +101,11 @@ class McpInstallCommand extends Command<void> {
       ..addMultiOption(
         'client',
         abbr: 'c',
-        allowed: McpClient.values.map((c) => c.name),
+        allowed: [...McpClient.values.map((c) => c.name), 'all'],
         help:
-            'Clients to configure. Default: the ones the project already '
-            'uses (.mcp.json/.claude, .cursor, .vscode), else claude.',
+            'Clients to configure ("all" for every one). Default: the ones '
+            'the project already uses (its .cursor, .vscode, .codex, '
+            '.gemini, ... folder or config), else claude.',
       )
       ..addOption(
         'local',
@@ -109,6 +139,14 @@ class McpInstallCommand extends Command<void> {
         'allow-destructive',
         negatable: false,
         help: 'Let the server write app state and storage.',
+      )
+      ..addFlag(
+        'static-tools',
+        negatable: false,
+        help:
+            'Have the server list every tool from the start and never change '
+            "the list: for a client that doesn't refresh it when the server "
+            'says it changed.',
       );
   }
 
@@ -130,7 +168,9 @@ class McpInstallCommand extends Command<void> {
             : null) ??
         _hostPackage(serverPath);
     final chosen = argResults!['client'] as List<String>;
-    final clients = chosen.isNotEmpty
+    final clients = chosen.contains('all')
+        ? McpClient.values
+        : chosen.isNotEmpty
         ? [for (final c in chosen) McpClient.values.byName(c)]
         : detectClients(project);
 
@@ -153,6 +193,7 @@ class McpInstallCommand extends Command<void> {
     }
     final extra = [
       if (argResults!['allow-destructive'] as bool) '--allow-destructive',
+      if (argResults!['static-tools'] as bool) '--static-tools',
     ];
 
     final dart = argResults!['dart'] as bool && await _hasDartMcp()
@@ -175,11 +216,17 @@ class McpInstallCommand extends Command<void> {
     // Claude Code starts servers in the project folder, where the server
     // looks first: no -p, so one entry serves every project.
     final args = [...launch.args, ...extra];
+    final line = [launch.command, ...args].map(_shellQuote).join(' ');
     stdout.writeln(
       '\nFor Claude Code in every project instead (user scope):\n'
-      '  claude mcp add --scope user flutterpilot -- '
-      '${[launch.command, ...args].map(_shellQuote).join(' ')}\n'
+      '  claude mcp add --scope user flutterpilot -- $line\n'
       '${dart == null ? '' : '  claude mcp add --scope user dart -- ${_shellQuote(dart)} mcp-server --disable $dartMcpDisabled\n'}'
+      '\nAny other client that starts a local (stdio) MCP server — Claude '
+      'Desktop\n(claude_desktop_config.json), Windsurf, Cline, GitHub '
+      'Copilot CLI, ... — takes\nthis entry in its MCP config:\n'
+      '${const JsonEncoder.withIndent('  ').convert({
+        'mcpServers': {'flutterpilot': serverEntry(McpClient.claude, project, launch, extraArgs: extra)},
+      })}\n'
       '\nNext: run the app (flutter run, flutterpilot dev or your IDE); the '
       'server finds it.',
     );
@@ -189,6 +236,19 @@ class McpInstallCommand extends Command<void> {
         'first use.',
       );
     }
+    if (clients.contains(McpClient.gemini)) {
+      stdout.writeln(
+        'Gemini CLI starts project servers only in a folder you trust '
+        '(it asks on first run).',
+      );
+    }
+    if (clients.contains(McpClient.codex)) {
+      stdout.writeln(
+        'Codex reads .codex/config.toml only in a project you have marked '
+        'as trusted. For every project instead:\n'
+        '  codex mcp add flutterpilot -- $line -p ${_shellQuote(project)}',
+      );
+    }
     if (failed) exitCode = 1;
   }
 
@@ -196,7 +256,7 @@ class McpInstallCommand extends Command<void> {
   static bool isConfigured(String project) => McpClient.values.any((c) {
     final f = File(p.join(project, c.configPath));
     try {
-      return f.existsSync() && f.readAsStringSync().contains('"flutterpilot"');
+      return f.existsSync() && f.readAsStringSync().contains('flutterpilot');
     } catch (_) {
       return false;
     }
@@ -218,15 +278,27 @@ class McpInstallCommand extends Command<void> {
     String project,
     ServerLaunch launch, {
     List<String> extraArgs = const [],
-  }) => {
-    if (client == McpClient.vscode) 'type': 'stdio',
-    'command': launch.command,
-    'args': [
-      ...launch.args,
-      ...extraArgs,
-      '-p',
-      client == McpClient.vscode ? r'${workspaceFolder}' : project,
-    ],
+  }) => _entry(client, launch.command, [
+    ...launch.args,
+    ...extraArgs,
+    '-p',
+    client == McpClient.vscode ? r'${workspaceFolder}' : project,
+  ]);
+
+  /// [command] and [args] in the shape [client]'s config takes: opencode
+  /// wants one `command` list and a `type`, VS Code a `type`.
+  static Map<String, Object> _entry(
+    McpClient client,
+    String command,
+    List<String> args,
+  ) => switch (client) {
+    McpClient.opencode => {
+      'type': 'local',
+      'command': [command, ...args],
+      'enabled': true,
+    },
+    McpClient.vscode => {'type': 'stdio', 'command': command, 'args': args},
+    _ => {'command': command, 'args': args},
   };
 
   /// The Dart MCP server's feature categories FlutterPilot covers: hot
@@ -238,11 +310,8 @@ class McpInstallCommand extends Command<void> {
 
   /// The official Dart MCP server's entry: it takes the project from the
   /// client's workspace folders, so it has no path.
-  static Map<String, Object> dartEntry(McpClient client, String dart) => {
-    if (client == McpClient.vscode) 'type': 'stdio',
-    'command': dart,
-    'args': ['mcp-server', '--disable', dartMcpDisabled],
-  };
+  static Map<String, Object> dartEntry(McpClient client, String dart) =>
+      _entry(client, dart, ['mcp-server', '--disable', dartMcpDisabled]);
 
   /// Adds the Dart MCP server as `dart` to [client]'s config, unless one
   /// is there already (under any name): then says how to drop its tools
@@ -256,8 +325,7 @@ class McpInstallCommand extends Command<void> {
   ) {
     final entry = dartEntry(client, dart);
     for (final MapEntry(:key, :value) in servers.entries) {
-      final args = value is Map ? value['args'] : null;
-      if (args is! List || !args.contains('mcp-server')) continue;
+      if (!jsonEncode(value).contains('"mcp-server"')) continue;
       if (jsonEncode(value) == jsonEncode(entry)) {
         return '✅ ${client.label}: Dart MCP server already set up.';
       }
@@ -314,7 +382,18 @@ class McpInstallCommand extends Command<void> {
     Map<String, Object> entry,
     String Function(Map<String, dynamic> servers) change,
   ) {
+    if (client.isToml) return _editToml(project, client, name, entry, change);
     final file = File(p.join(project, client.configPath));
+    final snippet = const JsonEncoder.withIndent('  ').convert({name: entry});
+    // opencode reads opencode.jsonc too; a second file would shadow it.
+    final jsonc = File('${file.path}c');
+    if (client == McpClient.opencode &&
+        !file.existsSync() &&
+        jsonc.existsSync()) {
+      return '❌ ${client.label}: this project uses opencode.jsonc '
+          '(comments), left unchanged. Add this under '
+          '"${client.serversKey}" yourself:\n$snippet';
+    }
     Map<String, dynamic> config = {};
     if (file.existsSync()) {
       final text = file.readAsStringSync();
@@ -329,8 +408,7 @@ class McpInstallCommand extends Command<void> {
         // it would drop the user's comments.
         return '❌ ${client.label}: ${client.configPath} is not plain JSON '
             '(comments?), left unchanged. Add this under '
-            '"${client.serversKey}" yourself:\n'
-            '${const JsonEncoder.withIndent('  ').convert({name: entry})}';
+            '"${client.serversKey}" yourself:\n$snippet';
       }
     }
     final servers = config[client.serversKey];
@@ -350,6 +428,112 @@ class McpInstallCommand extends Command<void> {
         );
     }
     return result;
+  }
+
+  /// A line that starts a TOML table: `[a.b]` or `[[a.b]]`.
+  // ponytail: line-based, not a TOML parser. A multi-line array whose
+  // element line is a bare `["x"]` would read as a header; Codex configs
+  // written by `codex mcp add` or by hand don't have those.
+  static final _tomlHeader = RegExp(
+    r'^\s*\[\[?\s*([^\[\]]+?)\s*\]\]?\s*(#.*)?$',
+  );
+
+  /// [text] split into its tables: the header's name (null before the
+  /// first header) and the lines up to the next header.
+  static List<({String? table, List<String> lines})> _tomlTables(String text) {
+    final tables = [(table: null as String?, lines: <String>[])];
+    for (final line in const LineSplitter().convert(text)) {
+      final header = _tomlHeader.firstMatch(line);
+      if (header != null) tables.add((table: header.group(1), lines: []));
+      tables.last.lines.add(line);
+    }
+    return tables;
+  }
+
+  /// The servers in a Codex config as a JSON-like map (name → command and
+  /// args, where they are written the way JSON writes them), for the same
+  /// [change] callbacks the JSON clients use.
+  static Map<String, dynamic> _tomlServers(String text, String key) {
+    final servers = <String, dynamic>{};
+    for (final (:table, :lines) in _tomlTables(text)) {
+      if (table == null || !table.startsWith('$key.')) continue;
+      final name = table.substring(key.length + 1);
+      if (name.contains('.')) continue; // [mcp_servers.x.env]
+      final entry = <String, dynamic>{};
+      for (final line in lines.skip(1)) {
+        final eq = line.indexOf('=');
+        if (eq < 0) continue;
+        try {
+          entry[line.substring(0, eq).trim()] = jsonDecode(
+            line.substring(eq + 1).trim(),
+          );
+        } on FormatException {
+          // A value JSON can't read (a 'literal' string, an inline table).
+          entry[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
+        }
+      }
+      servers[name] = entry;
+    }
+    return servers;
+  }
+
+  /// [_editServers] for Codex's TOML: the `[mcp_servers.<name>]` table is
+  /// added or replaced as text, everything else stays byte for byte.
+  static String _editToml(
+    String project,
+    McpClient client,
+    String name,
+    Map<String, Object> entry,
+    String Function(Map<String, dynamic> servers) change,
+  ) {
+    final file = File(p.join(project, client.configPath));
+    final text = file.existsSync() ? file.readAsStringSync() : '';
+    final servers = _tomlServers(text, client.serversKey);
+    final before = jsonEncode(servers[name]);
+    final result = change(servers);
+    if (jsonEncode(servers[name]) == before) return result;
+    final table = '${client.serversKey}.$name';
+    final kept = [
+      for (final (table: t, :lines) in _tomlTables(text))
+        if (t != table && !(t?.startsWith('$table.') ?? false)) ...lines,
+    ];
+    while (kept.isNotEmpty && kept.last.trim().isEmpty) {
+      kept.removeLast();
+    }
+    // JSON strings and lists of strings are valid TOML as they are.
+    final added = [
+      '[$table]',
+      for (final MapEntry(:key, :value) in entry.entries)
+        '$key = ${jsonEncode(value)}',
+    ];
+    file
+      ..parent.createSync(recursive: true)
+      ..writeAsStringSync(
+        '${[...kept, if (kept.isNotEmpty) '', ...added].join('\n')}\n',
+      );
+    return result;
+  }
+
+  /// What starts FlutterPilot in [client]'s config under [project]: null
+  /// when the file or the entry isn't there. Throws a [FormatException]
+  /// for a file that can't be read (JSONC).
+  static ServerLaunch? installedLaunch(String project, McpClient client) {
+    final file = File(p.join(project, client.configPath));
+    if (!file.existsSync()) return null;
+    final text = file.readAsStringSync();
+    final Object? servers = client.isToml
+        ? _tomlServers(text, client.serversKey)
+        : (jsonDecode(text) as Map)[client.serversKey];
+    final entry = servers is Map ? servers['flutterpilot'] : null;
+    if (entry is! Map) return null;
+    final command = entry['command'];
+    final args = (entry['args'] as List?)?.whereType<String>().toList() ?? [];
+    // opencode: one list, the executable first.
+    if (command is List && command.isNotEmpty) {
+      final all = command.whereType<String>().toList();
+      return (command: all.first, args: all.sublist(1));
+    }
+    return command is String ? (command: command, args: args) : null;
   }
 
   /// The flutterpilot_server package: from --local, or next to this CLI's

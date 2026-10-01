@@ -51,7 +51,8 @@ class DevCommand extends Command<void> {
     if (!McpInstallCommand.isConfigured(Directory.current.path)) {
       stdout.writeln(
         'ℹ️ No MCP client in this project uses FlutterPilot yet: run '
-        '"flutterpilot mcp install" (Claude Code, Cursor, VS Code).',
+        '"flutterpilot mcp install" (Claude Code, Cursor, VS Code, Codex, '
+        'Gemini CLI and more).',
       );
     }
     stdout.writeln('🚀 Starting Flutter app: flutter ${flutterArgs.join(" ")}');
