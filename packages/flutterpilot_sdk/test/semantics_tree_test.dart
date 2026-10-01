@@ -23,7 +23,12 @@ void main() {
         ),
       ),
     );
-    final root = tester.binding.renderViews.first.owner!.semanticsOwner!
+    final root = tester
+        .binding
+        .renderViews
+        .first
+        .owner!
+        .semanticsOwner!
         .rootSemanticsNode!;
     final nodes = <Map<String, dynamic>>[];
     void flatten(Map<String, dynamic> node) {
