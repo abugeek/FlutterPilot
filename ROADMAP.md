@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 65 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9); an app sees only those that work for it
+- 66 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -491,8 +491,21 @@ Findings #240–243.
   builds 12.7 ms; profile 87 ms, none, 1.0 ms. Not covered: zero-code apps
   in profile (the inspector extensions they rely on are debug-only), e2e in
   profile. Findings #248–251.
-- **Parallel devices:** run the same flow on iOS + Android + web and diff
-  results.
+- ~~**Parallel devices**~~ — done (2026-10-01): `run_on_devices(steps,
+  devices?)` runs tool calls (taps, text, keys, scrolls, forms, navigation,
+  assert_widget, wait_for, mocks) on several registered devices at once,
+  each on its own connection (a Zone pins every call of a device's run; the
+  active device and its event streams are untouched), each stopping at its
+  first failed step. The report groups agreeing devices ("✅ all"), then
+  lists how the final screens differ: route, tappable elements grouped by
+  the devices that have them, and errors raised during the run (the SDK's
+  snapshot now carries a running error total and the last message). Listed
+  once two devices are registered. hn_reader on iPhone 17 simulator + macOS:
+  4 steps in 1.7 s; the "Best" feed raised 13 overflow errors on the
+  iPhone only. With a third (stale) build: 400 ms, and its older tab labels
+  showed up as a difference. e2e (macOS): a second copy of the fixture
+  started from its built app. Not covered: Android and web field tests;
+  zero-code devices (the step tools need the SDK). Findings #285–287.
 - ~~**Security review**~~ — done (2026-09-29): `docs/security-review.md`.
   Fixed: obscured field text in widget properties/tree, credentials in
   logs/errors/URLs/state (one redactor, SDK and server), `exec_sql_query`

@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 65
+Tool count: 66
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -29,6 +29,15 @@ Adds a running Flutter app to the fleet under a name, e.g. the same app on an iP
 |---|---|---:|---|
 | `id` | string | yes | A short name, e.g. "iphone", "pixel", "web". |
 | `uri` | string | yes | The VM service URI (http://… as flutter run prints it, or ws://…/ws). |
+
+## `run_on_devices`
+
+Runs the same steps on several registered devices at once (e.g. iPhone, Android and web) and compares them: which steps passed where, and how the final screens differ (route, tappable elements, errors). Each device stops at its first failed step. Use it to check a flow works on every platform in one call.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, drag_widget, enter_text, execute_action_chain, fill_form, mock_http_response, navigate_to, press_key, scroll_into_view, set_slider_value, simulate_network, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
+| `devices` | array | no | Registered device names (list_connected_devices); default: all of them. |
 
 ## `switch_device`
 
