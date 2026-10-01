@@ -1142,6 +1142,19 @@ Future<void> main(List<String> args) async {
         ['Widget not found'],
         true,
       );
+      // Pull to refresh answers with the refresh's result: on Android the
+      // indicator animates into place before onRefresh even starts. (Not
+      // scroll_into_view: it stops once Row 0 shows, not always at offset
+      // 0, and a refresh only starts from there.)
+      await check('to the top of the list', 'tap_widget', {
+        'key': "Tooltip['Top']",
+      });
+      await check(
+        'pull to refresh waits for the refresh',
+        'swipe_widget',
+        {'key': 'Row 0', 'direction': 'down'},
+        ['Pulled to refresh', 'Refreshed 1'],
+      );
       await check('back from the list', 'press_key', {'key': 'back'}, ['Send']);
       await check(
         'a tap that does nothing says so',
@@ -1983,17 +1996,36 @@ class ListPage extends StatefulWidget {
 class _ListPageState extends State<ListPage> {
   final _rows = ScrollController(initialScrollOffset: 22300);
   String _picked = 'none';
+  int _refreshed = 0;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     // Underscores: the title must not match a row's label.
-    appBar: AppBar(title: Text('picked ${_picked.replaceAll(' ', '_')}')),
-    body: ListView.builder(
-      controller: _rows,
-      itemCount: 500,
-      itemBuilder: (_, i) => ListTile(
-        title: Text('Row $i'),
-        onTap: () => setState(() => _picked = 'Row $i'),
+    appBar: AppBar(
+      title: Text('picked ${_picked.replaceAll(' ', '_')}'),
+      actions: [
+        Text('Refreshed $_refreshed'),
+        // To the very top: a pull to refresh starts only there.
+        IconButton(
+          tooltip: 'Top',
+          onPressed: () => _rows.jumpTo(0),
+          icon: const Icon(Icons.vertical_align_top),
+        ),
+      ],
+    ),
+    // A refresh that takes a moment, as a request would.
+    body: RefreshIndicator(
+      onRefresh: () async {
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        setState(() => _refreshed++);
+      },
+      child: ListView.builder(
+        controller: _rows,
+        itemCount: 500,
+        itemBuilder: (_, i) => ListTile(
+          title: Text('Row $i'),
+          onTap: () => setState(() => _picked = 'Row $i'),
+        ),
       ),
     ),
   );

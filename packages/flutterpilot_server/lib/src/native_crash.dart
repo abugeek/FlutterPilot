@@ -372,15 +372,24 @@ Future<String> _appleLog(String predicate, {String? simulatorUdid}) async {
   return result.stdout as String;
 }
 
-/// The kernel keeps a corpse of a crashed process for its crash report and
-/// logs `name[pid] Corpse allowed …`; a process that exits normally has
-/// none. Simulator apps are processes on the Mac, so this holds for them.
+/// The kernel keeps a corpse of a crashed process for its crash report; a
+/// process that exits normally has none. Up to macOS 27.0 the kernel logged
+/// `name[pid] Corpse allowed …`; from 27.0.1 only ReportCrashService does
+/// ("Parsing corpse data for pid N"). Simulator apps are processes on the
+/// Mac, so this holds for them.
 Future<bool> _kernelSawCrash(int pid) async {
   final log = await _appleLog(
-    'processID == 0 AND eventMessage CONTAINS "[$pid] Corpse"',
+    '(processID == 0 AND eventMessage CONTAINS "[$pid] Corpse") OR '
+    '(process == "ReportCrashService" AND '
+    'eventMessage CONTAINS "corpse data for pid $pid")',
   ).timeout(const Duration(seconds: 10));
-  return log.contains('[$pid] Corpse');
+  return crashSeenInLog(log, pid);
 }
+
+/// Whether `log show` output has the corpse of process [pid].
+bool crashSeenInLog(String log, int pid) =>
+    log.contains('[$pid] Corpse') ||
+    RegExp('corpse data for pid $pid\\b').hasMatch(log);
 
 /// An uncaught NSException's message is only in the app's log.
 Future<String?> _exceptionFromAppleLog(CrashTarget target) async {
