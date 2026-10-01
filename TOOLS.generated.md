@@ -379,7 +379,7 @@ Which file:line in the app's code creates a widget: pass key (key, selector or v
 
 ## `get_semantics_tree`
 
-What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint, role flags, checked/enabled/focused and rect. Use to check labels for accessibility; semanticsId works in tap_widget.
+What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint, role flags, checked/enabled/focused and rect. Only what is set is listed: a missing flag is false, isChecked appears on checkable nodes, isEnabled only when false. Use to check labels for accessibility; semanticsId works in tap_widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
