@@ -28,6 +28,8 @@ void main() {
     expect(calls.single.first, 'osascript');
     expect(calls.single.last, contains('unix id is 4242'));
     expect(calls.single.last, contains('{390, 844}'));
+    // Not `window 1`: a system dialog of the app can be in front.
+    expect(calls.single.last, contains('AXStandardWindow'));
   });
 
   test('says so when the platform has no window to resize', () async {
@@ -56,5 +58,25 @@ void main() {
       ),
     );
     expect(problem, contains('Accessibility'));
+  });
+
+  test('reads the window size macOS reports', () async {
+    expect(
+      await readAppWindowSize(
+        7,
+        run: (_, args) async {
+          expect(args.last, contains('unix id is 7'));
+          return ProcessResult(1, 0, '700, 600\n', '');
+        },
+      ),
+      '700x600',
+    );
+    expect(
+      await readAppWindowSize(
+        7,
+        run: (_, _) async => ProcessResult(1, 1, '', 'x'),
+      ),
+      isNull,
+    );
   });
 }
