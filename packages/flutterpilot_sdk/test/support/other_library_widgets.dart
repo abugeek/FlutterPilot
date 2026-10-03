@@ -38,14 +38,24 @@ class Slider extends StatelessWidget {
   );
 }
 
+class InputDecoration {
+  const InputDecoration({this.labelText, this.hintText});
+  final String? labelText;
+  final String? hintText;
+}
+
 class TextField extends StatelessWidget {
-  const TextField({super.key, required this.label});
+  const TextField({super.key, required this.label, this.suffix});
   final String label;
+  final Widget? suffix;
+
+  InputDecoration get decoration => InputDecoration(labelText: label);
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
       Text(label),
+      ?suffix,
       EditableText(
         controller: TextEditingController(),
         focusNode: FocusNode(),
