@@ -395,7 +395,7 @@ class PilotWidgetInspector {
           (widget is TextField || widget is CupertinoTextField)) {
         final q = queryToSearch.toLowerCase();
         final names = widget is TextField
-            ? [widget.decoration?.labelText, widget.decoration?.hintText]
+            ? fieldNames(widget.decoration)
             : [(widget as CupertinoTextField).placeholder];
         if (names.any((n) => n != null && n.toLowerCase() == q)) {
           consider(75);
@@ -564,6 +564,36 @@ class PilotWidgetInspector {
   }
 
   /// Finds an [Element] by Key string.
+  /// What a Material text field can be called: its label, its hint, and the
+  /// two together in either order, which is how get_interactive_elements
+  /// and get_app_summary show an empty field that has both ("0.00 Liters").
+  static List<String?> fieldNames(InputDecoration? decoration) {
+    final label = decoration?.labelText;
+    final hint = decoration?.hintText;
+    return [
+      label,
+      hint,
+      if (label != null && hint != null) ...['$hint $label', '$label $hint'],
+    ];
+  }
+
+  /// The on-stage text inputs at or under [element]. One means [element]
+  /// names a field; several mean it is a container and typing into "its"
+  /// field would be a guess.
+  static List<EditableTextState> fieldsUnder(Element element) {
+    final fields = <EditableTextState>[];
+    void find(Element e) {
+      if (e is StatefulElement && e.state is EditableTextState) {
+        fields.add(e.state as EditableTextState);
+        return;
+      }
+      e.debugVisitOnstageChildren(find);
+    }
+
+    find(element);
+    return fields;
+  }
+
   static Element? findElementByKey(String keyString) {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return null;

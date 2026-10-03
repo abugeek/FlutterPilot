@@ -136,12 +136,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'Changes how the app renders, one or more at once: theme '
           '(light/dark), locale ("fr", "ar", "system"), textScale (2.0 to '
           'test large text; 0 resets), orientation (portrait/landscape/all, '
-          'phones), and the debug overlays debugPaint (layout bounds), '
-          'repaintRainbow (what repaints) and slowAnimations (5x slower). '
-          'Locale and textScale act like the device setting, with no app '
-          'code: the response says what the app shows, e.g. when it does '
-          'not support the locale or clamps text scaling. Pair with '
-          'audit_screen_health to catch overflows.',
+          'phones), windowSize ("390x844", macOS desktop window), and the '
+          'debug overlays debugPaint (layout bounds), repaintRainbow (what '
+          'repaints) and slowAnimations (5x slower). Locale and textScale '
+          'act like the device setting, with no app code: the response says '
+          'what the app shows, e.g. when it does not support the locale or '
+          'clamps text scaling. Pair with audit_screen_health to catch '
+          'overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
@@ -156,6 +157,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           ),
           'orientation': JsonSchema.string(
             enumValues: ['portrait', 'landscape', 'all'],
+          ),
+          'windowSize': JsonSchema.string(
+            description:
+                'macOS desktop: the window\'s size in logical pixels, '
+                '"WIDTHxHEIGHT" (e.g. "390x844" for a phone width, '
+                '"1280x860"). The title bar is part of the height.',
           ),
           'debugPaint': JsonSchema.boolean(),
           'repaintRainbow': JsonSchema.boolean(),
@@ -211,20 +218,26 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
               {'timeDilation': p['slowAnimations'] == true ? '5.0' : '1.0'},
             ),
         ];
-        if (steps.isEmpty) {
+        if (steps.isEmpty && p['windowSize'] == null) {
           return CallToolResult(
             isError: true,
             content: [
               TextContent(
                 text:
                     'Nothing to change: pass theme, locale, textScale, '
-                    'orientation, debugPaint, repaintRainbow or slowAnimations.',
+                    'orientation, windowSize, debugPaint, repaintRainbow or '
+                    'slowAnimations.',
               ),
             ],
           );
         }
         final lines = <String>[];
         var failed = false;
+        if (p['windowSize'] != null) {
+          final outcome = await _setWindowSize(p, '${p['windowSize']}');
+          failed = failed || outcome.failed;
+          lines.add(outcome.line);
+        }
         for (final (label, ext, args) in steps) {
           final res = await _callExtensionRaw(ext, args);
           if (res.isError) {
@@ -248,5 +261,59 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+  }
+
+  /// set_app_settings(windowSize): resizes the window on the host, then
+  /// reports the viewport the app now has.
+  Future<({String line, bool failed})> _setWindowSize(
+    Map<String, dynamic> p,
+    String value,
+  ) async {
+    final size = parseWindowSize(value);
+    if (size == null) {
+      return (
+        line: '✗ window size "$value": use WIDTHxHEIGHT, e.g. "390x844".',
+        failed: true,
+      );
+    }
+    final label = 'window ${size.width}x${size.height}';
+    final context = await _deviceContextForParameters(p);
+    final vm = context?.service;
+    final pid = vm == null ? null : (await vm.getVM()).pid;
+    Future<String?> viewport() async {
+      final snapshot = await _callExtensionRaw(
+        'ext.flutterpilot.getAppSnapshot',
+        {},
+      );
+      final v = snapshot.data?['viewport'];
+      return v is Map ? '${v['width']}x${v['height']}' : null;
+    }
+
+    final before = await viewport();
+    final problem = await resizeAppWindow(
+      operatingSystem: context?.operatingSystem,
+      pid: pid,
+      width: size.width,
+      height: size.height,
+    );
+    if (problem != null) return (line: '✗ $label: $problem', failed: true);
+    // The app lays out again a frame or two after the window changes.
+    var after = before;
+    for (var i = 0; i < 20 && after == before; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      after = await viewport();
+    }
+    if (after == null) return (line: '✓ $label', failed: false);
+    if (after == before && !after.startsWith('${size.width}x')) {
+      // Told to resize and nothing moved: a window with a fixed or minimum
+      // size, or one that is full screen.
+      return (
+        line:
+            '✗ $label: the window was asked to resize but the viewport is '
+            'still $after (a fixed, minimum or full-screen window).',
+        failed: true,
+      );
+    }
+    return (line: '✓ $label (viewport now $after)', failed: false);
   }
 }

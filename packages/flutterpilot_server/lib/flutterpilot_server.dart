@@ -23,12 +23,14 @@ import 'src/device_runtime_context.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
+import 'src/reload_failure.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/web_limits.dart';
+import 'src/window_size.dart';
 import 'src/zero_code.dart';
 
 export 'src/cli.dart' show runFlutterPilotServer;

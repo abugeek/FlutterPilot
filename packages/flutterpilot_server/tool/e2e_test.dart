@@ -765,6 +765,37 @@ Future<void> main(List<String> args) async {
         {'locale': 'system'},
         ['✓ locale system'],
       );
+      // The window is resized on the host. CI runners do not grant the
+      // Accessibility access that needs, so the resize runs locally only.
+      if (device == 'macos' && Platform.environment['CI'] == null) {
+        await check(
+          'window resizes to a narrower width',
+          'set_app_settings',
+          {'windowSize': '700x600'},
+          ['✓ window 700x600', 'viewport now 700x'],
+        );
+        await check(
+          'window resizes back',
+          'set_app_settings',
+          {'windowSize': '800x600'},
+          ['viewport now 800x'],
+        );
+      } else if (device != 'macos') {
+        await check(
+          'window size is refused off macOS, not faked',
+          'set_app_settings',
+          {'windowSize': '700x600'},
+          ['macOS desktop apps only'],
+          true,
+        );
+      }
+      await check(
+        'a malformed window size is refused',
+        'set_app_settings',
+        {'windowSize': 'wide'},
+        ['use WIDTHxHEIGHT'],
+        true,
+      );
       await check(
         'save baseline',
         'compare_screenshot',

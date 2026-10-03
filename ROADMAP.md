@@ -63,6 +63,12 @@ tools that always work beat many tools that sometimes work.
 - **macOS sandbox:** apps need `com.apple.security.network.client` in both
   entitlement files or all HTTP fails with `errno = 1`. `flutterpilot init`
   adds it; `flutterpilot doctor` checks it.
+- **macOS sandboxed app + hot reload:** flutter_tools copies the kernel
+  straight into the app's temp directory, which for a sandboxed app is inside
+  `~/Library/Containers/<bundle id>`. macOS keeps other processes out of it
+  unless the program that ran `flutter run` has App Management (or Full Disk
+  Access), so hot reload from an agent fails with "failed to create file".
+  `hot_reload` now says so (`reload_failure.dart`); it is not a compile error.
 - **Riverpod 3 retries failed providers forever by default** (endless spinner).
 - **`dart format` on a whole directory reformats unrelated files** → format
   only files you touched.

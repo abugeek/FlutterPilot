@@ -298,7 +298,7 @@ The route stack, bottom to top. With go_router also the location, path/query par
 
 ## `set_app_settings`
 
-Changes how the app renders, one or more at once: theme (light/dark), locale ("fr", "ar", "system"), textScale (2.0 to test large text; 0 resets), orientation (portrait/landscape/all, phones), and the debug overlays debugPaint (layout bounds), repaintRainbow (what repaints) and slowAnimations (5x slower). Locale and textScale act like the device setting, with no app code: the response says what the app shows, e.g. when it does not support the locale or clamps text scaling. Pair with audit_screen_health to catch overflows.
+Changes how the app renders, one or more at once: theme (light/dark), locale ("fr", "ar", "system"), textScale (2.0 to test large text; 0 resets), orientation (portrait/landscape/all, phones), windowSize ("390x844", macOS desktop window), and the debug overlays debugPaint (layout bounds), repaintRainbow (what repaints) and slowAnimations (5x slower). Locale and textScale act like the device setting, with no app code: the response says what the app shows, e.g. when it does not support the locale or clamps text scaling. Pair with audit_screen_health to catch overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -306,6 +306,7 @@ Changes how the app renders, one or more at once: theme (light/dark), locale ("f
 | `locale` | string | no | BCP-47 tag (e.g. "en", "en-GB", "zh-Hans-CN"); "system" restores the device locale. |
 | `textScale` | number | no | Text scale factor (1.0 normal); 0 restores the system value. |
 | `orientation` | string | no |  |
+| `windowSize` | string | no | macOS desktop: the window's size in logical pixels, "WIDTHxHEIGHT" (e.g. "390x844" for a phone width, "1280x860"). The title bar is part of the height. |
 | `debugPaint` | boolean | no |  |
 | `repaintRainbow` | boolean | no |  |
 | `slowAnimations` | boolean | no |  |
