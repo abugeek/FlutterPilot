@@ -131,6 +131,25 @@ void main() {
     expect(low.single, startsWith('"Back"'));
   });
 
+  // An app on the separate material_ui package has its own button classes.
+  testWidgets('a disabled control of another widget library is exempt too', (
+    tester,
+  ) async {
+    const faint = TextStyle(color: Color(0xFFBBBBBB));
+    final result = await audit(
+      tester,
+      const Column(
+        children: [
+          _OtherLibraryButton(
+            onPressed: null,
+            child: Text('Next', style: faint),
+          ),
+        ],
+      ),
+    );
+    expect(result['lowContrast'], isEmpty);
+  });
+
   test('WCAG contrast ratio', () {
     expect(
       AccessibilityAuditor.contrastRatio(0xff000000, 0xffffffff),
@@ -185,4 +204,17 @@ void main() {
 extension on (String, Rect) {
   (String, Rect) withY(double y) =>
       ($1, Rect.fromLTWH($2.left, y, $2.width, $2.height));
+}
+
+/// Stands in for a button class that is not flutter/material's.
+class _OtherLibraryButton extends StatelessWidget {
+  const _OtherLibraryButton({required this.onPressed, required this.child});
+
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  VoidCallback? get onLongPress => null;
+
+  @override
+  Widget build(BuildContext context) => child;
 }

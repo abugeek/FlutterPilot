@@ -391,12 +391,20 @@ class PilotWidgetInspector {
       // Priority 75: a text field's label / hint / placeholder. The label is a
       // sibling of the input, so resolving to the label Text would leave
       // enter_text without a field and make tap_widget report it covered.
+      // By type name as well: an app built on the separate material_ui /
+      // cupertino_ui packages has its own TextField class, which `is` from
+      // flutter/material does not match.
       if ((targetIndex != null || bestPriority < 75 + 5) &&
-          (widget is TextField || widget is CupertinoTextField)) {
+          (widget is TextField ||
+              widget is CupertinoTextField ||
+              typeName == 'TextField' ||
+              typeName == 'CupertinoTextField')) {
         final q = queryToSearch.toLowerCase();
         final names = widget is TextField
             ? fieldNames(widget.decoration)
-            : [(widget as CupertinoTextField).placeholder];
+            : widget is CupertinoTextField
+            ? [widget.placeholder]
+            : const <String?>[];
         if (names.any((n) => n != null && n.toLowerCase() == q) ||
             // The name the tappable list gives the field: every text it
             // shows, which also covers a label or hint passed as a widget.

@@ -283,11 +283,25 @@ class AccessibilityAuditor {
     ];
   }
 
-  static bool _isDisabledControl(Widget widget) =>
-      (widget is ButtonStyleButton && !widget.enabled) ||
-      (widget is IconButton && widget.onPressed == null) ||
-      (widget is TextField && widget.enabled == false) ||
-      (widget is Semantics && widget.properties.enabled == false);
+  static bool _isDisabledControl(Widget widget) {
+    if (widget is Semantics) return widget.properties.enabled == false;
+    if (widget is ButtonStyleButton) return !widget.enabled;
+    if (widget is IconButton) return widget.onPressed == null;
+    if (widget is TextField) return widget.enabled == false;
+    // The same controls from the separate material_ui package are other
+    // classes: `is` does not match them, their fields are the same.
+    final type = widget.runtimeType.toString();
+    try {
+      final dynamic control = widget;
+      if (type.endsWith('Button')) {
+        return control.onPressed == null && control.onLongPress == null;
+      }
+      if (type == 'TextField') return control.enabled == false;
+    } catch (_) {
+      // Not a control with those fields.
+    }
+    return false;
+  }
 
   static String? _sourceOf(Element element) {
     if (!SourceLocator.available) return null;
