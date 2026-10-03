@@ -22,9 +22,38 @@ Map<String, dynamic> normalizeToolParams(Map<String, dynamic> parameters) {
     }
   }
 
-  alias(['target', 'key', 'identifier', 'selector']);
-  alias(['rootTarget', 'rootKey', 'rootSelector', 'root']);
-  alias(['expected', 'expect', 'expectedValue']);
-  alias(['dbName', 'database']);
+  _normalized.forEach(alias);
   return p;
+}
+
+/// Names that mean the same argument in every tool.
+const _normalized = [
+  ['target', 'key', 'identifier', 'selector'],
+  ['rootTarget', 'rootKey', 'rootSelector', 'root'],
+  ['expected', 'expect', 'expectedValue'],
+  ['dbName', 'database'],
+];
+
+/// Old names single tools still read.
+const _legacy = [
+  ['name', 'provider', 'cubit'],
+  ['submitWith', 'submitTarget'],
+  ['query', 'search'],
+];
+
+/// The arguments in [given] a tool with these schema [properties] doesn't
+/// take. A name counts as known when the schema has it or one of its
+/// aliases (`target` for `key`).
+List<String> unknownToolArguments(
+  Iterable<String> given,
+  Iterable<String> properties,
+) {
+  final known = properties.toSet();
+  for (final group in [..._normalized, ..._legacy]) {
+    if (group.any(known.contains)) known.addAll(group);
+  }
+  return [
+    for (final name in given)
+      if (!known.contains(name)) name,
+  ];
 }

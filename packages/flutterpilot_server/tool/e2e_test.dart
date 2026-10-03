@@ -702,6 +702,14 @@ Future<void> main(List<String> args) async {
         '/ping',
         '200',
       ]);
+      // An argument the tool doesn't have is refused, not dropped (#280).
+      await check(
+        'an unknown argument is refused',
+        'get_network_logs',
+        {'clear': true},
+        ['has no "clear" parameter', 'nothing was done'],
+        true,
+      );
 
       // Merged tools (ROADMAP §4.2): one tool, the mode chosen by a parameter.
       await check(
