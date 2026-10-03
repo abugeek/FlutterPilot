@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/widget_inspector.dart';
 
+import 'support/other_library_widgets.dart' as other;
+
 void main() {
   group('PilotWidgetInspector Semantic Selectors', () {
     testWidgets('finds widget by explicit Key and ValueKey', (
@@ -291,6 +293,40 @@ void main() {
       final element = PilotWidgetInspector.findElement('0.00 Liters (L)')!;
       expect(element.widget, isA<TextField>());
       expect((element.widget as TextField).decoration!.hintText, '0.00');
+    });
+
+    // Octana's login: the password field holds a "Show password" button,
+    // and its TextField is material_ui's class, not Flutter's.
+    testWidgets('a field of another widget library is found by its label, '
+        'though other labels contain the word', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const other.TextField(label: 'Email'),
+                other.TextField(
+                  label: 'Password',
+                  suffix: IconButton(
+                    tooltip: 'Show password',
+                    icon: const Icon(Icons.visibility),
+                    onPressed: () {},
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {},
+                  child: const Text('Forgot Password?'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final element = PilotWidgetInspector.findElement('Password');
+      expect(PilotWidgetInspector.lastAmbiguity, isNull);
+      expect(element!.widget, isA<other.TextField>());
+      expect((element.widget as other.TextField).label, 'Password');
     });
 
     testWidgets('icon names label only icon-only buttons', (tester) async {

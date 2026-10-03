@@ -402,7 +402,7 @@ class PilotWidgetInspector {
             ? fieldNames(widget.decoration)
             : widget is CupertinoTextField
             ? [widget.placeholder]
-            : const <String?>[];
+            : _otherLibraryFieldNames(widget);
         if (names.any((n) => n != null && n.toLowerCase() == q) ||
             // The name the tappable list gives the field: every text it
             // shows, which also covers a label or hint passed as a widget.
@@ -585,6 +585,27 @@ class PilotWidgetInspector {
       hint,
       if (label != null && hint != null) ...['$hint $label', '$label $hint'],
     ];
+  }
+
+  /// [fieldNames] for a TextField of the separate material_ui / cupertino_ui
+  /// packages: other classes with the same fields.
+  static List<String?> _otherLibraryFieldNames(Widget field) {
+    try {
+      final dynamic f = field;
+      if (isNamed(field, 'CupertinoTextField')) {
+        return [f.placeholder as String?];
+      }
+      final dynamic decoration = f.decoration;
+      final label = decoration?.labelText as String?;
+      final hint = decoration?.hintText as String?;
+      return [
+        label,
+        hint,
+        if (label != null && hint != null) ...['$hint $label', '$label $hint'],
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// The on-stage text inputs at or under [element]. One means [element]
