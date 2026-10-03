@@ -29,6 +29,11 @@ extension _WidgetExtensions on FlutterPilot {
 
   /// Tapping a widget that isn't hittable (behind a dialog barrier, menu or
   /// overlay, or clipped) would hit whatever is on top and still "succeed".
+  static bool _isToggle(Widget w) =>
+      PilotWidgetInspector.isNamed(w, 'Checkbox') ||
+      PilotWidgetInspector.isNamed(w, 'Switch') ||
+      PilotWidgetInspector.isNamed(w, 'Radio');
+
   static ServiceExtensionResponse? _refuseIfCovered(
     Element element,
     String target,
@@ -1152,16 +1157,14 @@ extension _WidgetExtensions on FlutterPilot {
       void findToggleable(Element e) {
         if (renderBox != null) return;
         final w = e.widget;
-        if (w is Checkbox || w is Switch || w is Radio) {
+        if (_isToggle(w)) {
           renderBox = e.renderObject as RenderBox?;
           return;
         }
         e.debugVisitOnstageChildren(findToggleable);
       }
 
-      if (element.widget is Checkbox ||
-          element.widget is Switch ||
-          element.widget is Radio) {
+      if (_isToggle(element.widget)) {
         renderBox = element.renderObject as RenderBox?;
       } else {
         findToggleable(element);
@@ -1221,25 +1224,18 @@ extension _WidgetExtensions on FlutterPilot {
           'Widget not found: $target',
         );
       }
-      Slider? sliderWidget;
       Element? sliderElement;
       void findSlider(Element e) {
-        if (sliderWidget != null) return;
-        if (e.widget is Slider) {
-          sliderWidget = e.widget as Slider;
+        if (sliderElement != null) return;
+        if (PilotWidgetInspector.isNamed(e.widget, 'Slider')) {
           sliderElement = e;
           return;
         }
         e.debugVisitOnstageChildren(findSlider);
       }
 
-      if (element.widget is Slider) {
-        sliderWidget = element.widget as Slider;
-        sliderElement = element;
-      } else {
-        findSlider(element);
-      }
-      if (sliderWidget == null) {
+      findSlider(element);
+      if (sliderElement == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'No Slider found under target: $target',
@@ -1252,9 +1248,10 @@ extension _WidgetExtensions on FlutterPilot {
           'Slider not rendered',
         );
       }
-      final slider = sliderWidget!;
-      final min = slider.min;
-      final max = slider.max;
+      // dynamic: material_ui's Slider is another class with the same fields.
+      final dynamic slider = sliderElement!.widget;
+      final double min = slider.min as double;
+      final double max = slider.max as double;
       if (max <= min) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,

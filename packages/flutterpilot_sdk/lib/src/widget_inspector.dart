@@ -355,9 +355,7 @@ class PilotWidgetInspector {
             final label = _describeDescendants(element);
             final text = label.text.toLowerCase();
             final value = valueTarget.toLowerCase();
-            final ownLabel = widget is Tooltip
-                ? widget.message?.toLowerCase()
-                : null;
+            final ownLabel = tooltipMessage(widget)?.toLowerCase();
             if (ownLabel == value || (text == value && !label.glyphOnly)) {
               consider(96);
             } else if (text == value) {
@@ -446,14 +444,15 @@ class PilotWidgetInspector {
       }
 
       // Priority 50: Tooltip / Semantics
-      if ((targetIndex != null || bestPriority < 57 + 5) && widget is Tooltip) {
-        final message = widget.message?.toLowerCase();
+      final tooltip = tooltipMessage(widget);
+      if ((targetIndex != null || bestPriority < 57 + 5) && tooltip != null) {
+        final message = tooltip.toLowerCase();
         final q = queryToSearch.toLowerCase();
         if (message == q) {
           consider(57);
         } else if (partial &&
             (targetIndex != null || bestPriority < 50 + 5) &&
-            (message?.contains(q) ?? false)) {
+            message.contains(q)) {
           consider(50);
         }
       }
@@ -731,8 +730,7 @@ class PilotWidgetInspector {
   /// otherwise the text under it.
   static String _labelOf(Element element) {
     final w = element.widget;
-    if (w is Tooltip && w.message != null) return w.message!;
-    return _extractDescendantText(element);
+    return tooltipMessage(w) ?? _extractDescendantText(element);
   }
 
   /// The text under [element], leaving out the subtrees in [skip];
@@ -767,8 +765,8 @@ class PilotWidgetInspector {
         return;
       } else if (w is Semantics && fromApp) {
         add(w.properties.label);
-      } else if (w is Tooltip) {
-        add(w.message);
+      } else if (tooltipMessage(w) case final message?) {
+        add(message);
       } else if (w is IconButton) {
         add(w.tooltip);
       } else if (w is Icon) {
@@ -818,8 +816,8 @@ class PilotWidgetInspector {
       return "Text['$cleanText']";
     }
 
-    if (element.widget is Tooltip) {
-      final msg = (element.widget as Tooltip).message;
+    {
+      final msg = tooltipMessage(element.widget);
       if (msg != null && msg.isNotEmpty) {
         return "Tooltip['$msg']";
       }
@@ -879,8 +877,8 @@ class PilotWidgetInspector {
       text = widget.data ?? '';
     } else if (widget is RichText) {
       text = widget.text.toPlainText();
-    } else if (widget is Tooltip) {
-      text = widget.message ?? '';
+    } else if (tooltipMessage(widget) case final message?) {
+      text = message;
     } else if (widget is EditableText) {
       text = widget.obscureText
           ? '•' * widget.controller.text.length
@@ -1206,6 +1204,23 @@ class PilotWidgetInspector {
         (name.endsWith('Button') ||
             name.endsWith('ListTile') ||
             name.endsWith('Chip'));
+  }
+
+  /// Whether [w] is the framework widget called [name]: Flutter's own or the
+  /// one of the same name in the separate material_ui package, which is
+  /// another class with the same fields that `is` does not match.
+  static bool isNamed(Widget w, String name) =>
+      w.runtimeType.toString().split('<').first == name;
+
+  /// A Tooltip's message (see [isNamed]), else null.
+  static String? tooltipMessage(Widget w) {
+    if (w is Tooltip) return w.message;
+    if (!isNamed(w, 'Tooltip')) return null;
+    try {
+      return (w as dynamic).message as String?;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Widgets that actually receive taps/text/drags.
