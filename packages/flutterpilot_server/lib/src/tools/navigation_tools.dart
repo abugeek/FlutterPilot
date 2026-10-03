@@ -299,8 +299,9 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     if (problem != null) return (line: '✗ $label: $problem', failed: true);
     // The app lays out again a frame or two after the window changes.
     var after = before;
-    for (var i = 0; i < 20 && after == before; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+    // Up to 8 s: a covered or busy app takes its time to draw the new size.
+    for (var i = 0; i < 40 && after == before; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       after = await viewport();
     }
     if (after == null) return (line: '✓ $label', failed: false);
