@@ -291,7 +291,10 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
 
     final before = await viewport();
     final problem = await resizeAppWindow(
-      operatingSystem: context?.operatingSystem,
+      // A web app's VM reports the host's OS; the browser owns its window.
+      operatingSystem: context?.isWeb ?? false
+          ? 'web'
+          : context?.operatingSystem,
       pid: pid,
       width: size.width,
       height: size.height,
