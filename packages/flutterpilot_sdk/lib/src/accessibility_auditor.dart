@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart'
+    show ButtonStyleButton, IconButton, TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -35,7 +37,7 @@ class AccessibilityAuditor {
       ],
       'readingOrderJumps': readingOrderJumps([
         for (final n in nodes.where((n) => n.actionable)) (n.name, n.rect),
-      ]),
+      ], rtl: nodes.any((n) => n.rtl)),
       if (root == null)
         'semanticsNote':
             'The semantics tree was not built, so labels and reading order '
@@ -227,6 +229,9 @@ class AccessibilityAuditor {
     var checked = 0;
     void visit(Element element) {
       if (element.widget is AiOverlayMarker) return;
+      // WCAG 1.4.3 exempts inactive components: a disabled button is
+      // dimmed on purpose.
+      if (_isDisabledControl(element.widget)) return;
       final ro = element.renderObject;
       if (element is RenderObjectElement &&
           ro is RenderParagraph &&
@@ -276,6 +281,26 @@ class AccessibilityAuditor {
                 '$problem'
             .trim(),
     ];
+  }
+
+  static bool _isDisabledControl(Widget widget) {
+    if (widget is Semantics) return widget.properties.enabled == false;
+    if (widget is ButtonStyleButton) return !widget.enabled;
+    if (widget is IconButton) return widget.onPressed == null;
+    if (widget is TextField) return widget.enabled == false;
+    // The same controls from the separate material_ui package are other
+    // classes: `is` does not match them, their fields are the same.
+    final type = widget.runtimeType.toString();
+    try {
+      final dynamic control = widget;
+      if (type.endsWith('Button')) {
+        return control.onPressed == null && control.onLongPress == null;
+      }
+      if (type == 'TextField') return control.enabled == false;
+    } catch (_) {
+      // Not a control with those fields.
+    }
+    return false;
   }
 
   static String? _sourceOf(Element element) {
@@ -392,13 +417,25 @@ class AccessibilityAuditor {
 
   /// Places where the reading order moves clearly back up the screen: the
   /// next control ends above where the previous one starts.
-  static List<String> readingOrderJumps(List<(String, Rect)> order) => [
+  ///
+  /// Moving up into the next column is how a multi-column layout is read
+  /// (the left column to its end, then the top of the right one), so a
+  /// control that lies wholly on the reading-forward side of the previous
+  /// one is not a jump. [rtl] flips which side that is.
+  static List<String> readingOrderJumps(
+    List<(String, Rect)> order, {
+    bool rtl = false,
+  }) => [
     for (var i = 1; i < order.length; i++)
-      if (order[i].$2.bottom < order[i - 1].$2.top - 4)
+      if (order[i].$2.bottom < order[i - 1].$2.top - 4 &&
+          !_startsNextColumn(order[i - 1].$2, order[i].$2, rtl))
         'After ${order[i - 1].$1} (y ${order[i - 1].$2.top.round()}) a '
             'screen reader goes back up to ${order[i].$1} '
             '(y ${order[i].$2.top.round()}).',
   ];
+
+  static bool _startsNextColumn(Rect previous, Rect next, bool rtl) =>
+      rtl ? next.right <= previous.left + 4 : next.left >= previous.right - 4;
 }
 
 /// A screenshot's RGBA bytes and where its top-left is on screen.
@@ -417,6 +454,8 @@ class _Node {
   final Rect rect;
 
   SemanticsFlags get flags => data.flagsCollection;
+
+  bool get rtl => data.textDirection == TextDirection.rtl;
 
   bool get actionable =>
       data.hasAction(SemanticsAction.tap) ||

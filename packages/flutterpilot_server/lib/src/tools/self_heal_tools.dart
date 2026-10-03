@@ -114,13 +114,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           ? '${err.message} ${err.details ?? ''}'
           : '$err';
       return CallToolResult(
-        content: [
-          TextContent(
-            text:
-                '$service failed: $details\nHINT: usually a compile error — run `dart analyze` on the edited files, '
-                'fix, and retry. Some changes (main(), static initializers) need hot_reload(restart: true).',
-          ),
-        ],
+        content: [TextContent(text: reloadFailureText(service, details))],
         isError: true,
       );
     }

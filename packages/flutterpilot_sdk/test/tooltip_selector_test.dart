@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
+import 'support/other_library_widgets.dart' as other;
+
 /// A drawer button ("Open navigation menu", icon Icons.menu) next to a popup
 /// menu button whose tooltip is exactly "Menu".
 Widget _app() => MaterialApp(
@@ -121,5 +123,37 @@ void main() {
     );
     await _tap(tester, "IconButton['settings']");
     expect(tapped, isTrue);
+  });
+
+  // An app on the separate material_ui package has its own Tooltip class.
+  testWidgets('a tooltip of another widget library selects its button', (
+    tester,
+  ) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: other.Tooltip(
+            message: 'Close settings',
+            child: GestureDetector(
+              onTap: () => tapped = true,
+              child: const Icon(Icons.close),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (final query in ['Close settings', "Tooltip['Close settings']"]) {
+      tapped = false;
+      await _tap(tester, query);
+      expect(tapped, isTrue, reason: query);
+    }
+    expect(
+      PilotWidgetInspector.isNamed(
+        other.Slider(value: 0, onChanged: (_) {}),
+        'Slider',
+      ),
+      isTrue,
+    );
   });
 }

@@ -111,6 +111,45 @@ void main() {
     expect(low.single, contains('needs 4.5:1 for body text'));
   });
 
+  // Field test (Octana): a disabled "Next" button was reported at 3.18:1.
+  testWidgets('a disabled control is exempt from contrast', (tester) async {
+    const faint = TextStyle(color: Color(0xFFBBBBBB));
+    final result = await audit(
+      tester,
+      Column(
+        children: [
+          const TextButton(onPressed: null, child: Text('Next', style: faint)),
+          TextButton(
+            onPressed: () {},
+            child: const Text('Back', style: faint),
+          ),
+        ],
+      ),
+    );
+    final low = (result['lowContrast'] as List).cast<String>();
+    expect(low, hasLength(1));
+    expect(low.single, startsWith('"Back"'));
+  });
+
+  // An app on the separate material_ui package has its own button classes.
+  testWidgets('a disabled control of another widget library is exempt too', (
+    tester,
+  ) async {
+    const faint = TextStyle(color: Color(0xFFBBBBBB));
+    final result = await audit(
+      tester,
+      const Column(
+        children: [
+          _OtherLibraryButton(
+            onPressed: null,
+            child: Text('Next', style: faint),
+          ),
+        ],
+      ),
+    );
+    expect(result['lowContrast'], isEmpty);
+  });
+
   test('WCAG contrast ratio', () {
     expect(
       AccessibilityAuditor.contrastRatio(0xff000000, 0xffffffff),
@@ -136,4 +175,46 @@ void main() {
       'After "Save" (y 500) a screen reader goes back up to "Menu" (y 10).',
     ]);
   });
+
+  // Field test (Octana, 1280 dp): a two-column dashboard was reported as a
+  // jump although left column then right column is the order to read it in.
+  test('moving up into the next column is not a jump', () {
+    const leftBottom = ('"Ledger"', Rect.fromLTWH(289, 324, 450, 60));
+    const rightTop = ('"Fuel Sale"', Rect.fromLTWH(781, 96, 480, 90));
+
+    expect(
+      AccessibilityAuditor.readingOrderJumps([leftBottom, rightTop]),
+      isEmpty,
+    );
+    // Right to left, the next column is on the left: the same move is a jump.
+    expect(
+      AccessibilityAuditor.readingOrderJumps([leftBottom, rightTop], rtl: true),
+      hasLength(1),
+    );
+    expect(
+      AccessibilityAuditor.readingOrderJumps([
+        rightTop.withY(324),
+        leftBottom.withY(96),
+      ], rtl: true),
+      isEmpty,
+    );
+  });
+}
+
+extension on (String, Rect) {
+  (String, Rect) withY(double y) =>
+      ($1, Rect.fromLTWH($2.left, y, $2.width, $2.height));
+}
+
+/// Stands in for a button class that is not flutter/material's.
+class _OtherLibraryButton extends StatelessWidget {
+  const _OtherLibraryButton({required this.onPressed, required this.child});
+
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  VoidCallback? get onLongPress => null;
+
+  @override
+  Widget build(BuildContext context) => child;
 }

@@ -218,6 +218,81 @@ void main() {
       );
     });
 
+    // Field test (Octana fuel sale): the tappable list shows an empty field
+    // as "<hint> <label>". Typed back as a target it matched the page-wide
+    // GestureDetector by substring, and the text went into the first field
+    // on the page.
+    testWidgets('a field is found by its hint and label together, and a '
+        'container of fields is not one field', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GestureDetector(
+              onTap: () {},
+              child: const Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(hintText: 'Enter Plate Number'),
+                  ),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      labelText: 'Liters (L)',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      for (final name in ['0.00 Liters (L)', 'Liters (L) 0.00', 'Liters (L)']) {
+        final element = PilotWidgetInspector.findElement(name)!;
+        expect(element.widget, isA<TextField>(), reason: name);
+        expect(
+          (element.widget as TextField).decoration!.labelText,
+          'Liters (L)',
+          reason: name,
+        );
+        expect(PilotWidgetInspector.fieldsUnder(element), hasLength(1));
+      }
+
+      final page = tester.element(find.byType(GestureDetector).first);
+      expect(PilotWidgetInspector.fieldsUnder(page), hasLength(2));
+    });
+
+    // Octana's field passes its label as a widget, so labelText is null.
+    testWidgets('a field whose label is a widget is found by the text it '
+        'shows', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GestureDetector(
+              onTap: () {},
+              child: const Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(hintText: 'Enter Plate Number'),
+                  ),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      label: Text('Liters (L)'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final element = PilotWidgetInspector.findElement('0.00 Liters (L)')!;
+      expect(element.widget, isA<TextField>());
+      expect((element.widget as TextField).decoration!.hintText, '0.00');
+    });
+
     testWidgets('icon names label only icon-only buttons', (tester) async {
       await tester.pumpWidget(
         MaterialApp(

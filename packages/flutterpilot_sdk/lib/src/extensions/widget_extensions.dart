@@ -29,6 +29,11 @@ extension _WidgetExtensions on FlutterPilot {
 
   /// Tapping a widget that isn't hittable (behind a dialog barrier, menu or
   /// overlay, or clipped) would hit whatever is on top and still "succeed".
+  static bool _isToggle(Widget w) =>
+      PilotWidgetInspector.isNamed(w, 'Checkbox') ||
+      PilotWidgetInspector.isNamed(w, 'Switch') ||
+      PilotWidgetInspector.isNamed(w, 'Radio');
+
   static ServiceExtensionResponse? _refuseIfCovered(
     Element element,
     String target,
@@ -55,9 +60,13 @@ extension _WidgetExtensions on FlutterPilot {
   /// Finds [target] (waiting for the screen to settle, then scrolling to it)
   /// and taps it. Shared by tap_widget and execute_action_chain so both
   /// resolve targets the same way. [error] is set unless status is 'ok'.
+  ///
+  /// With [appearWithin], a target that is not there yet is waited for: the
+  /// step before it in a chain may have opened a page that is still loading.
   static Future<({String status, String? error})> _tapTarget(
-    String target,
-  ) async {
+    String target, {
+    Duration appearWithin = Duration.zero,
+  }) async {
     var element = PilotWidgetInspector.findElement(target);
     var scrolled = false;
     // A partial text match on screen ("Item 3" in "Item 399") is used only
@@ -74,6 +83,7 @@ extension _WidgetExtensions on FlutterPilot {
         element = PilotWidgetInspector.findElement(target);
       }
     }
+    element ??= await _awaitTarget(target, appearWithin);
     if (element == null) {
       return (status: 'notFound', error: _makeWidgetNotFoundMessage(target));
     }
@@ -138,8 +148,9 @@ extension _WidgetExtensions on FlutterPilot {
   /// execute_action_chain.
   static Future<({String status, String? error})> _enterTextInto(
     String? target,
-    String text,
-  ) async {
+    String text, {
+    Duration appearWithin = Duration.zero,
+  }) async {
     EditableTextState? field;
     final useFocused = target == null || target.isEmpty || target == 'focused';
     if (useFocused) {
@@ -160,19 +171,25 @@ extension _WidgetExtensions on FlutterPilot {
         await ScrollSimulator.scrollUntilVisible(target);
         element = PilotWidgetInspector.findElement(target);
       }
+      element ??= await _awaitTarget(target, appearWithin);
       if (element == null) {
         return (status: 'notFound', error: _makeWidgetNotFoundMessage(target));
       }
-      void find(Element e) {
-        if (field != null) return;
-        if (e is StatefulElement && e.state is EditableTextState) {
-          field = e.state as EditableTextState;
-          return;
-        }
-        e.debugVisitOnstageChildren(find);
+      final fields = PilotWidgetInspector.fieldsUnder(element);
+      // The target resolved to something that holds several fields (a form,
+      // or a page-wide tappable whose label contains every text on it):
+      // typing into the first one would be a guess.
+      if (fields.length > 1) {
+        return (
+          status: 'ambiguousField',
+          error:
+              '"$target" matches a ${element.widget.runtimeType} that holds '
+              '${fields.length} text fields, not one field. Name the field '
+              'by its label or hint, or use a selector such as '
+              "TextField['Email'].",
+        );
       }
-
-      find(element);
+      field = fields.firstOrNull;
     }
     final state = field;
     if (state == null) {
@@ -208,6 +225,29 @@ extension _WidgetExtensions on FlutterPilot {
       );
     }
     return (status: 'ok', error: null);
+  }
+
+  /// How long a chain step waits for a target the step before it may still
+  /// be bringing on screen (a page that loads its content after opening).
+  static const _chainStepAppearWithin = Duration(seconds: 3);
+
+  /// Looks for [target] every frame until it is found or [within] has passed.
+  static Future<Element?> _awaitTarget(String target, Duration within) async {
+    if (within <= Duration.zero ||
+        WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      return null;
+    }
+    final watch = Stopwatch()..start();
+    while (watch.elapsed < within) {
+      WidgetsBinding.instance.scheduleFrame();
+      await SchedulerBinding.instance.endOfFrame.timeout(
+        const Duration(milliseconds: 50),
+        onTimeout: () {},
+      );
+      final element = PilotWidgetInspector.findElement(target);
+      if (element != null) return element;
+    }
+    return null;
   }
 
   /// Whether the field the last [_enterTextInto] typed into hides its text.
@@ -1117,16 +1157,14 @@ extension _WidgetExtensions on FlutterPilot {
       void findToggleable(Element e) {
         if (renderBox != null) return;
         final w = e.widget;
-        if (w is Checkbox || w is Switch || w is Radio) {
+        if (_isToggle(w)) {
           renderBox = e.renderObject as RenderBox?;
           return;
         }
         e.debugVisitOnstageChildren(findToggleable);
       }
 
-      if (element.widget is Checkbox ||
-          element.widget is Switch ||
-          element.widget is Radio) {
+      if (_isToggle(element.widget)) {
         renderBox = element.renderObject as RenderBox?;
       } else {
         findToggleable(element);
@@ -1186,25 +1224,18 @@ extension _WidgetExtensions on FlutterPilot {
           'Widget not found: $target',
         );
       }
-      Slider? sliderWidget;
       Element? sliderElement;
       void findSlider(Element e) {
-        if (sliderWidget != null) return;
-        if (e.widget is Slider) {
-          sliderWidget = e.widget as Slider;
+        if (sliderElement != null) return;
+        if (PilotWidgetInspector.isNamed(e.widget, 'Slider')) {
           sliderElement = e;
           return;
         }
         e.debugVisitOnstageChildren(findSlider);
       }
 
-      if (element.widget is Slider) {
-        sliderWidget = element.widget as Slider;
-        sliderElement = element;
-      } else {
-        findSlider(element);
-      }
-      if (sliderWidget == null) {
+      findSlider(element);
+      if (sliderElement == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'No Slider found under target: $target',
@@ -1217,9 +1248,10 @@ extension _WidgetExtensions on FlutterPilot {
           'Slider not rendered',
         );
       }
-      final slider = sliderWidget!;
-      final min = slider.min;
-      final max = slider.max;
+      // dynamic: material_ui's Slider is another class with the same fields.
+      final dynamic slider = sliderElement!.widget;
+      final double min = slider.min as double;
+      final double max = slider.max as double;
       if (max <= min) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -1810,11 +1842,15 @@ extension _WidgetExtensions on FlutterPilot {
           _tapNote = null;
           switch (action) {
             case 'tap' || 'tap_widget' || 'tapWidget' when target != null:
-              r = await _tapTarget(target);
+              r = await _tapTarget(
+                target,
+                appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
+              );
             case 'enter_text' || 'enterText' || 'type':
               r = await _enterTextInto(
                 target,
                 (item as Map)['text']?.toString() ?? '',
+                appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
               );
             default:
               r = (

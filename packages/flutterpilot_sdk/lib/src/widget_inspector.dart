@@ -355,9 +355,7 @@ class PilotWidgetInspector {
             final label = _describeDescendants(element);
             final text = label.text.toLowerCase();
             final value = valueTarget.toLowerCase();
-            final ownLabel = widget is Tooltip
-                ? widget.message?.toLowerCase()
-                : null;
+            final ownLabel = tooltipMessage(widget)?.toLowerCase();
             if (ownLabel == value || (text == value && !label.glyphOnly)) {
               consider(96);
             } else if (text == value) {
@@ -391,13 +389,24 @@ class PilotWidgetInspector {
       // Priority 75: a text field's label / hint / placeholder. The label is a
       // sibling of the input, so resolving to the label Text would leave
       // enter_text without a field and make tap_widget report it covered.
+      // By type name as well: an app built on the separate material_ui /
+      // cupertino_ui packages has its own TextField class, which `is` from
+      // flutter/material does not match.
       if ((targetIndex != null || bestPriority < 75 + 5) &&
-          (widget is TextField || widget is CupertinoTextField)) {
+          (widget is TextField ||
+              widget is CupertinoTextField ||
+              typeName == 'TextField' ||
+              typeName == 'CupertinoTextField')) {
         final q = queryToSearch.toLowerCase();
         final names = widget is TextField
-            ? [widget.decoration?.labelText, widget.decoration?.hintText]
-            : [(widget as CupertinoTextField).placeholder];
-        if (names.any((n) => n != null && n.toLowerCase() == q)) {
+            ? fieldNames(widget.decoration)
+            : widget is CupertinoTextField
+            ? [widget.placeholder]
+            : const <String?>[];
+        if (names.any((n) => n != null && n.toLowerCase() == q) ||
+            // The name the tappable list gives the field: every text it
+            // shows, which also covers a label or hint passed as a widget.
+            _sameWords(_describeDescendants(element).text, q)) {
           consider(75);
         }
       }
@@ -435,14 +444,15 @@ class PilotWidgetInspector {
       }
 
       // Priority 50: Tooltip / Semantics
-      if ((targetIndex != null || bestPriority < 57 + 5) && widget is Tooltip) {
-        final message = widget.message?.toLowerCase();
+      final tooltip = tooltipMessage(widget);
+      if ((targetIndex != null || bestPriority < 57 + 5) && tooltip != null) {
+        final message = tooltip.toLowerCase();
         final q = queryToSearch.toLowerCase();
         if (message == q) {
           consider(57);
         } else if (partial &&
             (targetIndex != null || bestPriority < 50 + 5) &&
-            (message?.contains(q) ?? false)) {
+            message.contains(q)) {
           consider(50);
         }
       }
@@ -564,6 +574,36 @@ class PilotWidgetInspector {
   }
 
   /// Finds an [Element] by Key string.
+  /// What a Material text field can be called: its label, its hint, and the
+  /// two together in either order, which is how get_interactive_elements
+  /// and get_app_summary show an empty field that has both ("0.00 Liters").
+  static List<String?> fieldNames(InputDecoration? decoration) {
+    final label = decoration?.labelText;
+    final hint = decoration?.hintText;
+    return [
+      label,
+      hint,
+      if (label != null && hint != null) ...['$hint $label', '$label $hint'],
+    ];
+  }
+
+  /// The on-stage text inputs at or under [element]. One means [element]
+  /// names a field; several mean it is a container and typing into "its"
+  /// field would be a guess.
+  static List<EditableTextState> fieldsUnder(Element element) {
+    final fields = <EditableTextState>[];
+    void find(Element e) {
+      if (e is StatefulElement && e.state is EditableTextState) {
+        fields.add(e.state as EditableTextState);
+        return;
+      }
+      e.debugVisitOnstageChildren(find);
+    }
+
+    find(element);
+    return fields;
+  }
+
   static Element? findElementByKey(String keyString) {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return null;
@@ -667,12 +707,30 @@ class PilotWidgetInspector {
     Set<Element> skip = const {},
   }) => _describeDescendants(element, skip: skip).text;
 
+  /// The same words in any order, ignoring case: a field's hint and label
+  /// come out in tree order, which is not always the order they read in.
+  static bool _sameWords(String a, String b) {
+    List<String> words(String s) =>
+        s
+            .toLowerCase()
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .toList()
+          ..sort();
+    final x = words(a);
+    final y = words(b);
+    if (x.isEmpty || x.length != y.length) return false;
+    for (var i = 0; i < x.length; i++) {
+      if (x[i] != y[i]) return false;
+    }
+    return true;
+  }
+
   /// A widget's own label for ambiguity messages: a Tooltip's message,
   /// otherwise the text under it.
   static String _labelOf(Element element) {
     final w = element.widget;
-    if (w is Tooltip && w.message != null) return w.message!;
-    return _extractDescendantText(element);
+    return tooltipMessage(w) ?? _extractDescendantText(element);
   }
 
   /// The text under [element], leaving out the subtrees in [skip];
@@ -707,8 +765,8 @@ class PilotWidgetInspector {
         return;
       } else if (w is Semantics && fromApp) {
         add(w.properties.label);
-      } else if (w is Tooltip) {
-        add(w.message);
+      } else if (tooltipMessage(w) case final message?) {
+        add(message);
       } else if (w is IconButton) {
         add(w.tooltip);
       } else if (w is Icon) {
@@ -758,8 +816,8 @@ class PilotWidgetInspector {
       return "Text['$cleanText']";
     }
 
-    if (element.widget is Tooltip) {
-      final msg = (element.widget as Tooltip).message;
+    {
+      final msg = tooltipMessage(element.widget);
       if (msg != null && msg.isNotEmpty) {
         return "Tooltip['$msg']";
       }
@@ -819,8 +877,8 @@ class PilotWidgetInspector {
       text = widget.data ?? '';
     } else if (widget is RichText) {
       text = widget.text.toPlainText();
-    } else if (widget is Tooltip) {
-      text = widget.message ?? '';
+    } else if (tooltipMessage(widget) case final message?) {
+      text = message;
     } else if (widget is EditableText) {
       text = widget.obscureText
           ? '•' * widget.controller.text.length
@@ -1146,6 +1204,23 @@ class PilotWidgetInspector {
         (name.endsWith('Button') ||
             name.endsWith('ListTile') ||
             name.endsWith('Chip'));
+  }
+
+  /// Whether [w] is the framework widget called [name]: Flutter's own or the
+  /// one of the same name in the separate material_ui package, which is
+  /// another class with the same fields that `is` does not match.
+  static bool isNamed(Widget w, String name) =>
+      w.runtimeType.toString().split('<').first == name;
+
+  /// A Tooltip's message (see [isNamed]), else null.
+  static String? tooltipMessage(Widget w) {
+    if (w is Tooltip) return w.message;
+    if (!isNamed(w, 'Tooltip')) return null;
+    try {
+      return (w as dynamic).message as String?;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Widgets that actually receive taps/text/drags.
