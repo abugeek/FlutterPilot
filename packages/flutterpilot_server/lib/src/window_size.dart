@@ -9,11 +9,19 @@ import 'dart:io';
   return (width: int.parse(match[1]!), height: int.parse(match[2]!));
 }
 
-/// The AppleScript that resizes the first window of process [pid].
+// Not `window 1`: a system alert or dialog of the app can be in front.
+const _appWindow = '(first window whose subrole is "AXStandardWindow")';
+
+/// The AppleScript that resizes the app window of process [pid].
 String macWindowScript(int pid, int width, int height) =>
     'tell application "System Events" to tell '
-    '(first process whose unix id is $pid) to set size of window 1 to '
+    '(first process whose unix id is $pid) to set size of $_appWindow to '
     '{$width, $height}';
+
+/// The AppleScript that reads the size of the app window of process [pid].
+String macWindowSizeScript(int pid) =>
+    'tell application "System Events" to tell '
+    '(first process whose unix id is $pid) to get size of $_appWindow';
 
 typedef ProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
@@ -56,4 +64,20 @@ Future<String?> resizeAppWindow({
         'Settings > Privacy & Security > Accessibility. ($error)';
   }
   return error.isEmpty ? 'osascript exited with ${result.exitCode}.' : error;
+}
+
+/// The size macOS reports for the app's window (`"700x600"`), or null when
+/// it cannot be read.
+Future<String?> readAppWindowSize(
+  int pid, {
+  ProcessRunner run = Process.run,
+}) async {
+  try {
+    final result = await run('osascript', ['-e', macWindowSizeScript(pid)]);
+    if (result.exitCode != 0) return null;
+    final size = RegExp(r'(\d+),\s*(\d+)').firstMatch('${result.stdout}');
+    return size == null ? null : '${size[1]}x${size[2]}';
+  } on ProcessException {
+    return null;
+  }
 }

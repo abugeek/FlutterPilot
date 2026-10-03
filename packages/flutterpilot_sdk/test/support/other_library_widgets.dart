@@ -37,3 +37,22 @@ class Slider extends StatelessWidget {
     child: const SizedBox(width: 248, height: 48),
   );
 }
+
+class TextField extends StatelessWidget {
+  const TextField({super.key, required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Text(label),
+      EditableText(
+        controller: TextEditingController(),
+        focusNode: FocusNode(),
+        style: const TextStyle(),
+        cursorColor: const Color(0xFF000000),
+        backgroundCursorColor: const Color(0xFF000000),
+      ),
+    ],
+  );
+}
