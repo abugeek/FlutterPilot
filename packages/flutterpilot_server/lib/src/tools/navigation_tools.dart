@@ -309,12 +309,19 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     }
     if (after == null) return (line: '✓ $label', failed: false);
     if (after == before && !after.startsWith('${size.width}x')) {
-      // Told to resize and nothing moved: a window with a fixed or minimum
-      // size, or one that is full screen.
+      // Told to resize and the app saw nothing. Ask macOS which it was: a
+      // window that refused (fixed, minimum or full-screen size), or one
+      // that did resize while the app has not been told yet.
+      final window = pid == null ? null : await readAppWindowSize(pid);
+      final refused = window == null || !window.startsWith('${size.width}x');
       return (
-        line:
-            '✗ $label: the window was asked to resize but the viewport is '
-            'still $after (a fixed, minimum or full-screen window).',
+        line: refused
+            ? '✗ $label: the window was asked to resize but is still '
+                  '${window ?? 'the same size'} (a fixed, minimum or '
+                  'full-screen window); viewport $after.'
+            : '✗ $label: the window is now $window but the app still '
+                  'reports viewport $after: it has not received the new '
+                  'size (a hidden or minimised window?). Try again.',
         failed: true,
       );
     }

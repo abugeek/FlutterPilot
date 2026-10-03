@@ -85,7 +85,26 @@ class TestRecorder {
       w is FilterChip ||
       w is ActionChip ||
       w is FloatingActionButton ||
-      w is TextField;
+      w is TextField ||
+      _tappableByName(w);
+
+  /// The same controls from the separate material_ui package: other classes
+  /// with Flutter's names, which `is` does not match.
+  static bool _tappableByName(Widget w) {
+    final name = _named(w);
+    if (name.startsWith('_')) return false;
+    return name.endsWith('Button') ||
+        name.endsWith('Chip') ||
+        const {
+          'InkResponse',
+          'InkWell',
+          'ListTile',
+          'Checkbox',
+          'Switch',
+          'Radio',
+          'TextField',
+        }.contains(name);
+  }
 
   /// Text typed into a field; obscured text becomes secret number N.
   static Map<String, dynamic> typed(String text, {required bool obscured}) {
@@ -219,21 +238,24 @@ class TestFinder {
     Element? found;
     var depth = 0;
     e.visitAncestorElements((a) {
-      if (a.widget is TextField || a.widget is TextFormField) found = a;
+      if (_isField(a.widget) || _isFormField(a.widget)) found = a;
       return found == null && ++depth < 30;
     });
     // TextFormField holds a TextField: prefer the outer one.
-    if (found != null && found!.widget is TextField) {
+    if (found != null && _isField(found!.widget)) {
       Element? outer;
       var up = 0;
       found!.visitAncestorElements((a) {
-        if (a.widget is TextFormField) outer = a;
+        if (_isFormField(a.widget)) outer = a;
         return outer == null && ++up < 8;
       });
       found = outer ?? found;
     }
-    return found ?? (e.widget is TextField ? e : null);
+    return found ?? (_isField(e.widget) ? e : null);
   }
+
+  static bool _isField(Widget w) => _named(w) == 'TextField';
+  static bool _isFormField(Widget w) => _named(w) == 'TextFormField';
 
   static String? _tooltip(Element target) {
     if (target.widget is Tooltip) return (target.widget as Tooltip).message;
@@ -386,3 +408,5 @@ class TestFinder {
     'SearchBar',
   };
 }
+
+String _named(Widget w) => w.runtimeType.toString().split('<').first;

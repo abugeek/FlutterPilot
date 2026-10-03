@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/test_recorder.dart';
 
+import 'support/other_library_widgets.dart' as other;
+
 void main() {
   Future<void> pump(WidgetTester tester, Widget body) =>
       tester.pumpWidget(MaterialApp(home: Scaffold(body: body)));
@@ -59,6 +61,25 @@ void main() {
         children: [
           TextField(decoration: InputDecoration(labelText: 'Email')),
           TextField(decoration: InputDecoration(labelText: 'Password')),
+        ],
+      ),
+    );
+    expect(
+      finderFor(find.byType(EditableText).last, field: true),
+      "find.widgetWithText(TextField, 'Password')",
+    );
+  });
+
+  // An app on the separate material_ui package has its own TextField class.
+  testWidgets('a text field of another widget library by its label', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      const Column(
+        children: [
+          other.TextField(label: 'Email'),
+          other.TextField(label: 'Password'),
         ],
       ),
     );
