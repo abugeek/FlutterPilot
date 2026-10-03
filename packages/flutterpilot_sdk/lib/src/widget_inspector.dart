@@ -397,7 +397,10 @@ class PilotWidgetInspector {
         final names = widget is TextField
             ? fieldNames(widget.decoration)
             : [(widget as CupertinoTextField).placeholder];
-        if (names.any((n) => n != null && n.toLowerCase() == q)) {
+        if (names.any((n) => n != null && n.toLowerCase() == q) ||
+            // The name the tappable list gives the field: every text it
+            // shows, which also covers a label or hint passed as a widget.
+            _sameWords(_describeDescendants(element).text, q)) {
           consider(75);
         }
       }
@@ -696,6 +699,25 @@ class PilotWidgetInspector {
     Element element, {
     Set<Element> skip = const {},
   }) => _describeDescendants(element, skip: skip).text;
+
+  /// The same words in any order, ignoring case: a field's hint and label
+  /// come out in tree order, which is not always the order they read in.
+  static bool _sameWords(String a, String b) {
+    List<String> words(String s) =>
+        s
+            .toLowerCase()
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .toList()
+          ..sort();
+    final x = words(a);
+    final y = words(b);
+    if (x.isEmpty || x.length != y.length) return false;
+    for (var i = 0; i < x.length; i++) {
+      if (x[i] != y[i]) return false;
+    }
+    return true;
+  }
 
   /// A widget's own label for ambiguity messages: a Tooltip's message,
   /// otherwise the text under it.

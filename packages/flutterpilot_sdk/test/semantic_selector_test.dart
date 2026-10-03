@@ -262,6 +262,37 @@ void main() {
       expect(PilotWidgetInspector.fieldsUnder(page), hasLength(2));
     });
 
+    // Octana's field passes its label as a widget, so labelText is null.
+    testWidgets('a field whose label is a widget is found by the text it '
+        'shows', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GestureDetector(
+              onTap: () {},
+              child: const Column(
+                children: [
+                  TextField(
+                    decoration: InputDecoration(hintText: 'Enter Plate Number'),
+                  ),
+                  TextField(
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      label: Text('Liters (L)'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final element = PilotWidgetInspector.findElement('0.00 Liters (L)')!;
+      expect(element.widget, isA<TextField>());
+      expect((element.widget as TextField).decoration!.hintText, '0.00');
+    });
+
     testWidgets('icon names label only icon-only buttons', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
