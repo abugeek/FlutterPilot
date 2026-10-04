@@ -111,6 +111,23 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
 
 /// Tools for tapping, typing, scrolling, swiping, and other UI interactions.
 mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
+  /// Tools execute_action_chain runs: the ones that drive or check the
+  /// screen, each answering as when called alone.
+  static const _chainStepTools = {
+    'tap_widget',
+    'enter_text',
+    'press_key',
+    'scroll_into_view',
+    'swipe_widget',
+    'drag_widget',
+    'toggle_checkbox',
+    'set_slider_value',
+    'fill_form',
+    'navigate_to',
+    'assert_widget',
+    'wait_for',
+  };
+
   String _formatActionFeedback(
     String actionName,
     Map<String, dynamic> params,
@@ -168,18 +185,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'tap_widget',
       description:
-          'Taps a widget found by key, selector (e.g. "ElevatedButton[\'Log In\']"), '
-          'semantics identifier or visible text — or at x/y. Exact text wins; '
-          'text several widgets merely contain is refused with the candidates. '
-          'gesture: "double", "long" (durationMs) or "secondary" (right-click, '
-          'context menus). waitFor: a widget to wait for after the tap '
-          '(replaces a separate wait_for call). The response reports the '
-          'route change, a widget-tree diff and what is tappable now.',
+          'Taps a widget found by key, selector (e.g. '
+          '"ElevatedButton[\'Log In\']") or visible text, scrolling to it '
+          'first — or taps at x/y. '
+          'Exact text wins; text that several widgets merely contain is '
+          'refused with the candidates. Reports the route change, a '
+          'widget-tree diff and what is tappable now.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'ValueKey string, semantic selector (e.g. "ElevatedButton[\'Sign In\']"), visible button text, or icon name (e.g. "IconButton[\'settings\']").',
+                'Key, selector, visible text or icon name '
+                '("IconButton[\'settings\']").',
           ),
           'identifier': JsonSchema.string(
             description: 'Semantics identifier (Flutter 3.19+).',
@@ -188,11 +205,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'SemanticsNode id from get_semantics_tree.',
           ),
           'text': JsonSchema.string(
-            description: 'Visible text content within the widget to tap.',
+            description: 'Visible text inside the widget.',
           ),
           'type': JsonSchema.string(
-            description:
-                'Widget runtime type, e.g. "ElevatedButton", "TextButton", "IconButton".',
+            description: 'Widget type, e.g. "IconButton".',
           ),
           'x': JsonSchema.number(
             description: 'X in logical pixels (top-left origin), with y.',
@@ -200,14 +216,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'y': JsonSchema.number(description: 'Y in logical pixels.'),
           'gesture': JsonSchema.string(
             enumValues: ['tap', 'double', 'long', 'secondary'],
-            description: 'Default "tap".',
+            description:
+                'Default tap. long takes durationMs; secondary is a right-click '
+                '(context menus).',
           ),
           'durationMs': JsonSchema.integer(
             description: 'Long-press duration (default 600).',
           ),
           'waitFor': JsonSchema.string(
             description:
-                'Key, selector or text of a widget expected to appear after the tap.',
+                'A widget (key, selector or text) to wait for after the tap, in '
+                'place of a separate wait_for call.',
           ),
           'timeoutMs': JsonSchema.integer(
             description: 'How long to wait for waitFor (default 5000).',
@@ -315,10 +334,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'enter_text',
       description:
-          'Types text into a TextField/TextFormField found by key, selector '
-          '(e.g. "TextField[\'Email\']") or label, or into the focused field '
-          'when no key is given. Replaces the existing text unless '
-          'clear_first is false; text "" clears the field. Fires '
+          'Types text into a text field found by key, selector (e.g. '
+          '"TextField[\'Email\']") or label — or into the focused field '
+          'when no key is given — replacing what it holds. Fires '
           'onChanged; press_key("enter") afterwards submits.',
       inputSchema: ToolInputSchema(
         properties: {
@@ -327,14 +345,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'key': JsonSchema.string(
             description:
-                'ValueKey string, selector (e.g. "TextField[\'Email\']"), or label of the field. Omit for the focused field.',
+                'Key, selector or label of the field. Omit for the focused '
+                'field.',
           ),
           'identifier': JsonSchema.string(
             description: 'Semantics identifier of the text field.',
           ),
-          'clear_first': JsonSchema.boolean(
+          'clearFirst': JsonSchema.boolean(
             description:
-                'Whether to clear existing text before typing (default: true).',
+                'Clear the existing text before typing (default true).',
           ),
         },
         required: ['text'],
@@ -375,18 +394,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'press_key',
       description:
-          'Presses a key on the focused widget: "enter" (submits a text field), "tab", "escape" '
-          '(closes menus/dialogs), arrow keys, and shortcuts with modifiers (shift, ctrl, alt, meta). '
-          '"back" is the system back button: pops the current route, never '
-          'quits the app from the root. In a focused text field, characters, '
-          'backspace, delete, arrows, home/end and meta/ctrl+a edit it as '
-          'typing would, and the response shows the field\'s text and cursor; '
-          'to set a whole value, enter_text is simpler.',
+          'Presses a key on the focused widget: enter (submits a text '
+          'field), tab, escape (closes menus and dialogs), arrows, a '
+          'character, or a shortcut with modifiers. "back" is the system '
+          'back button: it pops the route and never quits the app from '
+          'the root. In a focused text field keys edit it as typing '
+          'would, and the response shows the field\'s text and cursor; '
+          'enter_text sets a whole value.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'Key name, e.g. "enter", "tab", "escape", "back", "arrowDown", "space", or a single character.',
+                'E.g. "enter", "tab", "escape", "back", "arrowDown", "space", '
+                '"backspace", or a single character.',
           ),
           'modifiers': JsonSchema.array(
             items: JsonSchema.string(),
@@ -454,26 +474,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'pinch_zoom',
       description:
-          'Two-finger pinch on a widget or at x/y: scale > 1 zooms in, < 1 '
-          'zooms out. Reports what changed.',
+          'Two-finger pinch on a widget or at x/y. Reports what changed.',
       inputSchema: ToolInputSchema(
         properties: {
           'scale': JsonSchema.number(
-            description:
-                'Zoom scale factor (e.g. 1.5 to zoom in, 0.75 to zoom out).',
+            description: 'Above 1 zooms in, below 1 zooms out.',
           ),
           'key': JsonSchema.string(
-            description: 'The ValueKey or selector of the target widget.',
+            description: 'Key or selector of the widget.',
           ),
           'identifier': JsonSchema.string(
             description: 'Semantics identifier of the target widget.',
           ),
-          'x': JsonSchema.number(
-            description: 'Optional center X coordinate for pinch gesture.',
-          ),
-          'y': JsonSchema.number(
-            description: 'Optional center Y coordinate for pinch gesture.',
-          ),
+          'x': JsonSchema.number(description: 'Center of the pinch, with y.'),
+          'y': JsonSchema.number(),
         },
         required: ['scale'],
       ),
@@ -501,11 +515,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description:
-                'The ValueKey string, semantic selector, or label of the widget to scroll into view.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+            description: 'Key, selector or text of the widget.',
           ),
         },
       ),
@@ -524,10 +534,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'The ValueKey string of the widget to swipe.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+            description: 'Key or selector of the widget to swipe on.',
           ),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
@@ -573,12 +580,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'fromKey': JsonSchema.string(
-            description:
-                'The ValueKey string of the widget to drag from (drag source).',
+            description: 'Key or selector of the widget to drag.',
           ),
           'toKey': JsonSchema.string(
-            description:
-                'The ValueKey string of the target widget to drag to (drop target).',
+            description: 'Key or selector of the widget to drop it on.',
           ),
         },
         required: ['fromKey', 'toKey'],
@@ -605,8 +610,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description:
-                'The ValueKey string or selector of the widget. Omit to unfocus all.',
+            description: 'Key or selector. Omit to unfocus everything.',
           ),
         },
       ),
@@ -644,15 +648,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'The ValueKey string of the Slider widget.',
+            description: 'Key or selector of the Slider.',
           ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
-          ),
-          'value': JsonSchema.number(
-            description:
-                'The new slider value. Must be within the slider min/max range.',
-          ),
+          'value': JsonSchema.number(),
         },
         required: ['value'],
       ),
@@ -668,16 +666,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'toggle_checkbox',
       description:
-          'Toggles the Checkbox, Switch or Radio under the key; the response '
-          'shows its new value (= true/false).',
+          'Toggles the Checkbox, Switch or Radio under the key, also one '
+          'inside a tappable row, where tap_widget would tap the row. The '
+          'response shows its new value (= true/false).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'The ValueKey string of the Checkbox, Switch, or Radio widget to toggle.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+                'Key, selector or label of the toggle, or of the row that '
+                'holds it.',
           ),
         },
       ),
@@ -751,33 +748,31 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'wait_for',
       description:
-          'Waits (polling, never a blind sleep) for one condition: key — a '
-          'widget/selector/text is on screen; route — the current route is '
-          'this one; animations: true — animations and frame callbacks '
-          'settled; state — a Riverpod provider or Bloc whose value contains '
-          'expectedValue (needs the plugin); frames — pump N frames (1–120). '
-          'Fails with the reason on timeout.',
+          'Waits for one condition, polling (never a blind sleep), and '
+          'fails with the reason on timeout: a widget on screen (key), a '
+          'route, settled animations, a Riverpod/Bloc value (state + '
+          'expectedValue) or a number of frames.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description:
-                'Selector or key to wait for (e.g. "Text[\'Dashboard\']").',
+            description: 'Key, selector or text that must be on screen.',
           ),
           'route': JsonSchema.string(
-            description: 'Route to wait for (e.g. "/dashboard").',
+            description: 'The route to be on, e.g. "/dashboard".',
           ),
           'animations': JsonSchema.boolean(
-            description: 'Wait until animations have settled.',
+            description: 'Until animations and frame callbacks have settled.',
           ),
           'state': JsonSchema.string(
             description:
-                'Provider/bloc name from get_state (e.g. "CounterCubit"); needs expectedValue.',
+                'Provider or bloc name from get_state, with expectedValue '
+                '(needs the Riverpod or Bloc plugin).',
           ),
           'expectedValue': JsonSchema.string(
             description: 'Substring expected in the state\'s value.',
           ),
           'frames': JsonSchema.integer(
-            description: 'Number of frames to pump (1–120).',
+            description: 'Pump this many frames (1–120).',
           ),
           'timeoutMs': JsonSchema.integer(
             description: 'Default 5000 (3000 for key).',
@@ -919,47 +914,110 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'execute_action_chain',
       description:
-          'Runs a known sequence of taps and text entries in one call, '
-          'stopping at the first step that fails. Returns how many steps ran, '
-          'the failure if any, and the screen afterwards (route, diff, '
-          'tappable elements).',
+          'Runs a known sequence of steps in one call, stopping at the first '
+          'that fails: taps, text, keys, scrolls, navigation, and wait_for / '
+          'assert_widget checks between them. Returns each step\'s outcome '
+          'and the screen after the last one (route, diff, tappable '
+          'elements).',
       inputSchema: ToolInputSchema(
         properties: {
-          'actions': JsonSchema.array(
+          'steps': JsonSchema.array(
             items: JsonSchema.object(),
             description:
-                'Steps run in order; the chain stops at the first step that fails. '
-                'Actions: "tap" (target) and "enter_text" (target, text). '
-                'Targets work like tap_widget\'s, e.g. [{"action": "tap", "target": "New note"}, '
-                '{"action": "enter_text", "target": "Title", "text": "Groceries"}].',
+                'Tool calls run in order, e.g. [{"tool": "tap_widget", '
+                '"arguments": {"key": "New note"}}, {"tool": "enter_text", '
+                '"arguments": {"key": "Title", "text": "Groceries"}}, '
+                '{"tool": "assert_widget", "arguments": {"text": "Saved"}}]. '
+                'Tools: ${(_chainStepTools.toList()..sort()).join(', ')}.',
           ),
         },
-        required: ['actions'],
+        required: ['steps'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.executeActionChain',
-          {'actions': json.encode(p['actions'])},
-        );
-        if (res.isError) return res.toCallToolResult();
-        final executed = res.data?['executedCount'] ?? 0;
-        final total = res.data?['totalActions'] ?? 0;
-        final failure = res.data?['failure'] as String?;
-        final buffer = StringBuffer(
-          failure == null
-              ? 'Action chain: $executed/$total steps done.\n'
-              : 'Action chain stopped after $executed/$total steps. '
-                    '$failure\nRemaining steps were skipped. State now:\n',
-        );
-        for (final step in (res.data?['steps'] as List?) ?? const []) {
-          if (step is Map && step['note'] is String) {
-            buffer.write('Step ${step['index']}: ${step['note']}\n');
+        CallToolResult error(String text) =>
+            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        final steps = <({String tool, Map<String, dynamic> arguments})>[];
+        for (final s in (p['steps'] as List?) ?? const []) {
+          final step = chainStep(s);
+          if (step == null ||
+              !_chainStepTools.contains(step.tool) ||
+              !_toolCallbacks.containsKey(step.tool)) {
+            return error(
+              'Step ${steps.length + 1}: '
+              '${step == null ? 'not a {"tool": ..., "arguments": {...}} step' : '"${step.tool}" can\'t run in a chain'}. '
+              'Tools: ${(_chainStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
+            );
           }
+          steps.add(step);
         }
-        buffer.write(_formatActionFeedback('Chain finished', const {}, res));
+        if (steps.isEmpty) return error('steps is empty.');
+
+        // Taps and text entries alone run inside the app, in one round trip.
+        final inApp = [for (final step in steps) ?inAppChainAction(step)];
+        if (inApp.length == steps.length) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.executeActionChain',
+            {'actions': json.encode(inApp)},
+          );
+          if (res.isError) return res.toCallToolResult();
+          final executed = res.data?['executedCount'] ?? 0;
+          final total = res.data?['totalActions'] ?? 0;
+          final failure = res.data?['failure'] as String?;
+          final buffer = StringBuffer(
+            failure == null
+                ? 'Action chain: $executed/$total steps done.\n'
+                : 'Action chain stopped after $executed/$total steps. '
+                      '$failure\nRemaining steps were skipped. State now:\n',
+          );
+          for (final step in (res.data?['steps'] as List?) ?? const []) {
+            if (step is Map && step['note'] is String) {
+              buffer.write('Step ${step['index']}: ${step['note']}\n');
+            }
+          }
+          buffer.write(_formatActionFeedback('Chain finished', const {}, res));
+          return CallToolResult(
+            isError: failure != null,
+            content: [TextContent(text: buffer.toString())],
+          );
+        }
+
+        // Anything else: one tool after the other, each as if called alone.
+        final outcomes = <String>[];
+        var failed = false;
+        for (final step in steps) {
+          final res = await _toolCallbacks[step.tool]!(
+            Map.of(step.arguments),
+            e,
+          );
+          final text = res.content
+              .whereType<TextContent>()
+              .map((c) => c.text)
+              .join('\n');
+          failed = res.isError == true;
+          // A check inside a chain is evidence like one called alone (the
+          // chain itself is recorded as the action).
+          if (Verification.checks.contains(step.tool)) {
+            _verification?.record(
+              step.tool,
+              step.arguments,
+              text,
+              isError: failed,
+            );
+          }
+          outcomes.add(text);
+          if (failed) break;
+        }
         return CallToolResult(
-          isError: failure != null,
-          content: [TextContent(text: buffer.toString())],
+          isError: failed,
+          content: [
+            TextContent(
+              text: describeChain(
+                [for (final step in steps) step.tool],
+                outcomes,
+                failed: failed,
+              ),
+            ),
+          ],
         );
       },
     );

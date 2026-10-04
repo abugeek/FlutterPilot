@@ -77,6 +77,12 @@ Future<void> main() async {
       ..writeln('Tool count: ${tools.length}')
       ..writeln()
       ..writeln(
+        'Size of the whole list as an agent receives it (names, '
+        'descriptions, schemas): ${_listBytes(tools)} bytes. An app is shown '
+        'only the tools that work for it.',
+      )
+      ..writeln()
+      ..writeln(
         '`native_*` tools are listed to agents only when the connected app '
         'runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is '
         'installed.',
@@ -88,6 +94,11 @@ Future<void> main() async {
       output.writeln('## `$name`');
       output.writeln();
       output.writeln(rawTool['description']?.toString() ?? '');
+      final effect = _effect(rawTool['annotations']);
+      if (effect != null) {
+        output.writeln();
+        output.writeln(effect);
+      }
       final schema = rawTool['inputSchema'];
       if (schema is Map && schema['properties'] is Map) {
         output.writeln();
@@ -99,7 +110,7 @@ Future<void> main() async {
         for (final entry in (schema['properties'] as Map).entries) {
           final property = entry.value is Map ? entry.value as Map : const {};
           output.writeln(
-            '| `${entry.key}` | ${property['type'] ?? 'any'} | '
+            '| `${entry.key}` | ${_type(property)} | '
             '${required.contains(entry.key) ? 'yes' : 'no'} | '
             '${(property['description'] ?? '').toString().replaceAll('|', '\\|')} |',
           );
@@ -116,4 +127,34 @@ Future<void> main() async {
     process.kill();
     await process.exitCode;
   }
+}
+
+/// The bytes of `tools/list` an agent's model is given: the rest
+/// (annotations, execution) goes to the client.
+int _listBytes(List<dynamic> tools) => tools
+    .whereType<Map>()
+    .map(
+      (tool) => jsonEncode({
+        for (final key in const ['name', 'description', 'inputSchema'])
+          key: tool[key],
+      }).length,
+    )
+    .fold(0, (a, b) => a + b);
+
+/// A parameter's type, with the values an enum takes.
+String _type(Map<dynamic, dynamic> property) {
+  final type = property['type'] ?? 'any';
+  final values = property['enum'];
+  return values is List ? '$type: ${values.join(r' \| ')}' : '$type';
+}
+
+/// The tool's annotations in words.
+String? _effect(Object? annotations) {
+  if (annotations is! Map) return null;
+  if (annotations['readOnlyHint'] == true) return '_Read-only._';
+  if (annotations['destructiveHint'] == true) {
+    return '_Destructive: replaces stored data (needs `--allow-destructive`) '
+        'or runs app code._';
+  }
+  return null;
 }

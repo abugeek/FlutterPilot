@@ -26,7 +26,9 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'name': JsonSchema.string(
             description: 'The custom tool name. Omit to list the tools.',
           ),
-          'params': JsonSchema.object(),
+          'params': JsonSchema.object(
+            description: 'The custom tool\'s parameters.',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -59,14 +61,13 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'mock_platform_channel',
       description:
           'Stands in for the native side of a plugin (camera, scanner, '
-          'location, permissions, Bluetooth), which a simulator or CI has '
-          'not. channel + method + result (or error): the app\'s calls to '
-          'that method get the value, or a PlatformException. channel + '
-          'event: delivers an event to the app\'s EventChannel listeners, '
-          'e.g. a scanned barcode. No argument lists the mocks and the '
-          'calls the app made (channel, method, arguments, whether a plugin '
-          'answered): how to find the names. clear:true removes mocks. '
-          'Pigeon APIs: the whole channel name, no method.',
+          'location, permissions, Bluetooth), which a simulator or CI '
+          'lacks. No argument: the mocks and the calls the app made '
+          '(channel, method, arguments, whether a plugin answered) — '
+          'where the names come from. channel + method + result (or '
+          'error) answers that call; channel + event delivers an event to '
+          'EventChannel listeners, e.g. a scanned barcode. Pigeon APIs: '
+          'the whole channel name, no method.',
       inputSchema: ToolInputSchema(
         properties: {
           'channel': JsonSchema.string(
@@ -86,7 +87,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
                 'Fail the call with a PlatformException of this code, e.g. '
                 '"PERMISSION_DENIED".',
           ),
-          'errorMessage': JsonSchema.string(),
+          'errorMessage': JsonSchema.string(description: 'With error.'),
           'event': JsonSchema.fromJson({
             'description': 'The event to deliver on an EventChannel: any JSON.',
           }),

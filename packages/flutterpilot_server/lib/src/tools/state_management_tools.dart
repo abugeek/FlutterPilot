@@ -19,22 +19,23 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_state',
       description:
-          'Current values of the app\'s Riverpod providers and Blocs/Cubits '
-          '(name: value (type)), as their plugins observe them. type limits '
-          'it to one of the two. history:true returns the recent changes '
-          'instead, oldest first with times — each value with the one it '
-          'replaced, providers created and disposed, and the route changes '
-          'between them: how the state got to where it is. clear:true '
-          'empties that history (before an action whose effects you want '
-          'alone).',
+          'Current values of the app\'s Riverpod providers and '
+          'Blocs/Cubits (name: value (type)). history:true lists the '
+          'recent changes instead, oldest first with times: each value '
+          'with the one it replaced, providers created and disposed, and '
+          'the route changes between them — how the state got to where it '
+          'is.',
       inputSchema: ToolInputSchema(
         properties: {
-          'type': JsonSchema.string(enumValues: ['riverpod', 'bloc']),
-          'history': JsonSchema.boolean(
-            description: 'The recent state changes instead of the values.',
+          'type': JsonSchema.string(
+            enumValues: ['riverpod', 'bloc'],
+            description: 'Only this kind.',
           ),
+          'history': JsonSchema.boolean(),
           'clear': JsonSchema.boolean(
-            description: 'Empty the history (after returning it).',
+            description:
+                'Empty the history after returning it: do that before an action '
+                'to see only its effects.',
           ),
         },
       ),
@@ -174,9 +175,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_network_logs',
       description:
-          'Recent Dio requests and responses: method, URL, status, error, '
-          'body (truncated, secrets redacted), and whether a mock answered. '
-          'Use when an API call failed or to check what was sent.',
+          'Requests that went through Dio, including those a mock '
+          'answered (which never reach get_http_profile): method, URL, '
+          'status, error and body (truncated, secrets redacted). On web '
+          'it is the only request log; elsewhere get_http_profile covers '
+          'every client, with timing and headers.',
       extension: 'ext.flutterpilot.getNetworkLogs',
       formatResult: (json) {
         final logs = json['logs'] as List?;
@@ -295,15 +298,13 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_shared_preferences',
       description:
-          'Returns all SharedPreferences keys and their typed values '
-          '(String, int, double, bool, List<String>). Values matching '
-          'sensitive key patterns (token, password, secret, auth, etc.) are '
-          'redacted by default — pass showSensitive=true to reveal them.',
+          'SharedPreferences keys with their typed values. Values of '
+          'sensitive-looking keys (token, password, secret, auth, ...) '
+          'are redacted.',
       extension: 'ext.flutterpilot.getSharedPreferences',
       properties: {
-        'showSensitive': JsonSchema.string(
-          description:
-              'Set to "true" to reveal values for sensitive-looking keys. Default: redacted.',
+        'showSensitive': JsonSchema.boolean(
+          description: 'Reveal the values of sensitive-looking keys.',
         ),
       },
     );
@@ -326,11 +327,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           ),
           'value': JsonSchema.string(
             description:
-                'The value to set as a string. Booleans: "true"/"false". Numbers: numeric string.',
+                '"true"/"false", "42", or for a stringList a JSON array of '
+                'strings.',
           ),
           'type': JsonSchema.string(
-            description:
-                'Value type: "string", "bool", "int", "double", or "stringList" (comma-separated).',
+            enumValues: ['string', 'bool', 'int', 'double', 'stringList'],
+            description: 'Default "string".',
           ),
         },
       ),
@@ -383,37 +385,33 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'mock_http_response',
       description:
-          'Registers a URL pattern mock so that any Dio request whose URL contains '
-          'urlPattern returns a synthetic response instead of hitting the network. '
-          'Use to test error states, empty states, or edge-case API responses. '
-          'error instead of statusCode fails the request with no response: '
-          '"timeout" (the server never answers) or "connection" (it can\'t '
-          'be reached). delayMs on two patterns reproduces responses '
-          'arriving out of order. clear:true removes the mock for '
-          'urlPattern, or all mocks without one — do that when done.',
+          'Makes Dio requests whose URL contains urlPattern get a made-up '
+          'response (statusCode, body) or fail without one (error), to '
+          'test error, empty and edge-case states without a backend. Two '
+          'patterns with different delayMs reproduce responses arriving '
+          'out of order. clear:true when done.',
       inputSchema: ToolInputSchema(
         properties: {
           'urlPattern': JsonSchema.string(
-            description: 'Substring of the URL to match (e.g. "/api/users")',
+            description: 'Part of the URL, e.g. "/api/users".',
           ),
           'clear': JsonSchema.boolean(
-            description: 'Remove mocks instead of adding one.',
+            description:
+                'Remove the mock for urlPattern, or every mock without one.',
           ),
-          'statusCode': JsonSchema.integer(
-            description: 'HTTP status code (e.g. 200, 404, 500)',
-          ),
+          'statusCode': JsonSchema.integer(),
           'body': JsonSchema.string(
             description:
-                'Response body as a JSON string (e.g. \'{"error":"not found"}\')',
+                'Response body as a JSON string, e.g. \'{"error":"not found"}\'.',
           ),
           'delayMs': JsonSchema.integer(
-            description:
-                'Artificial delay in milliseconds before returning the mock (default 0)',
+            description: 'Delay before the response or failure (default 0).',
           ),
           'error': JsonSchema.string(
             enumValues: ['timeout', 'connection'],
             description:
-                'Fail the request instead of answering it (after delayMs).',
+                'In place of statusCode: the server never answers (timeout) or '
+                'can\'t be reached (connection).',
           ),
         },
       ),

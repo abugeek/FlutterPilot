@@ -1,6 +1,6 @@
-/// Canonicalizes MCP tool arguments so agents can use `target` (preferred)
-/// while old names (`key`, `selector`, `identifier`, `dbName`/`database`)
-/// still work for at least one release.
+/// Canonicalizes MCP tool arguments: schemas list one name per argument
+/// (`key` for the widget), and the other names agents send for it
+/// (`target`, `selector`, `identifier`, `dbName`/`database`) keep working.
 Map<String, dynamic> normalizeToolParams(Map<String, dynamic> parameters) {
   final p = Map<String, dynamic>.from(parameters);
 
@@ -34,6 +34,27 @@ const _normalized = [
   ['dbName', 'database'],
 ];
 
+/// Parameters that were snake_case among camelCase ones: the schema lists
+/// the new name, the tool and the SDK in the app still read the former one,
+/// and a caller may send either.
+const _renamed = {
+  'clearFirst': 'clear_first',
+  'sinceSeconds': 'since_seconds',
+  'statusFilter': 'status_filter',
+};
+
+/// [args] with each renamed parameter also under its former name, its type
+/// kept ([normalizeToolParams] makes strings of what it copies).
+Map<String, dynamic> withFormerNames(Map<String, dynamic> args) {
+  if (!_renamed.keys.any(args.containsKey)) return args;
+  return {
+    ...args,
+    for (final MapEntry(key: name, value: former) in _renamed.entries)
+      if (args.containsKey(name) && !args.containsKey(former))
+        former: args[name],
+  };
+}
+
 /// Old names single tools still read.
 const _legacy = [
   ['name', 'provider', 'cubit'],
@@ -49,7 +70,11 @@ List<String> unknownToolArguments(
   Iterable<String> properties,
 ) {
   final known = properties.toSet();
-  for (final group in [..._normalized, ..._legacy]) {
+  for (final group in [
+    ..._normalized,
+    ..._legacy,
+    for (final e in _renamed.entries) [e.key, e.value],
+  ]) {
     if (group.any(known.contains)) known.addAll(group);
   }
   return [

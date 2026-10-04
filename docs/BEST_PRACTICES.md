@@ -183,13 +183,13 @@ void main() {
 }
 ```
 
-### ✅ Do: Use `get_capabilities` Before Testing
+### ✅ Do: Use `get_app_summary(setup: true)` Before Testing
 
 When writing test scripts or AI prompts, first check what's loaded:
 
 ```
 Claude: "Let me check what state managers are available."
-[Claude calls get_capabilities]
+[Claude calls get_app_summary(setup: true)]
 Claude: "I see Bloc, Riverpod, and Dio are loaded."
 ```
 
@@ -558,11 +558,11 @@ Full feature test:
 
 ## Debugging Tips
 
-### Use get_capabilities to Understand What's Available
+### Use get_app_summary(setup: true) to Understand What's Available
 
 ```bash
 # Shows loaded plugins and their state
-get_capabilities
+get_app_summary(setup: true)
 ```
 
 Output tells you:

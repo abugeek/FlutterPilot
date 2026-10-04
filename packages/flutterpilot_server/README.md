@@ -1,6 +1,6 @@
 # FlutterPilot Server
 
-The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes a versioned tool set via the VM service; use `get_capabilities` to discover the exact tools available at runtime.
+The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes a versioned tool set via the VM service; use `get_app_summary(setup: true)` to discover the exact tools available at runtime.
 
 Remote VM-service connections are blocked by default. Use `--allow-remote` only on a trusted network; optionally add `--remote-token` to require an additional token matching the VM-service URI path.
 
@@ -103,14 +103,14 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 67 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
-iOS simulators with idb, 16 tools for apps without `flutterpilot_sdk`.
+iOS simulators with idb, 15 tools for apps without `flutterpilot_sdk`.
 Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 `gesture: "double"`, `wait_for` `route: ...`, `hot_reload` `restart: true`).
 
 | Area | Tools |
 |---|---|
-| Connection & fleet | `connect_app`, `register_device`, `switch_device`, `list_connected_devices`, `get_capabilities` |
-| Seeing the app | `get_app_summary`, `get_widget_tree` (`diff`), `get_interactive_elements`, `get_widget_properties`, `inspect_widget` (source file:line, `layout`), `get_semantics_tree`, `capture_screenshot`, `get_navigation_stack` |
+| Connection & fleet | `connect_app`, `register_device`, `switch_device`, `list_connected_devices` |
+| Seeing the app | `get_app_summary` (`setup`), `get_widget_tree` (`diff`), `get_interactive_elements`, `get_widget_properties`, `inspect_widget` (source file:line, `layout`), `get_semantics_tree`, `capture_screenshot`, `get_navigation_stack` |
 | Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`, `navigate_to` |
 | Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` (layout + accessibility: labels, contrast, reading order), `generate_test` (record a flow, write it as an integration_test, run it), `verify_feature` (acceptance criteria → pass/fail report with evidence) |
 | Rendering | `set_app_settings` (theme, locale, textScale, keyboardInset, orientation, windowSize, debug overlays) |
