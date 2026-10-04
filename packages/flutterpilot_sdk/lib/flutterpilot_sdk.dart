@@ -89,8 +89,13 @@ String? _projectRoot;
 void _applyProjectRoot(String? root) {
   if (root == null || root.isEmpty || root == _projectRoot) return;
   _projectRoot = root;
+  // Creation locations are `file:` URI paths (`/D:/app`). An older server
+  // sends a Windows path as it is (`D:\app`), which matches none of them.
+  final pubRoot = RegExp(r'^[A-Za-z]:[\\/]').hasMatch(root)
+      ? Uri.file(root, windows: true).path
+      : root;
   // ignore: invalid_use_of_protected_member
-  WidgetInspectorService.instance.addPubRootDirectories([root]);
+  WidgetInspectorService.instance.addPubRootDirectories([pubRoot]);
 }
 
 DateTime _agentActiveUntil = DateTime(0);

@@ -10,6 +10,7 @@ import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 
+import 'src/app_root.dart';
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
@@ -1431,7 +1432,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     if (!extension.startsWith('ext.flutterpilot.')) return args;
     var root = _appRootByIsolate[isolateId];
     if (root == null) {
-      var resolved = _projectRoot.absolute.path;
+      var resolved = creationLocationRoot(_projectRoot.absolute.path);
       try {
         var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
         if (uri != null && uri.startsWith('package:')) {
