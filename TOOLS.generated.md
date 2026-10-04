@@ -298,15 +298,16 @@ The route stack, bottom to top. With go_router also the location, path/query par
 
 ## `set_app_settings`
 
-Changes how the app renders, one or more at once: theme (light/dark), locale ("fr", "ar", "system"), textScale (2.0 to test large text; 0 resets), orientation (portrait/landscape/all, phones), windowSize ("390x844", macOS desktop window), and the debug overlays debugPaint (layout bounds), repaintRainbow (what repaints) and slowAnimations (5x slower). Locale and textScale act like the device setting, with no app code: the response says what the app shows, e.g. when it does not support the locale or clamps text scaling. Pair with audit_screen_health to catch overflows.
+Changes how the app renders, several at once: theme (light/dark), locale ("fr", "ar", "system"), textScale (2.0 to test large text; 0 resets), keyboardInset (340: lay out as with an on-screen keyboard that tall open; 0 resets), orientation (phones), windowSize ("390x844", macOS and Windows desktop), and the debug overlays debugPaint, repaintRainbow and slowAnimations. Locale, textScale and keyboardInset act like the device, with no app code: the response says what the app shows, e.g. when it does not support the locale or clamps text scaling. Pair with audit_screen_health to catch overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `theme` | string | no |  |
 | `locale` | string | no | BCP-47 tag (e.g. "en", "en-GB", "zh-Hans-CN"); "system" restores the device locale. |
 | `textScale` | number | no | Text scale factor (1.0 normal); 0 restores the system value. |
+| `keyboardInset` | number | no | Height in logical pixels of a simulated on-screen keyboard (a phone's is about 300–350); 0 removes it. |
 | `orientation` | string | no |  |
-| `windowSize` | string | no | macOS desktop: the window's size in logical pixels, "WIDTHxHEIGHT" (e.g. "390x844" for a phone width, "1280x860"). The title bar is part of the height. |
+| `windowSize` | string | no | Desktop window size in logical pixels, "WIDTHxHEIGHT" (e.g. "390x844" for a phone width, "1280x860"). Windows: the app's viewport gets that size. macOS: the window does, title bar included. |
 | `debugPaint` | boolean | no |  |
 | `repaintRainbow` | boolean | no |  |
 | `slowAnimations` | boolean | no |  |
@@ -368,7 +369,7 @@ One widget's state: type, text (Text/TextField content), isEnabled, isChecked (C
 
 ## `inspect_widget`
 
-Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds it) and the app widgets above it. layout:true adds the constraints and size of each box up its ancestors and explains overflows and 0-sized widgets (which children fill a Row, which ancestor gives max width 0). Use before editing UI code.
+Which file:line in the app's code creates a widget: pass key (key, selector or visible text) or x,y (logical pixels, e.g. from a screenshot). Returns the source (for framework widgets, the app widget that builds it) and the app widgets above it. layout:true adds each box's constraints and size up its ancestors and explains overflows and 0-sized widgets. style:true adds what it is drawn with, in numbers a screenshot can't give: text size, weight and color, paddings, fills, borders, radii and elevation. Use before editing UI code, and to check a design spec.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -377,6 +378,7 @@ Which file:line in the app's code creates a widget: pass key (key, selector or v
 | `x` | number | no | X in logical pixels (top-left origin), with y. |
 | `y` | number | no | Y in logical pixels. |
 | `layout` | boolean | no | Also constraints and sizes up the ancestors, and why it overflows or is 0 wide. |
+| `style` | boolean | no | Also text styles, paddings (left, top, right, bottom), fills, borders, radii and elevation of the widget and what it contains. |
 
 ## `get_semantics_tree`
 
@@ -466,7 +468,7 @@ Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or normal again,
 
 ## `mock_http_response`
 
-Registers a URL pattern mock so that any Dio request whose URL contains urlPattern returns a synthetic response instead of hitting the network. Use to test error states, empty states, or edge-case API responses. clear:true removes the mock for urlPattern, or all mocks without one — do that when done.
+Registers a URL pattern mock so that any Dio request whose URL contains urlPattern returns a synthetic response instead of hitting the network. Use to test error states, empty states, or edge-case API responses. error instead of statusCode fails the request with no response: "timeout" (the server never answers) or "connection" (it can't be reached). delayMs on two patterns reproduces responses arriving out of order. clear:true removes the mock for urlPattern, or all mocks without one — do that when done.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -475,6 +477,7 @@ Registers a URL pattern mock so that any Dio request whose URL contains urlPatte
 | `statusCode` | integer | no | HTTP status code (e.g. 200, 404, 500) |
 | `body` | string | no | Response body as a JSON string (e.g. '{"error":"not found"}') |
 | `delayMs` | integer | no | Artificial delay in milliseconds before returning the mock (default 0) |
+| `error` | string | no | Fail the request instead of answering it (after delayMs). |
 
 ## `call_custom_tool`
 

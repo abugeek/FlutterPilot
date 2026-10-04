@@ -8,6 +8,25 @@ void main() {
     steps: steps,
   );
 
+  test('a mocked timeout is replayed as one', () {
+    final t = write([
+      {
+        'type': 'mock',
+        'urlPattern': '/pay',
+        'statusCode': 0,
+        'body': '',
+        'delayMs': 400,
+        'error': 'timeout',
+      },
+    ]);
+    expect(
+      t.source,
+      contains(
+        "DioPilotInterceptor.mock('/pay', error: 'timeout', delayMs: 400);",
+      ),
+    );
+  });
+
   test('starts the real app and replays steps with their finders', () {
     final t = write([
       {

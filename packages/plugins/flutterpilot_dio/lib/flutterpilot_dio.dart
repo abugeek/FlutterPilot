@@ -56,18 +56,27 @@ class DioPilotInterceptor extends Interceptor {
   /// Answers requests whose URL contains [urlPattern] with [statusCode] and
   /// [body] (JSON is decoded) instead of the network. What
   /// `mock_http_response` sets, and what tests generated from it call.
+  ///
+  /// [error] fails them without a response instead, as the network does:
+  /// `"timeout"` (the server never answers: a receive timeout) or
+  /// `"connection"` (it can't be reached), after [delayMs].
   static void mock(
     String urlPattern, {
-    required int statusCode,
-    required String body,
+    int statusCode = 200,
+    String body = '',
     int delayMs = 0,
+    String? error,
   }) {
     _mocks[urlPattern] = {
       'statusCode': statusCode,
       'body': body,
       'delayMs': delayMs.clamp(0, _maxDelayMs),
+      'error': ?error,
     };
   }
+
+  /// The failures [mock] can stand in for.
+  static const mockErrors = ['timeout', 'connection'];
 
   /// Removes the mock for [urlPattern], or all of them.
   static void clearMocks([String? urlPattern]) {
@@ -92,6 +101,7 @@ class DioPilotInterceptor extends Interceptor {
             statusCode: (m['statusCode'] as num?)?.toInt() ?? 200,
             body: '${m['body'] ?? ''}',
             delayMs: (m['delayMs'] as num?)?.toInt() ?? 0,
+            error: m['error'] as String?,
           );
         }
       }
@@ -191,13 +201,21 @@ class DioPilotInterceptor extends Interceptor {
       parameters,
     ) async {
       final urlPattern = parameters['urlPattern'];
-      final statusCodeStr = parameters['statusCode'];
-      final body = parameters['body'];
+      final error = parameters['error'];
+      final statusCodeStr =
+          parameters['statusCode'] ?? (error == null ? null : '0');
+      final body = parameters['body'] ?? (error == null ? null : '');
 
       if (urlPattern == null || statusCodeStr == null || body == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'Missing urlPattern, statusCode, or body',
+        );
+      }
+      if (error != null && !mockErrors.contains(error)) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'error must be one of: ${mockErrors.join(', ')}',
         );
       }
       final statusCode = int.tryParse(statusCodeStr);
@@ -211,12 +229,19 @@ class DioPilotInterceptor extends Interceptor {
         0,
         _maxDelayMs,
       );
-      mock(urlPattern, statusCode: statusCode, body: body, delayMs: delayMs);
+      mock(
+        urlPattern,
+        statusCode: statusCode,
+        body: body,
+        delayMs: delayMs,
+        error: error,
+      );
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
           'urlPattern': urlPattern,
-          'statusCode': statusCode,
+          // Not "error": the server reads that key as the call failing.
+          if (error == null) 'statusCode': statusCode else 'failsWith': error,
         }),
       );
     });
@@ -281,13 +306,29 @@ class DioPilotInterceptor extends Interceptor {
       if (delayMs > 0) {
         await Future.delayed(Duration(milliseconds: delayMs));
       }
+      options.extra['flutterpilot_mocked'] = true;
+      final error = mock['error'];
+      if (error != null) {
+        handler.reject(
+          error == 'timeout'
+              ? DioException.receiveTimeout(
+                  timeout: options.receiveTimeout ?? Duration.zero,
+                  requestOptions: options,
+                )
+              : DioException.connectionError(
+                  requestOptions: options,
+                  reason: '[FlutterPilot] mocked connection error',
+                ),
+          true, // run onError so the mocked failure is logged too
+        );
+        return;
+      }
       dynamic decodedBody;
       try {
         decodedBody = json.decode(mock['body'] as String);
       } catch (_) {
         decodedBody = mock['body'];
       }
-      options.extra['flutterpilot_mocked'] = true;
       final response = Response<dynamic>(
         requestOptions: options,
         statusCode: mock['statusCode'] as int,
@@ -366,7 +407,10 @@ class DioPilotInterceptor extends Interceptor {
           ? null
           : FlutterPilot.redactText(err.message!),
       'errorType': err.type.name,
-      if (err.response?.extra['flutterpilot_mocked'] == true) 'mocked': true,
+      // A mocked timeout or connection error has no response to carry it.
+      if (err.response?.extra['flutterpilot_mocked'] == true ||
+          err.requestOptions.extra['flutterpilot_mocked'] == true)
+        'mocked': true,
       if (errBody != null) 'body': errBody,
       'timestamp': DateTime.now().toIso8601String(),
     });

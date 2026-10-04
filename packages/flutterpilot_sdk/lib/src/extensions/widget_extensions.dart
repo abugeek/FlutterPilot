@@ -1417,7 +1417,8 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       // layout:true answers without source locations too (profile builds).
       final layout = parameters['layout'] == 'true';
-      if (!SourceLocator.available && !layout) {
+      final style = parameters['style'] == 'true';
+      if (!SourceLocator.available && !layout && !style) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
           'This build records no source locations: they exist only in debug '
@@ -1464,7 +1465,8 @@ extension _WidgetExtensions on FlutterPilot {
             'build, "flutter run", adds it).';
       }
       if (layout) result.addAll(LayoutExplorer.describe(element));
-      if (result['source'] == null && !layout) {
+      if (style) result.addAll(StyleExplorer.describe(element));
+      if (result['source'] == null && !layout && !style) {
         result['error'] =
             'No widget created by the app\'s own code draws this: it and '
             'everything above it come from the framework or packages.';

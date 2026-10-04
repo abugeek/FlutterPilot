@@ -643,6 +643,37 @@ CE settings, geolocator, its own scanner EventChannel); findings #301–310.
   `e2e_test.dart -d windows` runs now, and the SDK suite passes there
   (#310). Open: the Windows e2e is not in CI.
 
+## 12. Styles in numbers, keyboard inset, one URL failing — done (2026-10-05)
+
+No new tools; field-tested on Windows in `../pos_lab` (findings #311–319).
+
+- **`inspect_widget(style: true)`** (`StyleExplorer`): from the render
+  objects of a widget and what it contains — each text's size, weight,
+  color, font, line height, letter spacing (icons: size and color);
+  paddings as `ltrb`; fills, gradients, borders, radii, elevation, opacity;
+  and the nearest padding and fill around it. A Container's border is taken
+  out of its padding and listed (`plusBorder`), so 16 reads as 16. Capped
+  at 8 per kind. Not read: what the app's own CustomPainters draw (counted
+  in a note), a TextField's underline/outline (InputDecorator paints it),
+  images, per-span styles of `Text.rich` (flagged `mixed`).
+- **`set_app_settings(keyboardInset:)`**: `viewInsets.bottom` (and no
+  bottom padding) in the root MediaQuery, next to the text-scale override
+  and put back the same way. The OS keyboard is not involved, so a control
+  it would cover is reported as clipped, not hidden by a keyboard.
+- **`set_app_settings(windowSize:)` on Windows**: PowerShell + user32 on
+  the app's main window; the client area gets the requested size at the
+  window's DPI. Linux is not covered.
+- **`mock_http_response(error:)`**: `timeout` (a Dio receive timeout) or
+  `connection`, per URL pattern, after `delayMs`; carried by scenarios and
+  written into generated tests. Out-of-order responses need no feature:
+  two patterns with different `delayMs`. Random drops and jitter were left
+  out on purpose: a failure that can't be reproduced can't be kept as a
+  test.
+- Declined from the same list of suggestions: a route-map tool
+  (`get_navigation_stack(routes: true)` has it for go_router), a lifecycle
+  leak audit (`get_memory_details(cycle:)` is it), a one-call stress-test
+  macro (three existing calls, and a fixed recipe hides which step failed).
+
 ## Where things are
 
 - `docs/field-test-findings.md` — every tool observation (88 rows), latency.

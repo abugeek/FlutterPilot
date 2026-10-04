@@ -43,6 +43,7 @@ import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
 import 'src/source_locator.dart';
+import 'src/style_explorer.dart';
 import 'src/test_recorder.dart';
 import 'src/ui_health_auditor.dart';
 import 'src/widget_inspector.dart';

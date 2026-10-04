@@ -1174,7 +1174,8 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 - storage: `exec_sql_query`, `get_shared_preferences`, `get_hive_contents`, `get_secure_storage`
 
 ## Changing how the app renders
-- `set_app_settings` — theme, locale, textScale, orientation, debugPaint, repaintRainbow, slowAnimations
+- `set_app_settings` — theme, locale, textScale, keyboardInset (lay out as with an open keyboard), orientation, windowSize, debugPaint, repaintRainbow, slowAnimations
+- `inspect_widget(key, style: true)` — text size/weight/color, paddings, fills, borders, radii: check a design spec in numbers, not from a screenshot
 
 ## Performance
 - `profile_frame_budget` — p50/p90/p99 build/raster, jank

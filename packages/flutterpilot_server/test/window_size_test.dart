@@ -40,7 +40,39 @@ void main() {
       height: 844,
       run: (_, _) async => fail('must not run a host command'),
     );
-    expect(problem, contains('macOS desktop apps only'));
+    expect(problem, contains('macOS and Windows desktop apps only'));
+  });
+
+  test('on Windows the viewport, not the frame, gets the size', () async {
+    final calls = <List<String>>[];
+    final problem = await resizeAppWindow(
+      operatingSystem: 'windows',
+      pid: 4242,
+      width: 390,
+      height: 844,
+      run: (exe, args) async {
+        calls.add([exe, ...args]);
+        return ProcessResult(1, 0, '', '');
+      },
+    );
+    expect(problem, isNull);
+    expect(calls.single.first, 'powershell');
+    final script = calls.single.last;
+    expect(script, contains('Get-Process -Id 4242'));
+    // The frame around the client area is added to the requested size.
+    expect(script, contains(r'Round(390 * $d) + ($o.R - $o.L) - $c.R'));
+    expect(script, contains(r'Round(844 * $d) + ($o.B - $o.T) - $c.B'));
+
+    expect(
+      await resizeAppWindow(
+        operatingSystem: 'windows',
+        pid: 1,
+        width: 390,
+        height: 844,
+        run: (_, _) async => ProcessResult(1, 2, '', 'no window\n'),
+      ),
+      contains('has no window'),
+    );
   });
 
   test('names the permission when macOS refuses', () async {

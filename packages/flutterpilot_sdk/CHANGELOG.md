@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `StyleExplorer` (behind `inspect_widget(style: true)`) and
+  `AppSettingsOverride.setKeyboardInset` (behind
+  `set_app_settings(keyboardInset:)`).
+- Fixed: a second `set_app_settings(textScale:)` did nothing while one was
+  already applied (2, then 1.5, stayed at 2 until something else rebuilt the
+  root MediaQuery).
+
 - Call `FlutterPilot.initialize()` first in `main()`, before
   `WidgetsFlutterBinding.ensureInitialized()`: in debug and profile builds it
   then creates the binding (`FlutterPilotBinding`), whose messenger lets

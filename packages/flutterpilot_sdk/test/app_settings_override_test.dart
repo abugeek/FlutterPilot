@@ -101,6 +101,66 @@ void main() {
     });
   });
 
+  group('keyboard inset, no keyboard on the device', () {
+    // A form as tall as the screen: fine until a keyboard takes part of it.
+    Widget form() => MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => Column(
+            children: [
+              const SizedBox(height: 400, child: Placeholder()),
+              Text('inset ${MediaQuery.viewInsetsOf(context).bottom}'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('shrinks the page as an open keyboard does, and resets', (
+      tester,
+    ) async {
+      await tester.pumpWidget(form());
+      final full = tester.getSize(find.byType(Column)).height;
+      expect(full, 600);
+
+      final r = await _settle(tester, override.setKeyboardInset(340));
+      expect(r, {'inset': 340.0, 'height': 600.0});
+      // The Scaffold resizes its body: 400 no longer fits in 260.
+      expect(tester.getSize(find.byType(Column)).height, 260);
+      expect(tester.takeException().toString(), contains('overflowed'));
+
+      await _settle(tester, override.setKeyboardInset(null));
+      expect(tester.getSize(find.byType(Column)).height, full);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a new value replaces the old one, next to a text scale', (
+      tester,
+    ) async {
+      final seen = <double>[];
+      await tester.pumpWidget(_app(seen));
+      await _settle(tester, override.setTextScale(2));
+      await _settle(tester, override.setKeyboardInset(300));
+      final r = await _settle(tester, override.setKeyboardInset(100));
+      expect(r['inset'], 100.0);
+      expect(find.textContaining('scale 2.0'), findsOneWidget);
+
+      // Changing the scale keeps the inset; dropping the inset keeps it.
+      final scaled = await _settle(tester, override.setTextScale(1.5));
+      expect(scaled['scale'], 1.5);
+      final back = await _settle(tester, override.setKeyboardInset(null));
+      expect(back['inset'], 0.0);
+      expect(find.textContaining('scale 1.5'), findsOneWidget);
+    });
+
+    testWidgets('is never the whole screen', (tester) async {
+      await tester.pumpWidget(form());
+      final r = await _settle(tester, override.setKeyboardInset(5000));
+      expect(r['inset'], 540.0);
+      tester.takeException();
+    });
+  });
+
   group('locale, no wiring in the app', () {
     const gb = Locale('en', 'GB');
     const supported = [Locale('en', 'US'), gb];

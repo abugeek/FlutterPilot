@@ -786,7 +786,8 @@ Future<void> main(List<String> args) async {
       );
       // The window is resized on the host. CI runners do not grant the
       // Accessibility access that needs, so the resize runs locally only.
-      if (device == 'macos' && Platform.environment['CI'] == null) {
+      if (device == 'windows' ||
+          (device == 'macos' && Platform.environment['CI'] == null)) {
         await check(
           'window resizes to a narrower width',
           'set_app_settings',
@@ -796,15 +797,16 @@ Future<void> main(List<String> args) async {
         await check(
           'window resizes back',
           'set_app_settings',
-          {'windowSize': '800x600'},
-          ['viewport now 800x'],
+          // The size flutter create's runner opens with.
+          {'windowSize': device == 'windows' ? '1280x720' : '800x600'},
+          [device == 'windows' ? 'viewport now 1280x720' : 'viewport now 800x'],
         );
       } else if (device != 'macos') {
         await check(
-          'window size is refused off macOS, not faked',
+          'window size is refused off desktop, not faked',
           'set_app_settings',
           {'windowSize': '700x600'},
-          ['macOS desktop apps only'],
+          ['macOS and Windows desktop apps only'],
           true,
         );
       }
@@ -1781,6 +1783,40 @@ Future<void> main(List<String> args) async {
       await check('channel mock cleared: tap Battery', 'tap_widget', {
         'key': 'Battery 87%',
         'waitFor': 'Battery none',
+      });
+
+      // What a widget is drawn with, in numbers.
+      await check(
+        'inspect_widget style gives text, padding and fill',
+        'inspect_widget',
+        {'key': 'Send', 'style': true},
+        ['"style":', '"text":"Send"', '"size":14', '"padding":', '"color":"#'],
+        false,
+        Duration.zero,
+        2048,
+      );
+      // A keyboard no desktop or simulator shows: the page lays out above it.
+      await check(
+        'set_app_settings keyboardInset shrinks the page',
+        'set_app_settings',
+        {'keyboardInset': 200},
+        ['✓ keyboard inset 200', 'pages that resize for the keyboard'],
+      );
+      await check(
+        'keyboardInset resets',
+        'set_app_settings',
+        {'keyboardInset': 0},
+        ['✓ keyboard inset 0'],
+      );
+      await check(
+        'mock_http_response takes a timeout',
+        'mock_http_response',
+        {'urlPattern': '/never', 'error': 'timeout'},
+        ['"failsWith":"timeout"'],
+      );
+      await check('timeout mock cleared', 'mock_http_response', {
+        'urlPattern': '/never',
+        'clear': true,
       });
     }
 

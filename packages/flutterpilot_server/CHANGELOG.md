@@ -1,5 +1,17 @@
 ## Unreleased
 
+- `inspect_widget(style: true)`: what a widget is drawn with — text size,
+  weight, color, font and line height, paddings, fills, borders, corner
+  radii, elevation — and the padding and fill around it.
+- `set_app_settings(keyboardInset: 340)` lays the app out as with an open
+  on-screen keyboard that tall (0 removes it), so a form that overflows above
+  the keyboard is caught on desktop and web.
+- `set_app_settings(windowSize:)` works on Windows: the app's viewport gets
+  the size asked for. A window that stops at its minimum or the screen is
+  reported as partly applied, not as done.
+- `mock_http_response(error: "timeout" | "connection")` fails one URL with no
+  response.
+
 - `scenario` saves and loads local data too: the rows of the Drift and
   sqflite databases the app registered (one row per line in the file; each
   database replaced in one transaction) and Hive boxes of plain values.
