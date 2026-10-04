@@ -48,6 +48,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           });
         }
         if (res.isError) return res.toCallToolResult();
+        // The page slides in: until it has, its controls are off screen
+        // and the next call would list the page underneath. Bounded, since
+        // a screen with a spinner never stops animating.
+        await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+          'timeoutMs': '1500',
+        });
         final stack = await _callExtensionRaw(
           'ext.flutterpilot.getNavigationStack',
           {},

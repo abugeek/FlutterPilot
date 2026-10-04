@@ -1,5 +1,16 @@
 ## Unreleased
 
+- Apps built on the separate `material_ui` / `cupertino_ui` packages (the
+  same widgets as Flutter's under other classes): text fields are found by
+  their label or hint, buttons by their tooltip, sliders and toggles are
+  recognised, disabled controls are exempt from the contrast audit, and the
+  test recorder sees their controls.
+- `execute_action_chain` waits up to 3 s for a step's target to appear, so a
+  tap that opens a page can be followed by a tap on that page.
+- Typing into a target that holds several fields is refused instead of
+  filling the first one.
+- The reading-order audit no longer reports a second column as a jump back
+  up the screen.
 - Scrolling to a widget (scroll_into_view, and before a tap) pages through
   each list, including lazy, reversed, grid and nested horizontal lists,
   instead of swiping; a partial text match no longer stops the search
