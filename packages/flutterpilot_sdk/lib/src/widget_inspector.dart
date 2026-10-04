@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'ai_overlay_manager.dart';
+import 'form_inspector.dart';
 import 'hit_test_utils.dart';
 
 extension on Element {
@@ -1181,6 +1182,8 @@ class PilotWidgetInspector {
         'type': target.widget.runtimeType.toString(),
         'key': ?key,
         if (text.isNotEmpty) 'text': text,
+        // A field's validation error, when one is shown.
+        'fieldError': ?FormInspector.of(target)?.shown,
         'bounds': {
           'x': pos.dx.round(),
           'y': pos.dy.round(),

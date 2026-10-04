@@ -53,8 +53,12 @@ extension _WidgetExtensions on FlutterPilot {
             'covers it, or it is clipped. Dismiss the overlay (press_key '
             'escape / press_key back) or interact with what is on top.';
 
-  static String _disabledMessage(String target) =>
-      '"$target" is disabled and cannot be tapped.';
+  static String _disabledMessage(String target) {
+    // Usually the reason: the form it submits does not validate.
+    final problems = FormInspector.problemsOnScreen();
+    return '"$target" is disabled and cannot be tapped.'
+        '${problems.isEmpty ? '' : ' Fields on screen that do not validate: ${problems.join('; ')}.'}';
+  }
 
   static bool? _checkWidgetDisabled(Widget widget) {
     if (widget is Semantics) {

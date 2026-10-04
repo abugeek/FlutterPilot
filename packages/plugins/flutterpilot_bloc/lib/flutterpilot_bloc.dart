@@ -148,6 +148,7 @@ class BlocPilotObserver extends BlocObserver {
   @override
   void onClose(BlocBase<dynamic> bloc) {
     _active.remove(bloc);
+    FlutterPilot.logStateDisposed('bloc', bloc.runtimeType.toString());
     super.onClose(bloc);
   }
 }

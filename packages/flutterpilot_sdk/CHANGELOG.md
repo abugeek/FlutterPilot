@@ -1,5 +1,11 @@
 ## Unreleased
 
+- `FlutterPilot.logStateChange` keeps what plugins report (it was a stub)
+  in a 50-entry history, with `logStateDisposed` for a provider or bloc that
+  is gone. Values are cut at 160 characters and credentials masked.
+- `FormInspector`: a form field's shown error, or what its validator says
+  about the current value without showing it.
+
 - `StyleExplorer` (behind `inspect_widget(style: true)`) and
   `AppSettingsOverride.setKeyboardInset` (behind
   `set_app_settings(keyboardInset:)`).

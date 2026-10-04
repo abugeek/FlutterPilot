@@ -215,5 +215,6 @@ base class RiverpodPilotObserver extends ProviderObserver {
     _states.remove(name);
     _providers.remove(name);
     _containers.remove(name);
+    FlutterPilot.logStateDisposed('riverpod', name);
   }
 }

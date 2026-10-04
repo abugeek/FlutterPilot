@@ -20,6 +20,7 @@ import 'src/http_detail.dart';
 import 'src/image_budget.dart';
 import 'src/memory_leaks.dart';
 import 'src/native_crash.dart';
+import 'src/state_history.dart';
 import 'src/device_runtime_context.dart';
 import 'src/param_aliases.dart';
 import 'src/plugin_tools.dart';
@@ -1167,7 +1168,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 ## Reading state
 - `get_errors` (report:true: full crash report), `get_debug_logs` (clear:true)
 - `get_navigation_stack` — routes (go_router: params, routes:true, history:true)
-- `get_state` / `set_state` — Riverpod and Bloc (plugins)
+- `get_state` / `set_state` — Riverpod and Bloc (plugins); `get_state(history: true)`: the recent changes in order (old → new, created, disposed, route changes) when a value is not what you expect
 - `get_network_logs`, `mock_http_response`, `simulate_network` — Dio plugin
 - `mock_platform_channel` — answer a plugin's native calls (location, permission, camera) or deliver its events (a scanned barcode); no argument lists the calls the app made
 - `get_http_profile` — any dart:io client (clear:true for a baseline)
