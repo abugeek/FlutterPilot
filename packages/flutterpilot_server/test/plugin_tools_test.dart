@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutterpilot_server/src/plugin_tools.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 void main() {
@@ -11,7 +12,8 @@ void main() {
               .listSync(recursive: true)
               .whereType<File>()
               .where(
-                (f) => f.path.contains('/lib/') && f.path.endsWith('.dart'),
+                (f) =>
+                    p.split(f.path).contains('lib') && f.path.endsWith('.dart'),
               ))
         ...RegExp(
           r"[rR]egisterExtension\(\s*'(ext\.flutterpilot\.\w+)'",

@@ -62,12 +62,35 @@ class DtdApp {
     // The nearest folder that exists, with the rest appended.
     for (var dir = full; ; dir = p.dirname(dir)) {
       try {
+        if (FileSystemEntity.isLinkSync(dir)) {
+          final target = _resolveLink(dir);
+          final resolved = dir == full
+              ? target
+              : p.join(target, p.relative(full, from: dir));
+          return _real(resolved);
+        }
         final real = Directory(dir).resolveSymbolicLinksSync();
         return dir == full ? real : p.join(real, p.relative(full, from: dir));
       } on FileSystemException {
         if (p.dirname(dir) == dir) return full;
       }
     }
+  }
+
+  static String _resolveLink(String path) {
+    var cur = path;
+    var hops = 0;
+    while (FileSystemEntity.isLinkSync(cur) && hops++ < 10) {
+      try {
+        final target = Link(cur).targetSync();
+        cur = p.isAbsolute(target)
+            ? target
+            : p.normalize(p.join(p.dirname(cur), target));
+      } catch (_) {
+        break;
+      }
+    }
+    return cur;
   }
 
   static String? _packageName(String dir) {
