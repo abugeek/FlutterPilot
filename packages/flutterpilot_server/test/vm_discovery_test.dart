@@ -82,7 +82,7 @@ void main() {
       VmDiscoveryService.findUriFiles(
         tmp,
       ).map((f) => p.relative(f.path, from: tmp.path)),
-      [p.join('web', VmDiscoveryService.uriFile)],
+      [p.normalize(p.join('web', VmDiscoveryService.uriFile))],
     );
   });
 

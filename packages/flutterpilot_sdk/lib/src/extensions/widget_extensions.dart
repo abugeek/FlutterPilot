@@ -53,6 +53,90 @@ extension _WidgetExtensions on FlutterPilot {
             'covers it, or it is clipped. Dismiss the overlay (press_key '
             'escape / press_key back) or interact with what is on top.';
 
+  static String _disabledMessage(String target) =>
+      '"$target" is disabled and cannot be tapped.';
+
+  static bool? _checkWidgetDisabled(Widget widget) {
+    if (widget is Semantics) {
+      final props = widget.properties;
+      if (props.enabled != null &&
+          (props.button == true || props.onTap != null)) {
+        return props.enabled == false;
+      }
+    }
+
+    if (widget is ButtonStyleButton) {
+      return !widget.enabled;
+    }
+    if (widget is IconButton) {
+      return widget.onPressed == null;
+    }
+    if (widget is CupertinoButton) {
+      return !widget.enabled;
+    }
+
+    final type = widget.runtimeType.toString().split('<').first;
+    if (type.endsWith('Button')) {
+      final dynamic dyn = widget;
+      try {
+        final enabled = dyn.enabled;
+        if (enabled is bool) return !enabled;
+      } catch (_) {}
+      try {
+        final onPressed = dyn.onPressed;
+        var hasOther = false;
+        try {
+          hasOther = dyn.onLongPress != null;
+        } catch (_) {}
+        try {
+          hasOther = hasOther || dyn.onTap != null;
+        } catch (_) {}
+        if (onPressed == null && !hasOther) return true;
+        if (onPressed != null || hasOther) return false;
+      } catch (_) {}
+    }
+
+    if (widget is TextField && widget.enabled == false) {
+      return true;
+    }
+    if (widget is TextFormField && widget.enabled == false) {
+      return true;
+    }
+
+    return null;
+  }
+
+  static bool _isElementDisabled(Element element) {
+    final selfCheck = _checkWidgetDisabled(element.widget);
+    if (selfCheck != null) return selfCheck;
+
+    bool? foundState;
+    element.visitAncestorElements((ancestor) {
+      final w = ancestor.widget;
+      if (w is ModalRoute || w is Navigator) return false;
+
+      final check = _checkWidgetDisabled(w);
+      if (check != null) {
+        foundState = check;
+        return false;
+      }
+      return true;
+    });
+
+    return foundState == true;
+  }
+
+  static ServiceExtensionResponse? _refuseIfDisabled(
+    Element element,
+    String target,
+  ) {
+    if (!_isElementDisabled(element)) return null;
+    return ServiceExtensionResponse.error(
+      ServiceExtensionResponse.extensionError,
+      _disabledMessage(target),
+    );
+  }
+
   /// Set by [_tapTarget] when it closed the on-screen keyboard to reach its
   /// target; the tap response says so.
   static String? _tapNote;
@@ -132,6 +216,9 @@ extension _WidgetExtensions on FlutterPilot {
     }
     if (!HitTestUtils.isElementHittable(element)) {
       return (status: 'covered', error: _coveredMessage(target));
+    }
+    if (_isElementDisabled(element)) {
+      return (status: 'disabled', error: _disabledMessage(target));
     }
     if (scrolled) TestRecorder.addScroll(element);
     TestRecorder.add('tap', element: element, data: {'target': target});
@@ -436,6 +523,13 @@ extension _WidgetExtensions on FlutterPilot {
         }
 
         if (targetNode != null) {
+          if (targetNode!.hasFlag(SemanticsFlag.hasEnabledState) &&
+              !targetNode!.hasFlag(SemanticsFlag.isEnabled)) {
+            return ServiceExtensionResponse.error(
+              ServiceExtensionResponse.extensionError,
+              'Semantics #$semanticsId is disabled and cannot be tapped.',
+            );
+          }
           Matrix4 transform = Matrix4.identity();
           SemanticsNode? curr = targetNode;
           while (curr != null) {
@@ -833,6 +927,8 @@ extension _WidgetExtensions on FlutterPilot {
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         final covered = _refuseIfCovered(element, target);
         if (covered != null) return covered;
+        final disabled = _refuseIfDisabled(element, target);
+        if (disabled != null) return disabled;
         await InteractionManager.doubleTapAt(pos, label: target);
         final after = await _afterAction(
           routeBefore: routeBefore,
@@ -876,6 +972,8 @@ extension _WidgetExtensions on FlutterPilot {
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         final covered = _refuseIfCovered(element, target);
         if (covered != null) return covered;
+        final disabled = _refuseIfDisabled(element, target);
+        if (disabled != null) return disabled;
         await InteractionManager.longPressAt(
           pos,
           duration: Duration(milliseconds: ms),

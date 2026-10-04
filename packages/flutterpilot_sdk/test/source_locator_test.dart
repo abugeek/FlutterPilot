@@ -92,4 +92,12 @@ void main() {
     );
     expect(SourceLocator.shortPath('/x/test/a.dart'), '/x/test/a.dart');
   });
+
+  test('a Windows folder becomes a pub root creation locations start with', () {
+    expect(pubRootFor(r'D:\projects\my app'), '/D:/projects/my%20app');
+    expect(pubRootFor('C:/projects/app'), '/C:/projects/app');
+    // Already in that form: a POSIX path, or what a current server sends.
+    expect(pubRootFor('/Users/me/app'), '/Users/me/app');
+    expect(pubRootFor('/D:/projects/app'), '/D:/projects/app');
+  });
 }

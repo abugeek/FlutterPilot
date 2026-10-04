@@ -2,7 +2,7 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 66
+Tool count: 67
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -36,7 +36,7 @@ Runs the same steps on several registered devices at once (e.g. iPhone, Android 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, drag_widget, enter_text, execute_action_chain, fill_form, mock_http_response, navigate_to, press_key, scroll_into_view, set_slider_value, simulate_network, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, drag_widget, enter_text, execute_action_chain, fill_form, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, set_slider_value, simulate_network, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
 | `devices` | array | no | Registered device names (list_connected_devices); default: all of them. |
 
 ## `switch_device`
@@ -485,6 +485,20 @@ Runs a tool the app registered with FlutterPilot.registerCustomTool(). Without n
 | `name` | string | no | The custom tool name. Omit to list the tools. |
 | `params` | object | no |  |
 
+## `mock_platform_channel`
+
+Stands in for the native side of a plugin (camera, scanner, location, permissions, Bluetooth), which a simulator or CI has not. channel + method + result (or error): the app's calls to that method get the value, or a PlatformException. channel + event: delivers an event to the app's EventChannel listeners, e.g. a scanned barcode. No argument lists the mocks and the calls the app made (channel, method, arguments, whether a plugin answered): how to find the names. clear:true removes mocks. Pigeon APIs: the whole channel name, no method.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `channel` | string | no | Channel name, e.g. "dev.fluttercommunity.plus/battery". |
+| `method` | string | no | The method the app invokes, e.g. "getBatteryLevel". |
+| `result` | any | no | What the call returns: any JSON (null for a void method; {"$bytes": "<base64>"} is a byte array). |
+| `error` | string | no | Fail the call with a PlatformException of this code, e.g. "PERMISSION_DENIED". |
+| `errorMessage` | string | no |  |
+| `event` | any | no | The event to deliver on an EventChannel: any JSON. |
+| `clear` | boolean | no | Remove the mocks of channel (and method), or all of them. |
+
 ## `assert_widget`
 
 Checks the screen in the running app in milliseconds; an error result is a failed assertion. One check per call: text — that text is visible (substring unless exact); key — that widget is on screen, or with enabled true/false that it is enabled/disabled; type + count — exactly that many widgets of the type. Only what the user can see counts (not covered routes or hidden tabs).
@@ -543,7 +557,7 @@ Turns what you do in the app into an integration_test. start:true restarts the a
 
 ## `scenario`
 
-Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). save:"name" writes the route, SharedPreferences (sensitive keys left out), active mocked responses and simple Riverpod/Bloc values (bool/number/String). load:"name" replaces the preferences, hot-restarts with the mocks in place before the first request, sets the state and goes to the route (state is set behind the widgets: a TextField keeps its own text). No argument lists them. Loading preferences needs --allow-destructive.
+Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). save:"name" writes the route, SharedPreferences (sensitive keys left out), the rows of registered Drift/sqflite databases and plain Hive boxes, active mocks (HTTP, platform channel) and simple Riverpod/Bloc values. load:"name" replaces the stored data, hot-restarts with the mocks in place from the first call, sets the state and goes to the route (state is set behind the widgets: a TextField keeps its own text). No argument lists them. Loading stored data needs --allow-destructive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

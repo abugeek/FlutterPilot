@@ -1169,6 +1169,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 - `get_navigation_stack` — routes (go_router: params, routes:true, history:true)
 - `get_state` / `set_state` — Riverpod and Bloc (plugins)
 - `get_network_logs`, `mock_http_response`, `simulate_network` — Dio plugin
+- `mock_platform_channel` — answer a plugin's native calls (location, permission, camera) or deliver its events (a scanned barcode); no argument lists the calls the app made
 - `get_http_profile` — any dart:io client (clear:true for a baseline)
 - storage: `exec_sql_query`, `get_shared_preferences`, `get_hive_contents`, `get_secure_storage`
 

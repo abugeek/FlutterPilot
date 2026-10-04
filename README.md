@@ -69,8 +69,8 @@ In `main.dart`:
 import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 ```
@@ -159,7 +159,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 66 tools, of which an app sees only the ones that can work
+registrations): 67 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
@@ -193,6 +193,15 @@ culprit widget, route, recent requests), `get_debug_logs`.
 **Network** — `mock_http_response` (`clear: true` to remove),
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
 (any `dart:io` client; `id` for one request's headers and bodies).
+
+**Plugins without the hardware** — `mock_platform_channel` answers a
+plugin's native calls (location, permissions, camera) with a value or a
+PlatformException, delivers EventChannel events (a scanned barcode), and
+with no argument lists the calls the app made.
+
+**Start states** — `scenario` saves and loads a named state: route,
+preferences, Drift/sqflite rows and Hive boxes, mocks, simple
+Riverpod/Bloc values.
 
 **Performance** — `profile_frame_budget`, `profile_action` (CPU
 profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`

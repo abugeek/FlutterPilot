@@ -83,6 +83,8 @@ class SqflitePilotInspector {
         'ext.flutterpilot.listSqfliteDatabases',
         'ext.flutterpilot.listSqfliteTables',
         'ext.flutterpilot.querySqflite',
+        'ext.flutterpilot.dumpSqflite',
+        'ext.flutterpilot.restoreSqflite',
       ],
     );
     if (!FlutterPilot.isInitialized) {
@@ -215,6 +217,76 @@ class SqflitePilotInspector {
           'databases': _databases.keys.toList(),
           'count': _databases.length,
         }),
+      );
+    });
+
+    // -- ext.flutterpilot.dumpSqflite -------------------------------------------
+    // Every registered database's rows, for a scenario file.
+    _safeRegisterExtension('ext.flutterpilot.dumpSqflite', (
+      method,
+      parameters,
+    ) async {
+      try {
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'databases': {
+              for (final MapEntry(key: name, value: db) in _databases.entries)
+                name: await SqlSnapshot.dump(db.rawQuery),
+            },
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Could not read the database: $e',
+        );
+      }
+    });
+
+    // -- ext.flutterpilot.restoreSqflite ----------------------------------------
+    // data: {dbName: {tables: {name: [rows]}, sequences: {...}}}. Each
+    // database is replaced in one transaction, or not at all.
+    _safeRegisterExtension('ext.flutterpilot.restoreSqflite', (
+      method,
+      parameters,
+    ) async {
+      final Map<String, dynamic> data;
+      try {
+        data = (json.decode(parameters['data'] ?? '{}') as Map)
+            .cast<String, dynamic>();
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'data is not JSON: $e',
+        );
+      }
+      final restored = <String, Object?>{};
+      final errors = <String, String>{};
+      for (final MapEntry(key: name, value: snapshot) in data.entries) {
+        final db = _databases[name];
+        if (db == null) {
+          errors[name] =
+              'no sqflite database registered as "$name" '
+              '(registered: ${_databases.keys.join(', ')})';
+          continue;
+        }
+        try {
+          restored[name] = await db.transaction(
+            (txn) => SqlSnapshot.restore(
+              ((snapshot as Map)['tables'] as Map? ?? const {})
+                  .cast<String, Object?>(),
+              (snapshot['sequences'] as Map? ?? const {})
+                  .cast<String, Object?>(),
+              select: txn.rawQuery,
+              execute: txn.execute,
+            ),
+          );
+        } catch (e) {
+          errors[name] = e is StateError ? e.message : '$e';
+        }
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'restored': restored, 'errors': errors}),
       );
     });
   }

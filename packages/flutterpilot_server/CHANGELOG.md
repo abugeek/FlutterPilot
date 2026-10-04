@@ -1,5 +1,17 @@
 ## Unreleased
 
+- `scenario` saves and loads local data too: the rows of the Drift and
+  sqflite databases the app registered (one row per line in the file; each
+  database replaced in one transaction) and Hive boxes of plain values.
+  Tables over 1000 rows, tables with a credential-named column and virtual
+  tables are left out and named. Loading them needs `--allow-destructive`.
+- New `mock_platform_channel`: answers a plugin's method calls with a value
+  or a PlatformException, delivers EventChannel events, and lists the calls
+  the app made (and whether a plugin answered). A scenario carries the mocks
+  across its hot restart.
+- `scenario`, `generate_test` and `verify_feature` work on Windows: the
+  app's folder was taken as `/D:/app`, which is not a path there.
+
 - `get_app_summary` no longer prints a jank warning in a debug build, where
   most frames are over budget by nature and the line read as a defect on every
   call. It still does in a profile build, and `profile_frame_budget` answers

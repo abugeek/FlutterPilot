@@ -134,8 +134,8 @@ class DoctorCommand extends Command<void> {
         const DoctorCheck.fail(
           'flutterpilot_sdk is added but FlutterPilot.initialize() is never '
               'called: the app runs without it',
-          'in main(): WidgetsFlutterBinding.ensureInitialized(); '
-              'FlutterPilot.initialize(); (or run flutterpilot init)',
+          'first in main(): FlutterPilot.initialize(); (or run '
+              'flutterpilot init)',
         ),
       );
     } else {

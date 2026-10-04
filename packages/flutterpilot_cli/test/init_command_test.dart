@@ -158,7 +158,7 @@ $firebaseDeps''');
         expect(
           main,
           contains(
-            'async {\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();',
+            'async {\n  FlutterPilot.initialize();\n  WidgetsFlutterBinding.ensureInitialized();',
           ),
         );
       },
@@ -315,7 +315,7 @@ Future<void> main() async {
       expect(
         out,
         contains(
-          'WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();',
+          'FlutterPilot.initialize();\n  WidgetsFlutterBinding.ensureInitialized();',
         ),
       );
     });

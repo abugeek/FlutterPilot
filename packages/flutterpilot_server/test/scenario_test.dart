@@ -28,6 +28,60 @@ void main() {
     expect(minimal.summary, 'route /cart');
   });
 
+  test('stored data round-trips, one row per line', () {
+    final s = Scenario(
+      route: '/cart',
+      channelMocks: [
+        {'channel': 'app/scanner', 'method': 'start', 'result': true},
+      ],
+      databases: {
+        'main': {
+          'engine': 'drift',
+          'tables': {
+            'cart_items': [
+              {'id': 1, 'name': 'Milk', 'qty': 2},
+              {'id': 2, 'name': 'Tea', 'qty': 1},
+            ],
+            'orders': <Object?>[],
+          },
+          'sequences': {'cart_items': 2},
+        },
+      },
+      hive: {
+        'settings': [
+          ['currency', 'UZS'],
+          [0, true],
+        ],
+      },
+    );
+    final text = s.encode();
+    expect(text, contains('          {"id":1,"name":"Milk","qty":2},\n'));
+    expect(text, contains('      ["currency","UZS"],\n'));
+    final back = Scenario.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    expect(back.toJson(), s.toJson());
+    expect(
+      back.summary,
+      'route /cart, 1 platform-channel mock(s), 2 database row(s) in '
+      '2 table(s), 1 Hive box(es)',
+    );
+    expect(back.replacesStoredData, isTrue);
+    expect(Scenario(route: '/').replacesStoredData, isFalse);
+  });
+
+  test('a table with a credential column stays out of the file', () {
+    final r = scenarioTables({
+      'cart': [
+        {'id': 1, 'author': 'Ann'},
+      ],
+      'sessions': [
+        {'id': 1, 'access_token': 'eyJabc'},
+      ],
+      'empty': <Object?>[],
+    });
+    expect(r.kept.keys, ['cart', 'empty']);
+    expect(r.secret, ['sessions']);
+  });
+
   test('preferences map to the setter types', () {
     expect(prefForSetter(true), (type: 'bool', value: 'true'));
     expect(prefForSetter(3), (type: 'int', value: '3'));

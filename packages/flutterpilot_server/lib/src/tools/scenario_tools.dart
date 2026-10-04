@@ -11,12 +11,13 @@ mixin _ScenarioToolsMixin
           'Named app states to start from, kept as '
           'flutterpilot/scenarios/<name>.json in the app (check them in, '
           'edit them). save:"name" writes the route, SharedPreferences '
-          '(sensitive keys left out), active mocked responses and simple '
-          'Riverpod/Bloc values (bool/number/String). load:"name" replaces '
-          'the preferences, hot-restarts with the mocks in place before the '
-          'first request, sets the state and goes to the route (state is '
-          'set behind the widgets: a TextField keeps its own text). No '
-          'argument lists them. Loading preferences needs '
+          '(sensitive keys left out), the rows of registered Drift/sqflite '
+          'databases and plain Hive boxes, active mocks (HTTP, platform '
+          'channel) and simple Riverpod/Bloc values. load:"name" replaces '
+          'the stored data, hot-restarts with the mocks in place from the '
+          'first call, sets the state and goes to the route (state is set '
+          'behind the widgets: a TextField keeps its own text). No '
+          'argument lists them. Loading stored data needs '
           '--allow-destructive.',
       inputSchema: ToolInputSchema(
         properties: {
@@ -159,6 +160,15 @@ mixin _ScenarioToolsMixin
         (m as Map).cast<String, Object?>(),
     ];
 
+    final channels = await _callExtensionRaw(
+      'ext.flutterpilot.platformChannel',
+      {},
+    );
+    final channelMocks = [
+      for (final m in (channels.data?['mocks'] as List? ?? const []))
+        (m as Map).cast<String, Object?>(),
+    ];
+
     final state = <String, Map<String, Object?>>{};
     for (final (type, ext, valueKey) in [
       ('riverpod', 'ext.flutterpilot.getRiverpodStates', 'value'),
@@ -183,13 +193,83 @@ mixin _ScenarioToolsMixin
       }
     }
 
+    // Local databases, through the app's own connection.
+    final databases = <String, Object?>{};
+    for (final (engine, ext) in [
+      ('drift', 'ext.flutterpilot.dumpDrift'),
+      ('sqflite', 'ext.flutterpilot.dumpSqflite'),
+    ]) {
+      final res = await _callExtensionRaw(ext, {});
+      final dbs = res.data?['databases'];
+      if (res.isError || dbs is! Map) continue;
+      for (final MapEntry(key: name, value: db) in dbs.entries) {
+        if (db is! Map) continue;
+        final r = scenarioTables(
+          (db['tables'] as Map? ?? const {}).cast<String, Object?>(),
+        );
+        final skipped = [
+          ...(db['skipped'] as List? ?? const []).map((s) => '$s'),
+          ...r.secret.map((t) => '$t (a column looks like a credential)'),
+        ];
+        if (skipped.isNotEmpty) {
+          notes.add(
+            'Database "$name": not saved, and left as they are on load: '
+            '${skipped.join('; ')}.',
+          );
+        }
+        if (r.kept.isEmpty) continue;
+        final sequences =
+            (db['sequences'] as Map? ?? const {}).cast<String, Object?>()
+              ..removeWhere((t, _) => !r.kept.containsKey(t));
+        databases['$name'] = {
+          'engine': engine,
+          'tables': r.kept,
+          if (sequences.isNotEmpty) 'sequences': sequences,
+        };
+      }
+    }
+
+    final hive = <String, Object?>{};
+    final h = await _callExtensionRaw('ext.flutterpilot.dumpHive', {});
+    if (!h.isError) {
+      final secret = <String>[];
+      for (final MapEntry(key: name, value: entries)
+          in ((h.data?['boxes'] as Map?) ?? const {}).entries) {
+        final kept = <Object?>[];
+        for (final e in entries as List) {
+          if (Redaction.sensitiveName.hasMatch('${(e as List)[0]}')) {
+            secret.add('$name.${e[0]}');
+          } else {
+            kept.add(e);
+          }
+        }
+        hive['$name'] = kept;
+      }
+      final skipped = (h.data?['skipped'] as List? ?? const []);
+      if (skipped.isNotEmpty) {
+        notes.add(
+          'Hive boxes not saved (only plain JSON values can be put back): '
+          '${skipped.join('; ')}.',
+        );
+      }
+      if (secret.isNotEmpty) {
+        notes.add(
+          'Left out Hive keys that look like credentials (loading keeps '
+          'none of them): ${secret.join(', ')}.',
+        );
+      }
+    }
+
     final scenario = Scenario(
       description: description,
       route: route,
       prefs: prefs,
       mocks: mocks,
+      channelMocks: channelMocks,
       riverpod: state['riverpod'] ?? const {},
       bloc: state['bloc'] ?? const {},
+      databases: databases,
+      hive: hive,
     );
     file.parent.createSync(recursive: true);
     file.writeAsStringSync(scenario.encode());
@@ -228,11 +308,17 @@ mixin _ScenarioToolsMixin
     } catch (e) {
       return _scenarioError('${file.path} is not valid: $e');
     }
-    if (scenario.prefs != null && !allowDestructive) {
+    if (scenario.replacesStoredData && !allowDestructive) {
+      final what = [
+        if (scenario.prefs != null) 'SharedPreferences ("prefs")',
+        if (scenario.databases.isNotEmpty) 'database rows ("databases")',
+        if (scenario.hive.isNotEmpty) 'Hive boxes ("hive")',
+      ];
       return _scenarioError(
-        'Scenario "$name" replaces the app\'s SharedPreferences: restart '
+        'Scenario "$name" replaces the app\'s ${what.join(', ')}: restart '
         'FlutterPilot with --allow-destructive to load it (or remove '
-        '"prefs" from ${file.path}).',
+        '${what.length == 1 ? 'that part' : 'those parts'} from '
+        '${file.path}).',
       );
     }
     final done = <String>[];
@@ -269,10 +355,62 @@ mixin _ScenarioToolsMixin
       }
     }
 
+    for (final engine in ['drift', 'sqflite']) {
+      final dbs = {
+        for (final MapEntry(key: name, value: db) in scenario.databases.entries)
+          if (db is Map && (db['engine'] ?? 'drift') == engine) name: db,
+      };
+      if (dbs.isEmpty) continue;
+      final res = await _callExtensionRaw(
+        'ext.flutterpilot.restore${engine == 'drift' ? 'Drift' : 'Sqflite'}',
+        {'data': jsonEncode(dbs)},
+      );
+      if (res.isError) {
+        problems.add('database (${dbs.keys.join(', ')}): ${res.errorMessage}');
+        continue;
+      }
+      for (final MapEntry(key: name, value: tables)
+          in ((res.data?['restored'] as Map?) ?? const {}).entries) {
+        final rows = (tables as Map).values.fold<int>(
+          0,
+          (a, b) => a + (b as int),
+        );
+        done.add(
+          'database "$name" replaced ($rows row(s) in ${tables.length} '
+          'table(s))',
+        );
+      }
+      for (final MapEntry(key: name, value: why)
+          in ((res.data?['errors'] as Map?) ?? const {}).entries) {
+        problems.add('database "$name" left unchanged: $why');
+      }
+    }
+    if (scenario.hive.isNotEmpty) {
+      final res = await _callExtensionRaw('ext.flutterpilot.restoreHive', {
+        'data': jsonEncode(scenario.hive),
+      });
+      if (res.isError) {
+        problems.add('Hive: ${res.errorMessage}');
+      } else {
+        final restored = (res.data?['restored'] as Map?) ?? const {};
+        if (restored.isNotEmpty) {
+          done.add('Hive box(es) replaced (${restored.keys.join(', ')})');
+        }
+        for (final MapEntry(key: name, value: why)
+            in ((res.data?['errors'] as Map?) ?? const {}).entries) {
+          problems.add('Hive box "$name": $why');
+        }
+      }
+    }
+
     // 2. Mocks survive the restart in a file the app reads at startup.
-    if (scenario.mocks.isNotEmpty) {
+    if (scenario.mocks.isNotEmpty || scenario.channelMocks.isNotEmpty) {
       final res = await _callExtensionRaw('ext.flutterpilot.prepareRestart', {
-        'data': jsonEncode({'httpMocks': scenario.mocks}),
+        'data': jsonEncode({
+          if (scenario.mocks.isNotEmpty) 'httpMocks': scenario.mocks,
+          if (scenario.channelMocks.isNotEmpty)
+            'channelMocks': scenario.channelMocks,
+        }),
       });
       if (res.isError) problems.add('mocks: ${res.errorMessage}');
     }
@@ -306,6 +444,29 @@ mixin _ScenarioToolsMixin
         problems.add(
           'mocks: $count of ${scenario.mocks.length} active (the app must '
           'call DioPilotInterceptor.register() in main())',
+        );
+      }
+    }
+
+    if (scenario.channelMocks.isNotEmpty) {
+      final active = await _callExtensionRaw(
+        'ext.flutterpilot.platformChannel',
+        {},
+      );
+      final count = (active.data?['mocks'] as List?)?.length ?? 0;
+      if (active.data?['installed'] != true) {
+        problems.add(
+          'platform-channel mocks: FlutterPilot.initialize() must be the '
+          'first line of main() for them to answer',
+        );
+      } else if (count >= scenario.channelMocks.length) {
+        done.add(
+          '$count platform-channel mock(s) active from the first plugin call',
+        );
+      } else {
+        problems.add(
+          'platform-channel mocks: $count of '
+          '${scenario.channelMocks.length} active',
         );
       }
     }

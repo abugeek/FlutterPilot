@@ -14,8 +14,8 @@ import 'state.dart';
 import 'todo_api.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
+  WidgetsFlutterBinding.ensureInitialized();
 
   final dio = Dio(BaseOptions(baseUrl: 'https://jsonplaceholder.typicode.com'))
     ..interceptors.add(DioPilotInterceptor());

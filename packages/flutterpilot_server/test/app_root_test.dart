@@ -20,4 +20,8 @@ void main() {
       isTrue,
     );
   });
+  test('a file URI path becomes a path Directory takes', () {
+    expect(fileSystemPath('/D:/projects/my%20app'), 'D:/projects/my app');
+    expect(fileSystemPath('/Users/me/my%20app'), '/Users/me/my app');
+  });
 }

@@ -1,5 +1,14 @@
 ## Unreleased
 
+- Call `FlutterPilot.initialize()` first in `main()`, before
+  `WidgetsFlutterBinding.ensureInitialized()`: in debug and profile builds it
+  then creates the binding (`FlutterPilotBinding`), whose messenger lets
+  `mock_platform_channel` answer and list the app's plugin calls. With the
+  old order everything else works as before. `PlatformChannelMocks` is the
+  API behind the tool.
+- `SqlSnapshot`: a SQLite database's rows as JSON and back, used by the
+  Drift and sqflite plugins for scenarios.
+
 - Fewer false alarms: the contrast audit skips a page that lies under an open
   dialog or sheet (it is dimmed on purpose), and a progress bar with a value
   (a gauge) no longer makes an action report "still loading".
