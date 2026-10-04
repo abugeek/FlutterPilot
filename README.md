@@ -168,7 +168,8 @@ you'll use most:
 errors, logs, window visibility), `get_interactive_elements`,
 `get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
 `inspect_widget` (the file:line that draws a widget; `layout: true` for why
-it overflows or is 0 wide), `capture_screenshot`.
+it overflows or is 0 wide; `style: true` for text sizes, weights, colors,
+paddings, borders and radii), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
@@ -185,12 +186,14 @@ targets, unlabeled controls, text contrast, screen reader order).
 
 **Navigation & environment** — `navigate_to` (deep links, go_router
 push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,
-text scale, orientation, debug overlays), `hot_reload` (`restart: true`).
+text scale, a simulated keyboard inset, orientation, desktop window size,
+debug overlays), `hot_reload` (`restart: true`).
 
 **Errors** — `get_errors` (`report: true`: exception, your source line,
 culprit widget, route, recent requests), `get_debug_logs`.
 
-**Network** — `mock_http_response` (`clear: true` to remove),
+**Network** — `mock_http_response` (`error: "timeout"` / `"connection"` to
+fail one URL; `clear: true` to remove),
 `simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
 (any `dart:io` client; `id` for one request's headers and bodies).
 

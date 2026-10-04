@@ -548,6 +548,24 @@ with no native side.
 | 309 | `tool/e2e_test.dart` on Windows | ❌→fixed (start) | it had never run there: `Process.run('flutter')` does not find `flutter.bat`, and the fixture had no Windows runner. |
 | 310 | `navigation_edge_cases_test` on Windows | ❌→fixed (test) | 2 tests failed at `main` (`_EditorPage` expected, `MaterialPageRoute` named; the next test then saw the tree the failed one left). The test registered `Directory.current.path` (`D:…`) as the pub root, which matches no creation location (`/D:/…`); the running SDK converts the root the server sends. That conversion is now `pubRootFor` (source_locator.dart), used by both and unit-tested. Not a product bug: unnamed pages were named correctly in a running Windows app. |
 
+### pos_lab, second round: styles, keyboard inset, failing URLs (2026-10-05)
+
+Added to the app: a promo card with a spec in its doc comment (and two
+deliberate deviations), a checkout form as tall as the window, a
+search-as-you-type field and a pay call, both through Dio.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 311 | no tool gave a size, weight, color or padding | ❌→added | `inspect_widget(key: "promo_card", style: true)`, 10–50 ms, ~0.9 KB: title `"size":15,"weight":700` (spec 600), padding `[16,10,16,10]` (spec 12), `"color":"#FFFFFF","radius":12,"border":"#E2E8F0 1"`, around it `[16,8,16,8]` on `#FEF7FF`. Both deviations are read off the numbers. On a FilledButton: label 14/500 `#FFFFFF`, padding `[24,0,24,0]`, fill `#6750A4`, stadium. |
+| 312 | a Container's padding read 17, not 16 | ❌→fixed | found by the first unit test: Container folds its border's width into the padding. The border's share is taken out and listed as `plusBorder`. |
+| 313 | a form above the keyboard can't be checked on desktop | ❌→added | checkout at 681 px: audit clean. `set_app_settings(keyboardInset: 340)` → "pages … lay out in 341 px", audit: 1 overflow, `get_errors`: "overflowed by 87 pixels", `Column (lib/main.dart:371:16)`; `tap_widget("Pay now")` refused as clipped. `0` → clean again. |
+| 314 | a second text scale did nothing | ❌→fixed | found writing #313: with one override applied, the next value (2 → 1.5) was skipped because the root still held the patched widget. Reproduced on `main`. |
+| 315 | `windowSize` was macOS only | ❌→added | Windows: `"390x844"` → "viewport now 390x844" in 0.5 s, back to 1280x720. First attempt failed: `Add-Type -PassThru` returns every type it defines (the nested RECT too). |
+| 316 | `windowSize: "50x50"` said ✓ at 120x50 | ❌→fixed | the window stopped at its minimum width. Now "partly applied: the window stopped at a limit … viewport now 120x50". |
+| 317 | one URL can't time out | ❌→added | `mock_http_response(urlPattern: "/pay", error: "timeout", delayMs: 400)` → "Payment timed out. Try again." and the button enabled again; `"connection"` → "No connection. Try again."; 503 as before. The log line carries `[MOCKED]`. Through a scenario's hot restart too. First run: the extension's reply had an `error` field, which the server reads as a failed call — the mock was set and the tool said it wasn't. |
+| 318 | stale search result | ✅ | no new feature: `q=apple&` with `delayMs: 200`, `q=ap&` with 900, type "ap" then "apple": the field says "apple", the page "Results for "ap"". The pattern is a substring, so `q=ap` alone would match both. |
+| 319 | "Tool 'mock_http_response' is disabled" | 🔎 open | the app built its Dio in a lazy top-level `final`, so the plugin registered at the first request and the tool was not listed before it. The app should call `DioPilotInterceptor.register()` in `main()` (init wires it); the refusal comes from the MCP library and does not say so. |
+
 ## §10 performance targets (hn_reader, macOS, debug; medians of 8 calls)
 
 | # | Item | Result | Notes |

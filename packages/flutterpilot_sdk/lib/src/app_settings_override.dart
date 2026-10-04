@@ -26,6 +26,9 @@ class AppSettingsOverride with WidgetsBindingObserver {
 
   ui.Locale? _locale;
   double? _textScale;
+  double? _keyboardInset;
+
+  bool get _overridesMedia => _textScale != null || _keyboardInset != null;
 
   /// The locale the app resolved after the last override, re-read after
   /// FlutterPilot re-dispatches it (null until then).
@@ -65,6 +68,7 @@ class AppSettingsOverride with WidgetsBindingObserver {
   void reset() {
     _locale = null;
     _textScale = null;
+    _keyboardInset = null;
     _appLocale = null;
     _localizations = null;
     WidgetsBinding.instance.removeObserver(this);
@@ -102,9 +106,34 @@ class AppSettingsOverride with WidgetsBindingObserver {
   Future<Map<String, Object?>> setTextScale(double? scale) async {
     _textScale = scale;
     _hook();
-    _applyTextScale();
+    _applyMediaOverrides(changed: true);
     await _nextFrame();
     return {'scale': effectiveTextScale()};
+  }
+
+  /// The overriding keyboard inset, or null for the device's.
+  double? get keyboardInset => _keyboardInset;
+
+  /// Lays the app out as if an on-screen keyboard [inset] logical pixels
+  /// tall were open (the root [MediaQuery]'s `viewInsets.bottom`, and no
+  /// bottom padding, as on a phone); null restores the device's. A desktop
+  /// or web app has no such keyboard, and a form that overflows above one
+  /// is only seen this way. Returns `inset` (what the app's screens get)
+  /// and `height` (the view's height).
+  Future<Map<String, Object?>> setKeyboardInset(double? inset) async {
+    final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+    final height = view == null
+        ? null
+        : view.physicalSize.height / view.devicePixelRatio;
+    _keyboardInset = inset == null || height == null
+        ? inset
+        : inset.clamp(0, height * 0.9).toDouble();
+    _hook();
+    _applyMediaOverrides(changed: true);
+    await _nextFrame();
+    final probe = _find<Navigator>() ?? _find<MediaQuery>();
+    final media = probe?.getInheritedWidgetOfExactType<MediaQuery>();
+    return {'inset': media?.data.viewInsets.bottom, 'height': height};
   }
 
   /// The text scale the app's screens get: the one at the root [Navigator].
@@ -142,29 +171,45 @@ class AppSettingsOverride with WidgetsBindingObserver {
   /// parent for rebuild, it is rebuilt here first and the override put back
   /// before anything below it builds, so nothing builds or paints at the
   /// device's scale in between.
-  void _applyTextScale() {
+  ///
+  /// [changed]: an override was just set, so a root that already carries
+  /// the previous values is rebuilt from the device and patched again.
+  void _applyMediaOverrides({bool changed = false}) {
     final owner = WidgetsBinding.instance.buildOwner;
     if (owner == null) return;
     for (final element in _rootMediaQueries()) {
       final parent = _parentOf(element);
       final scale = _textScale;
+      final inset = _keyboardInset;
       if (parent == null) continue;
-      if (scale == null) {
+      if (!_overridesMedia) {
         if (_patched[element] != null) {
           _patched[element] = null;
           parent.markNeedsBuild();
         }
         continue;
       }
+      if (changed && _patched[element] != null) parent.markNeedsBuild();
       if (!parent.dirty && identical(element.widget, _patched[element])) {
         continue;
       }
       owner.buildScope(parent, () {
         if (parent.dirty) parent.rebuild();
         final current = element.widget as MediaQuery;
+        var data = current.data;
+        if (scale != null) {
+          data = data.copyWith(textScaler: TextScaler.linear(scale));
+        }
+        if (inset != null) {
+          // As an open keyboard reports: it covers the bottom safe area.
+          data = data.copyWith(
+            viewInsets: data.viewInsets.copyWith(bottom: inset),
+            padding: data.padding.copyWith(bottom: 0),
+          );
+        }
         final patched = MediaQuery(
           key: current.key,
-          data: current.data.copyWith(textScaler: TextScaler.linear(scale)),
+          data: data,
           child: current.child,
         );
         _patched[element] = patched;
@@ -174,15 +219,17 @@ class AppSettingsOverride with WidgetsBindingObserver {
   }
 
   void _deviceChanged() {
-    if (_textScale != null) _applyTextScale();
+    if (_overridesMedia) _applyMediaOverrides();
   }
 
   /// Catches what [_deviceChanged] can't see coming (hot reload, a rebuilt
   /// [View]) one frame late.
   void _checkAfterFrame(Duration _) {
-    if (_textScale != null &&
+    if (_overridesMedia &&
         _rootMediaQueries().any((e) => !identical(e.widget, _patched[e]))) {
-      SchedulerBinding.instance.addPostFrameCallback((_) => _applyTextScale());
+      SchedulerBinding.instance.addPostFrameCallback(
+        (_) => _applyMediaOverrides(),
+      );
     }
     if (_locale != null && _localizations != null) {
       final shown = _appLocalizations()?.locale;

@@ -153,10 +153,11 @@ GeneratedTest writeIntegrationTest({
         usesDio = true;
         final delay = step['delayMs'] as int? ?? 0;
         line('// $n. mocked response');
+        final error = step['error'] as String?;
         line(
           'DioPilotInterceptor.mock(${dartString('${step['urlPattern']}')}, '
-          'statusCode: ${step['statusCode']}, '
-          'body: ${dartString('${step['body'] ?? ''}')}'
+          '${error != null ? 'error: ${dartString(error)}' : 'statusCode: ${step['statusCode']}, '
+                    'body: ${dartString('${step['body'] ?? ''}')}'}'
           '${delay > 0 ? ', delayMs: $delay' : ''});',
         );
       case 'clearMocks':

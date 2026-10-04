@@ -351,8 +351,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'Registers a URL pattern mock so that any Dio request whose URL contains '
           'urlPattern returns a synthetic response instead of hitting the network. '
           'Use to test error states, empty states, or edge-case API responses. '
-          'clear:true removes the mock for urlPattern, or all mocks without '
-          'one — do that when done.',
+          'error instead of statusCode fails the request with no response: '
+          '"timeout" (the server never answers) or "connection" (it can\'t '
+          'be reached). delayMs on two patterns reproduces responses '
+          'arriving out of order. clear:true removes the mock for '
+          'urlPattern, or all mocks without one — do that when done.',
       inputSchema: ToolInputSchema(
         properties: {
           'urlPattern': JsonSchema.string(
@@ -371,6 +374,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'delayMs': JsonSchema.integer(
             description:
                 'Artificial delay in milliseconds before returning the mock (default 0)',
+          ),
+          'error': JsonSchema.string(
+            enumValues: ['timeout', 'connection'],
+            description:
+                'Fail the request instead of answering it (after delayMs).',
           ),
         },
       ),
@@ -391,19 +399,26 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           }
           return res.toCallToolResult();
         }
-        if (p['urlPattern'] == null || p['statusCode'] == null) {
+        final error = p['error']?.toString();
+        if (p['urlPattern'] == null ||
+            (p['statusCode'] == null && error == null)) {
           return CallToolResult(
             isError: true,
             content: [
-              TextContent(text: 'Pass urlPattern and statusCode (and body).'),
+              TextContent(
+                text:
+                    'Pass urlPattern and statusCode (and body), or '
+                    'urlPattern and error ("timeout" / "connection").',
+              ),
             ],
           );
         }
         final mapped = {
           'urlPattern': p['urlPattern']?.toString(),
-          'statusCode': p['statusCode']?.toString(),
+          'statusCode': (p['statusCode'] ?? 0).toString(),
           'body': p['body']?.toString() ?? '',
           if (p['delayMs'] != null) 'delayMs': p['delayMs'].toString(),
+          'error': ?error,
         };
         final res = await _callExtensionRaw(
           'ext.flutterpilot.addHttpMock',
@@ -416,6 +431,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             'statusCode': int.tryParse('${p['statusCode']}') ?? 200,
             'body': mapped['body'],
             'delayMs': int.tryParse('${p['delayMs'] ?? 0}') ?? 0,
+            'error': ?error,
           });
         }
         return res.toCallToolResult();

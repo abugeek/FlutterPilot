@@ -548,10 +548,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           '(key, selector or visible text) or x,y (logical pixels, e.g. from '
           'a screenshot). Returns the source (for framework widgets, the app '
           'widget that builds it) and the app widgets above it. layout:true '
-          'adds the constraints and size of each box up its ancestors and '
-          'explains overflows and 0-sized widgets (which children fill a '
-          'Row, which ancestor gives max width 0). Use before editing UI '
-          'code.',
+          'adds each box\'s constraints and size up its ancestors and '
+          'explains overflows and 0-sized widgets. style:true adds what it '
+          'is drawn with, in numbers a screenshot can\'t give: text size, '
+          'weight and color, paddings, fills, borders, radii and '
+          'elevation. Use before editing UI code, and to check a design '
+          'spec.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -569,6 +571,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
                 'Also constraints and sizes up the ancestors, and why it '
                 'overflows or is 0 wide.',
           ),
+          'style': JsonSchema.boolean(
+            description:
+                'Also text styles, paddings (left, top, right, bottom), '
+                'fills, borders, radii and elevation of the widget and what '
+                'it contains.',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -578,6 +586,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           if (p['x'] != null) 'x': p['x'].toString(),
           if (p['y'] != null) 'y': p['y'].toString(),
           if (p['layout'] == true) 'layout': 'true',
+          if (p['style'] == true) 'style': 'true',
         });
         if (res.isError) return res.toCallToolResult();
         final data = Map<String, dynamic>.of(res.data ?? const {});

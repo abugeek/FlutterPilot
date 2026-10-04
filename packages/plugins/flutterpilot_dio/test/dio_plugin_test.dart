@@ -240,6 +240,40 @@ void main() {
       );
     });
 
+    test(
+      'a mocked timeout or connection error fails without a response',
+      () async {
+        DioPilotInterceptor.mock('/pay', error: 'timeout', delayMs: 50);
+        DioPilotInterceptor.mock('/sync', error: 'connection');
+        final started = DateTime.now();
+        await expectLater(
+          dio().post<void>('/pay'),
+          throwsA(
+            isA<DioException>()
+                .having((e) => e.type, 'type', DioExceptionType.receiveTimeout)
+                .having((e) => e.response, 'response', isNull),
+          ),
+        );
+        expect(
+          DateTime.now().difference(started).inMilliseconds,
+          greaterThanOrEqualTo(45),
+        );
+        await expectLater(
+          dio().get<void>('/sync'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.type,
+              'type',
+              DioExceptionType.connectionError,
+            ),
+          ),
+        );
+        // Other URLs are untouched by these mocks.
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+      },
+    );
+
     test('a mocked 200 resolves with its body', () async {
       DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1, 2]');
       final response = await dio().get<List<dynamic>>('/todos');

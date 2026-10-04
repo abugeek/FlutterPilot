@@ -250,5 +250,43 @@ extension _StateExtensions on FlutterPilot {
         json.encode({'status': status, 'scale': shown, 'note': ?note}),
       );
     });
+
+    // -- ext.flutterpilot.setKeyboardInset ------------------------------------
+    // Lays the app out as with an on-screen keyboard `inset` logical pixels
+    // tall; 0 restores the device's.
+    registerExtension('ext.flutterpilot.setKeyboardInset', (
+      method,
+      parameters,
+    ) async {
+      final inset = double.tryParse(parameters['inset'] ?? '');
+      if (inset == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'inset must be a number of logical pixels (0 restores).',
+        );
+      }
+      final requested = inset <= 0 ? null : inset;
+      final r = await AppSettingsOverride.instance.setKeyboardInset(requested);
+      final shown = (r['inset'] as num?)?.toDouble();
+      final height = (r['height'] as num?)?.toDouble();
+      final String status;
+      final String? note;
+      if (requested == null) {
+        status = 'success';
+        note = null;
+      } else if (shown == null || shown == 0) {
+        status = 'no_effect';
+        note = 'the app sets its own MediaQuery above its Navigator';
+      } else {
+        status = (shown - requested).abs() > 0.5 ? 'limited' : 'success';
+        note =
+            '${shown.round()} of the view\'s ${height?.round()} px: pages '
+            'that resize for the keyboard lay out in '
+            '${height == null ? 'the rest' : '${(height - shown).round()} px'}';
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({'status': status, 'inset': shown, 'note': ?note}),
+      );
+    });
   }
 }

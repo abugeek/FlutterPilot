@@ -26,7 +26,37 @@ String macWindowSizeScript(int pid) =>
 typedef ProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 
-/// Resizes the app's window on the host (macOS desktop apps only): a
+/// The PowerShell that gives the window of process [pid] a client area (the
+/// app's viewport) of [width] x [height] logical pixels. A maximised or
+/// minimised window is restored first: it has no size of its own to change.
+String windowsWindowScript(int pid, int width, int height) =>
+    r'''
+$ErrorActionPreference = 'Stop'
+Add-Type -Name Win -Namespace FlutterPilot -MemberDefinition '
+[DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }'
+$w = [FlutterPilot.Win]
+$h = (Get-Process -Id PID).MainWindowHandle
+if ($h -eq [IntPtr]::Zero) { [Console]::Error.WriteLine('no window'); exit 2 }
+if ($w::IsZoomed($h) -or $w::IsIconic($h)) { [void]$w::ShowWindow($h, 9) }
+$d = $w::GetDpiForWindow($h) / 96.0
+$o = New-Object 'FlutterPilot.Win+RECT'; $c = New-Object 'FlutterPilot.Win+RECT'
+[void]$w::GetWindowRect($h, [ref]$o); [void]$w::GetClientRect($h, [ref]$c)
+$cx = [int][Math]::Round(WIDTH * $d) + ($o.R - $o.L) - $c.R
+$cy = [int][Math]::Round(HEIGHT * $d) + ($o.B - $o.T) - $c.B
+[void]$w::SetWindowPos($h, [IntPtr]::Zero, 0, 0, $cx, $cy, 0x0016)
+'''
+        .replaceAll('PID', '$pid')
+        .replaceAll('WIDTH', '$width')
+        .replaceAll('HEIGHT', '$height');
+
+/// Resizes the app's window on the host (macOS and Windows desktop apps): a
 /// Flutter app cannot resize its own window without a plugin, and a layout
 /// is only tested at the widths it is actually given.
 ///
@@ -38,11 +68,32 @@ Future<String?> resizeAppWindow({
   required int height,
   ProcessRunner run = Process.run,
 }) async {
-  if (operatingSystem != 'macos') {
-    return 'the window can be resized on macOS desktop apps only '
-        '(this app runs on ${operatingSystem ?? 'an unknown platform'}).';
+  if (operatingSystem != 'macos' && operatingSystem != 'windows') {
+    return 'the window can be resized on macOS and Windows desktop apps '
+        'only (this app runs on '
+        '${operatingSystem ?? 'an unknown platform'}).';
   }
   if (pid == null) return 'the app\'s process id is unknown.';
+  if (operatingSystem == 'windows') {
+    final ProcessResult result;
+    try {
+      result = await run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        windowsWindowScript(pid, width, height),
+      ]);
+    } on ProcessException catch (e) {
+      return 'powershell could not be run: ${e.message}';
+    }
+    if (result.exitCode == 0) return null;
+    final error = '${result.stderr}'.trim();
+    return error.contains('no window')
+        ? 'the app has no window (it runs hidden, or has not shown one yet).'
+        : error.isEmpty
+        ? 'powershell exited with ${result.exitCode}.'
+        : error.split('\n').first.trim();
+  }
   final ProcessResult result;
   try {
     result = await run('osascript', [
