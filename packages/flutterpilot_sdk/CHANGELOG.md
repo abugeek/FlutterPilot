@@ -1,5 +1,10 @@
 ## Unreleased
 
+- A label that only a container holds (a tap-to-dismiss detector over the
+  whole page contains every label on screen) no longer resolves to that
+  container: tapping "Inventory Tab 3 of 5" pressed whatever sat at the centre
+  of the screen. A NavigationBar destination is found by the name the tappable
+  list gives it.
 - The contrast audit holds an icon to 3:1 (WCAG 1.4.11, graphics), not the
   4.5:1 of text, and says "an icon" in the finding.
 - The reading-order audit no longer reports content scrolled below the screen

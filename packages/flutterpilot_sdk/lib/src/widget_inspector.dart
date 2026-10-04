@@ -381,7 +381,12 @@ class PilotWidgetInspector {
           if (text == q) consider(67);
         } else if (text == q) {
           consider(80);
-        } else if (partial && text.contains(q)) {
+        } else if (partial &&
+            text.contains(q) &&
+            // A wrapper around other controls (a tap-to-dismiss detector
+            // over the whole page) holds every label on screen: tapping its
+            // centre would press whatever happens to be there.
+            !_wrapsOtherControls(element)) {
           consider(69);
         }
       }
@@ -660,9 +665,34 @@ class PilotWidgetInspector {
     return typeName.contains('Button') ||
         typeName == 'InkWell' ||
         typeName == 'GestureDetector' ||
+        // The tappable list names a tab "Inventory Tab 3 of 5".
+        typeName == 'NavigationDestination' ||
         typeName.contains('ListTile') ||
         typeName.contains('ActionChip') ||
         typeName.contains('IconButton');
+  }
+
+  /// Whether two or more separate controls lie under [element]: then it is
+  /// a container, not the control a label names. One is not enough: a
+  /// button is itself built from nested clickable widgets (IconButton over
+  /// an InkWell).
+  static bool _wrapsOtherControls(Element element) {
+    var leaves = 0;
+    // Returns whether a control was found at or under [e].
+    bool visit(Element e) {
+      if (leaves >= 2) return true;
+      var inner = false;
+      e.debugVisitOnstageChildren((child) {
+        if (visit(child)) inner = true;
+      });
+      final type = e.widget.runtimeType.toString().split('<').first;
+      final control = _isButtonOrClickable(type) || e.widget is EditableText;
+      if (control && !inner) leaves++;
+      return control || inner;
+    }
+
+    element.debugVisitOnstageChildren(visit);
+    return leaves >= 2;
   }
 
   static bool _isMatchingType(String elementTypeName, String targetType) {
