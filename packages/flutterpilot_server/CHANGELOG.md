@@ -1,3 +1,11 @@
+## Unreleased
+
+- `set_app_settings(windowSize: "390x844")` resizes a macOS desktop app's
+  window (its standard window, not a dialog in front) and reports the
+  viewport the app then has; other platforms are refused with the reason.
+- `hot_reload` on a sandboxed macOS app explains the permission the Flutter
+  tool is missing instead of a bare failure.
+
 ## 0.1.0
 
 - Initial release
