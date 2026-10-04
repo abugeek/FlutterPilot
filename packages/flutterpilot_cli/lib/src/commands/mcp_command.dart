@@ -78,6 +78,33 @@ typedef ServerLaunch = ({String command, List<String> args});
 
 /// `flutterpilot mcp install`: writes the project's MCP config for each
 /// client, pointing at a compiled FlutterPilot server.
+/// Those of [configPaths] (relative to [project]) that exist and that git
+/// would offer to commit: untracked and not ignored. Empty outside a git
+/// repository or without git.
+List<String> untrackedConfigs(String project, List<String> configPaths) {
+  if (configPaths.isEmpty) return const [];
+  try {
+    final result = Process.runSync('git', [
+      'status',
+      '--porcelain',
+      '--',
+      ...configPaths,
+    ], workingDirectory: project);
+    if (result.exitCode != 0) return const [];
+    final untracked = {
+      for (final line in LineSplitter.split(result.stdout as String))
+        if (line.startsWith('?? ')) line.substring(3).trim(),
+    };
+    // git names a new folder (".cursor/"), not the file inside it.
+    return [
+      for (final path in configPaths)
+        if (untracked.any((u) => u == path || path.startsWith(u))) path,
+    ];
+  } on ProcessException {
+    return const [];
+  }
+}
+
 class McpInstallCommand extends Command<void> {
   @override
   final String name = 'install';
@@ -211,6 +238,18 @@ class McpInstallCommand extends Command<void> {
       stdout.writeln(result);
       if (dart != null && !result.startsWith('❌')) {
         stdout.writeln(writeDartConfig(project, client, dart));
+      }
+    }
+    final exposed = untrackedConfigs(project, [
+      for (final client in clients) client.configPath,
+    ]);
+    if (exposed.isNotEmpty) {
+      stdout.writeln(
+        '⚠️ ${exposed.join(', ')}: holds paths on this machine and git does '
+        'not ignore it. To keep it out of commits:',
+      );
+      for (final file in exposed) {
+        stdout.writeln('  echo ${_shellQuote(file)} >> .git/info/exclude');
       }
     }
     // Claude Code starts servers in the project folder, where the server

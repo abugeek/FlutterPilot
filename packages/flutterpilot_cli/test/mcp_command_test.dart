@@ -76,7 +76,9 @@ void main() {
     final host = p.join(home.path, 'server');
     expect(
       File(p.join(host, 'pubspec.yaml')).readAsStringSync(),
-      contains(serverPath),
+      // Written as a quoted YAML string: a Windows path's backslashes are
+      // escaped there.
+      contains(jsonEncode(serverPath)),
     );
     expect(
       File(p.join(host, 'bin', 'flutterpilot_server.dart')).readAsStringSync(),
@@ -342,5 +344,49 @@ void main() {
   test('refuses a folder without pubspec.yaml', () async {
     File(p.join(app.path, 'pubspec.yaml')).deleteSync();
     expect(install([]), throwsA(isA<UsageException>()));
+  });
+
+  group('untrackedConfigs', () {
+    late Directory repo;
+
+    setUp(() {
+      repo = Directory.systemTemp.createTempSync('fp_mcp_git');
+    });
+    tearDown(() => repo.deleteSync(recursive: true));
+
+    bool git(List<String> args) {
+      try {
+        return Process.runSync(
+              'git',
+              args,
+              workingDirectory: repo.path,
+            ).exitCode ==
+            0;
+      } on ProcessException {
+        return false;
+      }
+    }
+
+    test('names a config git would commit, not an ignored one', () {
+      if (!git(['init', '-q'])) {
+        markTestSkipped('git is not available');
+        return;
+      }
+      File(p.join(repo.path, '.mcp.json')).writeAsStringSync('{}');
+      Directory(p.join(repo.path, '.cursor')).createSync();
+      File(p.join(repo.path, '.cursor', 'mcp.json')).writeAsStringSync('{}');
+      const paths = ['.mcp.json', '.cursor/mcp.json'];
+      expect(untrackedConfigs(repo.path, paths), paths);
+
+      File(
+        p.join(repo.path, '.git', 'info', 'exclude'),
+      ).writeAsStringSync('.mcp.json\n', mode: FileMode.append);
+      expect(untrackedConfigs(repo.path, paths), ['.cursor/mcp.json']);
+    });
+
+    test('is empty outside a git repository', () {
+      File(p.join(repo.path, '.mcp.json')).writeAsStringSync('{}');
+      expect(untrackedConfigs(repo.path, ['.mcp.json']), isEmpty);
+    });
   });
 }
