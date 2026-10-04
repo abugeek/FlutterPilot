@@ -10,19 +10,17 @@ mixin _ScenarioToolsMixin
       description:
           'Named app states to start from, kept as '
           'flutterpilot/scenarios/<name>.json in the app (check them in, '
-          'edit them). save:"name" writes the route, SharedPreferences '
-          '(sensitive keys left out), the rows of registered Drift/sqflite '
-          'databases and plain Hive boxes, active mocks (HTTP, platform '
-          'channel) and simple Riverpod/Bloc values. load:"name" replaces '
-          'the stored data, hot-restarts with the mocks in place from the '
-          'first call, sets the state and goes to the route (state is set '
-          'behind the widgets: a TextField keeps its own text). No '
-          'argument lists them. Loading stored data needs '
-          '--allow-destructive.',
+          'edit them). No argument lists them. save writes the route, '
+          'SharedPreferences (sensitive keys left out), the rows of '
+          'registered Drift/sqflite databases and plain Hive boxes, '
+          'active HTTP and platform-channel mocks and simple '
+          'Riverpod/Bloc values. load replaces the stored data (needs '
+          '--allow-destructive), hot-restarts with the mocks answering '
+          'from the first call, sets the state and goes to the route.',
       inputSchema: ToolInputSchema(
         properties: {
-          'save': JsonSchema.string(description: 'Scenario name to write.'),
-          'load': JsonSchema.string(description: 'Scenario name to apply.'),
+          'save': JsonSchema.string(description: 'Name to write.'),
+          'load': JsonSchema.string(description: 'Name to apply.'),
           'description': JsonSchema.string(
             description: 'With save: what the scenario is for.',
           ),

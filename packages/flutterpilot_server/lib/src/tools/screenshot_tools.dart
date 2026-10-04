@@ -73,6 +73,126 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     );
   }
 
+  /// get_app_summary: from the SDK's snapshot, or without the SDK from the
+  /// inspector.
+  Future<CallToolResult> _appSummary() async {
+    final res = await _callExtensionRaw('ext.flutterpilot.getAppSnapshot', {});
+    if (res.isError) {
+      // No SDK in the app (zero-code mode): summary from the inspector.
+      final basic = await _callExtensionRaw('ext.flutterpilot.getSummary', {});
+      if (basic.isError || basic.data?['sdkMode'] != 'zero-code') {
+        return res.toCallToolResult();
+      }
+      final profile = _activeContext?.buildMode == BuildMode.profile;
+      return CallToolResult(
+        content: [
+          TextContent(
+            text:
+                '${zeroCodeSummary(basic.data!)}'
+                '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
+          ),
+        ],
+      );
+    }
+    final data = res.data ?? {};
+    final route = data['route']?['current'] ?? '/';
+    final depth = data['route']?['stackDepth'] ?? 1;
+    final elements = (data['interactiveElements'] as List?) ?? [];
+    final errors = (data['recentErrors'] as List?) ?? [];
+    final logs = (data['recentLogs'] as List?) ?? [];
+    final perf = data['performance'] ?? {};
+    final jankPct = (perf['jankPercentage'] as num?)?.toDouble() ?? 0.0;
+    final avgMs = (perf['avgFrameDurationMs'] as num?)?.toDouble();
+    final diagnosis = perf['diagnosis']?.toString();
+    final focused = data['focusedElement'];
+    final vp = data['viewport'] ?? {};
+
+    final summary = StringBuffer();
+    summary.writeln('• Route: $route (Depth: $depth)');
+    summary.writeln(
+      '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
+    );
+    final profile = _activeContext?.buildMode == BuildMode.profile;
+    if (profile) {
+      summary.writeln(
+        '• Build: profile. Release-like timings for profile_action and '
+        'profile_frame_budget; no hot reload or source locations (a '
+        'debug build has them).',
+      );
+    }
+    final lifecycle = data['lifecycle'];
+    final os = _activeContext?.operatingSystem;
+    // On a desktop, 'inactive' is a visible, unfocused window: nothing to
+    // report. On a phone it means something covers the app.
+    if (lifecycle == 'inactive' && (os == 'ios' || os == 'android')) {
+      summary.writeln(
+        '• App inactive: something of the OS covers it (a system alert '
+        'such as a permission request, the app switcher, Control '
+        'Center); the tappable elements below may be hidden.'
+        '${os == 'ios' ? ' native_describe_screen shows what is on top.' : ''}',
+      );
+    } else if (lifecycle != null &&
+        lifecycle != 'resumed' &&
+        lifecycle != 'inactive') {
+      summary.writeln(
+        '• App window: $lifecycle (not visible). FlutterPilot keeps it '
+        'rendering for inspection; frame timings are not profiled.',
+      );
+    }
+    final focusedType = focused?['type']?.toString() ?? '';
+    if (focused != null && !focusedType.startsWith('_')) {
+      summary.writeln(
+        '• Focused: $focusedType${focused['key'] != null ? ' [${focused['key']}]' : ''}',
+      );
+    }
+    // FPS is meaningless for an idle Flutter app; only report real jank,
+    // and not from a handful of startup frames.
+    final jankSamples = (perf['jankSampleCount'] as num?)?.toInt() ?? 0;
+    // Not in a debug build: it runs several times slower than release,
+    // so most frames are "over budget" there and the line would read as
+    // a problem on every call. profile_frame_budget still answers.
+    if (profile && jankPct >= 5.0 && jankSamples >= 30) {
+      summary.writeln(
+        '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
+        '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '
+        '${diagnosis ?? ''} Call profile_frame_budget for details.',
+      );
+    }
+    summary.writeln(
+      '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
+    );
+    summary.writeln('• Tappable Elements (${elements.length}):');
+    for (final el in elements.take(15)) {
+      final label = el['text']?.toString() ?? '';
+      final key = (el['key'] ?? el['identifier'] ?? '').toString();
+      final type = el['type']?.toString() ?? 'Widget';
+      final bounds = el['bounds'] != null
+          ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
+          : '';
+      final keyInfo = key.isNotEmpty && key != label ? ' [key: $key]' : '';
+      final error = el['fieldError'] == null
+          ? ''
+          : ' ⚠ error: ${el['fieldError']}';
+      summary.writeln(
+        '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo'
+        '$error',
+      );
+    }
+    if (elements.length > 15) {
+      summary.writeln('  ... and ${elements.length - 15} more elements');
+    }
+    if (logs.isNotEmpty) {
+      summary.writeln('• Recent Console Logs (${logs.length}):');
+      for (final log in logs.take(5)) {
+        summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
+      }
+    }
+
+    return CallToolResult(
+      content: [TextContent(text: summary.toString().trim())],
+    );
+  }
+
   void _registerScreenshotTools() {
     _tool(
       'capture_screenshot',
@@ -293,27 +413,22 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_tree',
       description:
-          'The app\'s own widgets on screen (DevTools summary tree) with keys, '
-          'text, selectors and bounds (rect: [x, y, w, h], left out when '
-          'the same as the parent\'s); layout wrappers are pruned unless '
-          'compact is false. rootKey scopes it to one subtree (a dialog, a '
-          'form). diff:true returns only what changed since the previous call.',
+          'The app\'s own widgets on screen (the DevTools summary tree) '
+          'with keys, text, selectors and bounds (rect: [x, y, w, h], '
+          'left out when the same as the parent\'s). diff:true returns '
+          'only what changed since the previous call.',
       inputSchema: ToolInputSchema(
         properties: {
-          'diff': JsonSchema.boolean(
-            description:
-                'Only widgets added/removed/changed since the last call.',
-          ),
+          'diff': JsonSchema.boolean(),
           'rootKey': JsonSchema.string(
             description:
-                'Optional widget key or semantic selector (e.g. "checkout_form", "Button[\'Save\']") to scope the tree capture to only that subtree.',
+                'Key or selector of the subtree to return (a dialog, a form).',
           ),
-          'maxDepth': JsonSchema.integer(
-            description: 'Maximum tree depth (default 50).',
-          ),
+          'maxDepth': JsonSchema.integer(description: 'Default 50.'),
           'compact': JsonSchema.boolean(
             description:
-                'Whether to prune intermediate unkeyed layout containers (default: true).',
+                'false keeps the unkeyed layout wrappers (default true: '
+                'pruned).',
           ),
         },
       ),
@@ -395,128 +510,26 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'focused widget, the tappable elements (labels + keys), uncaught '
           'errors, recent logs, jank, and whether the window is visible or '
           'covered by a system alert.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {
+          'setup': JsonSchema.boolean(
+            description:
+                'Also the server and app setup: connection, plugins the app '
+                'registered, SDK capabilities, VM, buffer limits. For when a '
+                'tool is missing or refused.',
+          ),
+        },
+      ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getAppSnapshot',
-          {},
-        );
-        if (res.isError) {
-          // No SDK in the app (zero-code mode): summary from the inspector.
-          final basic = await _callExtensionRaw(
-            'ext.flutterpilot.getSummary',
-            {},
-          );
-          if (basic.isError || basic.data?['sdkMode'] != 'zero-code') {
-            return res.toCallToolResult();
-          }
-          final profile = _activeContext?.buildMode == BuildMode.profile;
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    '${zeroCodeSummary(basic.data!)}'
-                    '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
-              ),
-            ],
-          );
-        }
-        final data = res.data ?? {};
-        final route = data['route']?['current'] ?? '/';
-        final depth = data['route']?['stackDepth'] ?? 1;
-        final elements = (data['interactiveElements'] as List?) ?? [];
-        final errors = (data['recentErrors'] as List?) ?? [];
-        final logs = (data['recentLogs'] as List?) ?? [];
-        final perf = data['performance'] ?? {};
-        final jankPct = (perf['jankPercentage'] as num?)?.toDouble() ?? 0.0;
-        final avgMs = (perf['avgFrameDurationMs'] as num?)?.toDouble();
-        final diagnosis = perf['diagnosis']?.toString();
-        final focused = data['focusedElement'];
-        final vp = data['viewport'] ?? {};
-
-        final summary = StringBuffer();
-        summary.writeln('• Route: $route (Depth: $depth)');
-        summary.writeln(
-          '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
-        );
-        final profile = _activeContext?.buildMode == BuildMode.profile;
-        if (profile) {
-          summary.writeln(
-            '• Build: profile. Release-like timings for profile_action and '
-            'profile_frame_budget; no hot reload or source locations (a '
-            'debug build has them).',
-          );
-        }
-        final lifecycle = data['lifecycle'];
-        final os = _activeContext?.operatingSystem;
-        // On a desktop, 'inactive' is a visible, unfocused window: nothing to
-        // report. On a phone it means something covers the app.
-        if (lifecycle == 'inactive' && (os == 'ios' || os == 'android')) {
-          summary.writeln(
-            '• App inactive: something of the OS covers it (a system alert '
-            'such as a permission request, the app switcher, Control '
-            'Center); the tappable elements below may be hidden.'
-            '${os == 'ios' ? ' native_describe_screen shows what is on top.' : ''}',
-          );
-        } else if (lifecycle != null &&
-            lifecycle != 'resumed' &&
-            lifecycle != 'inactive') {
-          summary.writeln(
-            '• App window: $lifecycle (not visible). FlutterPilot keeps it '
-            'rendering for inspection; frame timings are not profiled.',
-          );
-        }
-        final focusedType = focused?['type']?.toString() ?? '';
-        if (focused != null && !focusedType.startsWith('_')) {
-          summary.writeln(
-            '• Focused: $focusedType${focused['key'] != null ? ' [${focused['key']}]' : ''}',
-          );
-        }
-        // FPS is meaningless for an idle Flutter app; only report real jank,
-        // and not from a handful of startup frames.
-        final jankSamples = (perf['jankSampleCount'] as num?)?.toInt() ?? 0;
-        // Not in a debug build: it runs several times slower than release,
-        // so most frames are "over budget" there and the line would read as
-        // a problem on every call. profile_frame_budget still answers.
-        if (profile && jankPct >= 5.0 && jankSamples >= 30) {
-          summary.writeln(
-            '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
-            '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '
-            '${diagnosis ?? ''} Call profile_frame_budget for details.',
-          );
-        }
-        summary.writeln(
-          '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
-        );
-        summary.writeln('• Tappable Elements (${elements.length}):');
-        for (final el in elements.take(15)) {
-          final label = el['text']?.toString() ?? '';
-          final key = (el['key'] ?? el['identifier'] ?? '').toString();
-          final type = el['type']?.toString() ?? 'Widget';
-          final bounds = el['bounds'] != null
-              ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
-              : '';
-          final keyInfo = key.isNotEmpty && key != label ? ' [key: $key]' : '';
-          final error = el['fieldError'] == null
-              ? ''
-              : ' ⚠ error: ${el['fieldError']}';
-          summary.writeln(
-            '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo'
-            '$error',
-          );
-        }
-        if (elements.length > 15) {
-          summary.writeln('  ... and ${elements.length - 15} more elements');
-        }
-        if (logs.isNotEmpty) {
-          summary.writeln('• Recent Console Logs (${logs.length}):');
-          for (final log in logs.take(5)) {
-            summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
-          }
-        }
-
+        final summary = await _appSummary();
+        if (p['setup'] != true) return summary;
+        // Also when there is no summary: the setup says why.
         return CallToolResult(
-          content: [TextContent(text: summary.toString().trim())],
+          isError: summary.isError,
+          content: [
+            ...summary.content,
+            TextContent(text: 'Setup: ${await _setupReport()}'),
+          ],
         );
       },
     );
@@ -524,18 +537,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_properties',
       description:
-          'One widget\'s state: type, text (Text/TextField content), '
-          'isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), '
-          'isFocused and bounds. A form field also has fieldError (the '
-          'validation error it shows) or invalid (what its validator says '
-          'about the current value, not shown yet).',
+          'One widget\'s current state in a few fields: type, text, '
+          'isEnabled, isChecked, a slider\'s value/min/max, isFocused, '
+          'bounds, and for a form field fieldError (the validation error '
+          'it shows) or invalid (what its validator says about the '
+          'current value, not shown yet). inspect_widget gives its '
+          'source, layout and style.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'The ValueKey string of the widget to inspect.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+            description: 'Key or selector of the widget.',
           ),
         },
       ),
@@ -551,23 +562,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'inspect_widget',
       description:
-          'Which file:line in the app\'s code creates a widget: pass key '
-          '(key, selector or visible text) or x,y (logical pixels, e.g. from '
-          'a screenshot). Returns the source (for framework widgets, the app '
-          'widget that builds it) and the app widgets above it. layout:true '
-          'adds each box\'s constraints and size up its ancestors and '
-          'explains overflows and 0-sized widgets. style:true adds what it '
-          'is drawn with, in numbers a screenshot can\'t give: text size, '
-          'weight and color, paddings, fills, borders, radii and '
-          'elevation. Use before editing UI code, and to check a design '
-          'spec.',
+          'Where a widget is in the app\'s code (file:line; for a '
+          'framework widget, the app widget that builds it) and the app '
+          'widgets above it. Pass key, or x,y from a screenshot. layout '
+          'and style add the numbers a screenshot can\'t give. Use before '
+          'editing UI code and to check a design spec; for a widget\'s '
+          'current state get_widget_properties is cheaper.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'Key, semantic selector or visible text.',
-          ),
-          'target': JsonSchema.string(
-            description: 'Same as key (either name works).',
+            description: 'Key, selector or visible text.',
           ),
           'x': JsonSchema.number(
             description: 'X in logical pixels (top-left origin), with y.',
@@ -575,14 +579,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'y': JsonSchema.number(description: 'Y in logical pixels.'),
           'layout': JsonSchema.boolean(
             description:
-                'Also constraints and sizes up the ancestors, and why it '
-                'overflows or is 0 wide.',
+                'Also each box\'s constraints and size up the ancestors, and why '
+                'it overflows or is 0 wide.',
           ),
           'style': JsonSchema.boolean(
             description:
-                'Also text styles, paddings (left, top, right, bottom), '
-                'fills, borders, radii and elevation of the widget and what '
-                'it contains.',
+                'Also text size, weight and color, paddings (left, top, right, '
+                'bottom), fills, borders, radii and elevation of the widget and '
+                'what it contains.',
           ),
         },
       ),
@@ -622,9 +626,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'tap_widget.',
       inputSchema: ToolInputSchema(
         properties: {
-          'maxDepth': JsonSchema.integer(
-            description: 'Maximum tree depth (default 50).',
-          ),
+          'maxDepth': JsonSchema.integer(description: 'Default 50.'),
         },
       ),
       callback: (p, e) async {

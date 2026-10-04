@@ -15,7 +15,7 @@ How to use FlutterPilot with Claude, ChatGPT, Cursor, and other AI coding assist
 
 ## Overview
 
-FlutterPilot exposes app state and UI through a versioned MCP tool set. AI agents should call `get_capabilities` first to discover the exact tools and plugins available at runtime:
+FlutterPilot exposes app state and UI through a versioned MCP tool set. AI agents should call `get_app_summary(setup: true)` first to discover the exact tools and plugins available at runtime:
 
 ✅ **Understand** the current UI and state  
 ✅ **Inspect** widgets, navigation, and state managers  
@@ -101,7 +101,7 @@ Close and reopen Claude Desktop. In a new conversation, you should see:
 ```
 MCP Server: flutterpilot
 Status: Connected ✓
-Available Tools: discover at runtime with `get_capabilities`
+Available Tools: discover at runtime with `get_app_summary(setup: true)`
 ```
 
 #### Step 4: Use FlutterPilot
@@ -270,13 +270,13 @@ Good (break into steps):
 4. (etc. for each step)
 ```
 
-### 3. Use get_capabilities First
+### 3. Use get_app_summary(setup: true) First
 
 Always ask Claude to check what plugins are available:
 
 ```
 Claude: "Let me check what capabilities your app has loaded."
-[Claude calls get_capabilities]
+[Claude calls get_app_summary(setup: true)]
 Claude: "I see Bloc and Dio plugins are loaded. I can inspect 
 Bloc states and mock HTTP requests."
 ```
@@ -453,7 +453,7 @@ When talking to Claude, you can reference tool categories:
 - `get_network_logs` — Request history
 
 ### Capabilities (1 tool)
-- `get_capabilities` — Loaded plugins status
+- `get_app_summary(setup: true)` — Loaded plugins status
 
 See [TOOLS.md](../TOOLS.md) for complete reference.
 

@@ -10,6 +10,7 @@ import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 
+import 'src/action_chain.dart';
 import 'src/app_root.dart';
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
@@ -29,6 +30,7 @@ import 'src/reload_failure.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
 import 'src/test_writer.dart';
+import 'src/tool_annotations.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/web_limits.dart';
@@ -113,7 +115,7 @@ abstract class _FlutterPilotServerBase {
         ...properties,
         'deviceId', // refused with its own message in _registerTool
       ]);
-      if (unknown.isEmpty) return callback(args, extra);
+      if (unknown.isEmpty) return callback(withFormerNames(args), extra);
       return CallToolResult(
         isError: true,
         content: [
@@ -132,6 +134,7 @@ abstract class _FlutterPilotServerBase {
       name,
       description: description,
       inputSchema: inputSchema,
+      annotations: toolAnnotations(name),
       callback: checked,
     );
   }
@@ -158,11 +161,13 @@ abstract class _FlutterPilotServerBase {
     String name, {
     String? description,
     ToolInputSchema? inputSchema,
+    ToolAnnotations? annotations,
     required ToolFunction callback,
   }) => server.registerTool(
     name,
     description: description,
     inputSchema: inputSchema,
+    annotations: annotations,
     callback: (args, extra) async {
       // Only some tools used to take a per-call device, and most ignored it:
       // answering from another device than the one asked for is worse than
@@ -269,6 +274,7 @@ abstract class _FlutterPilotServerBase {
     required String description,
     required String extension,
     Map<String, JsonSchema>? properties,
+    List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
   });
 
@@ -289,10 +295,26 @@ abstract class _FlutterPilotServerBase {
     return available ?? 'riverpod';
   }
 
+  /// The server and app setup as JSON (get_app_summary(setup: true)).
+  Future<String> _setupReport();
+
   /// Returns an MCP error for an operation that mutates app data when the
   /// server was not explicitly started with --allow-destructive.
   CallToolResult _destructiveOperationDenied();
 }
+
+/// Sent once when a client connects, and the only FlutterPilot text an
+/// agent has before it reads a tool (clients that load tool schemas on
+/// demand keep this in context instead): how to start and what not to
+/// repeat. What a single tool does belongs in its description.
+const serverInstructions = '''
+FlutterPilot inspects and drives a running Flutter app (flutter run, debug or profile build).
+- Start with get_app_summary: route, what can be tapped (labels and keys), errors, logs. Only tools that work for the connected app are listed; without flutterpilot_sdk in the app it can be inspected but not driven, and the summary says so.
+- Find a widget by its key, a selector ("ElevatedButton['Log in']") or its visible text.
+- Actions (tap_widget, enter_text, press_key, fill_form, ...) report what they changed: route, widget diff, what is tappable now, new errors. Read that before taking a screenshot or reading the tree again.
+- When the steps are known, send them in one call: fill_form, execute_action_chain, tap_widget(waitFor: ...).
+- Check an outcome with assert_widget or wait_for (milliseconds, no sleeping) and layout with audit_screen_health.
+- After editing Dart code: hot_reload, then get_errors.''';
 
 /// FlutterPilot MCP Server — bridges AI agents to a running Flutter app.
 class FlutterPilotServer extends _FlutterPilotServerBase
@@ -392,6 +414,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
            capabilities: ServerCapabilities(
              tools: ServerCapabilitiesTools(listChanged: true),
            ),
+           instructions: serverInstructions,
          ),
        ) {
     _selfHealManager = SelfHealManager(server: server);
@@ -1031,6 +1054,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       name: tool.description ?? '',
   };
 
+  /// What `tools/list` sends for [names] (default: every registered tool):
+  /// the text an agent pays for before it calls anything.
+  List<Map<String, dynamic>> toolListJson([Iterable<String>? names]) {
+    final wanted = names?.toSet();
+    return [
+      for (final MapEntry(key: name, value: tool) in _allTools.entries)
+        if (wanted?.contains(name) ?? true)
+          Tool(
+            name: name,
+            description: tool.description,
+            inputSchema: tool.inputSchema ?? const ToolInputSchema(),
+            annotations: tool.annotations,
+          ).toJson(),
+    ];
+  }
+
   /// The registered devices (tests add some without running apps).
   FleetManager get fleet => _fleetManager;
 
@@ -1144,7 +1183,7 @@ targets the active device (see list_connected_devices / switch_device);
 run_on_devices runs the same steps on every registered device and compares.
 
 ## First steps
-1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility
+1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility (`setup: true`: connection and plugins, when a tool is missing)
 2. `capture_screenshot` — what the user sees
 3. `get_widget_tree` — keys and structure (diff:true: only what changed)
 4. `inspect_widget(key | x,y)` — the file:line in the app's code that draws a widget, and the app widgets above it
@@ -1154,8 +1193,8 @@ run_on_devices runs the same steps on every registered device and compares.
 - `enter_text(key, text)` — type into a field ("" clears it); `press_key("enter")` submits
 - `press_key(key)` — enter/tab/escape/arrows/shortcuts; "back" = system back (never quits from the root)
 - `fill_form(fields, submitWith)` — several fields (+ checkboxes) in one call
-- `execute_action_chain(actions)` — a known sequence of taps/text in one call
-- `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`
+- `execute_action_chain(steps)` — a known sequence in one call: taps, text, keys, scrolls, with `wait_for` / `assert_widget` between them (`[{tool, arguments}]`, as in `run_on_devices`)
+- `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox` (also a checkbox inside a tappable row), `focus_widget`
 - `navigate_to(route)` — jump to a route (action push/replace with go_router; deepLink:true)
 Every action reports whether the route changed, a widget-tree diff and what is tappable now: read it before re-checking.
 
@@ -1206,12 +1245,16 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     required String description,
     required String extension,
     Map<String, JsonSchema>? properties,
+    List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
   }) {
     _tool(
       name,
       description: description,
-      inputSchema: ToolInputSchema(properties: {...?properties}),
+      inputSchema: ToolInputSchema(
+        properties: {...?properties},
+        required: required,
+      ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();

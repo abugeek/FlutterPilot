@@ -139,42 +139,39 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_app_settings',
       description:
-          'Changes how the app renders, several at once: theme '
-          '(light/dark), locale ("fr", "ar", "system"), textScale (2.0 to '
-          'test large text; 0 resets), keyboardInset (340: lay out as with '
-          'an on-screen keyboard that tall open; 0 resets), orientation '
-          '(phones), windowSize ("390x844", macOS and Windows desktop), and '
-          'the debug overlays debugPaint, repaintRainbow and slowAnimations. '
-          'Locale, textScale and keyboardInset act like the device, with no '
-          'app code: the response says what the app shows, e.g. when it '
-          'does not support the locale or clamps text scaling. Pair with '
-          'audit_screen_health to catch overflows.',
+          'Changes how the app renders, several settings at once, the way '
+          'the device would (no app code): theme, locale, text scale, a '
+          'simulated on-screen keyboard, orientation, window size and the '
+          'debug overlays. The response says what the app shows, e.g. '
+          'when it does not support the locale or clamps text scaling. '
+          'Pair with audit_screen_health to catch overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
           'locale': JsonSchema.string(
             description:
-                'BCP-47 tag (e.g. "en", "en-GB", "zh-Hans-CN"); "system" '
-                'restores the device locale.',
+                'BCP-47 tag ("fr", "ar", "zh-Hans-CN"); "system" restores the '
+                'device\'s.',
           ),
           'textScale': JsonSchema.number(
             description:
-                'Text scale factor (1.0 normal); 0 restores the system value.',
+                '1.0 is normal, 2.0 tests large text; 0 restores the system '
+                'value.',
           ),
           'keyboardInset': JsonSchema.number(
             description:
-                'Height in logical pixels of a simulated on-screen keyboard '
-                '(a phone\'s is about 300–350); 0 removes it.',
+                'Lay out as with an on-screen keyboard this tall open (a '
+                'phone\'s is 300–350 logical pixels); 0 removes it.',
           ),
           'orientation': JsonSchema.string(
             enumValues: ['portrait', 'landscape', 'all'],
+            description: 'Phones.',
           ),
           'windowSize': JsonSchema.string(
             description:
-                'Desktop window size in logical pixels, "WIDTHxHEIGHT" '
-                '(e.g. "390x844" for a phone width, "1280x860"). Windows: '
-                'the app\'s viewport gets that size. macOS: the window '
-                'does, title bar included.',
+                '"WIDTHxHEIGHT" in logical pixels, e.g. "390x844" for a phone '
+                'width (macOS and Windows desktop; on macOS the title bar is '
+                'included).',
           ),
           'debugPaint': JsonSchema.boolean(),
           'repaintRainbow': JsonSchema.boolean(),

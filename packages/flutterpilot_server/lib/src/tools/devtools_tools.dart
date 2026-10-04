@@ -566,14 +566,13 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'profile_action',
       description:
-          'Why an interaction is slow: runs tool (tap_widget, '
-          'scroll_into_view, execute_action_chain, ...) with arguments while '
-          'profiling the app, then returns its functions by self/total CPU '
-          'time with file:line, the hottest framework functions with the app '
-          'code that called them, and for frames over budget their '
-          'build/layout/paint/raster times and which app widgets rebuilt. '
-          'durationMs keeps profiling after the action (results that load '
-          'later); without tool it profiles whatever the app does.',
+          'Why an interaction is slow: runs tool with arguments while '
+          'profiling the app, then returns the app\'s functions by '
+          'self/total CPU time with file:line, the hottest framework '
+          'functions with the app code that called them, and for frames '
+          'over budget their build/layout/paint/raster times and which '
+          'app widgets rebuilt. Without tool it profiles whatever the app '
+          'does for durationMs.',
       inputSchema: ToolInputSchema(
         properties: {
           'tool': JsonSchema.string(
@@ -826,32 +825,25 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_http_profile',
       description:
-          'HTTP requests the app made through any dart:io client (HttpClient, '
-          'package:http, Dio; the DevTools Network tab): #number, method, URL, '
-          'status, duration, sizes, most recent first; url filters. id: '
-          'one request in full — headers, bodies (JSON, secrets masked), '
-          'timing, redirects, error. clear:true empties the list for a clean '
-          'baseline.',
+          'HTTP requests the app made through any dart:io client '
+          '(HttpClient, package:http, Dio; the DevTools Network tab), '
+          'most recent first: #number, method, URL, status, duration, '
+          'sizes. id returns one request in full: headers, bodies '
+          '(secrets masked), timing, redirects, error.',
       inputSchema: ToolInputSchema(
         properties: {
           'clear': JsonSchema.boolean(
-            description: 'Clear the recorded requests instead of listing them.',
+            description: 'Empty the list instead, for a clean baseline.',
           ),
-          'limit': JsonSchema.integer(
-            description:
-                'Maximum number of requests to return, most recent first (default: 50).',
-          ),
-          'status_filter': JsonSchema.integer(
-            description:
-                'Optional HTTP status code filter (e.g. 404, 500). Omit to return all requests.',
+          'limit': JsonSchema.integer(description: 'Default 50.'),
+          'statusFilter': JsonSchema.integer(
+            description: 'Only this status code.',
           ),
           'url': JsonSchema.string(
             description: 'Only requests whose URL contains this text.',
           ),
           'id': JsonSchema.integer(
-            description:
-                'The #number of a request in the list: its headers, bodies '
-                'and timing.',
+            description: 'The #number of a request in the list.',
           ),
         },
       ),

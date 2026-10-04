@@ -65,12 +65,13 @@ call_tool("fill_form", {
   "submitWith": "Button['Continue']"
 })
 
-// A known sequence of steps, run inside the app in one call
+// A known sequence of steps in one call, with a check at the end
 call_tool("execute_action_chain", {
-  "actions": [
-    {"action": "enter_text", "target": "TextField['Username']", "text": "alice"},
-    {"action": "enter_text", "target": "TextField['Password']", "text": "secret123"},
-    {"action": "tap", "target": "Button['Sign In']"}
+  "steps": [
+    {"tool": "enter_text", "arguments": {"key": "TextField['Username']", "text": "alice"}},
+    {"tool": "enter_text", "arguments": {"key": "TextField['Password']", "text": "secret123"}},
+    {"tool": "tap_widget", "arguments": {"key": "Button['Sign In']"}},
+    {"tool": "wait_for", "arguments": {"route": "/home"}}
   ]
 })
 ```

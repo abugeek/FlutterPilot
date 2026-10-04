@@ -195,11 +195,11 @@ void main() {
 }
 ```
 
-**Verify with get_capabilities**:
+**Verify with get_app_summary(setup: true)**:
 
 ```bash
 # Server has a diagnostic tool:
-# "get_capabilities" shows which plugins loaded
+# "get_app_summary(setup: true)" shows which plugins loaded
 # If you don't see your plugin, init is wrong
 ```
 
@@ -444,7 +444,7 @@ flutter build apk --release
 **Check Plugin State**:
 
 ```bash
-# Server tool: get_capabilities
+# Server tool: get_app_summary(setup: true)
 # Shows buffer usage and plugin state size
 # If any is huge (>100MB), that's the leak
 ```

@@ -954,17 +954,67 @@ Future<void> main(List<String> args) async {
         'action chain accepts enter_text',
         'execute_action_chain',
         {
-          'actions': [
-            {'action': 'enter_text', 'target': 'Name', 'text': 'Pilot'},
+          'steps': [
+            {
+              'tool': 'enter_text',
+              'arguments': {'key': 'Name', 'text': 'Pilot'},
+            },
           ],
         },
         ['1/1 steps done'],
+      );
+      // A check between the steps: the chain runs the tools one by one.
+      await check(
+        'action chain runs checks between steps',
+        'execute_action_chain',
+        {
+          'steps': [
+            {
+              'tool': 'enter_text',
+              'arguments': {'key': 'Name', 'text': 'Pilot'},
+            },
+            {
+              'tool': 'wait_for',
+              'arguments': {'key': 'Name'},
+            },
+          ],
+        },
+        ['2/2 steps done', 'Step 1 enter_text', 'Step 2 wait_for'],
+      );
+      await check(
+        'action chain stops at a failed check',
+        'execute_action_chain',
+        {
+          'steps': [
+            {
+              'tool': 'assert_widget',
+              'arguments': {'text': 'No such text on screen'},
+            },
+            {
+              'tool': 'press_key',
+              'arguments': {'key': 'tab'},
+            },
+          ],
+        },
+        [
+          'stopped after 0/2',
+          'Step 1 assert_widget failed',
+          'Not run: press_key',
+        ],
+        true,
+      );
+      await check(
+        'summary with the setup',
+        'get_app_summary',
+        {'setup': true},
+        ['Route', 'Setup:', '"plugins"'],
       );
       await check(
         'action chain stops at a failed step',
         'execute_action_chain',
         {
-          'actions': [
+          // The shape steps had before: still read.
+          'steps': [
             {'action': 'tap', 'target': 'No such button'},
             {'action': 'enter_text', 'target': 'Name', 'text': 'never'},
           ],

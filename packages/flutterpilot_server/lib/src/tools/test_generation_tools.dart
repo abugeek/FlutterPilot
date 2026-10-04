@@ -9,24 +9,17 @@ mixin _TestGenerationToolsMixin
       'generate_test',
       description:
           'Turns what you do in the app into an integration_test. '
-          'start:true restarts the app (hot restart) and records from there: '
-          'taps, text, keys, scrolls, drags, back, assert_widget, wait_for '
-          'and mock_http_response, with the widgets found by key, text or '
-          'tooltip. name:"checkout" then writes '
-          'integration_test/checkout_test.dart, runs it on the same device '
-          'and reports whether it passed (with the failure if not). '
-          'Obscured text is passed with --dart-define, never written. Takes '
-          'minutes: the test builds the app again.',
+          'start:true hot-restarts the app and records taps, text, keys, '
+          'scrolls, drags, back, assert_widget, wait_for and '
+          'mock_http_response. name:"checkout" then writes '
+          'integration_test/checkout_test.dart, runs it on the same '
+          'device and reports whether it passed, or the step it failed '
+          'at. Obscured text is passed with --dart-define, never written. '
+          'Takes minutes: the test builds the app again.',
       inputSchema: ToolInputSchema(
         properties: {
-          'start': JsonSchema.boolean(
-            description: 'Restart the app and start recording.',
-          ),
-          'name': JsonSchema.string(
-            description:
-                'Test name (letters, digits, _): stop recording, write and '
-                'run the test.',
-          ),
+          'start': JsonSchema.boolean(),
+          'name': JsonSchema.string(description: 'Letters, digits and _.'),
           'run': JsonSchema.boolean(
             description: 'Run the written test (default true).',
           ),

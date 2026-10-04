@@ -33,6 +33,101 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       .where((entry) => (entry['deviceId'] ?? 'default') == _activeDeviceId)
       .toList();
 
+  /// get_app_summary(setup: true): how the server and the app are set up,
+  /// for when a tool is missing or refused.
+  @override
+  Future<String> _setupReport() async {
+    const pluginExtensions = {
+      'riverpod': 'getRiverpodStates',
+      'bloc': 'getBlocStates',
+      'dio': 'getNetworkLogs',
+      'hive': 'getHiveContents',
+      'drift': 'listDriftTables',
+      'sqflite': 'listSqfliteDatabases',
+      'shared_preferences': 'getSharedPreferences',
+      'supabase': 'getSupabaseAuth',
+      'go_router': 'getGoRouterState',
+      'connectivity': 'getConnectivity',
+      'firebase': 'getFirebaseAuth',
+      'secure_storage': 'getSecureStorageKeys',
+    };
+    final vmService = await _vmServiceForParameters(const {});
+    final rpcs = <String>{};
+    Map<String, dynamic>? vmInfo;
+    if (vmService != null) {
+      try {
+        final vm = await vmService.getVM();
+        final isolates = <String>[];
+        for (final ref in vm.isolates ?? const <IsolateRef>[]) {
+          isolates.add(ref.name ?? ref.id ?? '?');
+          rpcs.addAll(
+            (await vmService.getIsolate(ref.id!)).extensionRPCs ?? const [],
+          );
+        }
+        vmInfo = {
+          'version': vm.version,
+          'pid': vm.pid,
+          'os': vm.operatingSystem,
+          'isolates': isolates,
+        };
+      } catch (e) {
+        vmInfo = {'error': '$e'};
+      }
+    }
+    final pluginStatus = {
+      for (final MapEntry(key: plugin, value: ext) in pluginExtensions.entries)
+        plugin: rpcs.contains('ext.flutterpilot.$ext')
+            ? 'loaded'
+            : 'not_loaded',
+    };
+    final sdkCapabilities = await _callExtensionRaw(
+      'ext.flutterpilot.getCapabilities',
+      {},
+    );
+
+    final capabilities = {
+      'connection': {
+        'vmServiceUri': vmServiceUri,
+        'connected': _vmService != null,
+        'reconnecting': _isReconnecting,
+        'activeDevice': _fleetManager.activeDeviceId ?? 'default',
+      },
+      'config': {
+        'allowDestructive': allowDestructive,
+        'eventBufferMax': _Constants.eventBufferMax,
+        'eventBufferMaxBytes': _Constants.eventBufferMaxBytes,
+        'debugLogBufferMax': _Constants.debugLogBufferMax,
+        'debugLogBufferMaxBytes': _Constants.debugLogBufferMaxBytes,
+        'maxScreenshotBaselines': _Constants.maxScreenshotBaselines,
+        'maxScreenshotBaselineBytes': _Constants.maxScreenshotBaselineBytes,
+        'maxToolResponseBytes': _Constants.maxToolResponseBytes,
+      },
+      'plugins': pluginStatus,
+      'vm': ?vmInfo,
+      'sdkCapabilities': sdkCapabilities.isError
+          ? <String, dynamic>{
+              'status':
+                  sdkCapabilities.errorMessage?.contains('zero-code') == true
+                  ? 'flutterpilot_sdk not installed (zero-code mode)'
+                  : 'unavailable',
+            }
+          : sdkCapabilities.data,
+      'buffers': {
+        'events': _activeEvents.length,
+        'debugLogs': _activeDebugLogs.length,
+        'screenshotBaselines': _screenshotBaselines.length,
+      },
+      'fleet': {
+        'activeDevice': _fleetManager.activeDeviceId ?? 'default',
+        'deviceCount': _fleetManager.listDevices()['total'],
+        'parallelOperations': true,
+        'routing': 'per-device-context',
+      },
+    };
+
+    return jsonEncode(capabilities);
+  }
+
   void _registerAppInspectionTools() {
     _tool(
       'connect_app',
@@ -580,142 +675,31 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_debug_logs',
       description:
-          'Returns console output the running app printed since FlutterPilot connected — print(), debugPrint(), and dart:developer log() calls. '
-          'Supports search query, level filter ("debug", "info", "warning", "error"), since_seconds, and limit. '
-          'clear:true empties the server and in-app buffers instead (a clean baseline before a test).',
+          'What the app printed since FlutterPilot connected: print(), '
+          'debugPrint() and dart:developer log(). clear:true empties the '
+          'captured logs instead, for a clean baseline before a test.',
       inputSchema: ToolInputSchema(
         properties: {
           'level': JsonSchema.string(
-            description:
-                'Filter by log level: "debug", "info", "warning", or "error". Omit to return all levels.',
+            enumValues: ['debug', 'info', 'warning', 'error'],
           ),
           'query': JsonSchema.string(
-            description: 'Search string to filter log messages.',
+            description: 'Only messages containing this.',
           ),
-          'since_seconds': JsonSchema.integer(
-            description: 'Only return logs captured within the last N seconds.',
+          'sinceSeconds': JsonSchema.integer(
+            description: 'Only the last N seconds.',
           ),
-          'limit': JsonSchema.integer(
-            description:
-                'Maximum number of log entries to return (default: 100).',
-          ),
+          'limit': JsonSchema.integer(description: 'Default 100.'),
           'logger': JsonSchema.string(
             description:
-                'Filter by logger name (partial match). E.g. "debugPrint", "stdout", "print".',
+                'Only this logger (partial match), e.g. "debugPrint", "stdout".',
           ),
-          'clear': JsonSchema.boolean(
-            description: 'Clear the captured logs instead of reading them.',
-          ),
+          'clear': JsonSchema.boolean(),
         },
       ),
       callback: (params, extra) => params['clear'] == true
           ? executeClearAllLogs(params)
           : executeGetLogs(params),
-    );
-
-    // -- get_capabilities -----------------------------------------------------
-    _tool(
-      'get_capabilities',
-      description:
-          'Server and app setup: connection, which FlutterPilot plugins the '
-          'app registered, SDK capabilities, Dart VM version, pid and '
-          'isolates, buffer limits. Use when a tool is missing or refused.',
-      inputSchema: ToolInputSchema(properties: {}),
-      callback: (params, extra) async {
-        const pluginExtensions = {
-          'riverpod': 'getRiverpodStates',
-          'bloc': 'getBlocStates',
-          'dio': 'getNetworkLogs',
-          'hive': 'getHiveContents',
-          'drift': 'listDriftTables',
-          'sqflite': 'listSqfliteDatabases',
-          'shared_preferences': 'getSharedPreferences',
-          'supabase': 'getSupabaseAuth',
-          'go_router': 'getGoRouterState',
-          'connectivity': 'getConnectivity',
-          'firebase': 'getFirebaseAuth',
-          'secure_storage': 'getSecureStorageKeys',
-        };
-        final vmService = await _vmServiceForParameters(params);
-        final rpcs = <String>{};
-        Map<String, dynamic>? vmInfo;
-        if (vmService != null) {
-          try {
-            final vm = await vmService.getVM();
-            final isolates = <String>[];
-            for (final ref in vm.isolates ?? const <IsolateRef>[]) {
-              isolates.add(ref.name ?? ref.id ?? '?');
-              rpcs.addAll(
-                (await vmService.getIsolate(ref.id!)).extensionRPCs ?? const [],
-              );
-            }
-            vmInfo = {
-              'version': vm.version,
-              'pid': vm.pid,
-              'os': vm.operatingSystem,
-              'isolates': isolates,
-            };
-          } catch (e) {
-            vmInfo = {'error': '$e'};
-          }
-        }
-        final pluginStatus = {
-          for (final MapEntry(key: plugin, value: ext)
-              in pluginExtensions.entries)
-            plugin: rpcs.contains('ext.flutterpilot.$ext')
-                ? 'loaded'
-                : 'not_loaded',
-        };
-        final sdkCapabilities = await _callExtensionRaw(
-          'ext.flutterpilot.getCapabilities',
-          {},
-        );
-
-        final capabilities = {
-          'connection': {
-            'vmServiceUri': vmServiceUri,
-            'connected': _vmService != null,
-            'reconnecting': _isReconnecting,
-            'activeDevice': _fleetManager.activeDeviceId ?? 'default',
-          },
-          'config': {
-            'allowDestructive': allowDestructive,
-            'eventBufferMax': _Constants.eventBufferMax,
-            'eventBufferMaxBytes': _Constants.eventBufferMaxBytes,
-            'debugLogBufferMax': _Constants.debugLogBufferMax,
-            'debugLogBufferMaxBytes': _Constants.debugLogBufferMaxBytes,
-            'maxScreenshotBaselines': _Constants.maxScreenshotBaselines,
-            'maxScreenshotBaselineBytes': _Constants.maxScreenshotBaselineBytes,
-            'maxToolResponseBytes': _Constants.maxToolResponseBytes,
-          },
-          'plugins': pluginStatus,
-          'vm': ?vmInfo,
-          'sdkCapabilities': sdkCapabilities.isError
-              ? <String, dynamic>{
-                  'status':
-                      sdkCapabilities.errorMessage?.contains('zero-code') ==
-                          true
-                      ? 'flutterpilot_sdk not installed (zero-code mode)'
-                      : 'unavailable',
-                }
-              : sdkCapabilities.data,
-          'buffers': {
-            'events': _activeEvents.length,
-            'debugLogs': _activeDebugLogs.length,
-            'screenshotBaselines': _screenshotBaselines.length,
-          },
-          'fleet': {
-            'activeDevice': _fleetManager.activeDeviceId ?? 'default',
-            'deviceCount': _fleetManager.listDevices()['total'],
-            'parallelOperations': true,
-            'routing': 'per-device-context',
-          },
-        };
-
-        return CallToolResult(
-          content: [TextContent(text: jsonEncode(capabilities))],
-        );
-      },
     );
 
     _tool(

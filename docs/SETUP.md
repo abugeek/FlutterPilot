@@ -368,7 +368,7 @@ void main() {
 }
 ```
 
-Verify with server tool: `get_capabilities` will show which plugins loaded.
+Verify with server tool: `get_app_summary(setup: true)` will show which plugins loaded.
 
 ### "Cannot find VM Service URI"
 
@@ -458,9 +458,9 @@ FlutterPilot adds < 2% overhead (measured). If app is sluggish:
 
 After setup:
 1. **Verify tools work**: Run `get_app_summary` → should show current route
-2. **Check plugins**: Run `get_capabilities` → shows loaded plugins
+2. **Check plugins**: Run `get_app_summary(setup: true)` → shows loaded plugins
 3. **Test AI integration**: Try with Claude or Cursor
-4. **Read [TOOLS.md](../TOOLS.md)** → MCP tools reference; call `get_capabilities` for the runtime set
+4. **Read [TOOLS.md](../TOOLS.md)** → MCP tools reference; call `get_app_summary(setup: true)` for the runtime set
 
 ---
 

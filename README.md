@@ -159,8 +159,8 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 67 tools, of which an app sees only the ones that can work
-for it — plugin tools once it registers that plugin (a Dio-only app sees 42).
+registrations): 66 tools, of which an app sees only the ones that can work
+for it — plugin tools once it registers that plugin (a Dio-only app sees 45).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:
 
@@ -174,8 +174,9 @@ paddings, borders and radii), `capture_screenshot`.
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
 (`"back"` for system back), `swipe_widget`, `drag_widget`,
-`scroll_into_view`, `toggle_checkbox`, `set_slider_value`. Batch known
-sequences with `execute_action_chain` or `fill_form`. Every action reports
+`scroll_into_view`, `toggle_checkbox`, `set_slider_value`.
+Batch known sequences with `execute_action_chain` (steps are tool calls,
+with `wait_for` / `assert_widget` between them) or `fill_form`. Every action reports
 its own result — route change, what appeared/disappeared, tappable elements
 now, new errors — so you rarely need a follow-up read.
 

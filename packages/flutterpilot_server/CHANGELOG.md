@@ -1,5 +1,24 @@
 ## Unreleased
 
+- The tool list is 66 tools and about 9% smaller on the wire (a test holds
+  it to a size budget). Breaking:
+  - `get_capabilities` is `get_app_summary(setup: true)`.
+  - `execute_action_chain` takes `steps` — tool calls, as in
+    `run_on_devices`: `[{"tool": "tap_widget", "arguments": {"key": ...}}]` —
+    and runs keys, scrolls, navigation and `wait_for` / `assert_widget`
+    checks too, not only taps and text. Steps in the former
+    `{"action", "target"}` shape are still read.
+- Every tool has MCP annotations (read-only, destructive, idempotent), so
+  clients can run reads without asking and ask before the tools that need
+  `--allow-destructive`.
+- The server sends `instructions` on connect: where to start and what not to
+  repeat, for clients that load tool schemas on demand.
+- Parameters have one name each, in camelCase: `clearFirst`, `sinceSeconds`,
+  `statusFilter` (the former names still work), and schemas list `key` only
+  (`target` still works). `get_shared_preferences(showSensitive)` is a
+  boolean, `query_supabase_table(limit)` an integer; `table` and
+  `query_firestore`'s `path` are required.
+
 - `get_state(history: true)`: the last 50 Riverpod/Bloc changes, oldest
   first with times — old → new value, created, disposed — and the route
   changes between them; `clear: true` empties it.

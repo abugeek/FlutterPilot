@@ -243,7 +243,7 @@ class BlocPilotObserver extends BlocObserver {
 ### Server's Plugin Discovery
 
 ```dart
-// In get_capabilities tool:
+// In get_app_summary(setup: true) tool:
 final pluginStatus = <String, String>{};
 for (final entry in <String, String>{
   'bloc': 'ext.flutterpilot.getBlocStates',

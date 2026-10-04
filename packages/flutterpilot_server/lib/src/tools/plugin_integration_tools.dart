@@ -77,22 +77,17 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'query_supabase_table',
       description:
-          'Rows of a Supabase table read with the app\'s own client (its '
-          'session, so row-level security applies): up to limit (default 20, '
-          'max 200), optional "column=value" filter.',
+          'Rows of a Supabase table read with the app\'s own client and '
+          'session, so row-level security applies.',
       extension: 'ext.flutterpilot.querySupabaseTable',
       properties: {
-        'table': JsonSchema.string(
-          description: 'Supabase table name (required).',
-        ),
-        'limit': JsonSchema.string(
-          description: 'Max rows to return (1–200, default 20).',
-        ),
+        'table': JsonSchema.string(description: 'Supabase table name.'),
+        'limit': JsonSchema.integer(description: '1–200, default 20.'),
         'filter': JsonSchema.string(
-          description:
-              'Optional equality filter in "column=value" format, e.g. "user_id=abc123".',
+          description: 'One equality filter, "column=value".',
         ),
       },
+      required: ['table'],
       formatResult: (json) {
         final table = json['table'];
         final rowCount = json['rowCount'] ?? 0;
@@ -258,27 +253,29 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'query_firestore',
       description:
-          'Read Firestore with the app\'s own connection and signed-in user '
-          '(so security rules apply as in the app). path is a collection '
-          '("users/UID/notes") or a document ("users/UID"). Optional where '
-          '("done == false", ops == != < <= > >= array-contains), orderBy '
-          '("createdAt desc"), limit (default 20, max 100), source "cache" to '
-          'see what the app has locally instead of the server.',
+          'Reads Firestore through the app\'s own connection and signed-in '
+          'user, so security rules apply as in the app.',
       extension: 'ext.flutterpilot.queryFirestore',
       properties: {
-        'path': JsonSchema.string(description: 'Collection or document path.'),
+        'path': JsonSchema.string(
+          description:
+              'A collection ("users/UID/notes") or a document ("users/UID").',
+        ),
         'where': JsonSchema.string(
-          description: 'One filter: "field op value".',
+          description:
+              'One filter, "field op value" with == != < <= > >= or '
+              'array-contains, e.g. "done == false".',
         ),
         'orderBy': JsonSchema.string(
-          description: 'Field, optionally followed by "desc".',
+          description: 'A field, optionally followed by "desc".',
         ),
         'limit': JsonSchema.integer(description: '1–100, default 20.'),
         'source': JsonSchema.string(
-          description: '"server" (default) or "cache".',
           enumValues: ['server', 'cache'],
+          description: 'cache: what the app has locally instead of the server.',
         ),
       },
+      required: ['path'],
       formatResult: (json) {
         final path = json['path'];
         final from = json['source'] == 'cache' ? ' (from the local cache)' : '';

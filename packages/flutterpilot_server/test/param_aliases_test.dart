@@ -19,4 +19,17 @@ void main() {
     // ...but only for a tool that has that parameter.
     expect(unknownToolArguments(['target'], ['route']), ['target']);
   });
+
+  test('a renamed parameter works under both names, its type kept', () {
+    expect(
+      unknownToolArguments(['clear_first'], ['text', 'clearFirst']),
+      isEmpty,
+    );
+    expect(withFormerNames({'text': 'a', 'clearFirst': false}), {
+      'text': 'a',
+      'clearFirst': false,
+      'clear_first': false,
+    });
+    expect(withFormerNames({'since_seconds': 5}), {'since_seconds': 5});
+  });
 }

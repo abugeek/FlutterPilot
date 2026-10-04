@@ -16,7 +16,6 @@ const Set<String> zeroCodeTools = {
   'list_connected_devices',
   'register_device',
   'switch_device',
-  'get_capabilities',
   // Inspection (answered from the Flutter inspector).
   'get_app_summary',
   'get_widget_tree',
