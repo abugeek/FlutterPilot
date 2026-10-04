@@ -59,6 +59,63 @@ extension _RecordingExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode({'saved': true}));
     });
 
+    // -- ext.flutterpilot.platformChannel -------------------------------------
+    // action=mock: answer the app's calls to channel (+ method) with result
+    // (JSON) or errorCode; emit: deliver event (JSON) to the channel's
+    // EventChannel listeners; clear: drop mocks. Always returns the active
+    // mocks and the calls the app made.
+    registerExtension('ext.flutterpilot.platformChannel', (
+      method,
+      parameters,
+    ) async {
+      final channel = parameters['channel'];
+      final name = parameters['method'];
+      final code = parameters['errorCode'];
+      Object? decoded(String key) =>
+          parameters[key] == null ? null : json.decode(parameters[key]!);
+      bool? listening;
+      var cleared = 0;
+      try {
+        switch (parameters['action']) {
+          case 'mock':
+            PlatformChannelMocks.mock(
+              channel!,
+              method: name,
+              result: decoded('result'),
+              errorCode: code,
+              errorMessage: parameters['errorMessage'],
+            );
+          case 'emit':
+            listening = PlatformChannelMocks.emit(
+              channel!,
+              decoded('event'),
+              errorCode: code,
+              errorMessage: parameters['errorMessage'],
+            );
+          case 'clear':
+            cleared = PlatformChannelMocks.clear(
+              channel: channel,
+              method: name,
+            );
+        }
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          '$e',
+        );
+      }
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'installed': PlatformChannelMocks.installed,
+          'mocks': PlatformChannelMocks.mocks,
+          'calls': PlatformChannelMocks.calls,
+          'listeners': PlatformChannelMocks.listeners,
+          'listening': ?listening,
+          'cleared': cleared,
+        }),
+      );
+    });
+
     // -- ext.flutterpilot.listCustomTools -------------------------------------
     registerExtension('ext.flutterpilot.listCustomTools', (
       method,

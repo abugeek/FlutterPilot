@@ -448,15 +448,17 @@ class InitCommand extends Command<void> {
   static String? patchMain(String content) {
     if (content.contains('FlutterPilot.initialize')) return content;
     // Reuse the app's own binding call instead of adding a second one.
+    // FlutterPilot goes first: the binding it creates (debug and profile
+    // builds) is what lets mock_platform_channel answer plugin calls.
     const binding = 'WidgetsFlutterBinding.ensureInitialized();';
     if (content.contains(binding)) {
       return content.replaceFirst(
         binding,
-        '$binding\n  FlutterPilot.initialize();',
+        'FlutterPilot.initialize();\n  $binding',
       );
     }
     const init =
-        '\n  WidgetsFlutterBinding.ensureInitialized();\n  FlutterPilot.initialize();';
+        '\n  FlutterPilot.initialize();\n  WidgetsFlutterBinding.ensureInitialized();';
     final blockMain = RegExp(
       r'((?:Future<void>|void)\s+main\s*\([^)]*\)\s*(?:async\s*)?\{)',
     );

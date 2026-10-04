@@ -10,3 +10,10 @@ String creationLocationRoot(String path) {
       ? uriPath.substring(0, uriPath.length - 1)
       : uriPath;
 }
+
+/// The path of a `file:` URI as the file system takes it: a Windows drive
+/// path comes out of a URI as `/D:/app`, which `Directory` rejects.
+String fileSystemPath(String uriPath) =>
+    RegExp(r'^/[A-Za-z]:(/|$)').hasMatch(uriPath)
+    ? Uri.decodeComponent(uriPath.substring(1))
+    : Uri.decodeComponent(uriPath);

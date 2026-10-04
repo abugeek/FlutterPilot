@@ -60,7 +60,13 @@ Future<void> main(List<String> args) async {
   }
 
   Future<void> sh(String exe, List<String> a, {String? cwd}) async {
-    final r = await Process.run(exe, a, workingDirectory: cwd);
+    // On Windows `flutter` is flutter.bat: only a shell finds it.
+    final r = await Process.run(
+      exe,
+      a,
+      workingDirectory: cwd,
+      runInShell: Platform.isWindows,
+    );
     if (r.exitCode != 0) {
       throw 'FAILED: $exe ${a.join(' ')}\n${r.stdout}\n${r.stderr}';
     }
@@ -113,7 +119,7 @@ Future<void> main(List<String> args) async {
     await sh('flutter', [
       'create',
       '-e',
-      '--platforms=macos,ios,android,web',
+      '--platforms=macos,ios,android,web,windows',
       'fixture',
     ], cwd: work.path);
     if (zeroCode) {
@@ -142,14 +148,19 @@ Future<void> main(List<String> args) async {
     }
 
     print('▶ flutter run -d $device (first build can take a few minutes)');
-    flutter = await Process.start('flutter', [
-      'run',
-      '--machine',
-      // What `flutterpilot dev` passes; lets a server find the app (§3.1).
-      '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
-      '-d',
-      device,
-    ], workingDirectory: app);
+    flutter = await Process.start(
+      'flutter',
+      [
+        'run',
+        '--machine',
+        // What `flutterpilot dev` passes; lets a server find the app (§3.1).
+        '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
+        '-d',
+        device,
+      ],
+      workingDirectory: app,
+      runInShell: Platform.isWindows,
+    );
     final wsUri = Completer<String>();
     final started = Completer<void>();
     String? appId;
@@ -1451,13 +1462,18 @@ Future<void> main(List<String> args) async {
         '${withRoots == null ? '' : '\n   $withRoots'}',
       );
       // flutterpilot doctor reads what the running app registered (§3.4).
-      final doctor = await Process.run('dart', [
-        'run',
-        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
-        'doctor',
-        '-p',
-        app,
-      ]);
+      final doctor = await Process.run(
+        'dart',
+        [
+          'run',
+          '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+          'doctor',
+          '-p',
+          app,
+        ],
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8,
+      );
       final report = '${doctor.stdout}${doctor.stderr}';
       final expected = zeroCode
           ? ['App running (zero-code']
@@ -1589,13 +1605,18 @@ Future<void> main(List<String> args) async {
         }
         if (viaDtd != null) await explainDtd();
         if (!zeroCode && !forgotten) {
-          final doctor = await Process.run('dart', [
-            'run',
-            '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
-            'doctor',
-            '-p',
-            app,
-          ]);
+          final doctor = await Process.run(
+            'dart',
+            [
+              'run',
+              '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+              'doctor',
+              '-p',
+              app,
+            ],
+            stdoutEncoding: utf8,
+            stderrEncoding: utf8,
+          );
           final report = '${doctor.stdout}${doctor.stderr}';
           final ok = report.contains('✅ SDK registered in the running app');
           if (!ok) failed++;
@@ -1733,6 +1754,34 @@ Future<void> main(List<String> args) async {
       await check('scenario list', 'scenario', {}, [
         '- accepted: ping answers 202',
       ]);
+
+      // A plugin's native side, answered by a mock.
+      await check(
+        'mock_platform_channel answers a plugin call',
+        'mock_platform_channel',
+        {'channel': 'e2e/battery', 'method': 'level', 'result': 87},
+        ['Mocked e2e/battery level: returns 87'],
+      );
+      await check('channel mock: tap Battery', 'tap_widget', {
+        'key': 'Battery',
+        'waitFor': 'Battery 87%',
+      });
+      await check(
+        'mock_platform_channel lists the call and the mock',
+        'mock_platform_channel',
+        {},
+        ['- e2e/battery level → 87', 'e2e/battery level — mocked'],
+      );
+      await check(
+        'mock_platform_channel clear removes it',
+        'mock_platform_channel',
+        {'clear': true},
+        ['Removed 1 mock(s)', 'No mocks.'],
+      );
+      await check('channel mock cleared: tap Battery', 'tap_widget', {
+        'key': 'Battery 87%',
+        'waitFor': 'Battery none',
+      });
     }
 
     // ROADMAP §6: record a flow, write it as an integration_test, run it.
@@ -1896,8 +1945,8 @@ import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
 late final Dio dio;
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
   FlutterPilot.initialize();
+  WidgetsFlutterBinding.ensureInitialized();
   dio = Dio()..interceptors.add(DioPilotInterceptor());
   runApp(MaterialApp(
     navigatorObservers: [NavigationTracker()],
@@ -1918,7 +1967,7 @@ class _HomeState extends State<Home> {
   String _greeting = '';
   String _submitted = '';
   String _menu = '';
-  String _zoomed = 'zoom 1.0';
+  String _zoomed = 'zoom 1.0', _battery = 'Battery';
   bool _squeeze = false;
   int _taps = 0;
   final _keyDowns = <String, int>{};
@@ -2040,6 +2089,21 @@ class _HomeState extends State<Home> {
           child: Text('Tapped $_taps'),
         ),
         TextButton(onPressed: _signIn, child: const Text('Sign in')),
+        // A plugin call no test host answers: mock_platform_channel does.
+        TextButton(
+          onPressed: () async {
+            String text;
+            try {
+              final level = await const MethodChannel('e2e/battery')
+                  .invokeMethod<int>('level');
+              text = 'Battery $level%';
+            } on MissingPluginException {
+              text = 'Battery none';
+            }
+            setState(() => _battery = text);
+          },
+          child: Text(_battery),
+        ),
         // On the root navigator, above the page: in screenshots too.
         TextButton(
           onPressed: () => showDialog<void>(

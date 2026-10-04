@@ -32,6 +32,7 @@ class Verification {
     'pinch_zoom',
     'navigate_to',
     'mock_http_response',
+    'mock_platform_channel',
     'simulate_network',
     'set_state',
     'set_shared_preference',

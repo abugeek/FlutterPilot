@@ -19,6 +19,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     'assert_widget',
     'wait_for',
     'mock_http_response',
+    'mock_platform_channel',
     'simulate_network',
   };
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterpilot_sdk/src/navigation_tracker.dart';
+import 'package:flutterpilot_sdk/src/source_locator.dart';
 
 void main() {
   group('NavigationTracker edge cases', () {
@@ -102,9 +103,11 @@ void main() {
     });
 
     testWidgets('unnamed pages and menus get readable names', (tester) async {
+      // As the SDK registers the app's folder: on Windows `D:\app` matches
+      // no creation location (they are `/D:/app/...`).
       // ignore: invalid_use_of_protected_member
       WidgetInspectorService.instance.addPubRootDirectories([
-        Directory.current.path,
+        pubRootFor(Directory.current.path),
       ]);
       final navKey = GlobalKey<NavigatorState>();
       await tester.pumpWidget(

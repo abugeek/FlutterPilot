@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 66 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8); an app sees only those that work for it
+- 67 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11); an app sees only those that work for it
   (a Dio-only app 42, zero-code 16). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
@@ -611,6 +611,38 @@ frame pump runs at 60 Hz only for 2 s after a call or while an animation
 ticks (~10 Hz otherwise: ~5% CPU instead of ~20%). A tap that changes nothing
 still takes ~500 ms (it watches for a late effect, by design).
 
+## 11. Local data in scenarios, plugins without hardware — done (2026-10-05)
+
+Field-tested on Windows in `../pos_lab` (Drift cart, sqflite audit log, Hive
+CE settings, geolocator, its own scanner EventChannel); findings #301–310.
+
+- **Databases in `scenario`** (§7's "databases … are not captured"): save
+  writes the rows of every registered Drift/sqflite database (`SqlSnapshot`
+  in the SDK, through the app's own connection, so any platform and with
+  the database open) and Hive boxes of plain values; load replaces them —
+  each database in one transaction with foreign keys deferred, AUTOINCREMENT
+  counters included — before the hot restart. One row per line in the file.
+  Left out and named: tables over 1000 rows, tables with a credential-named
+  column, virtual tables, boxes holding adapter objects. Rows only: a
+  scenario is loaded into the schema the app has now, and one that no
+  longer fits leaves that database unchanged and says why. Still not
+  captured: secure storage, files.
+- **`mock_platform_channel`**: answers the app's method calls on a channel
+  (result or PlatformException; MethodChannel standard/JSON codecs, Pigeon
+  message channels), delivers EventChannel events, and lists the calls the
+  app made with whether a plugin answered. Needs FlutterPilot's binding
+  (`FlutterPilotBinding`, created by `initialize()` when it is the first
+  line of `main()` — `init` writes it that way now); an app with the old
+  order is told so, and events work regardless. A scenario carries the
+  mocks across its hot restart. Not covered: method calls from the platform
+  to the app (`setMethodCallHandler`: push notifications, purchase
+  updates), Pigeon replies holding Pigeon classes, replaying mocks in
+  `generate_test` (the step is listed as not replayed), zero-code apps.
+- **Windows**: `scenario`, `generate_test` and `verify_feature` took the
+  app's folder as `/D:/app`; `generate_test` could not start `flutter.bat`;
+  `e2e_test.dart -d windows` runs now, and the SDK suite passes there
+  (#310). Open: the Windows e2e is not in CI.
+
 ## Where things are
 
 - `docs/field-test-findings.md` — every tool observation (88 rows), latency.
@@ -618,6 +650,9 @@ still takes ~500 ms (it watches for a late effect, by design).
   the story subtitle `Row` in `lib/ui/story_tile.dart` overflows at 1.6× text
   scale (used to test overflow detection) — don't "fix" it without adding
   another known defect.
+- `../pos_lab` — Windows field-test app for §11 (scenarios with databases
+  in `flutterpilot/scenarios/`). Launch with
+  `flutter run -d windows --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the gate.
 - `packages/flutterpilot_server/tool/fp_bridge.dart` — shell driver.
 

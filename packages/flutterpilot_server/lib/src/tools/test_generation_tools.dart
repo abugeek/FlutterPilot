@@ -192,13 +192,18 @@ mixin _TestGenerationToolsMixin
     }
     final ProcessResult result;
     try {
-      result = await Process.run('flutter', [
-        'test',
-        relative,
-        '-d',
-        device,
-        if (secretFile != null) '--dart-define-from-file=${secretFile.path}',
-      ], workingDirectory: app.root).timeout(const Duration(minutes: 15));
+      result = await Process.run(
+        'flutter',
+        [
+          'test',
+          relative,
+          '-d',
+          device,
+          if (secretFile != null) '--dart-define-from-file=${secretFile.path}',
+        ],
+        workingDirectory: app.root,
+        runInShell: Platform.isWindows,
+      ).timeout(const Duration(minutes: 15));
     } on TimeoutException {
       return fail('${notes.join('\n')}\nThe test run took over 15 minutes.');
     } finally {
@@ -244,13 +249,13 @@ mixin _TestGenerationToolsMixin
       final path = resolved == null ? null : Uri.parse(resolved).path;
       final lib = path?.lastIndexOf('/lib/') ?? -1;
       if (path == null || lib < 0) return null;
-      return (root: path.substring(0, lib), mainImport: uri);
+      return (root: fileSystemPath(path.substring(0, lib)), mainImport: uri);
     }
     if (!uri.startsWith('file:')) return null;
     final path = Uri.parse(uri).path;
     final lib = path.lastIndexOf('/lib/');
     if (lib < 0) return null;
-    final root = path.substring(0, lib);
+    final root = fileSystemPath(path.substring(0, lib));
     final pubspec = File('$root/pubspec.yaml');
     if (!pubspec.existsSync()) return null;
     final name = RegExp(
@@ -267,11 +272,17 @@ mixin _TestGenerationToolsMixin
     if (RegExp(r'^\s+integration_test:', multiLine: true).hasMatch(pubspec)) {
       return null;
     }
-    final r = await Process.run('flutter', [
-      'pub',
-      'add',
-      'dev:integration_test:{"sdk":"flutter"}',
-    ], workingDirectory: root);
+    final r = await Process.run(
+      'flutter',
+      [
+        'pub',
+        'add',
+        // No quotes inside: on Windows this goes through cmd to flutter.bat.
+        'dev:integration_test:{sdk: flutter}',
+      ],
+      workingDirectory: root,
+      runInShell: Platform.isWindows,
+    );
     return r.exitCode == 0
         ? 'Added integration_test (sdk: flutter) to dev_dependencies.'
         : 'Could not add integration_test to dev_dependencies: ${r.stderr}';

@@ -5,6 +5,14 @@ import 'package:flutter/widgets.dart';
 import 'ai_overlay_manager.dart';
 import 'widget_inspector.dart';
 
+/// [root] as a pub root directory the widget inspector can match creation
+/// locations against. Those are `file:` URI paths (`/D:/app/lib/x.dart`), so
+/// a Windows path (`D:\app`) is turned into the path of its URI; anything
+/// else is already in that form.
+String pubRootFor(String root) => RegExp(r'^[A-Za-z]:[\\/]').hasMatch(root)
+    ? Uri.file(root, windows: true).path
+    : root;
+
 /// "What code draws this?" (ROADMAP §5.1): the file:line in the app's own
 /// code that creates a widget, and the app widgets above it.
 ///

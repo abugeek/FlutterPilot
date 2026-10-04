@@ -30,6 +30,7 @@ import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
+import 'src/platform_channel_mocks.dart';
 import 'src/redaction.dart';
 import 'src/restart_store.dart';
 import 'src/ring_buffer.dart';
@@ -53,10 +54,12 @@ export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
 export 'src/keyboard_simulator.dart';
 export 'src/navigation_tracker.dart';
+export 'src/platform_channel_mocks.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
 export 'src/settle_tracker.dart';
 export 'src/soft_keyboard.dart';
+export 'src/sql_snapshot.dart';
 export 'src/ui_health_auditor.dart';
 export 'src/widget_inspector.dart';
 
@@ -100,11 +103,8 @@ void _applyProjectRoot(String? root) {
   _projectRoot = root;
   // Creation locations are `file:` URI paths (`/D:/app`). An older server
   // sends a Windows path as it is (`D:\app`), which matches none of them.
-  final pubRoot = RegExp(r'^[A-Za-z]:[\\/]').hasMatch(root)
-      ? Uri.file(root, windows: true).path
-      : root;
   // ignore: invalid_use_of_protected_member
-  WidgetInspectorService.instance.addPubRootDirectories([pubRoot]);
+  WidgetInspectorService.instance.addPubRootDirectories([pubRootFor(root)]);
 }
 
 DateTime _agentActiveUntil = DateTime(0);
@@ -550,6 +550,21 @@ class FlutterPilot {
     if (kReleaseMode || _initialized) return;
     _initialized = true;
     RestartStore.load();
+    // Before anything creates the binding: FlutterPilot's own lets
+    // mock_platform_channel answer the app's plugin calls.
+    PlatformChannelMocks.install();
+    final channelMocks = RestartStore.take('channelMocks');
+    if (channelMocks is List) {
+      for (final m in channelMocks.whereType<Map>()) {
+        PlatformChannelMocks.mock(
+          '${m['channel']}',
+          method: m['method'] as String?,
+          result: m['result'],
+          errorCode: m['errorCode'] as String?,
+          errorMessage: m['errorMessage'] as String?,
+        );
+      }
+    }
 
     _setupModules();
     registerServiceExtensions();
