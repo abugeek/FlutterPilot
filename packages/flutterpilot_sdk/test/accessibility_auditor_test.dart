@@ -180,6 +180,55 @@ void main() {
     },
   );
 
+  // Octana, a sheet open over the home page: the page's own button label was
+  // reported at 1.18:1, through the barrier that dims it.
+  testWidgets('text under an open dialog is not checked, the dialog is', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(useMaterial3: true),
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: Builder(
+            // At the top, clear of the dialog in the middle of the screen.
+            builder: (context) => Align(
+              alignment: Alignment.topCenter,
+              child: TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => const AlertDialog(
+                    backgroundColor: Colors.white,
+                    content: Text(
+                      'Faint in the dialog',
+                      style: TextStyle(color: Color(0xFFCCCCCC)),
+                    ),
+                  ),
+                ),
+                // 7:1 on white; about 3:1 once the barrier dims both.
+                child: const Text(
+                  'Open',
+                  style: TextStyle(color: Color(0xFF595959)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    final handle = tester.ensureSemantics();
+    await tester.pump();
+    final result = (await tester.runAsync(AccessibilityAuditor.audit))!;
+    AccessibilityAuditor.debugReleaseSemantics();
+    handle.dispose();
+
+    final low = (result['lowContrast'] as List).cast<String>();
+    expect(low, hasLength(1));
+    expect(low.single, startsWith('"Faint in the dialog"'));
+  });
+
   test('WCAG contrast ratio', () {
     expect(
       AccessibilityAuditor.contrastRatio(0xff000000, 0xffffffff),

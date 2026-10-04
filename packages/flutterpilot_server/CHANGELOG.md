@@ -1,5 +1,9 @@
 ## Unreleased
 
+- `get_app_summary` no longer prints a jank warning in a debug build, where
+  most frames are over budget by nature and the line read as a defect on every
+  call. It still does in a profile build, and `profile_frame_budget` answers
+  in both.
 - `set_app_settings(windowSize: "390x844")` resizes a macOS desktop app's
   window (its standard window, not a dialog in front) and reports the
   viewport the app then has; other platforms are refused with the reason.

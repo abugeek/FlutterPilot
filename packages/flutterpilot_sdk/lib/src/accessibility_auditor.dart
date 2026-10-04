@@ -242,6 +242,9 @@ class AccessibilityAuditor {
       // WCAG 1.4.3 exempts inactive components: a disabled button is
       // dimmed on purpose.
       if (_isDisabledControl(element.widget)) return;
+      // A page under a dialog or sheet is dimmed by the barrier on purpose
+      // and cannot be read or used until that closes.
+      if (_isRouteBelowTop(element.widget)) return;
       final ro = element.renderObject;
       if (element is RenderObjectElement &&
           ro is RenderParagraph &&
@@ -298,6 +301,17 @@ class AccessibilityAuditor {
                 '$problem'
             .trim(),
     ];
+  }
+
+  /// The marker every route puts around its page; `isCurrent` is false
+  /// once another route (a dialog, a sheet, a pushed page) is on top.
+  static bool _isRouteBelowTop(Widget widget) {
+    if (widget.runtimeType.toString() != '_ModalScopeStatus') return false;
+    try {
+      return (widget as dynamic).isCurrent == false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static bool _isDisabledControl(Widget widget) {

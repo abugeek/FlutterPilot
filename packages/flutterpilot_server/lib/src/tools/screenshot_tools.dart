@@ -474,12 +474,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         // FPS is meaningless for an idle Flutter app; only report real jank,
         // and not from a handful of startup frames.
         final jankSamples = (perf['jankSampleCount'] as num?)?.toInt() ?? 0;
-        if (jankPct >= 5.0 && jankSamples >= 30) {
+        // Not in a debug build: it runs several times slower than release,
+        // so most frames are "over budget" there and the line would read as
+        // a problem on every call. profile_frame_budget still answers.
+        if (profile && jankPct >= 5.0 && jankSamples >= 30) {
           summary.writeln(
             '• ⚠️ Jank: ${jankPct.toStringAsFixed(1)}% of recent frames over budget'
             '${avgMs != null ? ' (avg ${avgMs.toStringAsFixed(1)}ms)' : ''}. '
-            '${diagnosis ?? ''} Call profile_frame_budget for details'
-            '${profile ? '' : ' (debug build: confirm on a --profile build)'}.',
+            '${diagnosis ?? ''} Call profile_frame_budget for details.',
           );
         }
         summary.writeln(
