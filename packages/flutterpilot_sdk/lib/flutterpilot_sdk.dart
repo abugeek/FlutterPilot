@@ -384,8 +384,21 @@ class FlutterPilot {
     };
   }
 
+  /// A progress bar with a value is a gauge (a tank level, an upload at
+  /// 40 %), not "still loading".
+  static bool _isIndeterminate(Widget widget) {
+    try {
+      return (widget as dynamic).value == null;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Whether a progress indicator is on screen: the action started work
   /// (a request) whose result isn't there yet.
+  @visibleForTesting
+  static bool debugProgressShowing() => _progressShowing();
+
   static bool _progressShowing() {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return false;
@@ -393,8 +406,11 @@ class FlutterPilot {
     void visit(Element e) {
       if (found) return;
       final type = e.widget.runtimeType.toString();
-      if (type.endsWith('ProgressIndicator') ||
-          type == 'CupertinoActivityIndicator') {
+      // A pull-to-refresh spinner has a value while it snaps into place,
+      // before it starts spinning: it always means a refresh is under way.
+      if (type == 'CupertinoActivityIndicator' ||
+          type == 'RefreshProgressIndicator' ||
+          (type.endsWith('ProgressIndicator') && _isIndeterminate(e.widget))) {
         found = true;
         return;
       }

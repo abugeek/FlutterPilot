@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Fewer false alarms: the contrast audit skips a page that lies under an open
+  dialog or sheet (it is dimmed on purpose), and a progress bar with a value
+  (a gauge) no longer makes an action report "still loading".
 - A label that only a container holds (a tap-to-dismiss detector over the
   whole page contains every label on screen) no longer resolves to that
   container: tapping "Inventory Tab 3 of 5" pressed whatever sat at the centre
