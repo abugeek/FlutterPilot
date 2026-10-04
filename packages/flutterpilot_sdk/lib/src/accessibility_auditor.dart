@@ -22,6 +22,14 @@ class AccessibilityAuditor {
   static const double minContrastLarge = 3.0;
 
   /// flutter_test's large-text rule: 18 logical px, or 14 bold.
+  /// A single private-use code point, which is how an Icon is drawn.
+  static bool isIconGlyph(String text) {
+    final runes = text.runes.toList();
+    if (runes.length != 1) return false;
+    final r = runes.single;
+    return (r >= 0xE000 && r <= 0xF8FF) || r >= 0xF0000;
+  }
+
   static bool isLarge(double fontSize, bool bold) =>
       fontSize >= 18 || (bold && fontSize >= 14);
 
@@ -35,9 +43,11 @@ class AccessibilityAuditor {
         for (final n in nodes.where((n) => n.actionable))
           '${n.name} (${n.rect.left.round()}, ${n.rect.top.round()})',
       ],
-      'readingOrderJumps': readingOrderJumps([
-        for (final n in nodes.where((n) => n.actionable)) (n.name, n.rect),
-      ], rtl: nodes.any((n) => n.rtl)),
+      'readingOrderJumps': readingOrderJumps(
+        [for (final n in nodes.where((n) => n.actionable)) (n.name, n.rect)],
+        rtl: nodes.any((n) => n.rtl),
+        viewport: _viewport(),
+      ),
       if (root == null)
         'semanticsNote':
             'The semantics tree was not built, so labels and reading order '
@@ -252,7 +262,10 @@ class AccessibilityAuditor {
             final style = ro.text.style;
             final size = ro.textScaler.scale(style?.fontSize ?? 14);
             final bold = (style?.fontWeight?.value ?? 400) >= 700;
-            final large = isLarge(size, bold);
+            // An icon is one glyph from a private-use code point: a
+            // graphic, which WCAG 1.4.11 holds to 3:1, not the 4.5:1 of text.
+            final icon = isIconGlyph(text);
+            final large = icon || isLarge(size, bold);
             final ratio = contrastRatio(pair.$1, pair.$2);
             if (ratio < (large ? minContrastLarge : minContrast)) {
               final shown = text.length > 40
@@ -261,8 +274,12 @@ class AccessibilityAuditor {
               final problem =
                   'contrast ${ratio.toStringAsFixed(2)}:1 '
                   '(${_hex(pair.$2)} on ${_hex(pair.$1)}), needs '
-                  '${large ? '3' : '4.5'}:1 for ${large ? 'large' : 'body'} '
-                  'text (${size.toStringAsFixed(0)} px'
+                  '${large ? '3' : '4.5'}:1 for '
+                  '${icon
+                      ? 'an icon'
+                      : large
+                      ? 'large text'
+                      : 'body text'} (${size.toStringAsFixed(0)} px'
                   '${bold ? ' bold' : ''}). '
                   '${_sourceOf(element) ?? ''}';
               final seen = issues[problem];
@@ -425,14 +442,24 @@ class AccessibilityAuditor {
   static List<String> readingOrderJumps(
     List<(String, Rect)> order, {
     bool rtl = false,
+    Rect? viewport,
   }) => [
     for (var i = 1; i < order.length; i++)
       if (order[i].$2.bottom < order[i - 1].$2.top - 4 &&
+          // Content scrolled below the screen is read before a bar fixed
+          // to the bottom of it: that is the order on screen once scrolled.
+          !(viewport != null && order[i - 1].$2.top >= viewport.bottom) &&
           !_startsNextColumn(order[i - 1].$2, order[i].$2, rtl))
         'After ${order[i - 1].$1} (y ${order[i - 1].$2.top.round()}) a '
             'screen reader goes back up to ${order[i].$1} '
             '(y ${order[i].$2.top.round()}).',
   ];
+
+  static Rect? _viewport() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+    if (view == null) return null;
+    return Offset.zero & (view.physicalSize / view.devicePixelRatio);
+  }
 
   static bool _startsNextColumn(Rect previous, Rect next, bool rtl) =>
       rtl ? next.right <= previous.left + 4 : next.left >= previous.right - 4;
