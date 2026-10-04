@@ -150,6 +150,36 @@ void main() {
     expect(result['lowContrast'], isEmpty);
   });
 
+  test('an icon glyph is held to 3:1, text is not an icon', () {
+    expect(
+      AccessibilityAuditor.isIconGlyph(String.fromCharCode(0xe5cd)),
+      isTrue,
+    );
+    expect(
+      AccessibilityAuditor.isIconGlyph(String.fromCharCode(0xf0025)),
+      isTrue,
+    );
+    expect(AccessibilityAuditor.isIconGlyph('A'), isFalse);
+    expect(AccessibilityAuditor.isIconGlyph('OK'), isFalse);
+  });
+
+  test(
+    'content scrolled below the screen before a bottom bar is not a jump',
+    () {
+      const viewport = Rect.fromLTWH(0, 0, 390, 812);
+      final order = [
+        ('"Name"', const Rect.fromLTWH(16, 200, 300, 48)),
+        ('"Scan Barcode"', const Rect.fromLTWH(16, 1143, 300, 48)),
+        ('"Home"', const Rect.fromLTWH(0, 744, 78, 60)),
+      ];
+      expect(AccessibilityAuditor.readingOrderJumps(order), hasLength(1));
+      expect(
+        AccessibilityAuditor.readingOrderJumps(order, viewport: viewport),
+        isEmpty,
+      );
+    },
+  );
+
   test('WCAG contrast ratio', () {
     expect(
       AccessibilityAuditor.contrastRatio(0xff000000, 0xffffffff),

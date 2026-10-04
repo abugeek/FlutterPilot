@@ -1,5 +1,9 @@
 ## Unreleased
 
+- The contrast audit holds an icon to 3:1 (WCAG 1.4.11, graphics), not the
+  4.5:1 of text, and says "an icon" in the finding.
+- The reading-order audit no longer reports content scrolled below the screen
+  followed by a bottom bar as a jump back up.
 - Apps built on the separate `material_ui` / `cupertino_ui` packages (the
   same widgets as Flutter's under other classes): text fields are found by
   their label or hint, buttons by their tooltip, sliders and toggles are
