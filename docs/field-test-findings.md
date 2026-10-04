@@ -566,6 +566,21 @@ search-as-you-type field and a pay call, both through Dio.
 | 318 | stale search result | ✅ | no new feature: `q=apple&` with `delayMs: 200`, `q=ap&` with 900, type "ap" then "apple": the field says "apple", the page "Results for "ap"". The pattern is a substring, so `q=ap` alone would match both. |
 | 319 | "Tool 'mock_http_response' is disabled" | 🔎 open | the app built its Dio in a lazy top-level `final`, so the plugin registered at the first request and the tool was not listed before it. The app should call `DioPilotInterceptor.register()` in `main()` (init wires it); the refusal comes from the MCP library and does not say so. |
 
+### pos_lab, third round: state history, field errors (2026-10-05)
+
+Added to the app: Riverpod (a cashier, loyalty points that reset when the
+cashier changes, an autoDispose tip), a Bloc cubit for the shift, and a
+checkout `Form` whose Pay button is disabled until its fields are valid.
+
+| # | Item | Result | Notes |
+|---|---|---|---|
+| 320 | `get_state` shows only the present | ❌→added | `get_state(history: true)` after "Sign out": `PointsNotifier: 30 → 0`, `CashierNotifier: Dilnoza → signed out`, `ShiftCubit: open → closed`, all at 01:25:18.476 — the unwanted reset is on the page. The plugins had been reporting every change to a stub. |
+| 321 | order is not cause | ✅ | the points reset is listed before the sign-out that triggered it (Riverpod tells the listener's observer first). The tool states order and time and nothing more. |
+| 322 | a provider that goes away | ✅ | open checkout, add a tip, go back: `push /checkout`, `TipNotifier: created 0`, `0 → 1000`, `pop /checkout`, `TipNotifier: disposed (was 1000)`. `type: "riverpod"` keeps the route changes. |
+| 323 | a disabled button gave no reason | ❌→added | `tap_widget("Pay now")`: "is disabled and cannot be tapped. Fields on screen that do not validate: Customer name: "Name is required"; Phone: "Phone needs at least 9 digits"." — before the form had shown any error. |
+| 324 | which field is wrong | ❌→added | `get_widget_properties` on Phone: `"invalid":"Phone needs at least 9 digits"` before validation, `"fieldError":…` once shown, neither when valid; the summary marks both fields "⚠ error: …". A plain TextField next to them has neither. |
+| 325 | `get_widget_properties` failed on a field with an error | ❌→fixed | the property was named `error`, which the server reads as the call failing (the same trap as #317). Now `fieldError`. |
+
 ## §10 performance targets (hn_reader, macOS, debug; medians of 8 calls)
 
 | # | Item | Result | Notes |

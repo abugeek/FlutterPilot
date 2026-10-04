@@ -674,6 +674,31 @@ No new tools; field-tested on Windows in `../pos_lab` (findings #311–319).
   leak audit (`get_memory_details(cycle:)` is it), a one-call stress-test
   macro (three existing calls, and a fixed recipe hides which step failed).
 
+## 13. State history, why a button is disabled — done (2026-10-05)
+
+No new tools; field-tested on Windows in `../pos_lab` (findings #320–325).
+
+- **`get_state(history: true)`**: `FlutterPilot.logStateChange` was an
+  empty stub the Riverpod and Bloc plugins already called. It now keeps the
+  last 50 changes (`StateHistory`): value with the one it replaced, created,
+  disposed/closed (the plugins report that now), and route changes from
+  `NavigationTracker` between them. Order and time only: no "caused by" —
+  observers are not told, and in pos_lab the points reset was reported
+  *before* the sign-out that triggered it, in the same millisecond.
+- **Field errors** (`FormInspector`): `fieldError` on fields that show a
+  validation error, `invalid` for what the validator says before anything
+  is shown (asked the way `FormFieldState.isValid` asks, nothing appears),
+  and the "is disabled" refusal lists the fields on screen that do not
+  validate. No `get_form_status` tool: the same facts sit where the agent
+  already looks. Not covered: custom validation outside `FormField`
+  (a controller listener, a bloc), which leaves no validator to ask.
+- Declined from the same list: freezing all animations (no framework switch
+  stops every ticker without wrapping the app; looping animations are
+  already ignored when settling), background-isolate errors (`compute`,
+  `Isolate.run` and Drift's isolate hand their errors to the caller on the
+  main isolate; only a hand-spawned isolate with no error listener is
+  silent — untested whether the VM service reports it).
+
 ## Where things are
 
 - `docs/field-test-findings.md` — every tool observation (88 rows), latency.

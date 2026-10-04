@@ -1,5 +1,13 @@
 ## Unreleased
 
+- `get_state(history: true)`: the last 50 Riverpod/Bloc changes, oldest
+  first with times — old → new value, created, disposed — and the route
+  changes between them; `clear: true` empties it.
+- Tapping a disabled control names the form fields on screen that do not
+  validate. `get_widget_properties` has `fieldError` / `invalid` for a form
+  field; `get_interactive_elements` and `get_app_summary` mark fields that
+  show an error.
+
 - `inspect_widget(style: true)`: what a widget is drawn with — text size,
   weight, color, font and line height, paddings, fills, borders, corner
   radii, elevation — and the padding and fill around it.

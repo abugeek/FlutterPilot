@@ -42,7 +42,9 @@ import 'src/screen_capture.dart';
 import 'src/scroll_simulator.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
+import 'src/form_inspector.dart';
 import 'src/source_locator.dart';
+import 'src/state_history.dart';
 import 'src/style_explorer.dart';
 import 'src/test_recorder.dart';
 import 'src/ui_health_auditor.dart';
@@ -747,7 +749,13 @@ class FlutterPilot {
   ///
   /// [source] identifies the origin (e.g., `'navigation'`, `'riverpod'`).
   /// [name] is the event name (e.g., `'push'`). [value] is the payload.
-  static void logStateChange(String source, String name, dynamic value) {}
+  static void logStateChange(String source, String name, dynamic value) =>
+      StateHistory.record(source, name, value);
+
+  /// Records that the state [name] of [source] no longer exists (a disposed
+  /// provider, a closed bloc), for `get_state(history: true)`.
+  static void logStateDisposed(String source, String name) =>
+      StateHistory.disposed(source, name);
 
   // ---------------------------------------------------------------------------
   // Service extensions
@@ -903,6 +911,13 @@ class FlutterPilot {
     }
 
     visitForEditable(element);
+
+    // A form field's validation error: shown, or what its validator says
+    // about the current value before the form shows it.
+    final problem = FormInspector.of(element);
+    // Not "error": the server reads that key as the call failing.
+    if (problem?.shown != null) props['fieldError'] = problem!.shown;
+    if (problem?.pending != null) props['invalid'] = problem!.pending;
 
     // Focus state fallback
     if (!props.containsKey('isFocused')) {

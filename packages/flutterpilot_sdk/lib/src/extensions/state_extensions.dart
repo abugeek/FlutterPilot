@@ -251,6 +251,21 @@ extension _StateExtensions on FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.getStateHistory -------------------------------------
+    // The recent state and route changes, oldest first; clear=true empties
+    // the buffer after reading (a clean start before an action).
+    registerExtension('ext.flutterpilot.getStateHistory', (
+      method,
+      parameters,
+    ) async {
+      final result = {
+        'changes': StateHistory.entries,
+        'dropped': StateHistory.dropped,
+      };
+      if (parameters['clear'] == 'true') StateHistory.clear();
+      return ServiceExtensionResponse.result(json.encode(result));
+    });
+
     // -- ext.flutterpilot.setKeyboardInset ------------------------------------
     // Lays the app out as with an on-screen keyboard `inset` logical pixels
     // tall; 0 restores the device's.

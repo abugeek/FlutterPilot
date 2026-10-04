@@ -364,7 +364,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       description:
           'Every widget the user can tap or type into right now (buttons, '
           'fields, checkboxes, switches, sliders, tappable tiles) with type, '
-          'label, key and bounds; covered or off-screen ones are left out. '
+          'label, key and bounds, and fieldError for a field showing a '
+          'validation error; covered or off-screen ones are left out. '
           'get_app_summary shows the first 15.',
       inputSchema: ToolInputSchema(
         properties: {
@@ -496,8 +497,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               ? ' (${(el['bounds']['x'] as num).round()}, ${(el['bounds']['y'] as num).round()})'
               : '';
           final keyInfo = key.isNotEmpty && key != label ? ' [key: $key]' : '';
+          final error = el['fieldError'] == null
+              ? ''
+              : ' ⚠ error: ${el['fieldError']}';
           summary.writeln(
-            '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo',
+            '  - [$type] "${label.isNotEmpty ? label : key}"$bounds$keyInfo'
+            '$error',
           );
         }
         if (elements.length > 15) {
@@ -521,7 +526,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       description:
           'One widget\'s state: type, text (Text/TextField content), '
           'isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), '
-          'isFocused and bounds.',
+          'isFocused and bounds. A form field also has fieldError (the '
+          'validation error it shows) or invalid (what its validator says '
+          'about the current value, not shown yet).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(

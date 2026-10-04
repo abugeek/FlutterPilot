@@ -21,13 +21,48 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       description:
           'Current values of the app\'s Riverpod providers and Blocs/Cubits '
           '(name: value (type)), as their plugins observe them. type limits '
-          'it to one of the two.',
+          'it to one of the two. history:true returns the recent changes '
+          'instead, oldest first with times — each value with the one it '
+          'replaced, providers created and disposed, and the route changes '
+          'between them: how the state got to where it is. clear:true '
+          'empties that history (before an action whose effects you want '
+          'alone).',
       inputSchema: ToolInputSchema(
         properties: {
           'type': JsonSchema.string(enumValues: ['riverpod', 'bloc']),
+          'history': JsonSchema.boolean(
+            description: 'The recent state changes instead of the values.',
+          ),
+          'clear': JsonSchema.boolean(
+            description: 'Empty the history (after returning it).',
+          ),
         },
       ),
       callback: (p, e) async {
+        if (p['history'] == true || p['clear'] == true) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.getStateHistory',
+            {if (p['clear'] == true) 'clear': 'true'},
+          );
+          if (res.isError) return res.toCallToolResult();
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: FlutterPilotServer._boundToolText(
+                  formatStateHistory(
+                    [
+                      for (final c in (res.data?['changes'] as List? ?? []))
+                        (c as Map).cast<String, Object?>(),
+                    ],
+                    dropped: res.data?['dropped'] as int? ?? 0,
+                    type: p['type']?.toString(),
+                    cleared: p['clear'] == true,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
         final sections = <String>[];
         String? lastError;
         for (final (type, ext, valueKey) in [

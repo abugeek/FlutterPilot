@@ -345,7 +345,7 @@ The app's own widgets on screen (DevTools summary tree) with keys, text, selecto
 
 ## `get_interactive_elements`
 
-Every widget the user can tap or type into right now (buttons, fields, checkboxes, switches, sliders, tappable tiles) with type, label, key and bounds; covered or off-screen ones are left out. get_app_summary shows the first 15.
+Every widget the user can tap or type into right now (buttons, fields, checkboxes, switches, sliders, tappable tiles) with type, label, key and bounds, and fieldError for a field showing a validation error; covered or off-screen ones are left out. get_app_summary shows the first 15.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -360,7 +360,7 @@ Start here. The running app in a few lines: route, viewport, focused widget, the
 
 ## `get_widget_properties`
 
-One widget's state: type, text (Text/TextField content), isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), isFocused and bounds.
+One widget's state: type, text (Text/TextField content), isEnabled, isChecked (Checkbox/Switch), value/min/max (Slider), isFocused and bounds. A form field also has fieldError (the validation error it shows) or invalid (what its validator says about the current value, not shown yet).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -398,11 +398,13 @@ Recompiles edited .dart files and hot reloads them into the running app, keeping
 
 ## `get_state`
 
-Current values of the app's Riverpod providers and Blocs/Cubits (name: value (type)), as their plugins observe them. type limits it to one of the two.
+Current values of the app's Riverpod providers and Blocs/Cubits (name: value (type)), as their plugins observe them. type limits it to one of the two. history:true returns the recent changes instead, oldest first with times — each value with the one it replaced, providers created and disposed, and the route changes between them: how the state got to where it is. clear:true empties that history (before an action whose effects you want alone).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `type` | string | no |  |
+| `history` | boolean | no | The recent state changes instead of the values. |
+| `clear` | boolean | no | Empty the history (after returning it). |
 
 ## `set_state`
 
