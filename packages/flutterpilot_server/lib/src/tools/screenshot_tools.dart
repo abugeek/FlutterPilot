@@ -84,10 +84,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         return res.toCallToolResult();
       }
       final profile = _activeContext?.buildMode == BuildMode.profile;
+      final stale = await _staleCodeNote();
       return CallToolResult(
         content: [
           TextContent(
             text:
+                '${stale == null ? '' : '• Code: $stale\n'}'
                 '${zeroCodeSummary(basic.data!)}'
                 '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
           ),
@@ -108,6 +110,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     final vp = data['viewport'] ?? {};
 
     final summary = StringBuffer();
+    if (await _staleCodeNote() case final stale?) {
+      summary.writeln('• Code: $stale');
+    }
     if (data['starting'] case final String why) {
       summary.writeln('• Starting: $why');
     }

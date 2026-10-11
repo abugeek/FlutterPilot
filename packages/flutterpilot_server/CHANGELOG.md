@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `get_app_summary` says when the app is not running the code on disk:
+  "• Code: 2 Dart files (lib/a.dart, lib/b.dart) edited since the app loaded
+  its code… hot_reload loads it", or that `pubspec.lock`, `pubspec.yaml` or
+  a native project file changed since the build and `launch_app(relaunch:
+  true)` is needed. Edited files are compared with the source the VM has
+  loaded, so a reload from the terminal or an earlier session counts.
+  `launch_app` with an app running gives the relaunch reason too.
 - `navigate_to(waitFor: "Orders")` waits for a key or text on the new page
   (an error if it has not appeared in 5 s): one call for navigate, then
   wait.

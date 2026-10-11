@@ -55,6 +55,15 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       final info = await probeDevice(
         _connectedUri!,
       ).then<Object>((i) => i, onError: (_) => 'an app');
+      // When something a reload can't load did change, say so: this is
+      // the case relaunch:true is for.
+      final stale = await _staleCodeNote();
+      if (stale != null && stale.contains('launch_app(relaunch: true)')) {
+        return _launchResult(
+          'Already running and connected: $info. Nothing was launched. $stale',
+          isError: true,
+        );
+      }
       return _launchResult(
         'Already running and connected: $info. Nothing was launched. '
         '${context?.buildMode == BuildMode.profile ? 'It is a profile build (no hot reload): relaunch:true builds it again.' : 'hot_reload(restart: true) loads every changed Dart file and runs main() again in about a second.'} '

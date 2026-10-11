@@ -16,6 +16,7 @@ import 'src/app_launcher.dart';
 import 'src/batch_nudge.dart';
 import 'src/build_mode.dart';
 import 'src/call_log.dart';
+import 'src/code_freshness.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
@@ -74,6 +75,89 @@ abstract class _FlutterPilotServerBase {
   /// Every tool's callback by name, for tools that run another tool
   /// (profile_action).
   final Map<String, ToolFunction> _toolCallbacks = {};
+
+  /// What changed on disk since the connected app loaded it (edited Dart
+  /// files, a changed pubspec.lock), as one line, or null when the app runs
+  /// what is there or its folder can't be told (web, a remote device).
+  Future<String?> _staleCodeNote() async {
+    final context = _activeContext;
+    final vm = context?.service;
+    if (context == null || vm == null) return null;
+    try {
+      return await () async {
+        final info = await vm.getVM();
+        for (final ref in info.isolates ?? const <IsolateRef>[]) {
+          final isolate = await vm.getIsolate(ref.id!);
+          var uri = isolate.rootLib?.uri;
+          if (uri != null && uri.startsWith('package:')) {
+            uri = (await vm.lookupResolvedPackageUris(ref.id!, [
+              uri,
+            ])).uris?.first;
+          }
+          if (uri == null || !uri.startsWith('file:')) continue;
+          final root = projectRootOfFile(Uri.parse(uri).toFilePath());
+          final isolateStart = isolate.startTime;
+          final vmStart = info.startTime;
+          if (root == null || isolateStart == null || vmStart == null) {
+            continue;
+          }
+          // A hot restart starts a new isolate; a reload is noted when it
+          // happens, whoever asked for it.
+          var loaded = DateTime.fromMillisecondsSinceEpoch(isolateStart);
+          final reloaded = context.lastReload;
+          if (reloaded != null && reloaded.isAfter(loaded)) loaded = reloaded;
+          final changed = codeFreshness(
+            root,
+            codeLoaded: loaded,
+            appStarted: DateTime.fromMillisecondsSinceEpoch(vmStart),
+          );
+          return CodeFreshness(
+            dart: await _notLoaded(vm, ref.id!, root, changed.dart),
+            relaunch: changed.relaunch,
+          ).note(hotReload: context.buildMode != BuildMode.profile);
+        }
+        return null;
+      }().timeout(const Duration(seconds: 4));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Of [files] (relative to [root], newer than the last reload this server
+  /// saw), those whose text differs from what the VM has loaded. Times alone
+  /// would call a file stale that was reloaded from the terminal, or before
+  /// this server connected. A file the app doesn't load (not imported yet)
+  /// is left out: importing it edits a file that is.
+  Future<List<String>> _notLoaded(
+    VmService vm,
+    String isolateId,
+    String root,
+    List<String> files,
+  ) async {
+    if (files.isEmpty) return files;
+    final loaded = {
+      for (final script
+          in (await vm.getScripts(isolateId)).scripts ?? const <ScriptRef>[])
+        if (script.uri != null && script.id != null) script.uri!: script.id!,
+    };
+    final fileUris = [for (final f in files) Uri.file('$root/$f').toString()];
+    final packageUris =
+        (await vm.lookupPackageUris(isolateId, fileUris)).uris ??
+        const <String?>[];
+    final stale = <String>[];
+    for (var i = 0; i < files.length; i++) {
+      final id =
+          loaded[i < packageUris.length ? packageUris[i] : null] ??
+          loaded[fileUris[i]];
+      if (id == null) continue;
+      final script = await vm.getObject(isolateId, id);
+      if (script is! Script || script.source == null) continue;
+      if (script.source != File('$root/${files[i]}').readAsStringSync()) {
+        stale.add(files[i]);
+      }
+    }
+    return stale;
+  }
 
   /// Says once when the agent drives the app one call at a time.
   final _batchNudge = BatchNudge();
@@ -897,6 +981,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         // with it, so the zero-code one does too.
         if (event.kind == EventKind.kIsolateStart) {
           context.zeroCodeErrors.clear();
+        }
+        // A reload from the terminal or the IDE counts like one of ours.
+        if (event.kind == EventKind.kIsolateReload) {
+          context.lastReload = DateTime.now();
         }
         // Plugins register when the app sets them up (after Firebase init,
         // a first Dio, ...): list their tools then.
