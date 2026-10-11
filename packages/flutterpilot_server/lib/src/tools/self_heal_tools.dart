@@ -88,14 +88,17 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         isError: true,
       );
     }
+    ({String root, int? logOffset, DateTime since})? before;
     try {
       final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
+      before = await _beforeReload(vmService, context);
       final hadSdk =
           service == 'hotRestart' && await _hasSdkExtensions(vmService);
       await vmService
           .callMethod(method, isolateId: isolateId)
           .timeout(const Duration(minutes: 2));
       _selfHealManager.reset();
+      context.lastReload = DateTime.now();
       if (service == 'hotRestart' &&
           !await _waitForRestartedApp(vmService, sdk: hadSdk)) {
         return CallToolResult(
@@ -119,9 +122,99 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           ? '${err.message} ${err.details ?? ''}'
           : '$err';
       return CallToolResult(
-        content: [TextContent(text: reloadFailureText(service, details))],
+        content: [
+          TextContent(
+            text: reloadFailureText(
+              service,
+              details,
+              compileErrors: before != null && mayBeCompileError(details)
+                  ? await _compileErrors(before)
+                  : '',
+            ),
+          ),
+        ],
         isError: true,
       );
+    }
+  }
+
+  /// Where to look for compiler errors if the reload about to run fails:
+  /// the app's folder, how long launch_app's log of `flutter run` is now,
+  /// and since when an edited file is news. Null when the app's folder
+  /// can't be told.
+  Future<({String root, int? logOffset, DateTime since})?> _beforeReload(
+    VmService vm,
+    DeviceRuntimeContext context,
+  ) async {
+    try {
+      for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+        final isolate = await vm.getIsolate(ref.id!);
+        var uri = isolate.rootLib?.uri;
+        if (uri != null && uri.startsWith('package:')) {
+          uri = (await vm.lookupResolvedPackageUris(ref.id!, [
+            uri,
+          ])).uris?.first;
+        }
+        if (uri == null || !uri.startsWith('file:')) continue;
+        final root = projectRootOfFile(Uri.parse(uri).toFilePath());
+        if (root == null) continue;
+        final log = File('$root/$launchLogFile');
+        final started = isolate.startTime;
+        return (
+          root: root,
+          logOffset:
+              runningLaunchPid(Directory(root)) != null && log.existsSync()
+              ? log.lengthSync()
+              : null,
+          since:
+              context.lastReload ??
+              (started == null
+                  ? DateTime.now().subtract(const Duration(hours: 1))
+                  : DateTime.fromMillisecondsSinceEpoch(started)),
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// The compiler's errors for a reload that just failed: from the
+  /// `flutter run` output when launch_app started the app, else from
+  /// `dart analyze` on the Dart files edited since the last good reload.
+  Future<String> _compileErrors(
+    ({String root, int? logOffset, DateTime since}) before,
+  ) async {
+    final offset = before.logOffset;
+    if (offset != null) {
+      final log = File('${before.root}/$launchLogFile');
+      // The supervisor copies flutter run's output a moment after it prints.
+      for (var i = 0; i < 6; i++) {
+        try {
+          final bytes = log.readAsBytesSync();
+          final errors = compileErrorsIn(
+            utf8.decode(
+              bytes.sublist(offset.clamp(0, bytes.length)),
+              allowMalformed: true,
+            ),
+          );
+          if (errors.isNotEmpty) return errors;
+        } catch (_) {}
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+    }
+    final files = dartFilesChangedSince(before.root, before.since);
+    if (files.isEmpty) return '';
+    try {
+      final result = await Process.run('dart', [
+        'analyze',
+        '--format=machine',
+        ...files,
+      ], workingDirectory: before.root).timeout(const Duration(seconds: 30));
+      return analyzerErrorsIn(
+        '${result.stdout}\n${result.stderr}',
+        before.root,
+      );
+    } catch (_) {
+      return '';
     }
   }
 
