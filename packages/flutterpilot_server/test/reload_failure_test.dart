@@ -25,6 +25,22 @@ void main() {
     expect(text, contains('App Management'));
   });
 
+  // Field test (Octana): carousel SVGs deleted while the app ran.
+  test('a missing asset is named as that', () {
+    final text = reloadFailureText(
+      'hotRestart',
+      'Error: Flutter failed to copy /app/assets/flow/welcome_4.svg to '
+          '/Users/me/Library/Containers/com.example.app/Data/tmp/app1/app/build/flutter_assets/assets/flow/welcome_4.svg '
+          'due to source location error. The file or directory could not be found.\n'
+          "PathNotFoundException: Cannot open file, path = '/app/assets/flow/welcome_4.svg'",
+    );
+
+    expect(text, contains('welcome_4.svg'));
+    expect(text, contains('not a compile error'));
+    expect(text, contains('pubspec.yaml'));
+    expect(text, isNot(contains('App Management')));
+  });
+
   test('anything else keeps the compile-error hint', () {
     final text = reloadFailureText(
       'reloadSources',

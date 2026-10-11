@@ -314,7 +314,7 @@ FlutterPilot inspects and drives a running Flutter app (flutter run, debug or pr
 - Actions (tap_widget, enter_text, press_key, fill_form, ...) report what they changed: route, widget diff, what is tappable now, new errors. Read that before taking a screenshot or reading the tree again.
 - When the steps are known, send them in one call: fill_form, execute_action_chain, tap_widget(waitFor: ...).
 - Check an outcome with assert_widget or wait_for (milliseconds, no sleeping) and layout with audit_screen_health.
-- After editing Dart code: hot_reload, then get_errors.''';
+- After editing Dart code: hot_reload, then get_errors. hot_reload(restart: true) loads every changed Dart file and runs main() again: use it after a git checkout or for a stuck app. Keep the app running; stop and rebuild it (minutes) only for pubspec.yaml, assets or native code changes.''';
 
 /// FlutterPilot MCP Server — bridges AI agents to a running Flutter app.
 class FlutterPilotServer extends _FlutterPilotServerBase
@@ -1226,6 +1226,11 @@ Every action reports whether the route changed, a widget-tree diff and what is t
 1. `get_errors` → your source frame (file:line)
 2. edit the Dart source → `hot_reload` (restart:true for main()/static initializers/provider definitions)
 3. repeat the steps; `assert_widget` / `get_errors` to confirm
+
+## Keep the app running
+- Building the app again takes minutes; `hot_reload` under a second.
+- `hot_reload(restart: true)` recompiles every changed Dart file and runs main() again: use it after a git checkout/merge too, and to get out of a stuck screen or a bad app state.
+- Run the app again only for pubspec.yaml (dependencies, assets), native code, --dart-define values, another device or build mode, or a dead process. Don't kill it when a task is done.
 ''',
               ),
             ),
