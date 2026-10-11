@@ -2,6 +2,11 @@
 
 - `FlutterPilot.protocol` and `ext.flutterpilot.protocol`: the contract with
   the server as a number, so each side can say when the other is older.
+- A gesture handler around the whole screen that has the screen's controls
+  inside it (tap outside to dismiss the keyboard, an idle timer) is no
+  longer listed as a tappable element: it came first, labelled with every
+  loose text on the screen. One with a key, or with nothing tappable inside,
+  is still listed.
 - `FlutterPilot.notOnScreenYet()`: why there is nothing to look at (no
   `runApp` yet, or no first frame); in the app summary as `starting` and in
   the screenshot error instead of "No RenderView".
