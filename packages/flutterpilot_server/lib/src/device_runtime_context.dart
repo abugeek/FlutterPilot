@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:vm_service/vm_service.dart';
 
 import 'operation_scheduler.dart';
+import 'screen_memory.dart';
 
 /// Runtime-owned state for one Flutter VM-service connection.
 ///
@@ -43,6 +44,9 @@ class DeviceRuntimeContext {
   /// with the SDK installed it reports errors itself.
   final List<Map<String, dynamic>> zeroCodeErrors = [];
 
+  /// What the last action response listed as tappable on this device.
+  final ScreenMemory screenMemory = ScreenMemory();
+
   /// The VM's `operatingSystem` (`ios`, `android`, `macos`, ...).
   String? operatingSystem;
 
@@ -80,6 +84,7 @@ class DeviceRuntimeContext {
     hasSdk = null;
     sdkProtocol = null;
     zeroCodeErrors.clear();
+    screenMemory.reset();
     lifecycle = null;
     lastReload = null;
     await service?.dispose();
