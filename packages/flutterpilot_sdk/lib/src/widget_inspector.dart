@@ -1166,6 +1166,11 @@ class PilotWidgetInspector {
 
       target.visitScreenChildren(findNested);
       final key = _userKey(target);
+      // A handler around the whole screen with the screen's controls inside
+      // it (tap outside to dismiss the keyboard, an idle timer) is not one
+      // of them: listed, it came first with every loose text on the screen
+      // as its label ("Tab 1 of 8 Tab 2 of 8 … TODAY'S REVENUE …").
+      if (key == null && nested.isNotEmpty && _coversTheView(ro)) continue;
       final text = _extractDescendantText(target, skip: nested);
       if (key == null && text.isEmpty && nested.isNotEmpty) continue;
       // A framework handler with no key or text can't be addressed anyway.
@@ -1200,6 +1205,16 @@ class PilotWidgetInspector {
       }
     }
     return elements;
+  }
+
+  /// Whether [box] takes up (nearly) all of the view it is in.
+  static bool _coversTheView(RenderBox box) {
+    final view = WidgetsBinding.instance.renderViews.firstOrNull;
+    if (view == null) return false;
+    final screen = view.size;
+    if (screen.isEmpty) return false;
+    return box.size.width * box.size.height >=
+        0.9 * screen.width * screen.height;
   }
 
   /// A key the developer can pass back to a finder: not framework-internal
