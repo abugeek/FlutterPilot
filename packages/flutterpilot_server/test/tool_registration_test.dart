@@ -52,8 +52,10 @@ void main() {
         .fold(0, (a, b) => a + b);
 
     test('the tool list stays within its size budget', () {
+      // +800 each for launch_app (2026-10-11): it replaces a pkill, a nohup
+      // and a polling loop per relaunch, and is listed with no app at all.
       // Every tool (--static-tools).
-      expect(listBytes((_) => true), lessThanOrEqualTo(40000));
+      expect(listBytes((_) => true), lessThanOrEqualTo(40800));
       // An app with the SDK and no plugin, not on an iOS simulator.
       expect(
         listBytes(
@@ -61,10 +63,10 @@ void main() {
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(28500),
+        lessThanOrEqualTo(29300),
       );
       // An app without the SDK.
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(8800));
+      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9600));
     });
 
     test('every tool says what it does to the app', () {

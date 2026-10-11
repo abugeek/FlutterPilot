@@ -1390,6 +1390,13 @@ Future<void> main(List<String> args) async {
       );
     }
 
+    // launch_app with the app up: no second build, and the way to load a
+    // change (a full launch is covered live; here it would kill the fixture).
+    await check('launch_app refuses while the app runs', 'launch_app', {}, [
+      'Already running and connected',
+      'relaunch:true',
+    ], true);
+
     // Fleet: name the app as flutter run prints its URI (http://.../), then
     // check that listing, switching and bad input are reported honestly.
     final sdkLabel = zeroCode ? 'zero-code' : 'flutterpilot_sdk';

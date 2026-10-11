@@ -1,6 +1,6 @@
 # FlutterPilot AI Assistant Guidelines
 
-FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 66 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
+FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 67 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
 
 **Next work:** see `ROADMAP.md` (priorities, field-test method, known gotchas). Drive tools from a shell with `packages/flutterpilot_server/tool/fp_bridge.dart`.
 
@@ -10,6 +10,7 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 - **Check setup**: `flutterpilot doctor` checks SDK/plugin wiring, macOS entitlements, MCP config and (if running) what the app registered, with exact fixes.
 - **Connect an agent**: `flutterpilot mcp install` writes the MCP config (Claude Code `.mcp.json`, Cursor, VS Code, Codex, Gemini CLI, Antigravity, Zed, opencode, Junie, Kiro, Roo Code; README "MCP Setup") with a compiled server, plus the official Dart MCP server (`dart mcp-server --disable flutter,dart_tooling_daemon`: its analyzer, `lsp` and pub; its hot reload/errors/inspector/driver duplicate ours).
 - **Finding the app**: a plain `flutter run`, an IDE launch or the Dart MCP server's `launch_app` is found through the Dart Tooling Daemon; `flutterpilot dev` also writes `.dart_tool/flutterpilot_vm_uri`.
+- **Starting the app**: `launch_app` builds and starts it (`flutter run`, or the command in the app's `flutterpilot/launch.json`: `{"command": ["./scripts/run.sh"]}`), waits for the first frame and connects; `device`, `target`, `mode: "profile"`. The app outlives the session. With an app already running it refuses unless `relaunch: true`: a hot restart loads every Dart change, a relaunch is for pubspec.yaml, assets, native code or dart-define changes. A failed build returns the end of the build output (`.dart_tool/flutterpilot_run.log`).
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
 - **Zero-Code Mode**: Without `flutterpilot_sdk` the app can be inspected but not driven: only the tools that work are listed (summary, widget tree, screenshots, errors, logs, hot reload/restart, theme and debug-paint toggles, memory/HTTP profiles). `get_app_summary` says so; `flutterpilot init` adds taps, text entry, navigation and assertions.
