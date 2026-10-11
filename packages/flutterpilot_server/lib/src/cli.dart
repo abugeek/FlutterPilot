@@ -55,6 +55,14 @@ Future<void> runFlutterPilotServer(List<String> args) async {
           'says why when called.',
       negatable: false,
     )
+    ..addFlag(
+      'call-log',
+      defaultsTo: true,
+      help:
+          'Note each tool call (name, time, size, kind of failure; no '
+          'arguments or results) in the project\'s '
+          '.dart_tool/flutterpilot_calls.jsonl for "flutterpilot stats".',
+    )
     ..addOption(
       'log-level',
       help: 'Log level (fine, info, warning, severe).',
@@ -85,6 +93,7 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     remoteAccessToken: remoteToken,
     projectRoot: projectRoot,
     staticTools: results['static-tools'] as bool,
+    callLog: results['call-log'] as bool,
   );
 
   // Handle graceful shutdown
