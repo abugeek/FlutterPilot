@@ -12,6 +12,10 @@
   message: from `flutter run`'s output when `launch_app` started the app,
   else from `dart analyze` on the Dart files edited since the last good
   reload.
+- An app whose `main()` has not reached `runApp` says so: `get_app_summary`
+  starts with "Starting: main() has not called runApp yet…" instead of only
+  "Route: Unknown" and no elements, and `capture_screenshot` waits up to 3 s
+  for the first frame, then gives that reason instead of "No RenderView".
 - `launch_app` builds and starts the app (`flutter run`, or the command in
   the app's `flutterpilot/launch.json`), waits for its first frame and
   connects. The app keeps running after the MCP session ends, and the next

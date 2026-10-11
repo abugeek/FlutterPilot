@@ -343,6 +343,9 @@ class FlutterPilot {
         'devicePixelRatio': devicePixelRatio,
       },
       'lifecycle': WidgetsBinding.instance.lifecycleState?.name,
+      // Only the certain case: a window hidden since launch may never
+      // report a rasterized frame while FlutterPilot's forced ones draw.
+      'starting': ?notOnScreenYet(firstFrame: false),
       'interactiveElements': interactiveElements,
       'focusedElement': focusedInfo,
       'performance': {
@@ -360,6 +363,24 @@ class FlutterPilot {
       'lastError': ?recentErrors.lastOrNull?['exception'],
       'recentLogs': recentLogs,
     };
+  }
+
+  /// Why there is nothing to look at yet, or null once the app has drawn:
+  /// main() has not reached runApp (it awaits Firebase, a database, a
+  /// session), or the first frame is still to come. Field sessions read
+  /// "No RenderView" and an empty summary as a dead display or a hung app.
+  static String? notOnScreenYet({bool firstFrame = true}) {
+    final binding = WidgetsBinding.instance;
+    if (binding.rootElement == null) {
+      return 'main() has not called runApp yet (it is still awaiting '
+          'something), so there is nothing on screen. get_debug_logs shows '
+          'how far it got; wait_for(key: ...) waits for the first screen.';
+    }
+    if (firstFrame && !binding.firstFrameRasterized) {
+      return 'The first frame has not been drawn yet; try again in a moment '
+          '(wait_for(frames: 5)).';
+    }
+    return null;
   }
 
   /// Extracts instant post-action state for telemetry and feedback.

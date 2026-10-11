@@ -182,11 +182,19 @@ extension _DiagnosticsExtensions on FlutterPilot {
     ) async {
       try {
         final scale = double.tryParse(parameters['scale'] ?? '') ?? 1.0;
-        final bytes = await FlutterPilot._captureScreenshot(scale: scale);
+        var bytes = await FlutterPilot._captureScreenshot(scale: scale);
+        // A screenshot asked for right after launch or a hot restart: give
+        // the app up to 3 s to draw before saying why there is none.
+        for (var i = 0; i < 30 && bytes == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          if (FlutterPilot.notOnScreenYet() == null) {
+            bytes = await FlutterPilot._captureScreenshot(scale: scale);
+          }
+        }
         if (bytes == null) {
           return ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
-            'No RenderView',
+            'No screenshot: ${FlutterPilot.notOnScreenYet() ?? 'the app has no view to draw into (window closed?).'}',
           );
         }
         return ServiceExtensionResponse.result(

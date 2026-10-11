@@ -108,6 +108,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     final vp = data['viewport'] ?? {};
 
     final summary = StringBuffer();
+    if (data['starting'] case final String why) {
+      summary.writeln('• Starting: $why');
+    }
     summary.writeln('• Route: $route (Depth: $depth)');
     summary.writeln(
       '• Viewport: ${vp['width']}x${vp['height']} (dpr: ${vp['devicePixelRatio']})',
