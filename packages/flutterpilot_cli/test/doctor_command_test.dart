@@ -88,10 +88,68 @@ void main() {
     expect(mac.ok, isFalse);
   });
 
+  // Field case: agents ran a server compiled days before its source moved.
+  test('a compiled server older than its source is pointed out', () {
+    final package = Directory(p.join(app.path, 'flutterpilot_server'));
+    File(p.join(package.path, 'pubspec.yaml'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('name: flutterpilot_server');
+    final source = File(p.join(package.path, 'lib', 'server.dart'))
+      ..createSync(recursive: true);
+    final binary = File(p.join(package.path, 'build', 'flutterpilot_server'))
+      ..createSync(recursive: true);
+    final built = DateTime(2026, 10, 5);
+    binary.setLastModifiedSync(built);
+    source.setLastModifiedSync(built.subtract(const Duration(days: 1)));
+    expect(DoctorCommand.staleServerBinary(binary.path), isNull);
+    source.setLastModifiedSync(built.add(const Duration(days: 6)));
+    expect(
+      DoctorCommand.staleServerBinary(binary.path),
+      contains('compiled before 1 of its source files last changed'),
+    );
+    // A server installed elsewhere (pub cache, a release) is not judged.
+    expect(DoctorCommand.staleServerBinary('/usr/local/bin/server'), isNull);
+  });
+
+  test("Claude Code's own config outside the project is checked too", () {
+    pubspec([]);
+    final home = Directory(p.join(app.path, 'home'))..createSync();
+    final package = Directory(p.join(app.path, 'flutterpilot_server'));
+    File(p.join(package.path, 'pubspec.yaml'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync('name: flutterpilot_server');
+    final source = File(p.join(package.path, 'lib', 'server.dart'))
+      ..createSync(recursive: true);
+    final binary = File(p.join(package.path, 'build', 'flutterpilot_server'))
+      ..createSync(recursive: true);
+    binary.setLastModifiedSync(DateTime(2026, 10, 5));
+    source.setLastModifiedSync(DateTime(2026, 10, 11));
+    File(p.join(home.path, '.claude.json')).writeAsStringSync(
+      jsonEncode({
+        'projects': {
+          p.normalize(p.absolute(app.path)): {
+            'mcpServers': {
+              'flutterpilot': {'command': binary.path, 'args': []},
+            },
+          },
+        },
+      }),
+    );
+    final check = DoctorCommand.checkMcpConfig(app.path, home: home.path);
+    expect(check.warn, isTrue);
+    expect(check.title, contains('Claude Code (~/.claude.json)'));
+    expect(check.title, contains('compiled before 1 of its source files'));
+
+    source.setLastModifiedSync(DateTime(2026, 10, 1));
+    final fine = DoctorCommand.checkMcpConfig(app.path, home: home.path);
+    expect(fine.warn, isFalse);
+    expect(fine.title, contains('Claude Code (~/.claude.json)'));
+  });
+
   test('MCP config: missing, pointing at a missing server, fine', () {
     pubspec([]);
     expect(
-      DoctorCommand.checkMcpConfig(app.path).fix,
+      DoctorCommand.checkMcpConfig(app.path, home: app.path).fix,
       'flutterpilot mcp install',
     );
     write(
@@ -102,7 +160,7 @@ void main() {
         },
       }),
     );
-    final missing = DoctorCommand.checkMcpConfig(app.path);
+    final missing = DoctorCommand.checkMcpConfig(app.path, home: app.path);
     expect(missing.ok, isFalse);
     expect(missing.title, contains('/nope/flutterpilot_server'));
     write(
@@ -116,7 +174,7 @@ void main() {
         },
       }),
     );
-    expect(DoctorCommand.checkMcpConfig(app.path).ok, isTrue);
+    expect(DoctorCommand.checkMcpConfig(app.path, home: app.path).ok, isTrue);
     // Codex's TOML and opencode's command list are read too.
     File(p.join(app.path, '.mcp.json')).deleteSync();
     write(
@@ -124,7 +182,7 @@ void main() {
       '[mcp_servers.flutterpilot]\ncommand = "/nope/server"\nargs = []\n',
     );
     expect(
-      DoctorCommand.checkMcpConfig(app.path).title,
+      DoctorCommand.checkMcpConfig(app.path, home: app.path).title,
       contains('Codex: .codex/config.toml starts /nope/server'),
     );
     File(p.join(app.path, '.codex', 'config.toml')).deleteSync();
@@ -140,7 +198,7 @@ void main() {
       }),
     );
     expect(
-      DoctorCommand.checkMcpConfig(app.path).title,
+      DoctorCommand.checkMcpConfig(app.path, home: app.path).title,
       'MCP config: opencode',
     );
   });

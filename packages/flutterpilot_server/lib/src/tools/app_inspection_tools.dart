@@ -103,6 +103,14 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         'maxToolResponseBytes': _Constants.maxToolResponseBytes,
       },
       'plugins': pluginStatus,
+      'sdkProtocol': {
+        'server': sdkProtocol,
+        'app': ?_activeContext?.sdkProtocol,
+        'note': ?switch (_activeContext?.sdkProtocol) {
+          final int app => protocolNote(app),
+          null => null,
+        },
+      },
       'vm': ?vmInfo,
       'sdkCapabilities': sdkCapabilities.isError
           ? <String, dynamic>{

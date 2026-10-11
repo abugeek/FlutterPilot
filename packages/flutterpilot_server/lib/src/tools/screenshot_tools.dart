@@ -110,6 +110,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     final vp = data['viewport'] ?? {};
 
     final summary = StringBuffer();
+    final protocol = _activeContext?.sdkProtocol;
+    if (protocol != null) {
+      if (protocolNote(protocol) case final note?) {
+        summary.writeln('• Versions: $note');
+      }
+    }
     if (await _staleCodeNote() case final stale?) {
       summary.writeln('• Code: $stale');
     }

@@ -35,6 +35,10 @@ class DeviceRuntimeContext {
   /// can from Flutter's own inspector extensions ("zero-code mode").
   bool? hasSdk;
 
+  /// The app SDK's protocol number (sdk_protocol.dart); 1 for an SDK from
+  /// before it had one. Null until checked, or without the SDK.
+  int? sdkProtocol;
+
   /// Framework errors (`Flutter.Error` events) seen while [hasSdk] is false;
   /// with the SDK installed it reports errors itself.
   final List<Map<String, dynamic>> zeroCodeErrors = [];
@@ -74,6 +78,7 @@ class DeviceRuntimeContext {
     isolateEvents = null;
     registeredServices.clear();
     hasSdk = null;
+    sdkProtocol = null;
     zeroCodeErrors.clear();
     lifecycle = null;
     lastReload = null;

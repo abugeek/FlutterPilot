@@ -33,6 +33,7 @@ import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
 import 'src/scenario.dart';
+import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
 import 'src/test_writer.dart';
@@ -764,6 +765,31 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     return false;
   }
 
+  /// The protocol number of the app's SDK: 1 when it has no
+  /// `ext.flutterpilot.protocol` (an SDK from before the number), null when
+  /// it could not be asked.
+  static Future<int?> _readSdkProtocol(VmService vm) async {
+    try {
+      for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+        final rpcs = (await vm.getIsolate(ref.id!)).extensionRPCs ?? const [];
+        if (!rpcs.any((r) => r.startsWith('ext.flutterpilot.'))) continue;
+        if (!rpcs.contains('ext.flutterpilot.protocol')) {
+          // Protocol 2 shipped a few commits before the number did: an SDK
+          // with its extension is at 2.
+          return rpcs.contains('ext.flutterpilot.screenNow') ? 2 : 1;
+        }
+        final res = await vm
+            .callServiceExtension(
+              'ext.flutterpilot.protocol',
+              isolateId: ref.id,
+            )
+            .timeout(const Duration(seconds: 3));
+        return (res.json?['protocol'] as num?)?.toInt() ?? 1;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Tool calls and the reconnect timer can both trigger a connect; share one
   /// attempt so they never race into two live connections.
   Future<void> _connectToVmService() => _connecting ??= _doConnectToVmService()
@@ -844,10 +870,17 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     activeContext.lifecycle = null;
     activeContext.zeroCodeErrors.clear();
     final checkedService = _vmService!;
-    _sdkExtensionsReady = _waitForSdkExtensions(checkedService).then((found) {
+    _sdkExtensionsReady = _waitForSdkExtensions(checkedService).then((
+      found,
+    ) async {
       if (!identical(activeContext.service, checkedService)) return;
       activeContext.hasSdk = found;
       if (found != null) _refreshToolVisibility();
+      if (found != true) return;
+      final protocol = await _readSdkProtocol(checkedService);
+      if (identical(activeContext.service, checkedService)) {
+        activeContext.sdkProtocol = protocol;
+      }
     });
     try {
       _nativeCrash = null;

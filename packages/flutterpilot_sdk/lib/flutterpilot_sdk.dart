@@ -203,6 +203,11 @@ class FlutterPilot {
 
   static bool _initialized = false;
 
+  /// The contract with the FlutterPilot server, as a number both carry (see
+  /// the server's sdk_protocol.dart): raised together whenever the server
+  /// starts relying on something new here.
+  static const protocol = 2;
+
   /// Whether the SDK has been initialized via [initialize].
   ///
   /// Plugins should check this before registering service extensions to ensure
