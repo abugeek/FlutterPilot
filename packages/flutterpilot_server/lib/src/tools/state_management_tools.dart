@@ -15,6 +15,49 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ? value
       : '${value.substring(0, 200)}… (${value.length} chars)';
 
+  /// For a query that failed on a column or table that isn't there: the
+  /// columns of the tables it reads, or the database's tables. Empty for any
+  /// other failure, or when the schema can't be read either.
+  Future<String> _sqlSchemaHint(
+    String extension,
+    String? database,
+    String sql,
+    String error,
+  ) async {
+    final miss = sqlMissIn(error);
+    if (miss == null) return '';
+    Future<List<String>> names(String query) async {
+      final res = await _callExtensionRaw(extension, {
+        'sql': query,
+        'dbName': ?database,
+      });
+      return [
+        for (final row in res.data?['results'] as List? ?? const [])
+          if (row is Map && row['name'] != null) '${row['name']}',
+      ];
+    }
+
+    final tables = await names(
+      "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') "
+      "AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    );
+    if (miss.isTable) {
+      return tables.isEmpty
+          ? ''
+          : 'HINT: ${schemaHint('tables here', miss.name, tables)}';
+    }
+    final lines = <String>[];
+    for (final table in tablesIn(sql)) {
+      // Only a name the database has (and so safe to put in a PRAGMA).
+      if (!tables.contains(table)) continue;
+      final columns = await names('PRAGMA table_info("$table")');
+      if (columns.isNotEmpty) {
+        lines.add(schemaHint('columns of $table', miss.name, columns));
+      }
+    }
+    return lines.isEmpty ? '' : 'HINT: ${lines.join('\n')}';
+  }
+
   void _registerStateManagementTools() {
     _tool(
       'get_state',
@@ -258,6 +301,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         }
 
         _ExtensionResult? res;
+        var answeredBy = '';
         for (final ext in [
           'ext.flutterpilot.queryDrift',
           'ext.flutterpilot.querySqflite',
@@ -265,6 +309,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           final r = await _callExtensionRaw(ext, args);
           if (!r.isError || !absent(r)) {
             res = r;
+            answeredBy = ext;
             break;
           }
         }
@@ -281,7 +326,23 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
-        if (res.isError) return res.toCallToolResult();
+        if (res.isError) {
+          final failed = res.toCallToolResult();
+          final hint = await _sqlSchemaHint(
+            answeredBy,
+            db,
+            sql,
+            res.errorMessage ?? '',
+          );
+          if (hint.isEmpty) return failed;
+          return CallToolResult(
+            isError: true,
+            content: [
+              ...failed.content,
+              TextContent(text: hint),
+            ],
+          );
+        }
         final rows = res.data?['results'] as List? ?? const [];
         final buf = StringBuffer('${rows.length} row(s)');
         if (res.data?['truncated'] == true) {
