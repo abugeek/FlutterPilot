@@ -13,7 +13,8 @@ void main(List<String> args) async {
         ..addCommand(McpCommand())
         ..addCommand(DoctorCommand())
         ..addCommand(TestCommand())
-        ..addCommand(AuditCommand());
+        ..addCommand(AuditCommand())
+        ..addCommand(StatsCommand());
 
   try {
     await runner.run(args);

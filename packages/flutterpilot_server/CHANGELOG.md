@@ -16,6 +16,11 @@
   starts with "Starting: main() has not called runApp yet…" instead of only
   "Route: Unknown" and no elements, and `capture_screenshot` waits up to 3 s
   for the first frame, then gives that reason instead of "No RenderView".
+- Each tool call is noted in the project's
+  `.dart_tool/flutterpilot_calls.jsonl` for `flutterpilot stats`: tool,
+  time, response size and the kind of failure (quoted text and numbers
+  masked). No arguments or results. `--no-call-log` or
+  `FLUTTERPILOT_NO_CALL_LOG` turns it off; the file is cut at 2 MB.
 - `launch_app` builds and starts the app (`flutter run`, or the command in
   the app's `flutterpilot/launch.json`), waits for its first frame and
   connects. The app keeps running after the MCP session ends, and the next

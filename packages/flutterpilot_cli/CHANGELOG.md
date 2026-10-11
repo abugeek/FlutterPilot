@@ -1,3 +1,9 @@
+## Unreleased
+
+- `flutterpilot stats`: how agents used FlutterPilot in this project (tools
+  called, failures, timings, what followed what) from the MCP server's call
+  log; `--clear` deletes the log.
+
 ## 0.1.0
 
 - First release: `flutterpilot init` (adds the SDK, matching plugins and the

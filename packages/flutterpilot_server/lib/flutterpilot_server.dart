@@ -15,6 +15,7 @@ import 'src/app_root.dart';
 import 'src/app_launcher.dart';
 import 'src/batch_nudge.dart';
 import 'src/build_mode.dart';
+import 'src/call_log.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
@@ -76,6 +77,10 @@ abstract class _FlutterPilotServerBase {
 
   /// Says once when the agent drives the app one call at a time.
   final _batchNudge = BatchNudge();
+
+  /// Where each tool call is noted for `flutterpilot stats`; null when
+  /// turned off or outside a Dart project.
+  CallLog? get _callLog;
 
   /// Where the connected app runs, to find its crash report if it dies.
   CrashTarget? _crashTarget;
@@ -204,9 +209,25 @@ abstract class _FlutterPilotServerBase {
           ],
         );
       }
+      final started = DateTime.now();
+      void log(CallToolResult result) {
+        final text = result.content
+            .whereType<TextContent>()
+            .map((c) => c.text)
+            .join('\n');
+        _callLog?.record(
+          name,
+          ms: DateTime.now().difference(started).inMilliseconds,
+          isError: result.isError == true,
+          chars: text.length,
+          error: text,
+        );
+      }
+
       try {
         var result = await callback(args, extra);
         if (result.isError) result = await _withNativeCrash(result);
+        log(result);
         _verification?.record(
           name,
           args,
@@ -241,6 +262,12 @@ abstract class _FlutterPilotServerBase {
           ],
         );
       } catch (e) {
+        log(
+          CallToolResult(
+            isError: true,
+            content: [TextContent(text: '$name threw ${e.runtimeType}')],
+          ),
+        );
         return CallToolResult(
           isError: true,
           content: [
@@ -384,6 +411,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   Directory get _projectRoot => _explicitProjectRoot ?? Directory.current;
 
+  /// `--no-call-log` (or FLUTTERPILOT_NO_CALL_LOG) turns the log off.
+  final bool callLog;
+
+  @override
+  late final CallLog? _callLog = callLog
+      ? CallLog.inProject(_projectRoot)
+      : null;
+
   @override
   List<Directory> get _discoveryRoots => _explicitProjectRoot != null
       ? [_explicitProjectRoot]
@@ -434,7 +469,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     this.remoteAccessToken,
     Directory? projectRoot,
     bool staticTools = false,
-  }) : staticTools =
+    bool callLog = true,
+  }) : callLog =
+           callLog && Platform.environment['FLUTTERPILOT_NO_CALL_LOG'] == null,
+       staticTools =
            staticTools ||
            Platform.environment['FLUTTERPILOT_LIST_ALL_TOOLS'] != null,
        _vmServiceUri = vmServiceUri,
