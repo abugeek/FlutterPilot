@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `FlutterPilot.notOnScreenYet()`: why there is nothing to look at (no
+  `runApp` yet, or no first frame); in the app summary as `starting` and in
+  the screenshot error instead of "No RenderView".
 - `ext.flutterpilot.screenNow`: the settled screen (route, tappable
   elements, new errors, a progress indicator showing) for the server's
   `wait_for` and `navigate_to` responses.
