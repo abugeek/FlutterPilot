@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 66
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 39654 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 39819 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -412,7 +412,7 @@ _Read-only._
 
 ## `hot_reload`
 
-Recompiles edited .dart files and hot reloads them into the running app, keeping state. restart:true does a hot restart instead (state is reset) — needed for main(), initState, global/static initializers, enums, generic type changes and provider definitions. Needs an app started by `flutter run` or an IDE debug session.
+Recompiles edited .dart files and hot reloads them into the running app, keeping state. restart:true does a hot restart instead (state is reset) — needed for main(), initState, global/static initializers, enums, generic type changes and provider definitions. A restart loads every changed Dart file: use it after a git checkout or for a stuck app instead of rebuilding (needed only for pubspec.yaml, assets or native code). Needs an app started by `flutter run` or an IDE debug session.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

@@ -10,8 +10,10 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           'app, keeping state. restart:true does a hot restart instead (state '
           'is reset) — needed for main(), initState, global/static '
           'initializers, enums, generic type changes and provider '
-          'definitions. Needs an app started by `flutter run` or an IDE '
-          'debug session.',
+          'definitions. A restart loads every changed Dart file: use it '
+          'after a git checkout or for a stuck app instead of rebuilding '
+          '(needed only for pubspec.yaml, assets or native code). '
+          'Needs an app started by `flutter run` or an IDE debug session.',
       inputSchema: ToolInputSchema(
         properties: {
           'restart': JsonSchema.boolean(
@@ -100,10 +102,13 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  '$successText\nBut the restarted app had not drawn its first '
-                  'frame${hadSdk ? ' or registered FlutterPilot' : ''} after '
-                  '10 s: main() may be stuck (awaiting something before '
-                  'runApp). Check get_logs.',
+                  '$successText\nThe restart worked, but the app is still '
+                  'starting: no first frame'
+                  '${hadSdk ? ' or FlutterPilot registration' : ''} after '
+                  '${_restartWait.inSeconds} s (a main() that awaits a lot '
+                  'before runApp). Do not run the app again: call '
+                  'wait_for or get_app_summary in a moment; get_debug_logs '
+                  'shows what main() is waiting on if it never comes up.',
             ),
           ],
         );
@@ -133,15 +138,20 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     return false;
   }
 
+  /// How long a restarted app gets to draw its first frame: a real app's
+  /// main() (Firebase, a database, a session) took over 10 s, and the "not
+  /// yet" answer read as a failed restart.
+  static const _restartWait = Duration(seconds: 30);
+
   /// A hot restart returns before the new isolate has run main(): until it
   /// has drawn its first frame (and, with the SDK, registered FlutterPilot's
   /// extensions), every tool would fail as "not registered". Waits up to
-  /// 10 s; false if it never got there.
+  /// [_restartWait]; false if it never got there.
   static Future<bool> _waitForRestartedApp(
     VmService vm, {
     required bool sdk,
   }) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    final deadline = DateTime.now().add(_restartWait);
     while (DateTime.now().isBefore(deadline)) {
       try {
         for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {

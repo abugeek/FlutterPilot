@@ -28,6 +28,15 @@ String _hintFor(String message) {
         'Access), then start `flutter run` again. Until then, stop the app '
         'and launch it again after each edit.';
   }
+  // An asset the build lists is gone (field test: SVGs deleted while the app
+  // ran); the agent took "compile error" at its word, then rebuilt the app.
+  if (message.contains('failed to copy') ||
+      message.contains('Unable to load asset')) {
+    return 'HINT: not a compile error. An asset the build expects is '
+        'missing (deleted, moved or renamed). Restore the file or fix the '
+        'assets: list in pubspec.yaml, then call hot_reload again; if it '
+        'fails the same way, stop the app and run it again.';
+  }
   return 'HINT: usually a compile error — run `dart analyze` on the edited '
       'files, fix, and retry. Some changes (main(), static initializers) '
       'need hot_reload(restart: true).';
