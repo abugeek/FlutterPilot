@@ -91,6 +91,22 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     ({String root, int? logOffset, DateTime since})? before;
     try {
       final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
+      // A hot restart of an app stuck in a loop made flutter_tools wait its
+      // full two minutes, then blamed a compile error. Ask the UI isolate
+      // something first: no answer means it cannot take a reload now.
+      if (!await _uiAnswers(vmService)) {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  'No answer from the app within 5 s, so it cannot take a '
+                  'hot ${service == 'hotRestart' ? 'restart' : 'reload'} '
+                  'now; nothing was reloaded.',
+            ),
+          ],
+        );
+      }
       before = await _beforeReload(vmService, context);
       final hadSdk =
           service == 'hotRestart' && await _hasSdkExtensions(vmService);
@@ -215,6 +231,29 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       );
     } catch (_) {
       return '';
+    }
+  }
+
+  /// Whether the Flutter UI isolate answers a service extension within 5 s.
+  /// True when there is nothing to ask yet (an app still starting).
+  static Future<bool> _uiAnswers(VmService vm) async {
+    try {
+      for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+        final rpcs = (await vm.getIsolate(ref.id!)).extensionRPCs ?? const [];
+        if (!rpcs.contains('ext.flutter.didSendFirstFrameEvent')) continue;
+        await vm
+            .callServiceExtension(
+              'ext.flutter.didSendFirstFrameEvent',
+              isolateId: ref.id,
+            )
+            .timeout(const Duration(seconds: 5));
+        return true;
+      }
+      return true;
+    } on TimeoutException {
+      return false;
+    } catch (_) {
+      return true;
     }
   }
 

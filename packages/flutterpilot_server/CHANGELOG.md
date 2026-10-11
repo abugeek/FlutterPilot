@@ -7,6 +7,14 @@
   true)` is needed. Edited files are compared with the source the VM has
   loaded, so a reload from the terminal or an earlier session counts.
   `launch_app` with an app running gives the relaunch reason too.
+- A call the app does not answer says why (`WHY: …` after the timeout): the
+  UI isolate busy in Dart code, with the stack where it was interrupted
+  (`Home.recomputeTotals (package:app/main.dart:15)`); paused in the
+  debugger and where; blocked outside Dart; or idle, with the call itself
+  waiting. The isolate is resumed afterwards.
+- `hot_reload` first checks that the app answers (5 s) instead of letting
+  flutter_tools wait two minutes on a hung app and then blame a compile
+  error.
 - `navigate_to(waitFor: "Orders")` waits for a key or text on the new page
   (an error if it has not appeared in 5 s): one call for navigate, then
   wait.
