@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40669 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40627 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -286,13 +286,14 @@ Brings the connected app back to the foreground on the iOS simulator (after nati
 
 ## `navigate_to`
 
-Goes to a route directly, e.g. "/profile/123" (go_router: router.go; otherwise Navigator.pushNamed). action "push"/"replace" use go_router's push/replace. deepLink:true opens the URL the way an OS deep link does (e.g. "myapp://product/123"). Back: press_key("back").
+Goes to a route directly, e.g. "/profile/123" (go_router: router.go; otherwise Navigator.pushNamed). Back: press_key("back").
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `route` | string | yes | Route or deep-link URL (e.g. "/home", "/profile/123"). |
 | `action` | string: go \| push \| replace | no | Default "go". push/replace need the go_router plugin. |
-| `deepLink` | boolean | no | Open route as an OS deep link. |
+| `deepLink` | boolean | no | Open route as an OS deep link (myapp://product/1). |
+| `waitFor` | string | no | Key or text to wait for on the new page. |
 
 ## `get_navigation_stack`
 

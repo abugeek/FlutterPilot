@@ -13,6 +13,7 @@ import 'package:vm_service/vm_service.dart';
 import 'src/action_chain.dart';
 import 'src/app_root.dart';
 import 'src/app_launcher.dart';
+import 'src/batch_nudge.dart';
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
@@ -72,6 +73,9 @@ abstract class _FlutterPilotServerBase {
   /// Every tool's callback by name, for tools that run another tool
   /// (profile_action).
   final Map<String, ToolFunction> _toolCallbacks = {};
+
+  /// Says once when the agent drives the app one call at a time.
+  final _batchNudge = BatchNudge();
 
   /// Where the connected app runs, to find its crash report if it dies.
   CrashTarget? _crashTarget;
@@ -209,6 +213,16 @@ abstract class _FlutterPilotServerBase {
           result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
           isError: result.isError == true,
         );
+        final tip = _batchNudge.after(name, isError: result.isError == true);
+        if (tip != null) {
+          result = CallToolResult(
+            isError: result.isError,
+            content: [
+              ...result.content,
+              TextContent(text: tip),
+            ],
+          );
+        }
         final images = result.content.whereType<ImageContent>();
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
