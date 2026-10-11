@@ -1,0 +1,69 @@
+name: Unit
+
+# The quick gate: formatting, analysis and every package's unit tests on
+# Linux, plus the server's process and file code on Windows. Minutes, no
+# simulators. The device runs (macOS, iOS, Android, web end-to-end) are the
+# CI workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: unit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install Melos
+        run: dart pub global activate melos
+
+      - name: Bootstrap
+        run: melos bootstrap
+
+      - name: Format Check
+        run: melos run format
+
+      - name: Analyze
+        run: melos run analyze
+
+      - name: Test All Packages
+        run: melos run test
+
+      - name: Plugin ranges accept the latest host packages
+        run: dart run tool/check_plugin_ranges.dart
+
+  # launch_app's supervisor and liveness check, the call log and the CLI's
+  # doctor take a different path on Windows (tasklist, backslashes): nothing
+  # else runs them there.
+  windows-process-code:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Server launcher and call log
+        working-directory: packages/flutterpilot_server
+        run: |
+          dart pub get
+          dart test test/app_launcher_test.dart test/call_log_test.dart
+
+      - name: CLI
+        working-directory: packages/flutterpilot_cli
+        run: |
+          dart pub get
+          dart test
