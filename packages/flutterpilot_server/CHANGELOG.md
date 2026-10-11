@@ -6,6 +6,13 @@
   one finds it. With an app already running it refuses unless
   `relaunch: true` and points at `hot_reload`; a failed build returns the
   end of the build output. 67 tools.
+- `wait_for` and `navigate_to` end with the screen as it is now (route,
+  tappable elements, new errors, still loading), as the action tools do; in
+  field sessions a quarter of `wait_for` calls were followed by
+  `get_app_summary`. `wait_for` answers in a sentence instead of JSON
+  (`On route "/x".`, `Pumped 30 frames.`). Needs the SDK from this version
+  (`ext.flutterpilot.screenNow`); an older one answers as before, without
+  the screen.
 - The tool list is 66 tools and about 9% smaller on the wire (a test holds
   it to a size budget). Breaking:
   - `get_capabilities` is `get_app_summary(setup: true)`.
