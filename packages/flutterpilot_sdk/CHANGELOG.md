@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `ext.flutterpilot.screenNow`: the settled screen (route, tappable
+  elements, new errors, a progress indicator showing) for the server's
+  `wait_for` and `navigate_to` responses.
 - `FlutterPilot.logStateChange` keeps what plugins report (it was a stub)
   in a 50-entry history, with `logStateDisposed` for a provider or bloc that
   is gone. Values are cut at 160 characters and credentials masked.

@@ -63,7 +63,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           content: [
             TextContent(
               text:
-                  'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.',
+                  'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.'
+                  '${await _screenAfter(route: false)}',
             ),
           ],
         );

@@ -95,6 +95,18 @@ abstract class _FlutterPilotServerBase {
     });
   }
 
+  /// The route and what is tappable once the screen has settled, for a tool
+  /// that waited or navigated (as tap_widget's response ends): field
+  /// sessions followed 51 of 199 wait_for calls with get_app_summary. Empty
+  /// for an app whose SDK predates `screenNow`.
+  Future<String> _screenAfter({bool route = true}) async {
+    final res = await _callExtensionRaw('ext.flutterpilot.screenNow', {});
+    if (res.isError) return '';
+    final current = (res.data?['postActionState'] as Map?)?['route'];
+    final named = route && current != null && current != 'Unknown';
+    return '${named ? '\nRoute: $current.' : ''}${_screenNow(res.data)}';
+  }
+
   /// Registers a tool. An unexpected exception becomes an error that names
   /// the tool and the cause — mcp_dart would replace it with a bare
   /// "Tool execution failed." and log the reason where the agent can't see it.

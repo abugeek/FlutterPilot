@@ -203,6 +203,18 @@ extension _NavigationExtensions on FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.screenNow -------------------------------------------
+    // What an action's response says about the screen (route, tappable
+    // elements, new errors, still loading), for the tools that only wait or
+    // navigate: without it each was followed by a get_app_summary.
+    registerExtension('ext.flutterpilot.screenNow', (method, parameters) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'postActionState': await FlutterPilot.getPostActionState(),
+        }),
+      );
+    });
+
     // -- ext.flutterpilot.waitForAnimation ------------------------------------
     registerExtension('ext.flutterpilot.waitForAnimation', (
       method,

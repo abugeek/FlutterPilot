@@ -780,6 +780,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        // What was waited for, then the screen as it is now.
+        Future<CallToolResult> waited(String text, {bool route = true}) async =>
+            CallToolResult(
+              content: [
+                TextContent(text: '$text${await _screenAfter(route: route)}'),
+              ],
+            );
         final timeout = p['timeoutMs']?.toString();
         final selector = p['selector'] ?? p['target'] ?? p['key'];
         if (selector != null) {
@@ -788,39 +795,52 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             {'selector': selector.toString(), 'timeoutMs': ?timeout},
           );
           if (res.isError) return res.toCallToolResult();
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
-              ),
-            ],
+          return waited(
+            '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
           );
         }
         if (p['route'] != null) {
-          return (await _callExtensionRaw('ext.flutterpilot.waitForRoute', {
+          final res = await _callExtensionRaw('ext.flutterpilot.waitForRoute', {
             'route': p['route'].toString(),
             'timeoutMs': ?timeout,
-          })).toCallToolResult();
+          });
+          if (res.isError) return res.toCallToolResult();
+          return waited('On route "${p['route']}".', route: false);
         }
         if (p['state'] != null) {
-          return (await _callExtensionRaw('ext.flutterpilot.waitForState', {
+          final res = await _callExtensionRaw('ext.flutterpilot.waitForState', {
             'type': await _stateTypeOf(p['state'].toString()),
             'name': p['state'].toString(),
             'expectedValue': p['expectedValue']?.toString() ?? '',
             'timeoutMs': ?timeout,
-          })).toCallToolResult();
+          });
+          if (res.isError) return res.toCallToolResult();
+          final value = '${res.data?['value']}';
+          return waited(
+            '${p['state']} is '
+            '${value.length > 200 ? '${value.substring(0, 200)}…' : value}.',
+          );
         }
         if (p['frames'] != null) {
           final count = ((p['frames'] as num).toInt()).clamp(1, 120);
-          return (await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
+          final res = await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
             'count': count.toString(),
-          })).toCallToolResult();
+          });
+          if (res.isError) return res.toCallToolResult();
+          return waited('Pumped $count frames.');
         }
         if (p['animations'] == true) {
-          return (await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
-            'timeoutMs': ?timeout,
-          })).toCallToolResult();
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.waitForAnimation',
+            {'timeoutMs': ?timeout},
+          );
+          if (res.isError) return res.toCallToolResult();
+          return waited(
+            res.data?['status'] == 'settled'
+                ? 'Animations settled.'
+                : 'Animations were still running at the timeout (a looping '
+                      'animation or a spinner?).',
+          );
         }
         return CallToolResult(
           isError: true,
