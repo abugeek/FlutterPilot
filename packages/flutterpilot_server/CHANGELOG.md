@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `navigate_to(waitFor: "Orders")` waits for a key or text on the new page
+  (an error if it has not appeared in 5 s): one call for navigate, then
+  wait.
+- The third single step in a row (`tap_widget`, `enter_text`, `press_key`,
+  `wait_for`, `assert_widget`, ...) ends with a one-line tip to send known
+  steps in one `execute_action_chain`; said again every 12 steps, never
+  after a failed step.
 - `launch_app` builds and starts the app (`flutter run`, or the command in
   the app's `flutterpilot/launch.json`), waits for its first frame and
   connects. The app keeps running after the MCP session ends, and the next

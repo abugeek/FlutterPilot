@@ -8,9 +8,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       'navigate_to',
       description:
           'Goes to a route directly, e.g. "/profile/123" (go_router: '
-          'router.go; otherwise Navigator.pushNamed). action "push"/"replace" '
-          'use go_router\'s push/replace. deepLink:true opens the URL the way '
-          'an OS deep link does (e.g. "myapp://product/123"). Back: '
+          'router.go; otherwise Navigator.pushNamed). Back: '
           'press_key("back").',
       inputSchema: ToolInputSchema(
         properties: {
@@ -24,7 +22,10 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                 'Default "go". push/replace need the go_router plugin.',
           ),
           'deepLink': JsonSchema.boolean(
-            description: 'Open route as an OS deep link.',
+            description: 'Open route as an OS deep link (myapp://product/1).',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Key or text to wait for on the new page.',
           ),
         },
         required: ['route'],
@@ -59,12 +60,28 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           {},
         );
         final now = (stack.data?['stack'] as List?)?.join(' -> ');
+        // The page's data may load after the transition: one call instead
+        // of navigate_to then wait_for (52 such pairs in field sessions).
+        final waitFor = p['waitFor']?.toString();
+        var waited = '';
+        var missing = false;
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final found = await _callExtensionRaw(
+            'ext.flutterpilot.waitForCondition',
+            {'selector': waitFor, 'timeoutMs': '5000'},
+          );
+          missing = found.isError;
+          waited = missing
+              ? ' But "$waitFor" did not appear within 5 s.'
+              : ' "$waitFor" is on screen.';
+        }
         return CallToolResult(
+          isError: missing,
           content: [
             TextContent(
               text:
                   'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.'
-                  '${await _screenAfter(route: false)}',
+                  '$waited${await _screenAfter(route: false)}',
             ),
           ],
         );
