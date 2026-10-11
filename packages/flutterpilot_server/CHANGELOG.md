@@ -15,6 +15,10 @@
 - `hot_reload` first checks that the app answers (5 s) instead of letting
   flutter_tools wait two minutes on a hung app and then blame a compile
   error.
+- The server and the app's SDK carry a protocol number. When they differ,
+  `get_app_summary` starts with "• Versions: the app's flutterpilot_sdk is
+  older than this server…, so it lacks: …" (or newer: rebuild the server),
+  and `get_app_summary(setup: true)` has both numbers.
 - `navigate_to(waitFor: "Orders")` waits for a key or text on the new page
   (an error if it has not appeared in 5 s): one call for navigate, then
   wait.

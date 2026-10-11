@@ -77,6 +77,14 @@ extension _DiagnosticsExtensions on FlutterPilot {
       return ServiceExtensionResponse.result(json.encode(snapshot));
     });
 
+    // -- ext.flutterpilot.protocol --------------------------------------------
+    // Lets the server say when this SDK is older or newer than it is.
+    registerExtension('ext.flutterpilot.protocol', (method, parameters) async {
+      return ServiceExtensionResponse.result(
+        json.encode({'protocol': FlutterPilot.protocol}),
+      );
+    });
+
     // -- ext.flutterpilot.getSummary ------------------------------------------
     registerExtension('ext.flutterpilot.getSummary', (
       method,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:path/path.dart' as p;
@@ -201,9 +202,93 @@ class DoctorCommand extends Command<void> {
     return checks;
   }
 
+  /// Says when a compiled server in a source checkout
+  /// (`…/flutterpilot_server/build/flutterpilot_server`) was built before its
+  /// source last changed: agents then run old tools while the repo, the docs
+  /// and the app's SDK have moved on. Null when it is current or not such a
+  /// binary.
+  static String? staleServerBinary(String server) {
+    final binary = File(server);
+    final package = Directory(p.dirname(p.dirname(server)));
+    if (p.basename(p.dirname(server)) != 'build' ||
+        !binary.existsSync() ||
+        !File(p.join(package.path, 'pubspec.yaml')).existsSync()) {
+      return null;
+    }
+    final built = binary.lastModifiedSync();
+    var newer = 0;
+    for (final dir in ['lib', 'bin']) {
+      final source = Directory(p.join(package.path, dir));
+      if (!source.existsSync()) continue;
+      for (final file in source.listSync(recursive: true)) {
+        if (file is File &&
+            file.path.endsWith('.dart') &&
+            file.lastModifiedSync().isAfter(built)) {
+          newer++;
+        }
+      }
+    }
+    return newer == 0
+        ? null
+        : 'the server binary $server was compiled before $newer of its '
+              'source files last changed';
+  }
+
+  /// The FlutterPilot server commands Claude Code has for [project] outside
+  /// it: the project's entry and the user-level one in `~/.claude.json`.
+  static List<String> claudeLocalServers(String project, {String? home}) {
+    final dir =
+        home ??
+        Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'];
+    if (dir == null) return const [];
+    try {
+      final json = jsonDecode(
+        File(p.join(dir, '.claude.json')).readAsStringSync(),
+      );
+      if (json is! Map) return const [];
+      String? command(Object? servers) {
+        final entry = servers is Map ? servers['flutterpilot'] : null;
+        final command = entry is Map ? entry['command'] : null;
+        return command is String ? command : null;
+      }
+
+      final projects = json['projects'];
+      final forProject = projects is Map
+          ? projects[p.normalize(p.absolute(project))]
+          : null;
+      return {
+        ?command(forProject is Map ? forProject['mcpServers'] : null),
+        ?command(json['mcpServers']),
+      }.toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Whether some client's config has FlutterPilot, and its server exists.
-  static DoctorCheck checkMcpConfig(String project) {
+  static DoctorCheck checkMcpConfig(String project, {String? home}) {
     final configured = <String>[];
+    // Claude Code also keeps servers outside the project (added with
+    // "claude mcp add"): per project and for the user, in ~/.claude.json.
+    // They win over the project's .mcp.json, so they are what runs.
+    for (final command in claudeLocalServers(project, home: home)) {
+      if (p.isAbsolute(command) && !File(command).existsSync()) {
+        return DoctorCheck.fail(
+          'Claude Code (~/.claude.json) starts $command, which does not exist',
+          'flutterpilot mcp install',
+        );
+      }
+      if (staleServerBinary(command) case final stale?) {
+        return DoctorCheck.warn(
+          'Claude Code (~/.claude.json): $stale',
+          'recompile it (dart compile exe bin/flutterpilot_server.dart -o '
+              'build/flutterpilot_server in that package), then restart '
+              'Claude Code',
+        );
+      }
+      configured.add('Claude Code (~/.claude.json)');
+    }
     for (final client in McpClient.values) {
       final file = File(p.join(project, client.configPath));
       if (!file.existsSync()) continue;
@@ -229,6 +314,13 @@ class DoctorCommand extends Command<void> {
           '${client.label}: ${client.configPath} starts $server, which does '
               'not exist',
           'flutterpilot mcp install',
+        );
+      }
+      if (staleServerBinary(server) case final stale?) {
+        return DoctorCheck.warn(
+          '${client.label}: $stale',
+          'flutterpilot mcp install  (recompiles it), then restart the MCP '
+              'client',
         );
       }
       configured.add(client.label);

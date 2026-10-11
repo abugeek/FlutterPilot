@@ -1,5 +1,7 @@
 ## Unreleased
 
+- `FlutterPilot.protocol` and `ext.flutterpilot.protocol`: the contract with
+  the server as a number, so each side can say when the other is older.
 - `FlutterPilot.notOnScreenYet()`: why there is nothing to look at (no
   `runApp` yet, or no first frame); in the app summary as `starting` and in
   the screenshot error instead of "No RenderView".
