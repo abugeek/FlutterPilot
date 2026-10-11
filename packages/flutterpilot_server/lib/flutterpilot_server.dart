@@ -33,6 +33,7 @@ import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
 import 'src/scenario.dart';
+import 'src/screen_memory.dart';
 import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
@@ -200,7 +201,7 @@ abstract class _FlutterPilotServerBase {
     if (res.isError) return '';
     final current = (res.data?['postActionState'] as Map?)?['route'];
     final named = route && current != null && current != 'Unknown';
-    return '${named ? '\nRoute: $current.' : ''}${_screenNow(res.data)}';
+    return '${named ? '\nRoute: $current.' : ''}${_screenNow(res.data, memory: _activeContext?.screenMemory)}';
   }
 
   /// Registers a tool. An unexpected exception becomes an error that names

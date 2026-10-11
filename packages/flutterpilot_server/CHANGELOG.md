@@ -19,6 +19,11 @@
   `get_app_summary` starts with "• Versions: the app's flutterpilot_sdk is
   older than this server…, so it lacks: …" (or newer: rebuild the server),
   and `get_app_summary(setup: true)` has both numbers.
+- Action responses are shorter. "Tappable now" says "same as after the
+  previous call" or only what was added and removed when the screen barely
+  changed (the full list returns at least every fourth time and after two
+  minutes); the bulk-rebuild note and the nothing-changed hints lost their
+  repeated instructions.
 - `navigate_to(waitFor: "Orders")` waits for a key or text on the new page
   (an error if it has not appeared in 5 s): one call for navigate, then
   wait.

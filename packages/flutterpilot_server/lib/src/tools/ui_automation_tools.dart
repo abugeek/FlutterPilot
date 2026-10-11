@@ -19,8 +19,14 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
   if (samples.isNotEmpty) {
     buffer.write('\n  ${samples.take(5).join('\n  ')}');
   }
-  if (widgetDiff['note'] != null) {
-    buffer.write('\n  (${widgetDiff['note']})');
+  if (widgetDiff['note'] case final String note) {
+    // The counts are in the line above; the SDK's note repeats them and how
+    // to read on, 190 characters on every tap that rebuilds a list.
+    buffer.write(
+      note.contains('total node changes')
+          ? '\n  (a bulk rebuild: these are samples)'
+          : '\n  ($note)',
+    );
   }
   return buffer.toString();
 }
@@ -41,14 +47,15 @@ String _unchangedRoute(Object? route) => route == null || route == 'Unknown'
 
 /// What the screen shows once the action settled: the tappable elements,
 /// new errors, and whether it was still moving when read.
-String _screenNow(Map<String, dynamic>? data) {
+String _screenNow(Map<String, dynamic>? data, {ScreenMemory? memory}) {
   final post = data?['postActionState'] as Map<String, dynamic>?;
   final buffer = StringBuffer();
   final elements = post?['visibleInteractiveElements'] as List?;
   if (elements != null && elements.isNotEmpty) {
+    final count = (post!['interactiveElementsCount'] as num?)?.toInt();
+    final shown = [for (final e in elements) '$e'];
     buffer.write(
-      '\nTappable now (${post!['interactiveElementsCount']}): '
-      '${elements.map((e) => '"$e"').join(', ')}',
+      '\n${(memory ?? ScreenMemory()).tappable(shown, count ?? shown.length)}',
     );
   }
   if (post?['stillMoving'] == true) {
@@ -76,11 +83,14 @@ String _quietNote(Map<String, dynamic>? delta) {
   final ms = delta?['quietMs'];
   if (ms is! int) return '';
   return ' Nothing changed in the ${(ms / 1000).toStringAsFixed(1)} s after '
-      'it either. If it starts slow work (a request), wait_for the result '
-      '(or pass waitFor).';
+      'it either; if it starts slow work (a request), wait_for the result.';
 }
 
-String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
+String _formatActionDelta(
+  Map<String, dynamic>? data, {
+  required String verb,
+  ScreenMemory? memory,
+}) {
   final delta = data?['delta'] as Map<String, dynamic>?;
   if (delta == null) return '$verb.';
   final navigated = delta['navigated'] == true;
@@ -100,12 +110,11 @@ String _formatActionDelta(Map<String, dynamic>? data, {required String verb}) {
   buffer.write(_quietNote(delta));
   if (!navigated && diffText.isEmpty && delta['quietMs'] == null) {
     buffer.write(
-      ' No widget-tree changes detected either. HINT: If you expected a purely '
-      'visual-only change (color, animation frame, pixel-level effect with no '
-      'structural diff), call capture_screenshot to confirm.',
+      ' No widget-tree change either; for a purely visual one (a color, an '
+      'animation frame), capture_screenshot.',
     );
   }
-  buffer.write(_screenNow(data));
+  buffer.write(_screenNow(data, memory: memory));
   return buffer.toString();
 }
 
@@ -163,7 +172,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       _widgetDiffSummary(delta?['widgetDiff'] as Map<String, dynamic>?),
     );
     buffer.write(_quietNote(delta));
-    buffer.write(_screenNow(res.data));
+    buffer.write(_screenNow(res.data, memory: _activeContext?.screenMemory));
     // A permission alert is not part of the Flutter tree (and doesn't even
     // change the app's lifecycle on iOS): an action that "did nothing" may
     // have opened one.
@@ -565,6 +574,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 verb: res.data?['pullToRefresh'] == true
                     ? 'Pulled to refresh'
                     : 'Swipe complete',
+                memory: _activeContext?.screenMemory,
               ),
             ),
           ],
@@ -594,7 +604,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text: _formatActionDelta(res.data, verb: 'Drag complete'),
+              text: _formatActionDelta(
+                res.data,
+                verb: 'Drag complete',
+                memory: _activeContext?.screenMemory,
+              ),
             ),
           ],
         );
@@ -687,7 +701,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             : CallToolResult(
                 content: [
                   TextContent(
-                    text: _formatActionDelta(res.data, verb: 'Toggled'),
+                    text: _formatActionDelta(
+                      res.data,
+                      verb: 'Toggled',
+                      memory: _activeContext?.screenMemory,
+                    ),
                   ),
                 ],
               );
@@ -738,7 +756,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text:
                   'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
-                  '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data)}',
+                  '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
             ),
           ],
         );
