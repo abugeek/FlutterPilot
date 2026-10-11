@@ -79,7 +79,9 @@ void main() {
     app('packages/ui', main: false);
     app('apps/mobile/build/copy');
     final found = flutterAppsUnder([tmp]);
-    expect(found.map((d) => d.path), [endsWith('apps/mobile')]);
+    expect(found.map((d) => d.path.replaceAll(r'\', '/')), [
+      endsWith('apps/mobile'),
+    ]);
   });
 
   test('the VM service URI is read from flutter run output', () {
