@@ -52,6 +52,10 @@ class DeviceRuntimeContext {
   /// trusted to do. Null until connected.
   BuildMode? buildMode;
 
+  /// When the last hot reload or restart succeeded: files edited since are
+  /// what a failed one is about.
+  DateTime? lastReload;
+
   /// The app's last reported `AppLifecycleState` name (SDK apps only).
   String? lifecycle;
 
@@ -72,6 +76,7 @@ class DeviceRuntimeContext {
     hasSdk = null;
     zeroCodeErrors.clear();
     lifecycle = null;
+    lastReload = null;
     await service?.dispose();
     service = null;
     cachedMainIsolateId = null;

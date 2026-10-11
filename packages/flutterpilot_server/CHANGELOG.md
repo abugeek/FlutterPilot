@@ -7,6 +7,11 @@
   `wait_for`, `assert_widget`, ...) ends with a one-line tip to send known
   steps in one `execute_action_chain`; said again every 12 steps, never
   after a failed step.
+- A `hot_reload` that fails because the code does not compile returns the
+  compiler's errors (`lib/a.dart:44:23: Error: …`) instead of an empty
+  message: from `flutter run`'s output when `launch_app` started the app,
+  else from `dart analyze` on the Dart files edited since the last good
+  reload.
 - `launch_app` builds and starts the app (`flutter run`, or the command in
   the app's `flutterpilot/launch.json`), waits for its first frame and
   connects. The app keeps running after the MCP session ends, and the next

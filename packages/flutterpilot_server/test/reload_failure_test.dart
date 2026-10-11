@@ -51,4 +51,67 @@ void main() {
     expect(text, contains('usually a compile error'));
     expect(text, isNot(contains('App Management')));
   });
+
+  // flutter_tools answers a reload that does not compile with an empty
+  // message and prints the compiler's errors in its own terminal.
+  test('compiler errors are read from flutter run output', () {
+    final errors = compileErrorsIn(
+      'Performing hot reload...                                        \n'
+      "lib/screens.dart:44:23: Error: Expected ',' before this.\n"
+      "                      Filter.open => 'Open',\n"
+      '                      ^^^^^^\n'
+      'Performing hot restart...                                       \n'
+      "lib/screens.dart:44:23: Error: Expected ',' before this.\n"
+      "                      Filter.open => 'Open',\n"
+      '                      ^^^^^^\n'
+      'Restarted application in 90ms.\n',
+    );
+    expect(
+      errors,
+      "lib/screens.dart:44:23: Error: Expected ',' before this.\n"
+      "                      Filter.open => 'Open',\n"
+      '                      ^^^^^^',
+    );
+    expect(compileErrorsIn('Reloaded 1 of 900 libraries in 300ms.'), isEmpty);
+  });
+
+  test('with compiler errors the reply is the errors', () {
+    final text = reloadFailureText(
+      'reloadSources',
+      '',
+      compileErrors: "lib/a.dart:1:1: Error: Expected ';' after this.",
+    );
+    expect(text, contains('does not compile'));
+    expect(text, contains("lib/a.dart:1:1: Error: Expected ';'"));
+    expect(text, contains('still running the code from before'));
+    expect(text, isNot(contains('usually a compile error')));
+  });
+
+  test('analyzer output keeps the errors, with paths from the app folder', () {
+    final errors = analyzerErrorsIn(
+      'INFO|LINT|PREFER_CONST|/app/lib/a.dart|3|5|4|Use const.\n'
+          "ERROR|SYNTACTIC_ERROR|EXPECTED_TOKEN|/app/lib/screens.dart|44|23|6|Expected to find ','.\n"
+          'WARNING|STATIC_WARNING|UNUSED|/app/lib/b.dart|1|1|1|Unused.\n',
+      '/app',
+    );
+    expect(errors, "lib/screens.dart:44:23: Expected to find ','.");
+  });
+
+  test('only a failure without a cause of its own looks for them', () {
+    expect(mayBeCompileError(''), isTrue);
+    expect(mayBeCompileError('Flutter failed to copy a.svg to b.svg'), isFalse);
+  });
+
+  test('the app folder is the one with the pubspec above the entrypoint', () {
+    bool exists(String path) => path == '/work/app/pubspec.yaml';
+    expect(
+      projectRootOfFile('/work/app/tool/pilot_main.dart', exists: exists),
+      '/work/app',
+    );
+    expect(
+      projectRootOfFile('/work/app/lib/src/main.dart', exists: exists),
+      '/work/app',
+    );
+    expect(projectRootOfFile('/elsewhere/main.dart', exists: exists), isNull);
+  });
 }
