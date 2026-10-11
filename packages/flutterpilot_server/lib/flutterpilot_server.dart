@@ -30,6 +30,7 @@ import 'src/redaction.dart';
 import 'src/reload_failure.dart';
 import 'src/scenario.dart';
 import 'src/self_heal_manager.dart';
+import 'src/sql_hints.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';
 import 'src/verification.dart';

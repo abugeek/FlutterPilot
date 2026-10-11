@@ -13,6 +13,10 @@
   (`On route "/x".`, `Pumped 30 frames.`). Needs the SDK from this version
   (`ext.flutterpilot.screenNow`); an older one answers as before, without
   the screen.
+- `exec_sql_query` failing on "no such column" lists the columns of the
+  tables the query reads, and on "no such table" the database's tables,
+  names like the missing one first. In field sessions 11 of 92 queries
+  failed, nearly all on a guessed column.
 - The tool list is 66 tools and about 9% smaller on the wire (a test holds
   it to a size budget). Breaking:
   - `get_capabilities` is `get_app_summary(setup: true)`.
