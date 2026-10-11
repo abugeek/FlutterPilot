@@ -1,5 +1,11 @@
 ## Unreleased
 
+- `launch_app` builds and starts the app (`flutter run`, or the command in
+  the app's `flutterpilot/launch.json`), waits for its first frame and
+  connects. The app keeps running after the MCP session ends, and the next
+  one finds it. With an app already running it refuses unless
+  `relaunch: true` and points at `hot_reload`; a failed build returns the
+  end of the build output. 67 tools.
 - The tool list is 66 tools and about 9% smaller on the wire (a test holds
   it to a size budget). Breaking:
   - `get_capabilities` is `get_app_summary(setup: true)`.

@@ -13,6 +13,7 @@ import 'package:image/image.dart' as img;
 const Set<String> zeroCodeTools = {
   // Connection and fleet.
   'connect_app',
+  'launch_app',
   'list_connected_devices',
   'register_device',
   'switch_device',

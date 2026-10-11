@@ -24,6 +24,7 @@ enum ToolEffect {
 const toolEffects = <String, ToolEffect>{
   // Connection and fleet
   'connect_app': ToolEffect.acts,
+  'launch_app': ToolEffect.acts,
   'list_connected_devices': ToolEffect.reads,
   'register_device': ToolEffect.acts,
   'switch_device': ToolEffect.acts,

@@ -12,6 +12,7 @@ import 'package:vm_service/vm_service.dart';
 
 import 'src/action_chain.dart';
 import 'src/app_root.dart';
+import 'src/app_launcher.dart';
 import 'src/build_mode.dart';
 import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
@@ -42,6 +43,7 @@ export 'src/cli.dart' show runFlutterPilotServer;
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
 part 'src/tools/devtools_tools.dart';
+part 'src/tools/launch_tools.dart';
 part 'src/tools/native_automation_tools.dart';
 part 'src/tools/navigation_tools.dart';
 part 'src/tools/screenshot_tools.dart';
@@ -309,12 +311,12 @@ abstract class _FlutterPilotServerBase {
 /// repeat. What a single tool does belongs in its description.
 const serverInstructions = '''
 FlutterPilot inspects and drives a running Flutter app (flutter run, debug or profile build).
-- Start with get_app_summary: route, what can be tapped (labels and keys), errors, logs. Only tools that work for the connected app are listed; without flutterpilot_sdk in the app it can be inspected but not driven, and the summary says so.
+- No app running: launch_app. Start with get_app_summary: route, what can be tapped (labels and keys), errors, logs. Only tools that work for the connected app are listed; without flutterpilot_sdk in the app it can be inspected but not driven, and the summary says so.
 - Find a widget by its key, a selector ("ElevatedButton['Log in']") or its visible text.
 - Actions (tap_widget, enter_text, press_key, fill_form, ...) report what they changed: route, widget diff, what is tappable now, new errors. Read that before taking a screenshot or reading the tree again.
 - When the steps are known, send them in one call: fill_form, execute_action_chain, tap_widget(waitFor: ...).
 - Check an outcome with assert_widget or wait_for (milliseconds, no sleeping) and layout with audit_screen_health.
-- After editing Dart code: hot_reload, then get_errors. hot_reload(restart: true) loads every changed Dart file and runs main() again: use it after a git checkout or for a stuck app. Keep the app running; stop and rebuild it (minutes) only for pubspec.yaml, assets or native code changes.''';
+- After editing Dart code: hot_reload, then get_errors. hot_reload(restart: true) loads every changed Dart file and runs main() again: use it after a git checkout or for a stuck app. Keep the app running; launch_app(relaunch: true) rebuilds it (minutes): only for pubspec.yaml, assets or native code changes.''';
 
 /// FlutterPilot MCP Server — bridges AI agents to a running Flutter app.
 class FlutterPilotServer extends _FlutterPilotServerBase
@@ -325,6 +327,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _NavigationToolsMixin,
         _ScreenshotToolsMixin,
         _SelfHealToolsMixin,
+        _LaunchToolsMixin,
         _StateManagementToolsMixin,
         _TestingToolsMixin,
         _DevtoolsToolsMixin,
@@ -354,6 +357,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   Directory get _projectRoot => _explicitProjectRoot ?? Directory.current;
 
+  @override
   List<Directory> get _discoveryRoots => _explicitProjectRoot != null
       ? [_explicitProjectRoot]
       : [Directory.current, ..._clientRoots];
@@ -530,6 +534,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   Future<void>? _connecting;
 
+  @override
   Future<void>? _sdkExtensionsReady;
 
   /// Right after launch (notably on web, via DWDS) the app may not have
@@ -1036,6 +1041,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerNavigationTools();
     _registerScreenshotTools();
     _registerSelfHealTools();
+    _registerLaunchTools();
     _registerStateManagementTools();
     _registerTestingTools();
     _registerDevtoolsTools();

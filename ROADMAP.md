@@ -11,7 +11,7 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 66 MCP tools (164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
+- 67 MCP tools (+launch_app, 2026-10-11; 164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
   (a Dio-only app 45, zero-code 15). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a

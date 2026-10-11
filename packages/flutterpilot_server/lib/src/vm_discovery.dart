@@ -21,9 +21,9 @@ class VmDiscoveryService {
 
   /// What makes an app findable, for "no app" messages.
   static const howToStart =
-      'Start the app with "flutter run" (or "flutterpilot dev", your IDE, or '
-      "the Dart MCP server's launch_app) in its project folder or under the "
-      'workspace; FlutterPilot then finds it. Otherwise call '
+      'Call launch_app to build and start it, or start it yourself with '
+      '"flutter run" (or "flutterpilot dev", your IDE) in its project '
+      'folder or under the workspace; FlutterPilot then finds it. Otherwise call '
       'connect_app(uri: ...) with the VM service URI "flutter run" prints.';
 
   /// How deep below each root to look for a Flutter project (a workspace

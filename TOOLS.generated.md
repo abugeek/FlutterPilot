@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 66
+Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 39819 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40669 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -417,6 +417,18 @@ Recompiles edited .dart files and hot reloads them into the running app, keeping
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `restart` | boolean | no | Hot restart instead of hot reload. |
+
+## `launch_app`
+
+Builds and starts the app (flutter run, or the command in flutterpilot/launch.json), waits for its first frame and connects; the app outlives this session. Takes minutes: with an app already running it refuses unless relaunch:true (pubspec.yaml, assets or native code changed); hot_reload loads Dart changes in a second. A failed build returns the end of its output.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `device` | string | no | flutter run -d: "macos", "chrome", an id. |
+| `target` | string | no | Entrypoint (default lib/main.dart). |
+| `mode` | string: debug \| profile | no | Default debug. |
+| `project` | string | no | App folder, if several. |
+| `relaunch` | boolean | no | Stop the running app and rebuild. |
 
 ## `get_state`
 

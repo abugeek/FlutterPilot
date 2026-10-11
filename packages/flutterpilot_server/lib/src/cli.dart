@@ -3,12 +3,18 @@ import 'package:args/args.dart';
 import 'package:logging/logging.dart' as logging;
 
 import '../flutterpilot_server.dart';
+import 'app_launcher.dart';
 
 /// The `flutterpilot_server` command: parses [args], starts the MCP server
 /// on stdio and runs until SIGINT. The executable (bin/) is just this, so a
 /// package that depends on flutterpilot_server can compile the same server
 /// (what `flutterpilot mcp install` does when the CLI came from pub.dev).
 Future<void> runFlutterPilotServer(List<String> args) async {
+  // launch_app's detached helper: runs the app's launch command and keeps
+  // its output and pid on disk (app_launcher.dart).
+  if (args.isNotEmpty && args.first == superviseFlag) {
+    exit(await superviseLaunch(args.sublist(1)));
+  }
   final parser = ArgParser()
     ..addOption(
       'uri',
