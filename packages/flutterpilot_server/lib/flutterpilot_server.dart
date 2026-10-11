@@ -21,6 +21,7 @@ import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
+import 'src/hang_diagnosis.dart';
 import 'src/http_detail.dart';
 import 'src/image_budget.dart';
 import 'src/memory_leaks.dart';
@@ -247,6 +248,47 @@ abstract class _FlutterPilotServerBase {
     );
   }
 
+  /// A tool that got no answer from the app says what the app's UI isolate
+  /// is doing instead (spinning in Dart code and where, paused in the
+  /// debugger, blocked outside Dart, or idle).
+  Future<CallToolResult> _withHangDiagnosis(CallToolResult result) async {
+    final text = result.content
+        .whereType<TextContent>()
+        .map((c) => c.text)
+        .join('\n');
+    final context = _activeContext;
+    final vm = context?.service;
+    if (!isNoAnswer(text) || vm == null || context!.isWeb) return result;
+    try {
+      final why = await () async {
+        for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+          final isolate = await vm.getIsolate(ref.id!);
+          final rpcs = isolate.extensionRPCs ?? const <String>[];
+          if (!rpcs.any((r) => r.startsWith('ext.flutter.'))) continue;
+          final root = isolate.rootLib?.uri ?? '';
+          final package = RegExp(r'^package:[^/]+/').stringMatch(root);
+          return diagnoseNoAnswer(
+            vm,
+            ref.id!,
+            appUriPrefixes: [?package, 'file:'],
+          );
+        }
+        return null;
+      }().timeout(const Duration(seconds: 8));
+      if (why == null) return result;
+      return CallToolResult(
+        isError: true,
+        content: [
+          ...result.content,
+          TextContent(text: why),
+        ],
+      );
+    } catch (_) {
+      // The VM itself not answering is what the error already says.
+      return result;
+    }
+  }
+
   /// A tool failing because the app is gone says why, when the OS
   /// recorded a native crash (ROADMAP §5.8).
   Future<CallToolResult> _withNativeCrash(CallToolResult result) async {
@@ -311,6 +353,7 @@ abstract class _FlutterPilotServerBase {
       try {
         var result = await callback(args, extra);
         if (result.isError) result = await _withNativeCrash(result);
+        if (result.isError) result = await _withHangDiagnosis(result);
         log(result);
         _verification?.record(
           name,
