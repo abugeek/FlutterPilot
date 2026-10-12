@@ -39,14 +39,17 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _iosDeviceApp = ios && pid != null && _simulatorApp == null
         ? await findIosDeviceApp(pid)
         : null;
-    final idb = ios && _idb != null;
+    // An iOS app that is not a simulator process runs on a phone: idb and
+    // simctl would drive some other, booted simulator.
+    _physicalIos = ios && pid != null && _simulatorApp == null;
+    final idb = ios && _idb != null && !_physicalIos;
     final xcrun = ios && await _onPath('xcrun');
     if (staticTools) return;
     for (final MapEntry(key: name, value: tool) in _nativeTools.entries) {
       final usable = android
           ? _adb != null
           : switch (name) {
-              'native_screenshot' => xcrun,
+              'native_screenshot' => xcrun && !_physicalIos,
               'native_open_app' =>
                 xcrun && (_simulatorApp != null || _iosDeviceApp != null),
               _ => idb,
@@ -58,6 +61,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   /// The physical iPhone and bundle id behind the connection, if it is one.
   @override
   ({String device, String bundleId})? _iosDeviceApp;
+
+  /// The connected app runs on an iPhone, not in a simulator.
+  bool _physicalIos = false;
 
   /// The connected app's operating system (`ios`, `android`, ...).
   String? _nativeOs;
@@ -166,6 +172,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     final explicit = p['simulatorUdid']?.toString();
     if (explicit != null && explicit.isNotEmpty) return explicit;
     if (_simulatorApp != null) return _simulatorApp!.udid;
+    // Never some other booted simulator when the app is on a phone.
+    if (_physicalIos) return null;
 
     if (!Platform.isMacOS) return null;
     try {
