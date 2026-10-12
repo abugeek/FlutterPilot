@@ -137,9 +137,13 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       uri = null;
       final code = launchExitCodeIn(text);
       if (code != null) {
+        final phone = await phoneStateForDevice(params['device'] as String?);
+        final hint = explainLaunchFailure(text);
         return _launchResult(
           '"$command" exited with code $code before the app was up '
-          '(in ${root.path}):\n${Redaction.text(launchLogTail(text))}',
+          '(in ${root.path}):\n${Redaction.text(launchLogTail(text))}'
+          '${hint == null ? '' : '\nHINT: $hint'}'
+          '${phone?.problem == null ? '' : '\nDEVICE: ${phone!.problem}. ${PhoneState.fix}'}',
           isError: true,
         );
       }
