@@ -144,29 +144,60 @@ abstract class _FlutterPilotServerBase {
     List<String> files,
   ) async {
     if (files.isEmpty) return files;
+    // A file's verdict holds while it is unchanged and nothing was reloaded
+    // since: edit-then-summary loops asked the VM for every script of the
+    // app (thousands, in a big one) and each edited file's text on every
+    // get_app_summary.
+    final stamp = _activeContext?.lastReload?.millisecondsSinceEpoch ?? 0;
+    final stale = <String>[];
+    final unknown = <String>[];
+    final mtimes = <String, int>{};
+    for (final f in files) {
+      final key = '$isolateId|$root/$f';
+      final mtime = File('$root/$f').lastModifiedSync().millisecondsSinceEpoch;
+      mtimes[f] = mtime;
+      final known = _staleVerdicts[key];
+      if (known != null && known.mtime == mtime && known.stamp == stamp) {
+        if (known.stale) stale.add(f);
+      } else {
+        unknown.add(f);
+      }
+    }
+    if (unknown.isEmpty) return stale;
     final loaded = {
       for (final script
           in (await vm.getScripts(isolateId)).scripts ?? const <ScriptRef>[])
         if (script.uri != null && script.id != null) script.uri!: script.id!,
     };
-    final fileUris = [for (final f in files) Uri.file('$root/$f').toString()];
+    final fileUris = [for (final f in unknown) Uri.file('$root/$f').toString()];
     final packageUris =
         (await vm.lookupPackageUris(isolateId, fileUris)).uris ??
         const <String?>[];
-    final stale = <String>[];
-    for (var i = 0; i < files.length; i++) {
+    for (var i = 0; i < unknown.length; i++) {
       final id =
           loaded[i < packageUris.length ? packageUris[i] : null] ??
           loaded[fileUris[i]];
-      if (id == null) continue;
-      final script = await vm.getObject(isolateId, id);
-      if (script is! Script || script.source == null) continue;
-      if (script.source != File('$root/${files[i]}').readAsStringSync()) {
-        stale.add(files[i]);
+      var differs = false;
+      if (id != null) {
+        final script = await vm.getObject(isolateId, id);
+        differs =
+            script is Script &&
+            script.source != null &&
+            script.source != File('$root/${unknown[i]}').readAsStringSync();
       }
+      _staleVerdicts['$isolateId|$root/${unknown[i]}'] = (
+        mtime: mtimes[unknown[i]]!,
+        stamp: stamp,
+        stale: differs,
+      );
+      if (differs) stale.add(unknown[i]);
     }
     return stale;
   }
+
+  /// [_notLoaded]'s verdict per file: its modification time and the reload
+  /// it was judged against.
+  final _staleVerdicts = <String, ({int mtime, int stamp, bool stale})>{};
 
   /// Says once when the agent drives the app one call at a time.
   final _batchNudge = BatchNudge();

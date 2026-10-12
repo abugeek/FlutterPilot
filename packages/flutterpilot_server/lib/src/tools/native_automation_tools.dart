@@ -794,18 +794,37 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
 
   PhoneState? _phoneStateCache;
   DateTime? _phoneStateAt;
+  Future<PhoneState?>? _phoneRefresh;
 
   /// Awake/locked state of the physical phone the app runs on (Android over
-  /// adb, an iPhone over devicectl); null for simulators, emulators-less
-  /// desktops, or when it cannot be read. Cached for a few seconds.
+  /// adb, an iPhone over devicectl); null for simulators, desktops, or when
+  /// it cannot be read. Never makes a caller wait for a read it already has:
+  /// within [_phoneStateTtl] the last answer stands, after that it is
+  /// returned at once while a fresh read runs behind it (devicectl takes
+  /// 1-3 s, adb 0.2 s). The first call, and [fresh], wait for the read.
   @override
   Future<PhoneState?> _phoneState({bool fresh = false}) async {
     final at = _phoneStateAt;
-    if (!fresh &&
-        at != null &&
-        DateTime.now().difference(at) < const Duration(seconds: 5)) {
-      return _phoneStateCache;
+    if (!fresh && at != null) {
+      final age = DateTime.now().difference(at);
+      if (age < _phoneStateTtl) return _phoneStateCache;
+      if (age < const Duration(minutes: 5)) {
+        // ignore: unawaited_futures
+        _refreshPhoneState();
+        return _phoneStateCache;
+      }
     }
+    return _refreshPhoneState();
+  }
+
+  Duration get _phoneStateTtl => _nativeOs == 'android'
+      ? const Duration(seconds: 5)
+      : const Duration(seconds: 20);
+
+  Future<PhoneState?> _refreshPhoneState() => _phoneRefresh ??=
+      _readPhoneState().whenComplete(() => _phoneRefresh = null);
+
+  Future<PhoneState?> _readPhoneState() async {
     PhoneState? state;
     try {
       if (_nativeOs == 'android') {
@@ -888,6 +907,20 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     if (explicit != null && explicit.isNotEmpty) return explicit;
     final adbPath = _adb ?? await findAdb();
     if (adbPath == null) return null;
+    // Two adb calls to find; the answer holds until the connection changes.
+    if (_serialCache != null && _serialCacheUri == vmServiceUri) {
+      return _serialCache;
+    }
+    final found = await _findAndroidSerial(adbPath);
+    _serialCache = found;
+    _serialCacheUri = vmServiceUri;
+    return found;
+  }
+
+  String? _serialCache;
+  String? _serialCacheUri;
+
+  Future<String?> _findAndroidSerial(String adbPath) async {
     final port = Uri.tryParse(_activeContext?.uri ?? '')?.port;
     if (port != null && port != 0) {
       final forwards = await adb(adbPath, null, ['forward', '--list']);

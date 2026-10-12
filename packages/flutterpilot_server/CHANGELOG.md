@@ -1,5 +1,21 @@
 ## Unreleased
 
+- Faster, measured on the example app against the field-session numbers in
+  `flutterpilot stats`:
+  - `navigate_to` skips its second wait for the animation (the app settles
+    before it answers; only go_router push/replace still need it: it cost up
+    to 1.5 s on a screen with a spinner) and reads the stack and the screen
+    together: 105-190 ms -> 55-80 ms.
+  - `get_app_summary` and every call that mentions the phone no longer wait
+    for adb/devicectl: the phone's state is served from the last read (5 s on
+    Android, 20 s on an iPhone, up to 5 min stale while a new read runs
+    behind it; `devicectl` took 1-3 s a call), and the adb device is found
+    once per connection instead of with two adb calls each time.
+  - The "edited but not reloaded" check remembers each file's verdict until it
+    changes or the app reloads: it asked the VM for every script of the app
+    and each edited file's text on every summary.
+  - `hot_reload` reads what it needs before the reload (folder, SDK, ping) in
+    parallel.
 - `capture_screenshot`, `compare_screenshot` and `audit_screen_health` are
   refused with the reason (`Not done: the screen is off (asleep)` / `the
   device is locked`) on a phone that is off or locked. Found on a real

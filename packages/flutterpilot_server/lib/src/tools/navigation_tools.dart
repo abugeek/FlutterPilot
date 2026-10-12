@@ -50,19 +50,30 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         }
         if (res.isError) return res.toCallToolResult();
         // The page slides in: until it has, its controls are off screen
-        // and the next call would list the page underneath. Bounded, since
-        // a screen with a spinner never stops animating.
-        await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
-          'timeoutMs': '1500',
-        });
-        final stack = await _callExtensionRaw(
+        // and the next call would list the page underneath. navigateTo and
+        // deep links settle in the app before they answer (route
+        // transitions and still text); only the router's push/replace do
+        // not. Bounded, since a screen with a spinner never stops
+        // animating: the second wait cost up to 1.5 s there.
+        if (action == 'push' || action == 'replace') {
+          await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+            'timeoutMs': '1500',
+          });
+        }
+        // The stack and the screen after it are independent reads (the
+        // screen is read after the wait when there is one).
+        final waitFor = p['waitFor']?.toString();
+        final stackFuture = _callExtensionRaw(
           'ext.flutterpilot.getNavigationStack',
           {},
         );
+        final screenFuture = waitFor == null || waitFor.isEmpty
+            ? _screenAfter(route: false)
+            : null;
+        final stack = await stackFuture;
         final now = (stack.data?['stack'] as List?)?.join(' -> ');
         // The page's data may load after the transition: one call instead
         // of navigate_to then wait_for (52 such pairs in field sessions).
-        final waitFor = p['waitFor']?.toString();
         var waited = '';
         var missing = false;
         if (waitFor != null && waitFor.isNotEmpty) {
@@ -81,7 +92,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             TextContent(
               text:
                   'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.'
-                  '$waited${await _screenAfter(route: false)}',
+                  '$waited${screenFuture == null ? await _screenAfter(route: false) : await screenFuture}',
             ),
           ],
         );

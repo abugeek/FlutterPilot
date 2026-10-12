@@ -90,6 +90,12 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     }
     ({String root, int? logOffset, DateTime since})? before;
     try {
+      // These reads do not depend on each other: started together, and the
+      // ping below decides whether the others matter.
+      final beforeFuture = _beforeReload(vmService, context);
+      final sdkFuture = service == 'hotRestart'
+          ? _hasSdkExtensions(vmService).catchError((_) => false)
+          : Future.value(false);
       final isolateId = (await vmService.getVM()).isolates?.firstOrNull?.id;
       // A hot restart of an app stuck in a loop made flutter_tools wait its
       // full two minutes, then blamed a compile error. Ask the UI isolate
@@ -107,9 +113,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           ],
         );
       }
-      before = await _beforeReload(vmService, context);
-      final hadSdk =
-          service == 'hotRestart' && await _hasSdkExtensions(vmService);
+      before = await beforeFuture;
+      final hadSdk = await sdkFuture;
       await vmService
           .callMethod(method, isolateId: isolateId)
           .timeout(const Duration(minutes: 2));
