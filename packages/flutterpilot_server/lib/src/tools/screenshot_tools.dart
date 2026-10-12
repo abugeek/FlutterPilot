@@ -153,8 +153,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         '• App inactive: something of the OS covers it (a system alert '
         'such as a permission request, the app switcher, Control '
         'Center); the tappable elements below may be hidden.'
-        '${os == 'ios' ? ' native_describe_screen shows what is on top.' : ''}',
+        '${_allTools['native_describe_screen']?.enabled == true ? ' native_describe_screen shows what is on top.' : ''}',
       );
+      if (await _permissionDialogHint() case final hint?) {
+        summary.writeln(hint);
+      }
     } else if (lifecycle != null &&
         lifecycle != 'resumed' &&
         lifecycle != 'inactive') {

@@ -32,6 +32,7 @@ import 'src/native_crash.dart';
 import 'src/state_history.dart';
 import 'src/device_runtime_context.dart';
 import 'src/param_aliases.dart';
+import 'src/permission_hint.dart';
 import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
@@ -506,6 +507,9 @@ abstract class _FlutterPilotServerBase {
   Future<PhoneState?> _phoneState();
 
   Future<CallToolResult> _withPhoneState(CallToolResult result);
+
+  /// How to get past a system dialog nothing here can tap, or null.
+  Future<String?> _permissionDialogHint();
 
   /// Makes the Android `adb forward` to the VM service again if it was
   /// dropped (unplugged cable, adb restarted); true when it did.

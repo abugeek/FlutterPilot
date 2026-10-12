@@ -1,5 +1,13 @@
 ## Unreleased
 
+- On a device where nothing here can tap a system dialog (a real iPhone:
+  idb drives simulators only), a tap that changed nothing now names the
+  permission calls the app made (`flutter.baseflow.com/permissions/methods /
+  requestPermissions`) and says to dismiss the dialog by hand or answer that
+  call with `mock_platform_channel` so it never opens; without
+  `FlutterPilot.initialize()` first in `main()` it says that is needed. The
+  app summary's "App inactive" line says the same instead of pointing at a
+  `native_describe_screen` that is not listed there.
 - `launch_app(waitSeconds: 60)` returns after that long if the build is still
   going, naming the stage (`compiling the iOS app`, `installing on the
   device`, `waiting for the device`…), so a 5-minute iPhone build is not one
