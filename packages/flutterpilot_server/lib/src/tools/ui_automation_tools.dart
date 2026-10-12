@@ -299,8 +299,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         final waitFor = p['waitFor']?.toString();
         if (waitFor == null || waitFor.isEmpty) {
+          final feedback = _formatActionFeedback(verb, p, res);
+          // A tap that changed nothing on a device nothing here can tap a
+          // system dialog on: say what may have opened one.
+          final dialog = feedback.contains('Nothing changed')
+              ? await _permissionDialogHint()
+              : null;
           return CallToolResult(
-            content: [TextContent(text: _formatActionFeedback(verb, p, res))],
+            content: [
+              TextContent(
+                text: dialog == null ? feedback : '$feedback\n$dialog',
+              ),
+            ],
           );
         }
         final fromRoute =

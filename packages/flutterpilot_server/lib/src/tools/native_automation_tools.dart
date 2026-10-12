@@ -706,6 +706,30 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     return 'ws://127.0.0.1:$hostPort/${vm.token}/ws';
   }
 
+  /// On a device where nothing here can tap a system dialog (a real
+  /// iPhone): what the app asked the platform for that may have opened one,
+  /// and how to avoid it. Null where the native tools can tap it, or when no
+  /// permission call was made.
+  @override
+  Future<String?> _permissionDialogHint() async {
+    if (_allTools['native_tap']?.enabled == true) return null;
+    final calls = await _callExtensionRaw(
+      'ext.flutterpilot.platformChannel',
+      {},
+    );
+    if (calls.isError) return null;
+    if (calls.data?['installed'] != true) {
+      return '  Nothing here can tap a system dialog on this device. If the '
+          'action opened one, dismiss it by hand. Putting '
+          'FlutterPilot.initialize() first in main() (before '
+          'WidgetsFlutterBinding.ensureInitialized()) would let '
+          'mock_platform_channel answer the permission call instead.';
+    }
+    return permissionCallsHint((calls.data?['calls'] as List?) ?? const []) ??
+        '  Nothing here can tap a system dialog on this device: if the '
+            'action opened one, dismiss it by hand.';
+  }
+
   /// Makes the remembered forward again if it is gone and the phone is
   /// attached; true when it did.
   @override
