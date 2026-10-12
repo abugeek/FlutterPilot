@@ -35,9 +35,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
             description: 'Stop the running app and rebuild.',
           ),
           'waitSeconds': JsonSchema.integer(
-            description:
-                'Return after this long if still building (default 600); '
-                'the build goes on, call again to keep waiting.',
+            description: 'Return early if still building (default 600).',
           ),
         },
       ),

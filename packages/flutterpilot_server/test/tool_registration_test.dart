@@ -72,8 +72,9 @@ void main() {
         // +100 (2026-10-12) for launch_app(waitSeconds).
         lessThanOrEqualTo(29500),
       );
-      // An app without the SDK.
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9600));
+      // An app without the SDK. +100 (2026-10-12) for
+      // launch_app(waitSeconds).
+      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9700));
     });
 
     test('every tool says what it does to the app', () {
