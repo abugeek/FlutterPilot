@@ -8,6 +8,10 @@ void main() {
       contains('FLUTTER_XCODE_DEVELOPMENT_TEAM'),
     );
     expect(
+      explainLaunchFailure('No Xcode build settings have been found.'),
+      contains('FLUTTER_XCODE_DEVELOPMENT_TEAM'),
+    );
+    expect(
       explainLaunchFailure('iPhone needs to be unlocked to enable development'),
       contains('iPhone is locked'),
     );

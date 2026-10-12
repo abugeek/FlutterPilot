@@ -143,7 +143,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
           '"$command" exited with code $code before the app was up '
           '(in ${root.path}):\n${Redaction.text(launchLogTail(text))}'
           '${hint == null ? '' : '\nHINT: $hint'}'
-          '${phone?.problem == null ? '' : '\nDEVICE: ${phone!.problem}. ${PhoneState.fix}'}',
+          '${phone?.problem == null ? '' : '\nDEVICE: ${phone!.problem}. ${phone.fix}'}',
           isError: true,
         );
       }

@@ -8,8 +8,10 @@ String? explainLaunchFailure(String log) {
         text.contains('no development team') ||
         text.contains('requires a development team') ||
         text.contains('no profiles for') ||
-        text.contains('signing for "runner" requires'))
-      'iOS signing is not set up for a real iPhone. Open '
+        text.contains('signing for "runner" requires') ||
+        text.contains('no xcode build settings have been found'))
+      'On a real iPhone this is usually iOS signing (or the phone being '
+          'locked). Open '
           'ios/Runner.xcworkspace once and pick a Team under Signing & '
           'Capabilities, or set FLUTTER_XCODE_DEVELOPMENT_TEAM=<team id> in '
           'flutterpilot/launch.json: {"command": ["env", '

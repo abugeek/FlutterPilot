@@ -1,5 +1,10 @@
 ## Unreleased
 
+- A failed `launch_app` on a phone says why when it can: iOS signing (with
+  the `FLUTTER_XCODE_DEVELOPMENT_TEAM` fix for `flutterpilot/launch.json`),
+  a locked iPhone, Developer Mode off, an unauthorized or restricted Android
+  phone, no storage; and adds the phone's state (`DEVICE: the iPhone is
+  locked`). Before: "No Xcode build settings have been found".
 - A phone whose cable or adb server dropped no longer needs a manual
   reconnect: the `adb forward` to the app is made again, and when
   `flutter run` itself is gone (its service proxy dies with it) the server

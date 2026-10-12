@@ -7,7 +7,7 @@ import 'android_device.dart';
 /// Whether a physical phone is fit to drive: awake and unlocked, and the
 /// facts that make a test flaky (battery saver, a short screen timeout).
 class PhoneState {
-  const PhoneState({this.problem, required this.summary});
+  const PhoneState({this.problem, required this.summary, this.fix = _fix});
 
   /// Null when the phone is fine to drive, else why not.
   final String? problem;
@@ -16,10 +16,16 @@ class PhoneState {
   final String summary;
 
   /// What to do about [problem].
-  static const fix =
+  final String fix;
+
+  static const _fix =
       'Wake and unlock it by hand (native_button WAKEUP wakes an Android '
       'phone, not the lock screen). FlutterPilot keeps the app drawing, but '
       'system dialogs, the camera and anything native need it awake.';
+
+  static const _iosFix =
+      'Unlock it and keep it unlocked while the app installs and runs: iOS '
+      'suspends a locked app, and system dialogs need the screen.';
 
   factory PhoneState.android(AndroidDeviceState s) =>
       PhoneState(problem: s.problem, summary: s.describe());
@@ -83,6 +89,7 @@ bool? parseDevicectlLocked(String json) {
 }
 
 PhoneState iosPhoneState(IosDevice device, {bool? locked}) => PhoneState(
+  fix: PhoneState._iosFix,
   problem: !device.connected
       ? 'the iPhone "${device.name}" is not connected (${device.transport}); '
             'unlock it and check the cable or the Wi-Fi'
