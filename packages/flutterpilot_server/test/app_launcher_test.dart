@@ -151,3 +151,31 @@ void main() {
     expect(tail, 'line 97\nline 98\nline 99');
   });
 }
+
+void launchPhaseTests() {
+  test('launchPhase names the last stage of the build', () {
+    expect(launchPhase(''), isNull);
+    expect(
+      launchPhase(
+        'Launching lib/main.dart on iPhone in debug mode...\nRunning Xcode build...',
+      ),
+      contains('compiling the iOS app'),
+    );
+    expect(
+      launchPhase('Running Xcode build...\nXcode build done.   13.9s\n'),
+      contains('installing'),
+    );
+    expect(
+      launchPhase(
+        'Running Gradle task \'assembleDebug\'...\nInstalling build/app.apk...',
+      ),
+      'installing on the device',
+    );
+    expect(
+      launchPhase(
+        'Installing and launching...\nSyncing files to device iPhone',
+      ),
+      contains('first frame'),
+    );
+  });
+}

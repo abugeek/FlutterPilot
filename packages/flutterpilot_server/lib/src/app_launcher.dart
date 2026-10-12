@@ -259,3 +259,35 @@ Future<int> superviseLaunch(List<String> args) async {
   } catch (_) {}
   return code;
 }
+
+/// Where a running launch is, from the end of [log] (what `flutter run`
+/// printed so far): the agent otherwise waits blind for minutes.
+String? launchPhase(String log) {
+  const stages = <(String, String)>[
+    ('Resolving dependencies', 'fetching packages'),
+    ('pod install', 'installing iOS pods'),
+    (
+      'Running Gradle task',
+      'compiling the Android app (Gradle: slow the first time)',
+    ),
+    (
+      'Running Xcode build',
+      'compiling the iOS app (Xcode: slow the first time)',
+    ),
+    ('Xcode build done', 'built; installing on the device'),
+    ('Built build/', 'built; installing on the device'),
+    ('Installing', 'installing on the device'),
+    ('Syncing files to device', 'starting; waiting for the first frame'),
+    ('Waiting for', 'waiting for the device (is it unlocked and connected?)'),
+  ];
+  var best = -1;
+  String? phase;
+  for (final (marker, text) in stages) {
+    final at = log.lastIndexOf(marker);
+    if (at > best) {
+      best = at;
+      phase = text;
+    }
+  }
+  return phase;
+}

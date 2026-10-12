@@ -1,5 +1,9 @@
 ## Unreleased
 
+- `launch_app(waitSeconds: 60)` returns after that long if the build is still
+  going, naming the stage (`compiling the iOS app`, `installing on the
+  device`, `waiting for the device`…), so a 5-minute iPhone build is not one
+  blind call; the build goes on and the next call keeps waiting.
 - A physical iPhone: `native_open_app` brings the app back to the foreground
   (`devicectl device process launch`; the bundle id comes from matching the
   VM's process to the installed app), and when the app dies in native code
