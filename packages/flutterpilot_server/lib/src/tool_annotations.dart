@@ -143,3 +143,11 @@ ToolAnnotations toolAnnotations(String name) {
     openWorldHint: openWorldTools.contains(name),
   );
 }
+
+/// Tools that draw the screen to pixels. On a phone that is off or locked the
+/// engine crashes doing that, so they are refused there.
+const rasterTools = {
+  'capture_screenshot',
+  'compare_screenshot',
+  'audit_screen_health',
+};
