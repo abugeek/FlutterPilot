@@ -30,6 +30,7 @@ import 'src/native_crash.dart';
 import 'src/state_history.dart';
 import 'src/device_runtime_context.dart';
 import 'src/param_aliases.dart';
+import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
@@ -368,6 +369,7 @@ abstract class _FlutterPilotServerBase {
 
       try {
         var result = await callback(args, extra);
+        if (result.isError) result = await _withPhoneState(result);
         if (result.isError) result = await _withNativeCrash(result);
         if (result.isError) result = await _withHangDiagnosis(result);
         log(result);
@@ -496,6 +498,11 @@ abstract class _FlutterPilotServerBase {
 
   /// The server and app setup as JSON (get_app_summary(setup: true)).
   Future<String> _setupReport();
+
+  /// Awake/locked state of the physical phone the app runs on, or null.
+  Future<PhoneState?> _phoneState();
+
+  Future<CallToolResult> _withPhoneState(CallToolResult result);
 
   /// Returns an MCP error for an operation that mutates app data when the
   /// server was not explicitly started with --allow-destructive.

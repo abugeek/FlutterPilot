@@ -85,11 +85,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       }
       final profile = _activeContext?.buildMode == BuildMode.profile;
       final stale = await _staleCodeNote();
+      final device = (await _phoneState())?.problem;
       return CallToolResult(
         content: [
           TextContent(
             text:
                 '${stale == null ? '' : '• Code: $stale\n'}'
+                '${device == null ? '' : '• Device: $device. ${PhoneState.fix}\n'}'
                 '${zeroCodeSummary(basic.data!)}'
                 '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
           ),
@@ -118,6 +120,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     }
     if (await _staleCodeNote() case final stale?) {
       summary.writeln('• Code: $stale');
+    }
+    if ((await _phoneState())?.problem case final problem?) {
+      summary.writeln('• Device: $problem. ${PhoneState.fix}');
     }
     if (data['starting'] case final String why) {
       summary.writeln('• Starting: $why');

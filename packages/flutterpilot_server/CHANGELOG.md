@@ -1,5 +1,10 @@
 ## Unreleased
 
+- A physical phone that is asleep, locked or (iPhone) not connected is said
+  so: `• Device: …` in `get_app_summary` (and the phone's state in
+  `setup: true`), and a `DEVICE: …` line on a call that got no answer or lost
+  the connection, which looked like a hung app. Android is read over adb
+  (`dumpsys`), an iPhone over `xcrun devicectl`. Not checked for simulators.
 - The `native_*` tools work on Android (emulator or phone) through `adb`:
   `native_describe_screen` lists system dialogs and notifications with tap
   points (uiautomator), `native_tap`, `native_text`, `native_button` (HOME,

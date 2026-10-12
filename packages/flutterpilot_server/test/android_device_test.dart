@@ -1,4 +1,5 @@
 import 'package:flutterpilot_server/src/android_device.dart';
+import 'package:flutterpilot_server/src/phone_state.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -89,6 +90,40 @@ UI hierchary dumped to: /dev/tty''';
         onPath: (_) async => false,
       ),
       isNull,
+    );
+  });
+
+  test('devicectl: devices and lock state', () {
+    const list = '''{"result":{"devices":[
+      {"identifier":"A","deviceProperties":{"name":"iPhone"},
+       "connectionProperties":{"transportType":"wired","tunnelState":"connected"}},
+      {"identifier":"B","deviceProperties":{"name":"iPhone 17"},
+       "connectionProperties":{"transportType":"sameMachine","tunnelState":"disconnected"}}]}}''';
+    final devices = parseDevicectlDevices(list);
+    expect(devices.where((d) => d.physical).single.name, 'iPhone');
+    expect(parseDevicectlDevices('nope'), isEmpty);
+    expect(
+      parseDevicectlLocked('{"result":{"passcodeRequired":true}}'),
+      isTrue,
+    );
+    expect(parseDevicectlLocked('{}'), isNull);
+    final phone = devices.first;
+    expect(iosPhoneState(phone, locked: true).problem, 'the iPhone is locked');
+    expect(iosPhoneState(phone, locked: false).problem, isNull);
+    expect(
+      iosPhoneState(phone, locked: false).summary,
+      'iPhone, USB, unlocked',
+    );
+    expect(
+      iosPhoneState(
+        const IosDevice(
+          identifier: 'A',
+          name: 'iPhone',
+          transport: 'localNetwork',
+          connected: false,
+        ),
+      ).problem,
+      contains('not connected'),
     );
   });
 }
