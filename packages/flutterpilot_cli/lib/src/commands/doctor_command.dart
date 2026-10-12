@@ -7,6 +7,7 @@ import 'package:vm_service/vm_service.dart';
 import 'package:vm_service/vm_service_io.dart';
 import 'package:yaml/yaml.dart';
 
+import '../devices_check.dart';
 import '../dtd_discovery.dart';
 import 'init_command.dart';
 import 'mcp_command.dart';
@@ -88,6 +89,7 @@ class DoctorCommand extends Command<void> {
     final checks = [
       ...checkProject(project),
       ...await checkRunningApp(project),
+      ...await checkDevices(),
     ];
     for (final c in checks) {
       stdout.writeln(c);

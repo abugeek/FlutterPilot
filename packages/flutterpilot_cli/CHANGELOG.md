@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `flutterpilot doctor` lists the phones plugged in: Android (unauthorized or
+  offline, screen off or locked, battery saver, a short screen timeout) and
+  iPhones (not connected, Developer Mode off, locked).
 - `flutterpilot doctor` fails a config that starts the server by name
   alone (`"command": "flutterpilot_server"`) when nothing by that name is
   on the PATH, and reports that before a stale-binary warning.

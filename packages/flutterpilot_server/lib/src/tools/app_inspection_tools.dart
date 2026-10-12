@@ -86,6 +86,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     final capabilities = {
+      'device': ?(await _phoneState())?.summary,
       'connection': {
         'vmServiceUri': vmServiceUri,
         'connected': _vmService != null,

@@ -609,6 +609,68 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     );
   }
   // ---------------------------------------------------------------------------
+  // Is the phone fit to drive?
+  // ---------------------------------------------------------------------------
+
+  PhoneState? _phoneStateCache;
+  DateTime? _phoneStateAt;
+
+  /// Awake/locked state of the physical phone the app runs on (Android over
+  /// adb, an iPhone over devicectl); null for simulators, emulators-less
+  /// desktops, or when it cannot be read. Cached for a few seconds.
+  @override
+  Future<PhoneState?> _phoneState() async {
+    final at = _phoneStateAt;
+    if (at != null &&
+        DateTime.now().difference(at) < const Duration(seconds: 5)) {
+      return _phoneStateCache;
+    }
+    PhoneState? state;
+    try {
+      if (_nativeOs == 'android') {
+        final adbPath = _adb ?? await findAdb();
+        if (adbPath != null) {
+          final s = await readAndroidDeviceState(
+            adbPath,
+            await _androidSerial(null),
+          );
+          if (s != null) state = PhoneState.android(s);
+        }
+      } else if (_nativeOs == 'ios' && _simulatorApp == null) {
+        state = await readIosPhoneState();
+      }
+    } catch (_) {}
+    _phoneStateCache = state;
+    _phoneStateAt = DateTime.now();
+    return state;
+  }
+
+  /// A failure that could be the phone's doing says so: "no answer" from a
+  /// locked or sleeping phone looks like a hung app otherwise.
+  @override
+  Future<CallToolResult> _withPhoneState(CallToolResult result) async {
+    final text = result.content
+        .whereType<TextContent>()
+        .map((c) => c.text)
+        .join('\n');
+    if (!(isNoAnswer(text) ||
+        text.contains('connection to the app dropped') ||
+        text.contains('No active Flutter app connection') ||
+        text.contains('Service has disappeared'))) {
+      return result;
+    }
+    final problem = (await _phoneState())?.problem;
+    if (problem == null) return result;
+    return CallToolResult(
+      isError: true,
+      content: [
+        ...result.content,
+        TextContent(text: 'DEVICE: $problem. ${PhoneState.fix}'),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Android (adb)
   // ---------------------------------------------------------------------------
 
