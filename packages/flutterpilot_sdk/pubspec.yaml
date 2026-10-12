@@ -18,6 +18,8 @@ dependencies:
   flutter:
     sdk: flutter
   meta: ^1.17.0
+  # Keeps a real phone's screen on while an agent drives the app.
+  wakelock_plus: ">=1.2.8 <2.0.0"
 dev_dependencies:
   flutter_test:
     sdk: flutter

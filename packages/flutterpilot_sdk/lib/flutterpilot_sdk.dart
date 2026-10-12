@@ -20,6 +20,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'src/keep_awake.dart';
 import 'src/app_nap_stub.dart'
     if (dart.library.ffi) 'src/app_nap_ffi.dart'
     as app_nap;
@@ -89,6 +90,7 @@ void registerExtension(String method, ServiceExtensionHandler handler) {
   if (!isNew) return;
   developer.registerExtension(method, (m, p) async {
     _applyProjectRoot(p['projectRoot']);
+    KeepAwake.touch();
     await _ensureFreshFrame();
     return _extensionHandlers[method]!(m, p);
   });

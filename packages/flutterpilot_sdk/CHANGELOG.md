@@ -1,5 +1,8 @@
 ## Unreleased
 
+- The device screen stays on while an agent drives the app (a real phone no
+  longer dims and locks mid-test), and goes back to the OS timeout 10 minutes
+  after the last call. Off with `--dart-define=FLUTTERPILOT_KEEP_AWAKE=false`.
 - A hidden window with an animation on screen is redrawn at about 20 Hz
   between agent calls, not 60 Hz for the 30 s after each one (60 Hz stays
   for the 2 s after a call). On a spinner screen that measured 24% CPU
