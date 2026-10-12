@@ -16,6 +16,12 @@ void main() {
       contains('iPhone is locked'),
     );
     expect(
+      explainLaunchFailure(
+        'Error (Xcode): No Accounts: Add a new account in Accounts settings.',
+      ),
+      contains('Apple ID'),
+    );
+    expect(
       explainLaunchFailure('Developer Mode is disabled'),
       contains('Developer Mode'),
     );
