@@ -37,6 +37,7 @@ import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
 import 'src/scenario.dart';
+import 'src/signing_team.dart';
 import 'src/screen_memory.dart';
 import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';

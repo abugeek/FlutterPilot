@@ -4,6 +4,11 @@
   going, naming the stage (`compiling the iOS app`, `installing on the
   device`, `waiting for the device`…), so a 5-minute iPhone build is not one
   blind call; the build goes on and the next call keeps waiting.
+- `launch_app` on a real iPhone signs with your team by itself when the
+  project names none and the Mac has exactly one valid Apple Development
+  certificate (passed as `FLUTTER_XCODE_DEVELOPMENT_TEAM`; the project is not
+  touched, and the result says which team). Before: "No profiles for …" until
+  the project was opened in Xcode.
 - A physical iPhone: `native_open_app` brings the app back to the foreground
   (`devicectl device process launch`; the bundle id comes from matching the
   VM's process to the installed app), and when the app dies in native code
