@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `capture_screenshot`, `compare_screenshot` and `audit_screen_health` are
+  refused with the reason (`Not done: the screen is off (asleep)` / `the
+  device is locked`) on a phone that is off or locked. Found on a real
+  Android phone: drawing the screen there crashes the engine's raster thread
+  (SIGSEGV, "call to OpenGL ES API with no current context") and the app is
+  lost; the smoke run did this to the example app. Android is read afresh
+  before each such call (0.2 s).
 - Android: reading the phone's state (awake, locked, battery, who has the
   focus) is one adb call that filters on the phone and reads the slow
   settings once a minute: 190 ms instead of 550 ms (measured on a phone). A
