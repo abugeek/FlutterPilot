@@ -189,7 +189,11 @@ bool _isRunning(int pid) {
 /// `--supervise`) that is detached from the MCP server: the app keeps
 /// running when the agent's session ends, and the next one finds it.
 /// No shell is involved; the output goes to [launchLogFile].
-Future<void> startSupervised(Directory root, List<String> command) async {
+Future<void> startSupervised(
+  Directory root,
+  List<String> command, {
+  Map<String, String>? environment,
+}) async {
   startLaunchLog(root);
   final exe = Platform.resolvedExecutable;
   final compiled = !p.basenameWithoutExtension(exe).startsWith('dart');
@@ -202,6 +206,7 @@ Future<void> startSupervised(Directory root, List<String> command) async {
       ...command,
     ],
     workingDirectory: root.path,
+    environment: environment,
     mode: ProcessStartMode.detached,
   );
 }
