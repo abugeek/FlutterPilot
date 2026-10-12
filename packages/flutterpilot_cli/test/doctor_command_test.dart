@@ -39,6 +39,20 @@ void main() {
     expect(titles(checks, ok: false).single, contains('never called'));
   });
 
+  // Field case: an app wires FlutterPilot in a dev-only entrypoint
+  // (flutter run -t tool/pilot_main.dart) so lib/ never imports it, and
+  // doctor reported seven things as missing that the running app had.
+  test('wiring in a tool/ entrypoint counts', () {
+    pubspec(['flutter', 'flutterpilot_sdk', 'dio', 'flutterpilot_dio']);
+    write('lib/main.dart', 'void main() {}');
+    write(
+      'tool/pilot_main.dart',
+      'void main() { FlutterPilot.initialize(); DioPilotInterceptor.register(); }',
+    );
+    final checks = DoctorCommand.checkProject(app.path);
+    expect(titles(checks, ok: false), isEmpty);
+  });
+
   test('a plugin added but not wired, and one missing', () {
     pubspec(['flutterpilot_sdk', 'dio', 'flutterpilot_dio', 'hive']);
     write('lib/main.dart', 'void main() { FlutterPilot.initialize(); }');

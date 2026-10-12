@@ -171,7 +171,8 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       '${drawn ? '' : ' It has not drawn its first frame yet: wait_for or get_app_summary in a moment.'}'
       '${ignored.isEmpty ? '' : ' ${ignored.join(', ')} not applied: $launchConfigFile sets the command.'}'
       '\nLeave it running: after editing Dart code call hot_reload. '
-      'Build output: $launchLogFile.',
+      'Build output: $launchLogFile'
+      '${relaunch ? ' (the app before it: $previousLaunchLogFile)' : ''}.',
     );
   }
 

@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `launch_app` keeps the output of the launch before it as
+  `.dart_tool/flutterpilot_run.prev.log`: a relaunch erased what the app it
+  had just stopped had printed.
 - `get_app_summary` says when the app is not running the code on disk:
   "• Code: 2 Dart files (lib/a.dart, lib/b.dart) edited since the app loaded
   its code… hot_reload loads it", or that `pubspec.lock`, `pubspec.yaml` or

@@ -17,6 +17,11 @@ import 'vm_discovery.dart';
 /// `flutter run`'s output, for a launch that fails or is still building.
 const launchLogFile = '.dart_tool/flutterpilot_run.log';
 
+/// The output of the launch before this one: a relaunch used to erase what
+/// the app that was just stopped had printed (slow-frame warnings, in the
+/// case that prompted this).
+const previousLaunchLogFile = '.dart_tool/flutterpilot_run.prev.log';
+
 /// The pid of the running launch command; gone when it has exited.
 const launchPidFile = '.dart_tool/flutterpilot_run.pid';
 
@@ -185,9 +190,7 @@ bool _isRunning(int pid) {
 /// running when the agent's session ends, and the next one finds it.
 /// No shell is involved; the output goes to [launchLogFile].
 Future<void> startSupervised(Directory root, List<String> command) async {
-  final log = File(p.join(root.path, launchLogFile));
-  log.parent.createSync(recursive: true);
-  log.writeAsStringSync('');
+  startLaunchLog(root);
   final exe = Platform.resolvedExecutable;
   final compiled = !p.basenameWithoutExtension(exe).startsWith('dart');
   await Process.start(
@@ -201,6 +204,21 @@ Future<void> startSupervised(Directory root, List<String> command) async {
     workingDirectory: root.path,
     mode: ProcessStartMode.detached,
   );
+}
+
+/// Empties [launchLogFile] for a new launch, keeping what the last one
+/// wrote as [previousLaunchLogFile].
+void startLaunchLog(Directory root) {
+  final log = File(p.join(root.path, launchLogFile));
+  log.parent.createSync(recursive: true);
+  try {
+    if (log.existsSync() && log.lengthSync() > 0) {
+      log.copySync(p.join(root.path, previousLaunchLogFile));
+    }
+  } catch (_) {
+    // Losing the old output must not stop the new launch.
+  }
+  log.writeAsStringSync('');
 }
 
 /// First argument of the supervisor invocation; see [superviseLaunch].

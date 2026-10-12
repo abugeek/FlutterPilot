@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `flutterpilot doctor` and `init` read `tool/` and `bin/` as well as
+  `lib/`: an app that wires FlutterPilot in a dev-only entrypoint
+  (`flutter run -t tool/pilot_main.dart`) was told nothing was wired.
 - `flutterpilot doctor` warns when a server binary compiled in a source
   checkout is older than its source, and checks the FlutterPilot server
   Claude Code has for the project in `~/.claude.json` (it wins over the
