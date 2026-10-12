@@ -1,5 +1,12 @@
 ## Unreleased
 
+- `flutterpilot smoke` launches the app (`-d <device>`, `--relaunch` to build
+  again, `--no-launch` to use the running one), visits the current screen and
+  every go_router route without parameters (or `--routes /a,/b`), checks each
+  for layout, tap-target, label and contrast problems and errors, and writes
+  `flutterpilot/reports/smoke-<time>/report.md` with a screenshot of each
+  screen that has findings. Exit code 1 when anything was found. Stops with
+  the reason on a phone that is off or locked.
 - `flutterpilot doctor` lists the phones plugged in: Android (unauthorized or
   offline, screen off or locked, battery saver, a short screen timeout) and
   iPhones (not connected, Developer Mode off, locked).

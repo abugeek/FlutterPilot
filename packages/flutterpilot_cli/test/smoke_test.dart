@@ -61,4 +61,12 @@ void main() {
     expect(routeFileName('/'), 'root');
     expect(routeFileName('/a/b?x=1'), 'a_b_x_1');
   });
+
+  test('long findings are cut in the report', () {
+    final r = smokeReport([
+      ScreenResult('/', audit: 'Layout overflows ${'x' * 9000}'),
+    ], at: DateTime.utc(2026));
+    expect(r.length, lessThan(5000));
+    expect(r, contains('more characters'));
+  });
 }

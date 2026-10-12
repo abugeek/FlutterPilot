@@ -162,6 +162,11 @@ class SmokeCommand extends Command<void> {
         }
       }
       final audit = await s.call('audit_screen_health', {});
+      if (audit.text.startsWith('Not done:')) {
+        // The phone is off or locked: every screen would say the same.
+        stderr.writeln('\n${audit.text}');
+        return true;
+      }
       final errors = await s.call('get_errors', {});
       final errorText =
           errors.isError ||
@@ -239,7 +244,7 @@ class SmokeCommand extends Command<void> {
         Platform.isWindows ? 'flutterpilot_server.exe' : 'flutterpilot_server',
       ),
     );
-    if (compiled.existsSync()) {
+    if (compiled.existsSync() && _newerThanSource(compiled, dir)) {
       return (executable: compiled.path, args: args, workingDirectory: null);
     }
     return (
@@ -247,5 +252,22 @@ class SmokeCommand extends Command<void> {
       args: ['run', p.join(dir, 'bin', 'flutterpilot_server.dart'), ...args],
       workingDirectory: dir,
     );
+  }
+
+  /// A compiled server older than its source is not what the checkout says.
+  static bool _newerThanSource(File binary, String serverDir) {
+    final built = binary.lastModifiedSync();
+    try {
+      for (final f in Directory(
+        p.join(serverDir, 'lib'),
+      ).listSync(recursive: true)) {
+        if (f is File &&
+            f.path.endsWith('.dart') &&
+            f.lastModifiedSync().isAfter(built)) {
+          return false;
+        }
+      }
+    } catch (_) {}
+    return true;
   }
 }

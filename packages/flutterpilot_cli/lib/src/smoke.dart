@@ -114,12 +114,12 @@ String smokeReport(
         ..writeln();
     if (!s.auditClean)
       b
-        ..writeln(s.audit.trim())
+        ..writeln(_capped(s.audit.trim()))
         ..writeln();
     if (s.hasErrors)
       b
         ..writeln('Errors:')
-        ..writeln(s.errors.trim());
+        ..writeln(_capped(s.errors.trim()));
   }
   return b.toString();
 }
@@ -237,3 +237,8 @@ class McpSession {
     _process.kill();
   }
 }
+
+/// A screen's findings can run to pages (a reading order of 30 controls).
+String _capped(String text, {int max = 4000}) => text.length <= max
+    ? text
+    : '${text.substring(0, max)}\n… (${text.length - max} more characters)';
