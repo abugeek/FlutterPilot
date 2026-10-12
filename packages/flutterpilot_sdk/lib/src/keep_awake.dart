@@ -15,8 +15,10 @@ class KeepAwake {
   static bool _held = false;
 
   /// Off with `--dart-define=FLUTTERPILOT_KEEP_AWAKE=false`.
-  static const _enabled =
-      bool.fromEnvironment('FLUTTERPILOT_KEEP_AWAKE', defaultValue: true);
+  static const _enabled = bool.fromEnvironment(
+    'FLUTTERPILOT_KEEP_AWAKE',
+    defaultValue: true,
+  );
 
   /// Called on every agent call: holds the wakelock and pushes the release out.
   static void touch() {
