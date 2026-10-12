@@ -36,6 +36,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     if (android && _adb != null) await _rememberAdbForward();
     if (ios) _idb = await _findIdb();
     _simulatorApp = ios && pid != null ? await _findSimulatorApp(pid) : null;
+    _iosDeviceApp = ios && pid != null && _simulatorApp == null
+        ? await findIosDeviceApp(pid)
+        : null;
     final idb = ios && _idb != null;
     final xcrun = ios && await _onPath('xcrun');
     if (staticTools) return;
@@ -44,12 +47,17 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           ? _adb != null
           : switch (name) {
               'native_screenshot' => xcrun,
-              'native_open_app' => xcrun && _simulatorApp != null,
+              'native_open_app' =>
+                xcrun && (_simulatorApp != null || _iosDeviceApp != null),
               _ => idb,
             };
       if (tool.enabled != usable) usable ? tool.enable() : tool.disable();
     }
   }
+
+  /// The physical iPhone and bundle id behind the connection, if it is one.
+  @override
+  ({String device, String bundleId})? _iosDeviceApp;
 
   /// The connected app's operating system (`ios`, `android`, ...).
   String? _nativeOs;
@@ -571,6 +579,27 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         if (_nativeOs == 'android') return _androidNative('native_open_app', p);
+        if (_iosDeviceApp case final phone?) {
+          final error = await launchOnIosDevice(phone.device, phone.bundleId);
+          if (error != null) {
+            return _androidError('devicectl launch failed: $error');
+          }
+          final deadline = DateTime.now().add(const Duration(seconds: 3));
+          while (_activeContext?.lifecycle != null &&
+              _activeContext?.lifecycle != 'resumed' &&
+              DateTime.now().isBefore(deadline)) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Brought ${phone.bundleId} to the foreground on the '
+                    'iPhone (app state kept).',
+              ),
+            ],
+          );
+        }
         final app = _simulatorApp;
         if (app == null) {
           return CallToolResult(

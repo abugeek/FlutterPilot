@@ -17,6 +17,10 @@ String? explainLaunchFailure(String log) {
           'flutterpilot/launch.json: {"command": ["env", '
           '"FLUTTER_XCODE_DEVELOPMENT_TEAM=<team id>", "flutter", "run", '
           '"-d", "<device>"]}.',
+    if (text.contains('no accounts: add a new account'))
+      'Xcode has no Apple ID signed in, so it cannot make a provisioning '
+          'profile: Xcode → Settings → Accounts → add your Apple ID, then '
+          'launch again.',
     if (text.contains('needs to be unlocked') ||
         text.contains('device is locked') ||
         text.contains('is locked'))

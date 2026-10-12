@@ -1,5 +1,12 @@
 ## Unreleased
 
+- A physical iPhone: `native_open_app` brings the app back to the foreground
+  (`devicectl device process launch`; the bundle id comes from matching the
+  VM's process to the installed app), and when the app dies in native code
+  its crash report is fetched from the phone (`devicectl … systemCrashLogs`)
+  and shown like a simulator's. Tested on an iPhone 15 Pro Max (SIGABRT).
+  The other `native_*` tools need idb, which drives simulators only.
+- A failed iOS build with `No Accounts` says Xcode has no Apple ID signed in.
 - A failed `launch_app` on a phone says why when it can: iOS signing (with
   the `FLUTTER_XCODE_DEVELOPMENT_TEAM` fix for `flutterpilot/launch.json`),
   a locked iPhone, Developer Mode off, an unauthorized or restricted Android

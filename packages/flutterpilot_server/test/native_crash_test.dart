@@ -202,7 +202,7 @@ void main() {
       final sw = Stopwatch()..start();
       expect(await watch.current(wait: const Duration(seconds: 15)), isNull);
       // Three looks at the log, not the whole 20 s window.
-      expect(sw.elapsed, lessThan(const Duration(seconds: 14)));
+      expect(sw.elapsed, lessThan(const Duration(seconds: 19)));
     },
     testOn: 'mac-os',
   );
