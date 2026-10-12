@@ -78,6 +78,24 @@ String? serialForForwardedPort(String forwardList, int port) {
   return null;
 }
 
+/// One `adb forward` entry: `serial tcp:local tcp:remote`.
+class AdbForward {
+  const AdbForward(this.serial, this.local, this.remote);
+  final String serial;
+  final String local;
+  final String remote;
+}
+
+List<AdbForward> parseAdbForwards(String out) => [
+  for (final line in const LineSplitter().convert(out))
+    if (line.trim().split(RegExp(r'\s+')) case [
+      final serial,
+      final local,
+      final remote,
+    ])
+      AdbForward(serial, local, remote),
+];
+
 /// Runs `adb [-s serial] args`; null when it fails or times out.
 Future<ProcessResult?> adb(
   String adbPath,
@@ -319,4 +337,43 @@ Future<String?> androidPackageOfPid(
   if (r == null || r.exitCode != 0) return null;
   final name = (r.stdout as String).split('\u0000').first.trim();
   return RegExp(r'^[\w.]+$').hasMatch(name) ? name : null;
+}
+
+/// Whether something on 127.0.0.1:[port] answers HTTP (any status): tells a
+/// live `adb forward` from a stale one left by an earlier run.
+Future<bool> portAnswersHttp(int port) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+  try {
+    final request = await client
+        .getUrl(Uri.parse('http://127.0.0.1:$port/'))
+        .timeout(const Duration(seconds: 2));
+    final response = await request.close().timeout(const Duration(seconds: 2));
+    await response.drain<void>();
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close(force: true);
+  }
+}
+
+/// The VM service an Android app printed when it started, from
+/// `adb logcat -d -v brief -s flutter:I`: the device port and auth token of
+/// the last such line from process [pid]. Lets the server reach an app whose
+/// `flutter run` (and its service proxy) died, e.g. when the cable dropped.
+({int devicePort, String token})? parseVmServiceFromLogcat(
+  String log,
+  int pid,
+) {
+  ({int devicePort, String token})? found;
+  final line = RegExp(
+    r'\(\s*(\d+)\):.*Dart VM service is listening on '
+    r'http://[\w.\[\]:]+?:(\d+)/([^\s/]+)/?',
+  );
+  for (final l in const LineSplitter().convert(log)) {
+    final m = line.firstMatch(l);
+    if (m == null || int.parse(m.group(1)!) != pid) continue;
+    found = (devicePort: int.parse(m.group(2)!), token: m.group(3)!);
+  }
+  return found;
 }

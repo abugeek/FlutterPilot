@@ -124,6 +124,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     if ((await _phoneState())?.problem case final problem?) {
       summary.writeln('• Device: $problem. ${PhoneState.fix}');
     }
+    if (_connectionNote case final note?) {
+      _connectionNote = null;
+      summary.writeln('• Connection: $note');
+    }
     if (data['starting'] case final String why) {
       summary.writeln('• Starting: $why');
     }

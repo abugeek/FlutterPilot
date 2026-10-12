@@ -3,6 +3,7 @@ import 'package:flutterpilot_server/src/phone_state.dart';
 import 'package:test/test.dart';
 
 void main() {
+  logcatTests();
   test('parseAdbDevices: state, model, wireless', () {
     final d = parseAdbDevices('''
 List of devices attached
@@ -125,5 +126,26 @@ UI hierchary dumped to: /dev/tty''';
       ).problem,
       contains('not connected'),
     );
+  });
+}
+
+void logcatTests() {
+  test('parseVmServiceFromLogcat: the last line of the app\'s pid', () {
+    const log = '''
+I/flutter (111): The Dart VM service is listening on http://127.0.0.1:1111/old=/
+I/flutter (222): The Dart VM service is listening on http://127.0.0.1:41225/AbC_d-E=/
+I/flutter (222): Observatory something else
+I/flutter (333): The Dart VM service is listening on http://127.0.0.1:3333/other=/
+''';
+    final vm = parseVmServiceFromLogcat(log, 222)!;
+    expect(vm.devicePort, 41225);
+    expect(vm.token, 'AbC_d-E=');
+    expect(parseVmServiceFromLogcat(log, 999), isNull);
+  });
+
+  test('parseAdbForwards', () {
+    final f = parseAdbForwards('A tcp:1 tcp:2\n\nB tcp:3 tcp:4\n');
+    expect(f.map((e) => e.local), ['tcp:1', 'tcp:3']);
+    expect(f.last.remote, 'tcp:4');
   });
 }
