@@ -1,5 +1,14 @@
 ## Unreleased
 
+- On an app running on a real iPhone, `native_tap`, `native_text`,
+  `native_button`, `native_describe_screen` and `native_screenshot` are no
+  longer listed: idb and simctl drove whichever simulator happened to be
+  booted (found on the iPhone: the dialog described and the coordinates were
+  the simulator's). `native_open_app` stays. The permission hint and the
+  "App inactive" line (an open permission dialog does make a real iPhone's
+  app inactive) then apply; checked on an iPhone 15 Pro Max with geolocator:
+  the hint names `geolocator_apple / requestPermission`, and mocking that
+  call gets the app past the dialog.
 - On a device where nothing here can tap a system dialog (a real iPhone:
   idb drives simulators only), a tap that changed nothing now names the
   permission calls the app made (`flutter.baseflow.com/permissions/methods /
