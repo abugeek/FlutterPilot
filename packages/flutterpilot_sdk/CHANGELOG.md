@@ -1,5 +1,9 @@
 ## Unreleased
 
+- A hidden window with an animation on screen is redrawn at about 20 Hz
+  between agent calls, not 60 Hz for the 30 s after each one (60 Hz stays
+  for the 2 s after a call). On a spinner screen that measured 24% CPU
+  before and 11% after.
 - `FlutterPilot.protocol` and `ext.flutterpilot.protocol`: the contract with
   the server as a number, so each side can say when the other is older.
 - A gesture handler around the whole screen that has the screen's controls

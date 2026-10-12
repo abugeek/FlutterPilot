@@ -8,7 +8,9 @@ void main() {
         if (pumpRendersTick(t, busy: busy, animating: animating)) t,
     ].length;
     expect(rendered(busy: true, animating: false), 60);
-    expect(rendered(busy: false, animating: true), 60);
+    expect(rendered(busy: true, animating: true), 60);
+    // An animation nobody sees, with the agent thinking: ~20 Hz.
+    expect(rendered(busy: false, animating: true), 20);
     // Waiting for the agent's next call: ~10 Hz.
     expect(rendered(busy: false, animating: false), 10);
   });

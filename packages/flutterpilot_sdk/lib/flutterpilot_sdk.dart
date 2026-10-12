@@ -116,13 +116,18 @@ Timer? _forcedFrames;
 int _pumpTicks = 0;
 
 /// Whether the forced-frame pump (16 ms ticks) renders on this [tick]: every
-/// tick (60 Hz) while an agent call is recent ([busy]) or an animation is
-/// ticking, every 6th (~10 Hz) otherwise — a hidden app waiting for the
-/// agent's next call costs a sixth of the CPU and still shows late results
-/// (a response, a debounced setState) within 100 ms.
+/// tick (60 Hz) while an agent call is recent ([busy]); every 3rd (~20 Hz)
+/// while only an animation is ticking; every 6th (~10 Hz) otherwise. A
+/// hidden app waiting for the agent's next call still shows late results (a
+/// response, a debounced setState) within 100 ms.
+///
+/// An animation used to get every tick for the whole 30 s after a call: a
+/// screen with a spinner or a shimmer (most real ones) then rebuilt 60 times
+/// a second for nobody, which measured 124-134% CPU on a real app's hidden
+/// window. Animations run on the clock, so fewer frames don't slow them.
 @visibleForTesting
 bool pumpRendersTick(int tick, {required bool busy, required bool animating}) =>
-    busy || animating || tick % 6 == 0;
+    busy || tick % (animating ? 3 : 6) == 0;
 
 Future<void> _ensureFreshFrame() async {
   final binding = SchedulerBinding.instance;
