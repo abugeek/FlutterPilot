@@ -750,13 +750,14 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         text.contains('Service has disappeared'))) {
       return result;
     }
-    final problem = (await _phoneState())?.problem;
-    if (problem == null) return result;
+    final state = await _phoneState();
+    final problem = state?.problem;
+    if (state == null || problem == null) return result;
     return CallToolResult(
       isError: true,
       content: [
         ...result.content,
-        TextContent(text: 'DEVICE: $problem. ${PhoneState.fix}'),
+        TextContent(text: 'DEVICE: $problem. ${state.fix}'),
       ],
     );
   }

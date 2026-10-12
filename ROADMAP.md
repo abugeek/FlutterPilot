@@ -741,8 +741,25 @@ the server itself: `flutterpilot stats`).
   the phone's own clock (right for an edit and a touched pubspec.lock,
   silent on a fresh app), and an `audit_screen_health(routes:)` sweep.
 
+- Real phones (2026-10-12), checked on a physical Android phone (TFY-LX1):
+  the `native_*` tools over `adb`, the `• Device:` line (asleep/locked), the
+  adb forward remade and a direct connection from logcat after `flutter run`
+  and the adb server were killed (the app kept its state), the SDK's
+  keep-awake. `flutterpilot doctor` lists plugged-in phones. On a physical
+  iPhone only the lock state (`devicectl`) and the launch-failure hints are
+  checked: the phone locked again within seconds, so a build + install could
+  not be watched.
+
 **Still open:**
 
+0. A physical iPhone, with the phone kept unlocked (Settings → Display →
+   Auto-Lock → Never for the session) and a Team set
+   (`FLUTTER_XCODE_DEVELOPMENT_TEAM`): `launch_app`, the SDK's keep-awake on
+   iOS, `native_open_app` through `devicectl device process launch` (needs
+   the bundle id: `devicectl device info apps`), and crash reports from
+   `devicectl device info files --domain-type systemCrashLogs` (`parseIpsReport`
+   already reads the `.ips`). The output formats were not seen while the
+   phone was locked, so none of it is written yet.
 1. `launch_app` on Windows and Linux desktops and on a physical iPhone
    (the server's launcher and CLI unit tests do run on Windows in CI).
 2. On a real app, 1.4 s frames after two hours hidden were seen once and

@@ -7,7 +7,7 @@ import 'android_device.dart';
 /// Whether a physical phone is fit to drive: awake and unlocked, and the
 /// facts that make a test flaky (battery saver, a short screen timeout).
 class PhoneState {
-  const PhoneState({this.problem, required this.summary});
+  const PhoneState({this.problem, required this.summary, this.fix = _fix});
 
   /// Null when the phone is fine to drive, else why not.
   final String? problem;
@@ -16,10 +16,16 @@ class PhoneState {
   final String summary;
 
   /// What to do about [problem].
-  static const fix =
+  final String fix;
+
+  static const _fix =
       'Wake and unlock it by hand (native_button WAKEUP wakes an Android '
       'phone, not the lock screen). FlutterPilot keeps the app drawing, but '
       'system dialogs, the camera and anything native need it awake.';
+
+  static const _iosFix =
+      'Unlock it and keep it unlocked while the app installs and runs: iOS '
+      'suspends a locked app, and system dialogs need the screen.';
 
   factory PhoneState.android(AndroidDeviceState s) =>
       PhoneState(problem: s.problem, summary: s.describe());
@@ -32,8 +38,12 @@ class IosDevice {
     required this.name,
     required this.transport,
     required this.connected,
+    this.udid,
   });
   final String identifier;
+
+  /// The hardware UDID `flutter devices` prints (`00008130-…`).
+  final String? udid;
   final String name;
 
   /// `wired`, `localNetwork`, or `sameMachine` (a simulator).
@@ -58,6 +68,7 @@ List<IosDevice> parseDevicectlDevices(String json) {
           connected:
               (d['connectionProperties'] as Map?)?['tunnelState'] ==
               'connected',
+          udid: (d['hardwareProperties'] as Map?)?['udid'] as String?,
         ),
     ];
   } catch (_) {
@@ -78,6 +89,7 @@ bool? parseDevicectlLocked(String json) {
 }
 
 PhoneState iosPhoneState(IosDevice device, {bool? locked}) => PhoneState(
+  fix: PhoneState._iosFix,
   problem: !device.connected
       ? 'the iPhone "${device.name}" is not connected (${device.transport}); '
             'unlock it and check the cable or the Wi-Fi'
@@ -110,11 +122,17 @@ Future<String?> _devicectl(List<String> args) async {
 
 /// The one physical iPhone attached, with its lock state; null when there
 /// is none, several (ambiguous), or devicectl is not available.
-Future<PhoneState?> readIosPhoneState() async {
+Future<PhoneState?> readIosPhoneState({String? udid}) async {
   if (!Platform.isMacOS) return null;
   final list = await _devicectl(['list', 'devices']);
   if (list == null) return null;
-  final phones = parseDevicectlDevices(list).where((d) => d.physical).toList();
+  final phones = parseDevicectlDevices(list)
+      .where(
+        (d) =>
+            d.physical &&
+            (udid == null || d.udid == udid || d.identifier == udid),
+      )
+      .toList();
   if (phones.length != 1) return null;
   final phone = phones.single;
   bool? locked;
@@ -129,4 +147,28 @@ Future<PhoneState?> readIosPhoneState() async {
     if (raw != null) locked = parseDevicectlLocked(raw);
   }
   return iosPhoneState(phone, locked: locked);
+}
+
+/// The state of the phone `flutter run -d [deviceId]` targets: an Android
+/// serial from `adb devices`, or an iPhone UDID; null for anything else
+/// (simulators, desktops, web) or when it cannot be read.
+Future<PhoneState?> phoneStateForDevice(String? deviceId) async {
+  if (deviceId == null || deviceId.isEmpty) return null;
+  try {
+    final adbPath = await findAdb();
+    if (adbPath != null) {
+      final list = await adb(adbPath, null, ['devices', '-l']);
+      final known = list == null
+          ? const <AdbDevice>[]
+          : parseAdbDevices(list.stdout as String);
+      if (known.any((d) => d.serial == deviceId)) {
+        final state = await readAndroidDeviceState(adbPath, deviceId);
+        return state == null ? null : PhoneState.android(state);
+      }
+    }
+    if (RegExp(r'^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}$').hasMatch(deviceId)) {
+      return await readIosPhoneState(udid: deviceId);
+    }
+  } catch (_) {}
+  return null;
 }

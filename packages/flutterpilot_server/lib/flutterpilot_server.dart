@@ -23,6 +23,7 @@ import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
 import 'src/hang_diagnosis.dart';
+import 'src/launch_failure.dart';
 import 'src/http_detail.dart';
 import 'src/image_budget.dart';
 import 'src/memory_leaks.dart';
