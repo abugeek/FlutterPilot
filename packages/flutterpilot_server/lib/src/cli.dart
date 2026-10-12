@@ -63,6 +63,7 @@ Future<void> runFlutterPilotServer(List<String> args) async {
           'arguments or results) in the project\'s '
           '.dart_tool/flutterpilot_calls.jsonl for "flutterpilot stats".',
     )
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.')
     ..addOption(
       'log-level',
       help: 'Log level (fine, info, warning, severe).',
@@ -70,6 +71,14 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     );
 
   final results = parser.parse(args);
+  if (results['help'] as bool) {
+    stdout.writeln(
+      'flutterpilot_server: the FlutterPilot MCP server (stdio). An MCP '
+      'client starts it; "flutterpilot mcp install" writes the config.\n\n'
+      '${parser.usage}',
+    );
+    return;
+  }
   final uri = results['uri'] as String?;
   final allowDestructive = results['allow-destructive'] as bool;
   final allowRemote = results['allow-remote'] as bool;

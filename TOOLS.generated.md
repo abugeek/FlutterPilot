@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40794 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40756 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -476,13 +476,13 @@ _Read-only._
 
 ## `exec_sql_query`
 
-Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. List tables with "SELECT name FROM sqlite_master WHERE type='table'". If the app registers several databases, a call without database names them.
+Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. Without sql: the tables and their columns. If the app registers several databases, a call without database names them.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `sql` | string | yes | SQL statement to execute. |
+| `sql` | string | no | SQL statement; omit for the schema. |
 | `database` | string | no | Database name, only needed when the app registers several. |
 
 ## `get_shared_preferences`

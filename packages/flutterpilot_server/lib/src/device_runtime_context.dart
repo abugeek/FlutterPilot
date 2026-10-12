@@ -49,6 +49,13 @@ class DeviceRuntimeContext {
   /// against the VM before a call is refused for it.
   String? pausedIsolateId;
 
+  /// Fires when a Debug event says the app stopped in a debugger, for a
+  /// call in flight to end with that instead of its timeout.
+  final StreamController<void> pauses = StreamController<void>.broadcast();
+
+  /// Tables whose columns exec_sql_query has already listed (`db/table`).
+  final Set<String> sqlTablesShown = {};
+
   /// What the last action response listed as tappable on this device.
   final ScreenMemory screenMemory = ScreenMemory();
 
@@ -92,6 +99,7 @@ class DeviceRuntimeContext {
     sdkProtocol = null;
     zeroCodeErrors.clear();
     screenMemory.reset();
+    sqlTablesShown.clear();
     pausedIsolateId = null;
     lifecycle = null;
     lastReload = null;

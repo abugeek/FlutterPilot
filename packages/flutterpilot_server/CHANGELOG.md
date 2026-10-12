@@ -1,5 +1,14 @@
 ## Unreleased
 
+- `exec_sql_query` without `sql` lists the tables with their columns, and
+  the first successful query on a table ends with that table's columns
+  (once per table and connection): the next query has names to use instead
+  of guesses.
+- A call whose own action runs into a breakpoint ends as soon as the pause
+  is seen ("This call did not finish: the app is paused at a breakpoint
+  at …"), not after 30 s.
+- `audit_screen_health(routes: …)` goes back to the screen it started on.
+- `flutterpilot_server --help`.
 - An app blocked outside Dart (a native call, `sleep()`) now gets its
   `WHY:`: the diagnosis itself waited on calls such an isolate never
   answers and timed out without a word.
