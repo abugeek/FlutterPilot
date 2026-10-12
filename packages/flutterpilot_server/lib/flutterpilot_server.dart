@@ -263,20 +263,33 @@ abstract class _FlutterPilotServerBase {
     if (!isNoAnswer(text) || vm == null || context!.isWeb) return result;
     try {
       final why = await () async {
-        for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
-          final isolate = await vm.getIsolate(ref.id!);
+        final isolates = (await vm.getVM()).isolates ?? const <IsolateRef>[];
+        for (final ref in isolates) {
+          final Isolate isolate;
+          try {
+            isolate = await vm
+                .getIsolate(ref.id!)
+                .timeout(const Duration(seconds: 2));
+          } on TimeoutException {
+            // Only the VM answered: this isolate takes no messages. The
+            // Flutter UI isolate is the one named "main".
+            if (ref.name == 'main' || isolates.length == 1) {
+              return blockedOutsideDart;
+            }
+            continue;
+          }
           final rpcs = isolate.extensionRPCs ?? const <String>[];
           if (!rpcs.any((r) => r.startsWith('ext.flutter.'))) continue;
           final root = isolate.rootLib?.uri ?? '';
           final package = RegExp(r'^package:[^/]+/').stringMatch(root);
           return diagnoseNoAnswer(
             vm,
-            ref.id!,
+            isolate,
             appUriPrefixes: [?package, 'file:'],
           );
         }
         return null;
-      }().timeout(const Duration(seconds: 8));
+      }().timeout(const Duration(seconds: 12));
       if (why == null) return result;
       return CallToolResult(
         isError: true,
@@ -1029,6 +1042,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     context.serviceEvents = null;
     await context.isolateEvents?.cancel();
     context.isolateEvents = null;
+    await context.debugEvents?.cancel();
+    context.debugEvents = null;
     context.registeredServices.clear();
 
     // The VM service replays ServiceRegistered for already-registered services
@@ -1074,6 +1089,28 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       await service.streamListen(EventStreams.kIsolate);
     } catch (e) {
       _log.fine('Could not subscribe to Isolate stream: $e');
+    }
+
+    // An app stopped at a breakpoint answers nothing: every call would wait
+    // out its timeout before saying so. Remember the pause as it happens.
+    try {
+      context.debugEvents = service.onDebugEvent.listen((Event event) {
+        switch (event.kind) {
+          case EventKind.kPauseBreakpoint ||
+              EventKind.kPauseException ||
+              EventKind.kPauseStart ||
+              EventKind.kPauseExit ||
+              EventKind.kPausePostRequest:
+            context.pausedIsolateId = event.isolate?.id;
+          case EventKind.kResume:
+            if (event.isolate?.id == context.pausedIsolateId) {
+              context.pausedIsolateId = null;
+            }
+        }
+      });
+      await service.streamListen(EventStreams.kDebug);
+    } catch (e) {
+      _log.fine('Could not subscribe to Debug stream: $e');
     }
 
     try {
@@ -1546,6 +1583,26 @@ Every action reports whether the route changed, a widget-tree diff and what is t
             : 'No running Flutter app found. ${VmDiscoveryService.howToStart}',
         ErrorCategory.connectionLost,
       );
+    }
+    // Stopped in a debugger (seen as it happened, confirmed now): say so at
+    // once instead of after the timeout.
+    if (context.pausedIsolateId case final pausedId?) {
+      String? paused;
+      try {
+        paused = pausedInDebugger(
+          await context.service!
+              .getIsolate(pausedId)
+              .timeout(const Duration(seconds: 2)),
+        );
+      } catch (_) {}
+      if (paused == null) {
+        context.pausedIsolateId = null;
+      } else {
+        return _ExtensionResult.error(
+          'Nothing was done: $paused',
+          ErrorCategory.timeout,
+        );
+      }
     }
     // iOS suspends a backgrounded app: every call would hang until it's back.
     if (context.lifecycle == 'paused' && context.operatingSystem == 'ios') {

@@ -1,5 +1,11 @@
 ## Unreleased
 
+- An app blocked outside Dart (a native call, `sleep()`) now gets its
+  `WHY:`: the diagnosis itself waited on calls such an isolate never
+  answers and timed out without a word.
+- An app stopped at a breakpoint is remembered as it happens: calls after
+  the first answer at once with "Nothing was done: the app is paused at a
+  breakpoint at …" instead of each waiting 30 s.
 - `launch_app` keeps the output of the launch before it as
   `.dart_tool/flutterpilot_run.prev.log`: a relaunch erased what the app it
   had just stopped had printed.
