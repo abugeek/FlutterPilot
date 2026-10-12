@@ -105,13 +105,24 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       inProgress = false;
     }
     final waitFrom = DateTime.now();
+    String? signingTeam;
     if (!inProgress) {
       // A stale URI file would be read as this launch's.
       try {
         File('${root.path}/${VmDiscoveryService.uriFile}').deleteSync();
       } catch (_) {}
       try {
-        await startSupervised(root, command.command);
+        final team = command.fromConfig
+            ? null
+            : await signingTeamFor(root, device: params['device'] as String?);
+        signingTeam = team;
+        await startSupervised(
+          root,
+          command.command,
+          environment: team == null
+              ? null
+              : {'FLUTTER_XCODE_DEVELOPMENT_TEAM': team},
+        );
       } on ProcessException catch (e) {
         return _launchResult(
           'Could not start the launcher: ${e.message}',
@@ -174,6 +185,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       '($seconds s, "$command").'
       '${drawn ? '' : ' It has not drawn its first frame yet: wait_for or get_app_summary in a moment.'}'
       '${ignored.isEmpty ? '' : ' ${ignored.join(', ')} not applied: $launchConfigFile sets the command.'}'
+      '${signingTeam == null ? '' : ' Signed with team $signingTeam (the only Apple Development certificate on this Mac; set FLUTTER_XCODE_DEVELOPMENT_TEAM or a Team in Xcode to choose another).'}'
       '\nLeave it running: after editing Dart code call hot_reload. '
       'Build output: $launchLogFile'
       '${relaunch ? ' (the app before it: $previousLaunchLogFile)' : ''}.',
