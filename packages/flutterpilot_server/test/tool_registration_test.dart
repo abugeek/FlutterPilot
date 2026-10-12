@@ -63,7 +63,9 @@ void main() {
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(29300),
+        // +100 (2026-10-12) for audit_screen_health(routes) and
+        // get_state(name): a sweep was three calls a screen without them.
+        lessThanOrEqualTo(29400),
       );
       // An app without the SDK.
       expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9600));
