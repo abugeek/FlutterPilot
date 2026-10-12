@@ -70,4 +70,15 @@ void main() {
     expect(checks[2].title, contains('not connected'));
     expect(iosChecks('garbage'), isEmpty);
   });
+
+  test('stale adb forwards: the ones that do not answer', () {
+    const list = 'A tcp:1 tcp:9\nA tcp:2 tcp:8\nB tcp:3 tcp:7\nA tcp:4 tcp:6\n';
+    expect(staleForwardPorts(list, 'A', {2}), [1, 4]);
+    expect(staleForwardPorts(list, 'B', {3}), isEmpty);
+    expect(staleForwardChecks('A', const []), isEmpty);
+    final c = staleForwardChecks('A', [1, 4]).single;
+    expect(c.ok, isTrue);
+    expect(c.title, contains('2 stale adb forwards'));
+    expect(c.fix, contains('adb -s A forward --remove tcp:1'));
+  });
 }

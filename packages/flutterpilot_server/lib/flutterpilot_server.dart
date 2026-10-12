@@ -521,6 +521,10 @@ abstract class _FlutterPilotServerBase {
   // ignore: unused_element
   Future<String?> _adoptAndroidApp();
 
+  /// Removes the adb forward this server made, if any.
+  // ignore: unused_element
+  Future<void> _removeOwnForwards();
+
   /// The physical iPhone and bundle id behind the connection, if it is one.
   // ignore: unused_element
   ({String device, String bundleId})? get _iosDeviceApp;
@@ -2333,6 +2337,7 @@ Every action reports whether the route changed, a widget-tree diff and what is t
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _visibilityTimer?.cancel();
+    await _removeOwnForwards();
     for (final context in _deviceContexts.values) {
       await context.dispose();
     }
