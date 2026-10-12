@@ -6,6 +6,13 @@
 - An app stopped at a breakpoint is remembered as it happens: calls after
   the first answer at once with "Nothing was done: the app is paused at a
   breakpoint at …" instead of each waiting 30 s.
+- `audit_screen_health(routes: ["/a", "/b"])` goes to each route and
+  checks it in one call: per route "Clean." or the findings, new errors on
+  arriving, and a progress indicator still showing. In field sessions a
+  sweep was navigate_to, get_errors and audit_screen_health for every
+  screen (75 such rounds in one session). Up to 40 routes a call.
+- `get_state(name: "cart")` returns only the states whose name contains
+  it, or the names there are; agents passed a name the tool did not take.
 - `launch_app` keeps the output of the launch before it as
   `.dart_tool/flutterpilot_run.prev.log`: a relaunch erased what the app it
   had just stopped had printed.

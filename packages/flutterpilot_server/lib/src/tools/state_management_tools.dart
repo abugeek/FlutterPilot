@@ -74,6 +74,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             enumValues: ['riverpod', 'bloc'],
             description: 'Only this kind.',
           ),
+          'name': JsonSchema.string(description: 'Only names containing this.'),
           'history': JsonSchema.boolean(),
           'clear': JsonSchema.boolean(
             description:
@@ -119,7 +120,25 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             lastError = res.errorMessage;
             continue;
           }
-          final states = res.data?['states'] as Map?;
+          var states = res.data?['states'] as Map?;
+          // One provider is what is usually wanted: in field sessions agents
+          // passed a name the tool did not take, and got nothing.
+          final wanted = p['name']?.toString().toLowerCase();
+          if (states != null && wanted != null && wanted.isNotEmpty) {
+            final all = states;
+            states = {
+              for (final e in all.entries)
+                if ('${e.key}'.toLowerCase().contains(wanted)) e.key: e.value,
+            };
+            if (states.isEmpty && all.isNotEmpty) {
+              sections.add(
+                '$type: no state named like "${p['name']}". There are: '
+                '${all.keys.take(40).join(', ')}'
+                '${all.length > 40 ? ', …' : ''}.',
+              );
+              continue;
+            }
+          }
           sections.add(
             states == null || states.isEmpty
                 ? '$type: nothing observed yet.'

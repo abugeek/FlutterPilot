@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40627 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40794 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
 
@@ -220,6 +220,7 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `routes` | array | no | Go to each route and check it. |
 
 ## `execute_action_chain`
 
@@ -440,6 +441,7 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `type` | string: riverpod \| bloc | no | Only this kind. |
+| `name` | string | no | Only names containing this. |
 | `history` | boolean | no |  |
 | `clear` | boolean | no | Empty the history after returning it: do that before an action to see only its effects. |
 

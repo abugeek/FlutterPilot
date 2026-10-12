@@ -883,68 +883,139 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'the rendered pixels), and where the screen reader order jumps back '
           'up. Each with position and source file:line. Use after '
           'set_app_settings(textScale/locale/theme) or a UI change.',
-      inputSchema: ToolInputSchema(properties: {}),
+      inputSchema: ToolInputSchema(
+        properties: {
+          'routes': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Go to each route and check it.',
+          ),
+        },
+      ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.auditScreenHealth',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        final data = res.data ?? const {};
-        List<dynamic> list(String key) => data[key] as List? ?? const [];
-        final overflows = list('overflows');
-        final targets = list('accessibilityIssues');
-        final unlabeled = list('unlabeled');
-        final contrast = list('lowContrast');
-        final jumps = list('readingOrderJumps');
-        final order = list('readingOrder');
-        final buffer = StringBuffer();
-        void section(
-          String title,
-          List<dynamic> items,
-          String Function(dynamic) line,
-        ) {
-          if (items.isEmpty) return;
-          buffer.writeln('$title (${items.length}):');
-          for (final item in items.take(12)) {
-            buffer.writeln('- ${line(item)}');
+        // One screen's findings; a sweep shows fewer per kind and leaves
+        // out the reading order.
+        String report(Map<String, dynamic> data, {required bool sweep}) {
+          final max = sweep ? 5 : 12;
+          List<dynamic> list(String key) => data[key] as List? ?? const [];
+          final overflows = list('overflows');
+          final targets = list('accessibilityIssues');
+          final unlabeled = list('unlabeled');
+          final contrast = list('lowContrast');
+          final jumps = list('readingOrderJumps');
+          final order = list('readingOrder');
+          final buffer = StringBuffer();
+          void section(
+            String title,
+            List<dynamic> items,
+            String Function(dynamic) line,
+          ) {
+            if (items.isEmpty) return;
+            buffer.writeln('$title (${items.length}):');
+            for (final item in items.take(max)) {
+              buffer.writeln('- ${line(item)}');
+            }
+            if (items.length > max) {
+              buffer.writeln('- … ${items.length - max} more');
+            }
           }
-          if (items.length > 12) {
-            buffer.writeln('- … ${items.length - 12} more');
+
+          section(
+            'Layout overflows',
+            overflows,
+            (o) => '${o['type']}: ${o['details']}',
+          );
+          section(
+            'Small tap targets',
+            targets,
+            (a) => '`${a['target']}` (${a['type']}): ${a['issue']}',
+          );
+          section('Controls without a label', unlabeled, (u) => '$u');
+          section('Low contrast text', contrast, (c) => '$c');
+          section('Reading order jumps', jumps, (j) => '$j');
+          if (buffer.isEmpty) {
+            buffer.writeln(
+              'No layout overflows, small tap targets, unlabeled controls, '
+              'low-contrast text or reading order jumps.',
+            );
           }
+          if (order.isNotEmpty && !sweep) {
+            final shown = order.take(15).join(' → ');
+            buffer.writeln(
+              'Screen reader order (${order.length} controls): $shown'
+              '${order.length > 15 ? ' → …' : ''}',
+            );
+          }
+          if (data['semanticsNote'] != null) {
+            buffer.writeln(data['semanticsNote']);
+          }
+          return buffer.toString().trim();
         }
 
-        section(
-          'Layout overflows',
-          overflows,
-          (o) => '${o['type']}: ${o['details']}',
-        );
-        section(
-          'Small tap targets',
-          targets,
-          (a) => '`${a['target']}` (${a['type']}): ${a['issue']}',
-        );
-        section('Controls without a label', unlabeled, (u) => '$u');
-        section('Low contrast text', contrast, (c) => '$c');
-        section('Reading order jumps', jumps, (j) => '$j');
-        if (buffer.isEmpty) {
-          buffer.writeln(
-            'No layout overflows, small tap targets, unlabeled controls, '
-            'low-contrast text or reading order jumps.',
+        final routes = [
+          for (final r in (p['routes'] as List?) ?? const []) '$r',
+        ];
+        if (routes.isEmpty) {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.auditScreenHealth',
+            {},
+          );
+          if (res.isError) return res.toCallToolResult();
+          return CallToolResult(
+            content: [
+              TextContent(text: report(res.data ?? const {}, sweep: false)),
+            ],
           );
         }
-        if (order.isNotEmpty) {
-          final shown = order.take(15).join(' → ');
-          buffer.writeln(
-            'Screen reader order (${order.length} controls): $shown'
-            '${order.length > 15 ? ' → …' : ''}',
+        // navigate_to, get_errors and audit_screen_health per screen were
+        // three calls a screen in field sessions (75 such rounds in one).
+        final out = StringBuffer();
+        var clean = 0;
+        for (final route in routes.take(40)) {
+          out.writeln('== $route ==');
+          final went = await _callExtensionRaw('ext.flutterpilot.navigateTo', {
+            'route': route,
+          });
+          if (went.isError) {
+            out.writeln('Could not go there: ${went.errorMessage}');
+            continue;
+          }
+          await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+            'timeoutMs': '1500',
+          });
+          final now = await _callExtensionRaw('ext.flutterpilot.screenNow', {});
+          final post = now.data?['postActionState'] as Map?;
+          final errors = (post?['newErrorCount'] as num?)?.toInt() ?? 0;
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.auditScreenHealth',
+            {},
           );
+          if (res.isError) {
+            out.writeln('Audit failed: ${res.errorMessage}');
+            continue;
+          }
+          final text = report(res.data ?? const {}, sweep: true);
+          final fine = text.startsWith('No layout overflows') && errors == 0;
+          if (fine) clean++;
+          if (errors > 0) {
+            out.writeln('$errors new error(s) on arriving: get_errors.');
+          }
+          if (post?['loading'] == true) {
+            out.writeln('A progress indicator was still showing.');
+          }
+          out.writeln(fine ? 'Clean.' : text);
         }
-        if (data['semanticsNote'] != null) {
-          buffer.writeln(data['semanticsNote']);
-        }
+        final skipped = routes.length > 40
+            ? ' ${routes.length - 40} more routes not checked (40 a call).'
+            : '';
         return CallToolResult(
-          content: [TextContent(text: buffer.toString().trim())],
+          content: [
+            TextContent(
+              text: FlutterPilotServer._boundToolText(
+                '${routes.take(40).length} routes checked, $clean clean.'
+                '$skipped\n${out.toString().trim()}',
+              ),
+            ),
+          ],
         );
       },
     );
