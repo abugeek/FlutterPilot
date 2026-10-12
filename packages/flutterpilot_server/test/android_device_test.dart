@@ -149,3 +149,43 @@ I/flutter (333): The Dart VM service is listening on http://127.0.0.1:3333/other
     expect(f.last.remote, 'tcp:4');
   });
 }
+
+void speedTests() {
+  test('foreground package and sections', () {
+    const window =
+        '  mCurrentFocus=Window{426593a u0 com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity}\n'
+        '  isKeyguardShowing=false\n';
+    expect(
+      parseForegroundPackage(window),
+      'com.google.android.permissioncontroller',
+    );
+    expect(
+      parseForegroundPackage('mCurrentFocus=Window{1 u0 NotificationShade}'),
+      isNull,
+      reason: 'a window without a package slash is not an app',
+    );
+    expect(parseForegroundPackage('mCurrentFocus=null'), isNull);
+    final s = splitSections(
+      '@@power\nmWakefulness=Awake\n@@window\n$window@@lowpower\n0\n',
+    );
+    expect(s['power'], 'mWakefulness=Awake\n');
+    final state = parseAndroidDeviceState(
+      power: s['power']!,
+      window: s['window']!,
+      lowPower: s['lowpower']!,
+    );
+    expect(state.foreground, 'com.google.android.permissioncontroller');
+    expect(state.locked, isFalse);
+    expect(state.problem, isNull);
+  });
+
+  test('awake from dumpsys window when power is not read', () {
+    expect(
+      parseAndroidDeviceState(
+        window: 'mAwake=false\nisKeyguardShowing=true',
+      ).problem,
+      'the screen is off (asleep)',
+    );
+    expect(parseAndroidDeviceState(window: 'mAwake=true').awake, isTrue);
+  });
+}

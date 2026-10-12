@@ -1,5 +1,14 @@
 ## Unreleased
 
+- Android: reading the phone's state (awake, locked, battery, who has the
+  focus) is one adb call that filters on the phone and reads the slow
+  settings once a minute: 190 ms instead of 550 ms (measured on a phone). A
+  tap that changed nothing now says in that time whether the app or a system
+  dialog is in front (`In front is com.google.android.permissioncontroller`)
+  instead of leaving a 2.5 s `native_describe_screen` to find out, which also
+  names the package in front and uses `uiautomator dump --compressed` (half
+  the output). The dump itself stays about 2.5 s: the phone's uiautomator
+  waits for the screen to be idle.
 - The `adb forward` the server makes to reach an app by itself (after
   `flutter run` died) is removed when it makes a new one and when the server
   stops; `flutterpilot doctor` lists stale forwards left by killed
