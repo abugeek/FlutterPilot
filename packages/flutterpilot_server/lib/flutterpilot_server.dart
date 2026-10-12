@@ -1102,6 +1102,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               EventKind.kPauseExit ||
               EventKind.kPausePostRequest:
             context.pausedIsolateId = event.isolate?.id;
+            context.pauses.add(null);
           case EventKind.kResume:
             if (event.isolate?.id == context.pausedIsolateId) {
               context.pausedIsolateId = null;
@@ -1718,14 +1719,43 @@ Every action reports whether the route changed, a widget-tree diff and what is t
         return result;
       },
     );
-    return scheduled.timeout(
-      _operationDeadline,
-      onTimeout: () => _ExtensionResult.error(
-        'No answer from the app within ${_operationDeadline.inSeconds} s. '
-        'Check the app state before retrying: a change may still apply.',
-        ErrorCategory.deadlineExceeded,
-      ),
-    );
+    // A call whose own action runs into a breakpoint would wait out the
+    // whole deadline: end it when the pause is seen (and confirmed).
+    final stopped = Completer<_ExtensionResult>();
+    final pauses = context.pauses.stream.listen((_) async {
+      String? paused;
+      try {
+        paused = pausedInDebugger(
+          await context.service!
+              .getIsolate(context.pausedIsolateId!)
+              .timeout(const Duration(seconds: 2)),
+        );
+      } catch (_) {}
+      if (paused != null && !stopped.isCompleted) {
+        stopped.complete(
+          _ExtensionResult.error(
+            'This call did not finish: $paused What it did up to there '
+            'has happened.',
+            ErrorCategory.timeout,
+          ),
+        );
+      }
+    });
+    try {
+      return await Future.any([
+        scheduled.timeout(
+          _operationDeadline,
+          onTimeout: () => _ExtensionResult.error(
+            'No answer from the app within ${_operationDeadline.inSeconds} s. '
+            'Check the app state before retrying: a change may still apply.',
+            ErrorCategory.deadlineExceeded,
+          ),
+        ),
+        stopped.future,
+      ]);
+    } finally {
+      await pauses.cancel();
+    }
   }
 
   static const _operationDeadline = Duration(seconds: 30);

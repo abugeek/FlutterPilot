@@ -15,6 +15,29 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ? value
       : '${value.substring(0, 200)}… (${value.length} chars)';
 
+  static const _sqlTablesQuery =
+      "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') "
+      "AND name NOT LIKE 'sqlite_%' ORDER BY name";
+
+  /// A table name safe to put in a PRAGMA.
+  static final _sqlName = RegExp(r'^\w+$');
+
+  /// The `name` column of [query]'s rows, from the plugin at [extension].
+  Future<List<String>> _sqlNames(
+    String extension,
+    String? database,
+    String query,
+  ) async {
+    final res = await _callExtensionRaw(extension, {
+      'sql': query,
+      'dbName': ?database,
+    });
+    return [
+      for (final row in res.data?['results'] as List? ?? const [])
+        if (row is Map && row['name'] != null) '${row['name']}',
+    ];
+  }
+
   /// For a query that failed on a column or table that isn't there: the
   /// columns of the tables it reads, or the database's tables. Empty for any
   /// other failure, or when the schema can't be read either.
@@ -279,21 +302,25 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       description:
           'Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the '
           'app\'s local database — Drift or sqflite, whichever is wired. Rows '
-          'come back as JSON. List tables with '
-          '"SELECT name FROM sqlite_master WHERE type=\'table\'". If the app '
-          'registers several databases, a call without database names them.',
+          'come back as JSON. Without sql: the tables and their columns. If '
+          'the app registers several databases, a call without database '
+          'names them.',
       inputSchema: ToolInputSchema(
         properties: {
-          'sql': JsonSchema.string(description: 'SQL statement to execute.'),
+          'sql': JsonSchema.string(
+            description: 'SQL statement; omit for the schema.',
+          ),
           'database': JsonSchema.string(
             description:
                 'Database name, only needed when the app registers several.',
           ),
         },
-        required: ['sql'],
       ),
       callback: (p, e) async {
-        final sql = p['sql']?.toString().trim() ?? '';
+        final asked = p['sql']?.toString().trim() ?? '';
+        // No query: the schema, so the first real one need not guess.
+        final schemaOnly = asked.isEmpty;
+        final sql = schemaOnly ? _sqlTablesQuery : asked;
         if (!isReadOnlySqlStatement(sql)) {
           return CallToolResult(
             content: [
@@ -363,6 +390,32 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           );
         }
         final rows = res.data?['results'] as List? ?? const [];
+        final shown = _activeContext?.sqlTablesShown ?? <String>{};
+        if (schemaOnly) {
+          final lines = <String>[];
+          for (final row in rows.take(80)) {
+            final table = row is Map ? '${row['name']}' : '';
+            if (!_sqlName.hasMatch(table)) continue;
+            final columns = await _sqlNames(
+              answeredBy,
+              db,
+              'PRAGMA table_info("$table")',
+            );
+            shown.add('$db/$table');
+            lines.add('$table(${columns.take(40).join(', ')})');
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: FlutterPilotServer._boundToolText(
+                  '${rows.length} tables'
+                  '${rows.length > 80 ? ' (80 shown)' : ''}:\n'
+                  '${lines.join('\n')}',
+                ),
+              ),
+            ],
+          );
+        }
         final buf = StringBuffer('${rows.length} row(s)');
         if (res.data?['truncated'] == true) {
           buf.write(' (truncated from ${res.data?['total']})');
@@ -371,6 +424,27 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           buf.write('\n${jsonEncode(row)}');
         }
         if (rows.length > 50) buf.write('\n… ${rows.length - 50} more');
+        // The first time a table is read, its columns: the next query on it
+        // then has names to use instead of guesses (6 of 39 queries in
+        // field sessions failed on a guessed column).
+        var listed = 0;
+        for (final table in tablesIn(sql)) {
+          if (listed == 3) break;
+          if (!_sqlName.hasMatch(table) ||
+              table.toLowerCase().startsWith('sqlite_') ||
+              table.toLowerCase().startsWith('pragma_') ||
+              !shown.add('$db/$table')) {
+            continue;
+          }
+          final columns = await _sqlNames(
+            answeredBy,
+            db,
+            'PRAGMA table_info("$table")',
+          );
+          if (columns.isEmpty) continue;
+          listed++;
+          buf.write('\nColumns of $table: ${columns.take(40).join(', ')}');
+        }
         return CallToolResult(content: [TextContent(text: buf.toString())]);
       },
     );

@@ -736,14 +736,23 @@ the server itself: `flutterpilot stats`).
   times (before 152); `wait_for` then `get_app_summary` gone from the top
   pairs (before 51); `tap_widget` 350 characters on average (before 839).
 
+- `launch_app` on a physical Android phone (TFY-LX1, Android 13) over USB:
+  launch, taps, hot reload and restart, relaunch, the `• Code:` line with
+  the phone's own clock (right for an edit and a touched pubspec.lock,
+  silent on a fresh app), and an `audit_screen_health(routes:)` sweep.
+
 **Still open:**
 
-1. `launch_app` on Windows and Linux desktops, and on a physical phone.
+1. `launch_app` on Windows and Linux desktops and on a physical iPhone
+   (the server's launcher and CLI unit tests do run on Windows in CI).
 2. On a real app, 1.4 s frames after two hours hidden were seen once and
    not reproduced; `flutterpilot_run.prev.log` now survives a relaunch, and
    `profile_action` on the slow app is the next step if it returns.
-3. `exec_sql_query` still fails first on a guessed column (6 of 39): the
-   hint fixes the retry, not the guess.
+3. Whether the schema `exec_sql_query` now gives up front (no `sql`, and a
+   table's columns on its first read) ends the first-guess failures (6 of
+   39 before): read `flutterpilot stats` after some use.
+4. An `audit_screen_health(routes:)` sweep that finds something has only
+   been seen through the single-screen report it shares its code with.
 
 ## Where things are
 

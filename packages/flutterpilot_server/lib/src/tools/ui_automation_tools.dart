@@ -970,6 +970,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         // three calls a screen in field sessions (75 such rounds in one).
         final out = StringBuffer();
         var clean = 0;
+        // The sweep ends where it started: found on a phone, left three
+        // screens away from the list the next tap was meant for.
+        final before = await _callExtensionRaw(
+          'ext.flutterpilot.screenNow',
+          {},
+        );
+        final start = (before.data?['postActionState'] as Map?)?['route'];
         for (final route in routes.take(40)) {
           out.writeln('== $route ==');
           final went = await _callExtensionRaw('ext.flutterpilot.navigateTo', {
@@ -1007,12 +1014,25 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final skipped = routes.length > 40
             ? ' ${routes.length - 40} more routes not checked (40 a call).'
             : '';
+        var back = '';
+        if (start is String && start != 'Unknown' && start != routes.last) {
+          final returned = await _callExtensionRaw(
+            'ext.flutterpilot.navigateTo',
+            {'route': start},
+          );
+          if (!returned.isError) {
+            await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+              'timeoutMs': '1500',
+            });
+            back = '\nBack on $start.';
+          }
+        }
         return CallToolResult(
           content: [
             TextContent(
               text: FlutterPilotServer._boundToolText(
                 '${routes.take(40).length} routes checked, $clean clean.'
-                '$skipped\n${out.toString().trim()}',
+                '$skipped\n${out.toString().trim()}$back',
               ),
             ),
           ],
