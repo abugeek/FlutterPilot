@@ -372,6 +372,12 @@ abstract class _FlutterPilotServerBase {
       }
 
       try {
+        if (rasterTools.contains(name)) {
+          if (await _hiddenPhoneRefusal() case final refusal?) {
+            log(refusal);
+            return refusal;
+          }
+        }
         var result = await callback(args, extra);
         if (result.isError) result = await _withPhoneState(result);
         if (result.isError) result = await _withNativeCrash(result);
@@ -504,7 +510,8 @@ abstract class _FlutterPilotServerBase {
   Future<String> _setupReport();
 
   /// Awake/locked state of the physical phone the app runs on, or null.
-  Future<PhoneState?> _phoneState();
+  // ignore: unused_element_parameter
+  Future<PhoneState?> _phoneState({bool fresh = false});
 
   Future<CallToolResult> _withPhoneState(CallToolResult result);
 
@@ -520,6 +527,10 @@ abstract class _FlutterPilotServerBase {
   /// logcat, with its port forwarded; null if it cannot be found.
   // ignore: unused_element
   Future<String?> _adoptAndroidApp();
+
+  /// An error result when [name] would draw the screen of a phone that is
+  /// off or locked, else null.
+  Future<CallToolResult?> _hiddenPhoneRefusal();
 
   /// Removes the adb forward this server made, if any.
   // ignore: unused_element

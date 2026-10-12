@@ -799,9 +799,10 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   /// adb, an iPhone over devicectl); null for simulators, emulators-less
   /// desktops, or when it cannot be read. Cached for a few seconds.
   @override
-  Future<PhoneState?> _phoneState() async {
+  Future<PhoneState?> _phoneState({bool fresh = false}) async {
     final at = _phoneStateAt;
-    if (at != null &&
+    if (!fresh &&
+        at != null &&
         DateTime.now().difference(at) < const Duration(seconds: 5)) {
       return _phoneStateCache;
     }
@@ -823,6 +824,31 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _phoneStateCache = state;
     _phoneStateAt = DateTime.now();
     return state;
+  }
+
+  /// Drawing the screen (a screenshot, the contrast check of
+  /// audit_screen_health) of a phone whose screen is off or locked takes the
+  /// app down: its surface is gone, and the engine's raster thread crashes
+  /// (SIGSEGV; found on a real Android phone, the app was lost). Refused
+  /// with the reason instead.
+  @override
+  Future<CallToolResult?> _hiddenPhoneRefusal() async {
+    if (_nativeOs != 'android' && !_physicalIos) return null;
+    // Android is read afresh (0.2 s): it may have locked since the last look.
+    final state = await _phoneState(fresh: _nativeOs == 'android');
+    final problem = state?.problem;
+    if (state == null || problem == null) return null;
+    return CallToolResult(
+      isError: true,
+      content: [
+        TextContent(
+          text:
+              'Not done: $problem. This draws the screen, and on a phone '
+              'that is off or locked the app\'s engine crashes (the app '
+              'would be lost). ${state.fix}',
+        ),
+      ],
+    );
   }
 
   /// A failure that could be the phone's doing says so: "no answer" from a
