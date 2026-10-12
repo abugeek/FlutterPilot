@@ -34,6 +34,9 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
           'relaunch': JsonSchema.boolean(
             description: 'Stop the running app and rebuild.',
           ),
+          'waitSeconds': JsonSchema.integer(
+            description: 'Return early if still building (default 600).',
+          ),
         },
       ),
       callback: (p, e) => _launchApp(p),
@@ -140,7 +143,11 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     }
 
     String? uri;
-    while (DateTime.now().difference(waitFrom) < _launchWait) {
+    final waitSeconds = (params['waitSeconds'] as num?)?.toInt();
+    final wait = waitSeconds == null || waitSeconds <= 0
+        ? _launchWait
+        : Duration(seconds: waitSeconds.clamp(5, _launchWait.inSeconds));
+    while (DateTime.now().difference(waitFrom) < wait) {
       await Future<void>.delayed(const Duration(milliseconds: 500));
       final text = readLog();
       uri = _launchUriFile(root) ?? vmServiceUriIn(text);
@@ -162,7 +169,9 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     final seconds = DateTime.now().difference(waitFrom).inSeconds;
     if (uri == null) {
       return _launchResult(
-        'Still building after $seconds s; the launch goes on. Call '
+        'Still building after $seconds s'
+        '${launchPhase(readLog()) == null ? '' : ' (${launchPhase(readLog())})'}'
+        '; the launch goes on. Call '
         'launch_app again to keep waiting (it will not start a second '
         'build). Output so far ($launchLogFile):\n'
         '${Redaction.text(launchLogTail(readLog(), lines: 8))}',

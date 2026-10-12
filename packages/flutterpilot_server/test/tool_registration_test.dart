@@ -56,8 +56,10 @@ void main() {
       // and a polling loop per relaunch, and is listed with no app at all.
       // +300 (2026-10-12): the native tools also drive Android (serial,
       // BACK, WAKEUP).
+      // +200 (2026-10-12): launch_app(waitSeconds), so a 5-minute iPhone
+      // build is not one blind call.
       // Every tool (--static-tools).
-      expect(listBytes((_) => true), lessThanOrEqualTo(41100));
+      expect(listBytes((_) => true), lessThanOrEqualTo(41300));
       // An app with the SDK and no plugin, not on an iOS simulator.
       expect(
         listBytes(
@@ -67,10 +69,12 @@ void main() {
         ),
         // +100 (2026-10-12) for audit_screen_health(routes) and
         // get_state(name): a sweep was three calls a screen without them.
-        lessThanOrEqualTo(29400),
+        // +100 (2026-10-12) for launch_app(waitSeconds).
+        lessThanOrEqualTo(29500),
       );
-      // An app without the SDK.
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9600));
+      // An app without the SDK. +100 (2026-10-12) for
+      // launch_app(waitSeconds).
+      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9700));
     });
 
     test('every tool says what it does to the app', () {
