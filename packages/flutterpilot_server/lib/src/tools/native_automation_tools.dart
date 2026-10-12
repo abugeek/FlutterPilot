@@ -722,6 +722,19 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
   /// permission call was made.
   @override
   Future<String?> _permissionDialogHint() async {
+    if (_nativeOs == 'android' && _adb != null) {
+      // 0.1 s instead of the 2 s uiautomator dump: who has the focus?
+      final front = (await readAndroidDeviceState(
+        _adb!,
+        await _androidSerial(null),
+      ))?.foreground;
+      if (front == null) return null;
+      return front == _androidPackage
+          ? 'The app is in front: no system dialog is open.'
+          : 'In front is $front, not the app: a system dialog or another '
+                'app. native_describe_screen lists its buttons, native_tap '
+                'taps one.';
+    }
     if (_allTools['native_tap']?.enabled == true) return null;
     final calls = await _callExtensionRaw(
       'ext.flutterpilot.platformChannel',
@@ -989,12 +1002,18 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           content: [TextContent(text: 'Pressed $button on $serial.')],
         );
       case 'native_describe_screen':
-        final r = await adb(adbPath, serial, [
+        // The focus probe runs beside the (2 s) dump: --compressed keeps
+        // only the nodes a screen reader would, half the output.
+        final dump = adb(adbPath, serial, [
           'exec-out',
           'uiautomator',
           'dump',
+          '--compressed',
           '/dev/tty',
         ], timeout: const Duration(seconds: 25));
+        final focus = readAndroidDeviceState(adbPath, serial);
+        final r = await dump;
+        final foreground = (await focus)?.foreground;
         final out = r?.stdout as String?;
         if (r == null ||
             r.exitCode != 0 ||
@@ -1003,7 +1022,13 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           return failed('uiautomator dump', r);
         }
         return CallToolResult(
-          content: [TextContent(text: describeAndroidScreen(out))],
+          content: [
+            TextContent(
+              text:
+                  '${foreground == null ? '' : 'In front: $foreground${foreground == _androidPackage ? ' (the app)' : ''}\n'}'
+                  '${describeAndroidScreen(out)}',
+            ),
+          ],
         );
       case 'native_open_app':
         final package = _androidPackage;

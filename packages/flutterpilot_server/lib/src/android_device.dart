@@ -243,6 +243,7 @@ class AndroidDeviceState {
     this.charging,
     this.batteryLevel,
     this.screenOffTimeoutMs,
+    this.foreground,
   });
   final bool? awake;
   final bool? locked;
@@ -250,6 +251,10 @@ class AndroidDeviceState {
   final bool? charging;
   final int? batteryLevel;
   final int? screenOffTimeoutMs;
+
+  /// The package whose window has the focus: the app, a system dialog
+  /// (`com.google.android.permissioncontroller`), the launcher.
+  final String? foreground;
 
   /// Null when the device is fine to drive, else why not.
   String? get problem {
@@ -284,6 +289,10 @@ AndroidDeviceState parseAndroidDeviceState({
   String timeout = '',
 }) {
   final wake = RegExp(r'mWakefulness=(\w+)').firstMatch(power)?.group(1);
+  // `dumpsys window` knows too, and is cheaper than `dumpsys power`.
+  final windowAwake = RegExp(
+    r'mAwake=(true|false)',
+  ).firstMatch(window)?.group(1);
   bool? flag(String name) {
     final v = RegExp('$name=(true|false)').firstMatch(window)?.group(1);
     return v == null ? null : v == 'true';
@@ -294,7 +303,9 @@ AndroidDeviceState parseAndroidDeviceState({
     r'(AC|USB|Wireless) powered: (true|false)',
   ).allMatches(battery).map((m) => m.group(2) == 'true').toList();
   return AndroidDeviceState(
-    awake: wake == null ? null : wake == 'Awake',
+    awake: wake != null
+        ? wake == 'Awake'
+        : (windowAwake == null ? null : windowAwake == 'true'),
     locked: locked,
     batterySaver: lowPower.trim() == '1'
         ? true
@@ -304,26 +315,71 @@ AndroidDeviceState parseAndroidDeviceState({
       RegExp(r'level: (\d+)').firstMatch(battery)?.group(1) ?? '',
     ),
     screenOffTimeoutMs: int.tryParse(timeout.trim()),
+    foreground: parseForegroundPackage(window),
   );
 }
 
+/// The package of `mCurrentFocus=Window{… u0 pkg/Activity}` in `dumpsys
+/// window` output, null when nothing has the focus.
+String? parseForegroundPackage(String window) => RegExp(
+  r'mCurrentFocus=Window\{\S+ u\d+ ([\w.]+)[/}]',
+).firstMatch(window)?.group(1);
+
+/// Battery saver and the screen timeout change when the user opens settings,
+/// not between calls: read them once a minute per device.
+final _slowSettings =
+    <String?, ({DateTime at, String lowPower, String timeout})>{};
+
 /// Reads [AndroidDeviceState] from a connected device; null if adb fails.
+/// One adb call with the filtering done on the phone. Measured on a phone:
+/// five calls with whole `dumpsys` dumps took 550 ms; the window, the
+/// battery and (once a minute) the two settings reads are about 250 ms.
 Future<AndroidDeviceState?> readAndroidDeviceState(
   String adbPath,
   String? serial,
 ) async {
-  Future<String> sh(List<String> cmd) async =>
-      ((await adb(adbPath, serial, ['shell', ...cmd]))?.stdout as String?) ??
-      '';
-  final power = await sh(['dumpsys', 'power']);
-  if (power.isEmpty) return null;
+  final slow = _slowSettings[serial];
+  final needSlow =
+      slow == null || DateTime.now().difference(slow.at).inSeconds > 60;
+  final script =
+      'echo @@window; dumpsys window | grep -E '
+      '"mAwake=|isKeyguardShowing|mShowingLockscreen|mCurrentFocus="; '
+      'echo @@battery; dumpsys battery | grep -E "powered|level"'
+      '${needSlow ? '; echo @@lowpower; settings get global low_power; '
+                'echo @@timeout; settings get system screen_off_timeout' : ''}';
+  final r = await adb(adbPath, serial, ['shell', script]);
+  final out = r?.stdout as String?;
+  if (r == null || r.exitCode != 0 || out == null || out.isEmpty) return null;
+  final sections = splitSections(out);
+  if ((sections['window'] ?? '').isEmpty) return null;
+  if (needSlow) {
+    _slowSettings[serial] = (
+      at: DateTime.now(),
+      lowPower: sections['lowpower'] ?? '',
+      timeout: sections['timeout'] ?? '',
+    );
+  }
+  final known = _slowSettings[serial];
   return parseAndroidDeviceState(
-    power: power,
-    window: await sh(['dumpsys', 'window']),
-    battery: await sh(['dumpsys', 'battery']),
-    lowPower: await sh(['settings', 'get', 'global', 'low_power']),
-    timeout: await sh(['settings', 'get', 'system', 'screen_off_timeout']),
+    window: sections['window'] ?? '',
+    battery: sections['battery'] ?? '',
+    lowPower: known?.lowPower ?? '',
+    timeout: known?.timeout ?? '',
   );
+}
+
+/// `@@name` marker lines split [out] into named sections.
+Map<String, String> splitSections(String out) {
+  final sections = <String, StringBuffer>{};
+  StringBuffer? current;
+  for (final line in const LineSplitter().convert(out)) {
+    if (line.startsWith('@@')) {
+      current = sections[line.substring(2).trim()] = StringBuffer();
+    } else {
+      current?.writeln(line);
+    }
+  }
+  return {for (final e in sections.entries) e.key: e.value.toString()};
 }
 
 /// The package behind process [pid] on the device (`/proc/<pid>/cmdline`),
