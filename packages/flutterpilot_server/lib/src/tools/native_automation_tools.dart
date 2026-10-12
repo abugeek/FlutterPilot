@@ -26,12 +26,14 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     int? pid,
   }) async {
     _nativeOs = operatingSystem;
+    _androidPid = pid;
     final ios = operatingSystem == 'ios' && Platform.isMacOS;
     final android = operatingSystem == 'android';
     _adb = android ? await findAdb() : null;
     _androidPackage = android && _adb != null && pid != null
         ? await androidPackageOfPid(_adb!, await _androidSerial(null), pid)
         : null;
+    if (android && _adb != null) await _rememberAdbForward();
     if (ios) _idb = await _findIdb();
     _simulatorApp = ios && pid != null ? await _findSimulatorApp(pid) : null;
     final idb = ios && _idb != null;
@@ -51,6 +53,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
 
   /// The connected app's operating system (`ios`, `android`, ...).
   String? _nativeOs;
+
+  /// The VM's process id (on the phone when the app runs on one).
+  int? _androidPid;
 
   /// The adb executable, when the connected app runs on Android.
   String? _adb;
@@ -608,6 +613,92 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
   }
+
+  /// The `adb forward` that carries the VM service to the phone: kept so it
+  /// can be made again when the cable or the adb server drops it (the app
+  /// keeps running on the phone, the port on this Mac is just gone).
+  ({int port, String serial, String remote})? _adbForward;
+
+  Future<void> _rememberAdbForward() async {
+    final adbPath = _adb;
+    if (adbPath == null) return;
+    final list = await adb(adbPath, null, ['forward', '--list']);
+    if (list == null) return;
+    final forwards = parseAdbForwards(list.stdout as String);
+    final port = Uri.tryParse(_activeContext?.uri ?? '')?.port;
+    // flutter run may put its own proxy port in the URI: then the adb
+    // forward behind it is the one of this phone that still answers.
+    var mine = forwards.where((f) => f.local == 'tcp:$port').toList();
+    if (mine.isEmpty) {
+      final serial = await _androidSerial(null);
+      final live = <AdbForward>[];
+      for (final f in forwards.where((f) => f.serial == serial)) {
+        final local = int.tryParse(f.local.replaceFirst('tcp:', ''));
+        if (local != null && await portAnswersHttp(local)) live.add(f);
+      }
+      mine = live.length == 1 ? live : const [];
+    }
+    if (mine.length != 1) return;
+    final f = mine.single;
+    _adbForward = (
+      port: int.parse(f.local.replaceFirst('tcp:', '')),
+      serial: f.serial,
+      remote: f.remote,
+    );
+  }
+
+  /// Reaches an app whose `flutter run` is gone (the cable dropped and its
+  /// service proxy died with it): its VM service address is in logcat from
+  /// when it started. Forwards that port and returns the new URI, else null.
+  @override
+  Future<String?> _adoptAndroidApp() async {
+    final adbPath = _adb;
+    final pid = _androidPid;
+    final serial = _adbForward?.serial ?? await _androidSerial(null);
+    if (adbPath == null || pid == null || serial == null) return null;
+    final log = await adb(adbPath, serial, [
+      'logcat',
+      '-d',
+      '-v',
+      'brief',
+      '-s',
+      'flutter:I',
+    ]);
+    if (log == null || log.exitCode != 0) return null;
+    final vm = parseVmServiceFromLogcat(log.stdout as String, pid);
+    if (vm == null) return null;
+    final fwd = await adb(adbPath, serial, [
+      'forward',
+      'tcp:0',
+      'tcp:${vm.devicePort}',
+    ]);
+    final hostPort = int.tryParse('${fwd?.stdout}'.trim());
+    if (fwd == null || fwd.exitCode != 0 || hostPort == null) return null;
+    return 'ws://127.0.0.1:$hostPort/${vm.token}/ws';
+  }
+
+  /// Makes the remembered forward again if it is gone and the phone is
+  /// attached; true when it did.
+  @override
+  Future<bool> _restoreAdbForward() async {
+    final known = _adbForward;
+    final adbPath = _adb;
+    if (known == null || adbPath == null) return false;
+    final list = await adb(adbPath, null, ['forward', '--list']);
+    if (list == null ||
+        parseAdbForwards(list.stdout as String).any(
+          (f) => f.serial == known.serial && f.local == 'tcp:${known.port}',
+        )) {
+      return false; // still there: the app is what is not answering
+    }
+    final r = await adb(adbPath, known.serial, [
+      'forward',
+      'tcp:${known.port}',
+      known.remote,
+    ]);
+    return r != null && r.exitCode == 0;
+  }
+
   // ---------------------------------------------------------------------------
   // Is the phone fit to drive?
   // ---------------------------------------------------------------------------
@@ -693,7 +784,17 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     final ready = devices == null
         ? const <AdbDevice>[]
         : parseAdbDevices(devices.stdout as String).where((d) => d.ready);
-    return ready.length == 1 ? ready.first.serial : null;
+    if (ready.length == 1) return ready.first.serial;
+    // Several phones: the one that has this app's process.
+    final pid = _androidPid;
+    if (pid == null || ready.isEmpty) return null;
+    final hits = <String>[];
+    for (final d in ready) {
+      if (await androidPackageOfPid(adbPath, d.serial, pid) != null) {
+        hits.add(d.serial);
+      }
+    }
+    return hits.length == 1 ? hits.single : null;
   }
 
   CallToolResult _androidError(String message) =>

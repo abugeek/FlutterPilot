@@ -504,6 +504,19 @@ abstract class _FlutterPilotServerBase {
 
   Future<CallToolResult> _withPhoneState(CallToolResult result);
 
+  /// Makes the Android `adb forward` to the VM service again if it was
+  /// dropped (unplugged cable, adb restarted); true when it did.
+  // ignore: unused_element
+  Future<bool> _restoreAdbForward();
+
+  /// The VM service URI of an Android app whose `flutter run` is gone, from
+  /// logcat, with its port forwarded; null if it cannot be found.
+  // ignore: unused_element
+  Future<String?> _adoptAndroidApp();
+
+  /// How the last lost connection was restored, said once in the summary.
+  String? _connectionNote;
+
   /// Returns an MCP error for an operation that mutates app data when the
   /// server was not explicitly started with --allow-destructive.
   CallToolResult _destructiveOperationDenied();
@@ -847,23 +860,51 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     try {
       _vmService = await connectVmService(_vmServiceUri!);
     } catch (_) {
-      // The app was most likely restarted on a new port: rediscover it
-      // instead of retrying a dead URI forever.
-      final found = await VmDiscoveryService.discover(roots: _discoveryRoots);
-      final discovered = found == null ? null : normalizeVmServiceUri(found);
-      final owner = discovered == null
-          ? null
-          : _fleetManager.idForUri(discovered);
-      if (discovered == null ||
-          discovered == _vmServiceUri ||
-          !_isAllowedConnectionUri(discovered) ||
-          // Another registered device's app, not this one restarted.
-          (owner != null && owner != _fleetManager.activeDeviceId)) {
-        rethrow;
+      // The phone's forward on this Mac may just be gone (cable replugged,
+      // adb restarted) while the app still runs: make it again.
+      var restored = false;
+      if (await _restoreAdbForward()) {
+        try {
+          _vmService = await connectVmService(_vmServiceUri!);
+          _connectionNote =
+              'The connection to the phone had dropped (the adb forward was '
+              'gone); it was made again and the app kept its state.';
+          restored = true;
+        } catch (_) {}
       }
-      _log.info('App restarted; rediscovered VM Service.');
-      _vmServiceUri = discovered;
-      _vmService = await connectVmService(discovered);
+      if (!restored) {
+        if (await _adoptAndroidApp() case final adopted?) {
+          try {
+            final adoptedService = await connectVmService(adopted);
+            _vmService = adoptedService;
+            _vmServiceUri = adopted;
+            _connectionNote =
+                '`flutter run` was gone (hot reload and launch_app need it: '
+                'start the app again for those), but the app kept running; '
+                'FlutterPilot connected to it directly.';
+            restored = true;
+          } catch (_) {}
+        }
+      }
+      if (!restored) {
+        // The app was most likely restarted on a new port: rediscover it
+        // instead of retrying a dead URI forever.
+        final found = await VmDiscoveryService.discover(roots: _discoveryRoots);
+        final discovered = found == null ? null : normalizeVmServiceUri(found);
+        final owner = discovered == null
+            ? null
+            : _fleetManager.idForUri(discovered);
+        if (discovered == null ||
+            discovered == _vmServiceUri ||
+            !_isAllowedConnectionUri(discovered) ||
+            // Another registered device's app, not this one restarted.
+            (owner != null && owner != _fleetManager.activeDeviceId)) {
+          rethrow;
+        }
+        _log.info('App restarted; rediscovered VM Service.');
+        _vmServiceUri = discovered;
+        _vmService = await connectVmService(discovered);
+      }
     }
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',

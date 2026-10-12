@@ -1,5 +1,11 @@
 ## Unreleased
 
+- A phone whose cable or adb server dropped no longer needs a manual
+  reconnect: the `adb forward` to the app is made again, and when
+  `flutter run` itself is gone (its service proxy dies with it) the server
+  reads the app's VM service address from logcat, forwards it and connects
+  directly. The summary says so once (`• Connection: …`); hot reload and
+  `launch_app` still need `flutter run`.
 - A physical phone that is asleep, locked or (iPhone) not connected is said
   so: `• Device: …` in `get_app_summary` (and the phone's state in
   `setup: true`), and a `DEVICE: …` line on a call that got no answer or lost
