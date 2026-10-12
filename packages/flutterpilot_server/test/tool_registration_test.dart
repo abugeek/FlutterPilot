@@ -54,8 +54,10 @@ void main() {
     test('the tool list stays within its size budget', () {
       // +800 each for launch_app (2026-10-11): it replaces a pkill, a nohup
       // and a polling loop per relaunch, and is listed with no app at all.
+      // +300 (2026-10-12): the native tools also drive Android (serial,
+      // BACK, WAKEUP).
       // Every tool (--static-tools).
-      expect(listBytes((_) => true), lessThanOrEqualTo(40800));
+      expect(listBytes((_) => true), lessThanOrEqualTo(41100));
       // An app with the SDK and no plugin, not on an iOS simulator.
       expect(
         listBytes(

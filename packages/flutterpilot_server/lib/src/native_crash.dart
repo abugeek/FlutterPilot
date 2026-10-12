@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'android_device.dart';
+
 /// Why the app died outside Dart (ROADMAP §5.8): an Objective-C, Swift or
 /// Kotlin exception, or a signal. The VM connection only says the app is
 /// gone; the reason is in the OS crash report and log.
@@ -245,12 +247,16 @@ class CrashTarget {
     required this.operatingSystem,
     required this.since,
     this.simulatorUdid,
+    this.adbSerial,
   });
 
   final int pid;
   final String operatingSystem;
   final DateTime since;
   final String? simulatorUdid;
+
+  /// The adb device an Android app runs on (several can be attached).
+  final String? adbSerial;
 }
 
 /// Finds out, once the connection to [target] dropped, whether it crashed
@@ -429,13 +435,15 @@ Future<NativeCrash?> _androidCrash(CrashTarget target) async {
   for (var i = 0; i < 3; i++) {
     if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
     try {
-      final result = await Process.run('adb', [
+      final adbPath = await findAdb();
+      if (adbPath == null) return null;
+      final result = await adb(adbPath, target.adbSerial, [
         'logcat',
         '-b',
         'crash',
         '-d',
-      ]).timeout(const Duration(seconds: 10));
-      if (result.exitCode != 0) return null;
+      ], timeout: const Duration(seconds: 10));
+      if (result == null || result.exitCode != 0) return null;
       final crash = parseLogcatCrash(result.stdout as String, target.pid);
       if (crash != null) return crash;
     } catch (_) {
