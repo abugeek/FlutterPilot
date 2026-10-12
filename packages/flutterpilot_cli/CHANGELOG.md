@@ -1,5 +1,8 @@
 ## Unreleased
 
+- `flutterpilot doctor` fails a config that starts the server by name
+  alone (`"command": "flutterpilot_server"`) when nothing by that name is
+  on the PATH, and reports that before a stale-binary warning.
 - `flutterpilot doctor` and `init` read `tool/` and `bin/` as well as
   `lib/`: an app that wires FlutterPilot in a dev-only entrypoint
   (`flutter run -t tool/pilot_main.dart`) was told nothing was wired.

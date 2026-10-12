@@ -234,6 +234,24 @@ class DoctorCommand extends Command<void> {
               'source files last changed';
   }
 
+  /// Whether [command] is found in one of the PATH's folders ([path]
+  /// defaults to the environment's).
+  static bool onPath(String command, {String? path}) {
+    final dirs = (path ?? Platform.environment['PATH'] ?? '').split(
+      Platform.isWindows ? ';' : ':',
+    );
+    final names = Platform.isWindows
+        ? [command, '$command.exe', '$command.bat', '$command.cmd']
+        : [command];
+    for (final dir in dirs) {
+      if (dir.isEmpty) continue;
+      for (final name in names) {
+        if (File(p.join(dir, name)).existsSync()) return true;
+      }
+    }
+    return false;
+  }
+
   /// The FlutterPilot server commands Claude Code has for [project] outside
   /// it: the project's entry and the user-level one in `~/.claude.json`.
   static List<String> claudeLocalServers(String project, {String? home}) {
@@ -267,8 +285,13 @@ class DoctorCommand extends Command<void> {
   }
 
   /// Whether some client's config has FlutterPilot, and its server exists.
-  static DoctorCheck checkMcpConfig(String project, {String? home}) {
+  static DoctorCheck checkMcpConfig(
+    String project, {
+    String? home,
+    String? path,
+  }) {
     final configured = <String>[];
+    DoctorCheck? warning;
     // Claude Code also keeps servers outside the project (added with
     // "claude mcp add"): per project and for the user, in ~/.claude.json.
     // They win over the project's .mcp.json, so they are what runs.
@@ -280,12 +303,14 @@ class DoctorCommand extends Command<void> {
         );
       }
       if (staleServerBinary(command) case final stale?) {
-        return DoctorCheck.warn(
+        // Not returned yet: a config that cannot start at all comes first.
+        warning ??= DoctorCheck.warn(
           'Claude Code (~/.claude.json): $stale',
           'recompile it (dart compile exe bin/flutterpilot_server.dart -o '
               'build/flutterpilot_server in that package), then restart '
               'Claude Code',
         );
+        continue;
       }
       configured.add('Claude Code (~/.claude.json)');
     }
@@ -307,6 +332,20 @@ class DoctorCommand extends Command<void> {
       final server = p.basename(launch.command).startsWith('dart')
           ? launch.args.firstWhere((a) => a.endsWith('.dart'), orElse: () => '')
           : launch.command;
+      // A config kept free of machine paths names the server alone
+      // ("flutterpilot_server"): that only works where it is on the PATH.
+      if (!p.isAbsolute(launch.command) &&
+          !launch.command.contains(p.separator) &&
+          !onPath(launch.command, path: path)) {
+        return DoctorCheck.fail(
+          '${client.label}: ${client.configPath} starts '
+              '"${launch.command}", which is not on the PATH',
+          'put it there (e.g. ln -s <FlutterPilot>/packages/'
+              'flutterpilot_server/build/flutterpilot_server '
+              '~/.local/bin/${launch.command}), or flutterpilot mcp install '
+              'for a config with this machine\'s path',
+        );
+      }
       if (server.isNotEmpty &&
           p.isAbsolute(server) &&
           !File(server).existsSync()) {
@@ -317,14 +356,16 @@ class DoctorCommand extends Command<void> {
         );
       }
       if (staleServerBinary(server) case final stale?) {
-        return DoctorCheck.warn(
+        warning ??= DoctorCheck.warn(
           '${client.label}: $stale',
           'flutterpilot mcp install  (recompiles it), then restart the MCP '
               'client',
         );
+        continue;
       }
       configured.add(client.label);
     }
+    if (warning != null) return warning;
     return configured.isEmpty
         ? const DoctorCheck.warn(
             'No MCP client in this project is set up for FlutterPilot',

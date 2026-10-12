@@ -45,35 +45,52 @@ String describeStack(
   return lines.join('\n');
 }
 
-/// Looks at the UI isolate [isolateId] after a call went unanswered and
-/// says what it is doing. Never leaves the isolate paused: if a pause it
-/// asked for lands late, it is resumed then.
+/// What is said when the UI isolate does not even answer the VM service:
+/// an isolate inside a native call takes no messages, not `getIsolate` and
+/// not a pause (found on a real app: both simply never returned).
+const blockedOutsideDart =
+    "WHY: the app's UI isolate does not answer the VM service at all: it "
+    'is blocked outside Dart (a synchronous native or platform-channel '
+    'call, sleep(), a native modal dialog, a deadlock in native code) and '
+    'will answer when that returns. If it never does, '
+    'launch_app(relaunch: true) starts the app again.';
+
+/// "the app is paused at a breakpoint at … Nothing runs until …" when
+/// [isolate] is stopped in a debugger, else null.
+String? pausedInDebugger(Isolate isolate) {
+  final paused = isolate.pauseEvent;
+  final kind = paused?.kind;
+  if (kind == null ||
+      kind == EventKind.kResume ||
+      kind == EventKind.kNone ||
+      kind == EventKind.kPauseInterrupted) {
+    return null;
+  }
+  final at = paused?.topFrame == null
+      ? ''
+      : ' at ${describeFrame(paused!.topFrame!)}';
+  final why = switch (kind) {
+    EventKind.kPauseBreakpoint => 'at a breakpoint',
+    EventKind.kPauseException => 'on an exception ("pause on exceptions")',
+    EventKind.kPauseStart => 'at its start (launched with --start-paused)',
+    EventKind.kPauseExit => 'at exit: its main isolate has finished',
+    _ => 'in the debugger ($kind)',
+  };
+  return 'the app is paused $why$at. Nothing runs until it is resumed from '
+      'the IDE or debugger that paused it.';
+}
+
+/// Looks at the UI isolate ([isolate], just read with `getIsolate`) after a
+/// call went unanswered and says what it is doing. Never leaves the isolate
+/// paused: if a pause it asked for lands late, it is resumed then.
 Future<String> diagnoseNoAnswer(
   VmService vm,
-  String isolateId, {
+  Isolate isolate, {
   List<String> appUriPrefixes = const [],
   Duration pauseWait = const Duration(seconds: 2),
 }) async {
-  final isolate = await vm.getIsolate(isolateId);
-  final paused = isolate.pauseEvent;
-  final kind = paused?.kind;
-  if (kind != null &&
-      kind != EventKind.kResume &&
-      kind != EventKind.kNone &&
-      kind != EventKind.kPauseInterrupted) {
-    final at = paused?.topFrame == null
-        ? ''
-        : ' at ${describeFrame(paused!.topFrame!)}';
-    final why = switch (kind) {
-      EventKind.kPauseBreakpoint => 'at a breakpoint',
-      EventKind.kPauseException => 'on an exception ("pause on exceptions")',
-      EventKind.kPauseStart => 'at its start (launched with --start-paused)',
-      EventKind.kPauseExit => 'at exit: its main isolate has finished',
-      _ => 'in the debugger ($kind)',
-    };
-    return 'WHY: the app is paused $why$at. Nothing runs until it is '
-        'resumed from the IDE or debugger that paused it.';
-  }
+  final isolateId = isolate.id!;
+  if (pausedInDebugger(isolate) case final paused?) return 'WHY: $paused';
 
   // Ask it to stop: Dart code that is running stops at once, wherever it is.
   final interrupted = Completer<void>();
@@ -96,16 +113,13 @@ Future<String> diagnoseNoAnswer(
   } on RPCError {
     // Already subscribed.
   }
-  await vm.pause(isolateId);
+  // Not awaited: the reply only comes once the isolate takes the message.
+  unawaited(vm.pause(isolateId).then((_) {}, onError: (_) {}));
   try {
     await interrupted.future.timeout(pauseWait);
   } on TimeoutException {
     gaveUp = true;
-    return 'WHY: the app\'s UI isolate is not running Dart code and did not '
-        'stop when asked: it is blocked outside Dart (a synchronous native '
-        'or platform-channel call, a native modal dialog, a deadlock in '
-        'native code). If hot_reload(restart: true) gets no answer either, '
-        'launch_app(relaunch: true) starts the app again.';
+    return blockedOutsideDart;
   }
   try {
     final frames = (await vm.getStack(isolateId)).frames ?? const <Frame>[];

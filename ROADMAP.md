@@ -717,18 +717,33 @@ the server itself: `flutterpilot stats`).
 - A `Unit` workflow (Linux + Windows) on every PR; the device `CI` workflow
   is still disabled.
 
-**Not proven yet** (do these before trusting them):
+**Proven since (2026-10-12), each on a real app:**
 
-1. `WHY:` branches other than "busy in Dart code": paused in a debugger,
-   blocked outside Dart, idle. Only wording is unit-tested.
-2. `launch_app` on iOS, Android and web; the `• Code:` relaunch check on a
-   device whose clock differs from the host's.
-3. The `• Versions:` "older SDK" line against a real protocol-1 app.
-4. Whether the batching tip and shorter responses change behaviour: read
-   `flutterpilot stats` on a real project after a week.
-5. On a real app, 1.4 s frames after two hours hidden were seen once and
+- All four `WHY:` branches: busy in Dart (a `while (true)`), blocked
+  outside Dart (`sleep()`; this found the diagnosis hanging on the blocked
+  isolate), stopped at a breakpoint (now also answered at once on later
+  calls), idle (a custom tool that never answers).
+- `launch_app` on web (Chrome), an iOS simulator and an Android emulator:
+  launch, drive, hot reload, refuse, relaunch, and a relaunch onto another
+  device. The `• Code:` line on iOS and Android: right for an edit and for a
+  touched pubspec.lock, silent on a fresh app.
+- `• Versions:` against an app pinned to an SDK from before the protocol
+  number; that app still works, without the newer responses.
+- Behaviour, from 1,248 calls in 14 sessions on one app after these
+  changes (before: 1,563 calls): `hot_reload` 54 calls to 2 `launch_app`
+  (before 23 to ~14 rebuilds); `execute_action_chain` 140 to 136
+  `tap_widget` (before 100 to 425); `tap_widget` then `tap_widget` 28
+  times (before 152); `wait_for` then `get_app_summary` gone from the top
+  pairs (before 51); `tap_widget` 350 characters on average (before 839).
+
+**Still open:**
+
+1. `launch_app` on Windows and Linux desktops, and on a physical phone.
+2. On a real app, 1.4 s frames after two hours hidden were seen once and
    not reproduced; `flutterpilot_run.prev.log` now survives a relaunch, and
    `profile_action` on the slow app is the next step if it returns.
+3. `exec_sql_query` still fails first on a guessed column (6 of 39): the
+   hint fixes the retry, not the guess.
 
 ## Where things are
 

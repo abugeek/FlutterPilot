@@ -24,6 +24,7 @@ class DeviceRuntimeContext {
   StreamSubscription<Event>? stdoutEvents;
   StreamSubscription<Event>? serviceEvents;
   StreamSubscription<Event>? isolateEvents;
+  StreamSubscription<Event>? debugEvents;
 
   /// Services registered on the VM service by `flutter run` (or an IDE debug
   /// session), e.g. `reloadSources` -> `s0.reloadSources`. Real hot reload and
@@ -43,6 +44,10 @@ class DeviceRuntimeContext {
   /// Framework errors (`Flutter.Error` events) seen while [hasSdk] is false;
   /// with the SDK installed it reports errors itself.
   final List<Map<String, dynamic>> zeroCodeErrors = [];
+
+  /// The isolate a Debug event said is stopped in a debugger; checked
+  /// against the VM before a call is refused for it.
+  String? pausedIsolateId;
 
   /// What the last action response listed as tappable on this device.
   final ScreenMemory screenMemory = ScreenMemory();
@@ -75,16 +80,19 @@ class DeviceRuntimeContext {
     await stdoutEvents?.cancel();
     await serviceEvents?.cancel();
     await isolateEvents?.cancel();
+    await debugEvents?.cancel();
     extensionEvents = null;
     loggingEvents = null;
     stdoutEvents = null;
     serviceEvents = null;
     isolateEvents = null;
+    debugEvents = null;
     registeredServices.clear();
     hasSdk = null;
     sdkProtocol = null;
     zeroCodeErrors.clear();
     screenMemory.reset();
+    pausedIsolateId = null;
     lifecycle = null;
     lastReload = null;
     await service?.dispose();

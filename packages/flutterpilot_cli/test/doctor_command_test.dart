@@ -125,6 +125,36 @@ void main() {
     expect(DoctorCommand.staleServerBinary('/usr/local/bin/server'), isNull);
   });
 
+  // Field case: a config kept free of machine paths ("flutterpilot_server")
+  // on a machine where nothing by that name was installed; doctor said ✅.
+  test('a server named without a path must be on the PATH', () {
+    pubspec([]);
+    write(
+      '.mcp.json',
+      jsonEncode({
+        'mcpServers': {
+          'flutterpilot': {
+            'command': 'flutterpilot_server',
+            'args': ['-p', '.'],
+          },
+        },
+      }),
+    );
+    final bin = Directory(p.join(app.path, 'bin'))..createSync();
+    final missing = DoctorCommand.checkMcpConfig(
+      app.path,
+      home: app.path,
+      path: bin.path,
+    );
+    expect(missing.ok, isFalse);
+    expect(missing.title, contains('"flutterpilot_server", which is not on'));
+    File(p.join(bin.path, 'flutterpilot_server')).createSync();
+    expect(
+      DoctorCommand.checkMcpConfig(app.path, home: app.path, path: bin.path).ok,
+      isTrue,
+    );
+  });
+
   test("Claude Code's own config outside the project is checked too", () {
     pubspec([]);
     final home = Directory(p.join(app.path, 'home'))..createSync();
