@@ -14,7 +14,8 @@ void main(List<String> args) async {
         ..addCommand(DoctorCommand())
         ..addCommand(TestCommand())
         ..addCommand(AuditCommand())
-        ..addCommand(StatsCommand());
+        ..addCommand(StatsCommand())
+        ..addCommand(SmokeCommand());
 
   try {
     await runner.run(args);

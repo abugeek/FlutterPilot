@@ -6,3 +6,4 @@ export 'src/commands/audit_command.dart';
 export 'src/commands/mcp_command.dart';
 export 'src/version.dart';
 export 'src/commands/stats_command.dart';
+export 'src/commands/smoke_command.dart';

@@ -575,6 +575,9 @@ class McpInstallCommand extends Command<void> {
     return command is String ? (command: command, args: args) : null;
   }
 
+  /// [_serverPackage] for other commands (smoke).
+  static Future<String?> serverPackage(String? local) => _serverPackage(local);
+
   /// The flutterpilot_server package: from --local, or next to this CLI's
   /// own package (a checkout, or the clone `pub global activate` made);
   /// null when the CLI came from pub.dev and has no server beside it.
