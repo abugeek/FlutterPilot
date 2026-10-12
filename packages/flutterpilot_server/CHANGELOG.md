@@ -1,5 +1,11 @@
 ## Unreleased
 
+- The `adb forward` the server makes to reach an app by itself (after
+  `flutter run` died) is removed when it makes a new one and when the server
+  stops; `flutterpilot doctor` lists stale forwards left by killed
+  `flutter run`s on a plugged-in phone, with the `adb forward --remove`
+  commands. Parsing is unit-tested; the phone was unplugged when I came to
+  run it live.
 - On a device where nothing here can tap a system dialog (a real iPhone:
   idb drives simulators only), a tap that changed nothing now names the
   permission calls the app made (`flutter.baseflow.com/permissions/methods /

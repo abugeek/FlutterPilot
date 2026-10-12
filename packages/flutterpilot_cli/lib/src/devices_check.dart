@@ -51,6 +51,52 @@ List<AdbEntry> parseAdbList(String out) => [
       ),
 ];
 
+/// The host ports of `adb forward --list` lines for [serial] that [live]
+/// does not list: left behind by a `flutter run` that was killed. [list] is
+/// the output of `adb forward --list`.
+List<int> staleForwardPorts(String list, String serial, Set<int> live) => [
+  for (final line in const LineSplitter().convert(list))
+    if (line.trim().split(RegExp(r'\s+')) case [
+      final s,
+      final local,
+      _,
+    ] when s == serial && local.startsWith('tcp:'))
+      if (int.tryParse(local.substring(4)) case final port?)
+        if (!live.contains(port)) port,
+];
+
+/// The warning for [ports] of stale forwards on [serial], else nothing.
+List<DoctorCheck> staleForwardChecks(String serial, List<int> ports) =>
+    ports.isEmpty
+    ? const []
+    : [
+        DoctorCheck.warn(
+          '$serial: ${ports.length} stale adb forward'
+              '${ports.length == 1 ? '' : 's'} (left by a flutter run that was '
+              'killed)',
+          'Harmless but they pile up: '
+              '${ports.take(5).map((p) => 'adb -s $serial forward --remove tcp:$p').join('; ')}'
+              '${ports.length > 5 ? '; …' : ''}.',
+        ),
+      ];
+
+/// Whether something on 127.0.0.1:[port] answers HTTP (any status).
+Future<bool> portAnswers(int port) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+  try {
+    final request = await client
+        .getUrl(Uri.parse('http://127.0.0.1:$port/'))
+        .timeout(const Duration(seconds: 2));
+    final response = await request.close().timeout(const Duration(seconds: 2));
+    await response.drain<void>();
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close(force: true);
+  }
+}
+
 /// The findings for one Android device from its `dumpsys`/`settings` output.
 List<DoctorCheck> androidChecks(
   AdbEntry device, {
@@ -230,6 +276,23 @@ Future<List<DoctorCheck>> checkDevices() async {
                 ]),
               ),
       );
+      if (device.state == 'device') {
+        final forwards = await _run(adb, ['forward', '--list']) ?? '';
+        final live = <int>{};
+        for (final line in const LineSplitter().convert(forwards)) {
+          final parts = line.trim().split(RegExp(r'\s+'));
+          final port = parts.length == 3 && parts[0] == device.serial
+              ? int.tryParse(parts[1].replaceFirst('tcp:', ''))
+              : null;
+          if (port != null && await portAnswers(port)) live.add(port);
+        }
+        checks.addAll(
+          staleForwardChecks(
+            device.serial,
+            staleForwardPorts(forwards, device.serial, live),
+          ),
+        );
+      }
     }
   }
   if (Platform.isMacOS) {

@@ -696,6 +696,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     if (log == null || log.exitCode != 0) return null;
     final vm = parseVmServiceFromLogcat(log.stdout as String, pid);
     if (vm == null) return null;
+    await _removeOwnForwards(); // the one an earlier adoption made
     final fwd = await adb(adbPath, serial, [
       'forward',
       'tcp:0',
@@ -703,6 +704,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     ]);
     final hostPort = int.tryParse('${fwd?.stdout}'.trim());
     if (fwd == null || fwd.exitCode != 0 || hostPort == null) return null;
+    _adoptedForward = (serial: serial, port: hostPort);
     return 'ws://127.0.0.1:$hostPort/${vm.token}/ws';
   }
 
@@ -728,6 +730,19 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     return permissionCallsHint((calls.data?['calls'] as List?) ?? const []) ??
         '  Nothing here can tap a system dialog on this device: if the '
             'action opened one, dismiss it by hand.';
+  }
+
+  /// The `adb forward` this server made to reach an app by itself; removed
+  /// when it is replaced and when the server stops (they pile up otherwise).
+  ({String serial, int port})? _adoptedForward;
+
+  @override
+  Future<void> _removeOwnForwards() async {
+    final own = _adoptedForward;
+    final adbPath = _adb;
+    _adoptedForward = null;
+    if (own == null || adbPath == null) return;
+    await adb(adbPath, own.serial, ['forward', '--remove', 'tcp:${own.port}']);
   }
 
   /// Makes the remembered forward again if it is gone and the phone is
