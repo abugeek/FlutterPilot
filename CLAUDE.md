@@ -22,6 +22,8 @@ When interacting with a Flutter app using FlutterPilot:
 
 ### 1. Orientation & Diagnostics
 - **First Step**: Call `get_app_summary` — route, the tappable elements on screen (labels + keys), errors, logs, and whether the app window is visible. `setup: true` adds the connection, the plugins the app registered and the SDK's capabilities, for when a tool is missing or refused. `get_interactive_elements` gives the full tappable list.
+- **Out-of-step versions**: the summary starts with `• Versions: …` when the app's `flutterpilot_sdk` is older than the server (it names what the app lacks; update the SDK ref in the app's pubspec and `launch_app(relaunch: true)`) or newer (rebuild the server). `flutterpilot doctor` flags a server binary older than its source.
+- **App still starting**: `• Starting: main() has not called runApp yet…` in the summary (and as the reason `capture_screenshot` gives) means there is no screen yet, not a dead app: `wait_for(key: ...)` for the first screen, `get_debug_logs` for how far main() got.
 - **Stale code**: the summary starts with `• Code: …` when Dart files on disk differ from what the app has loaded (call `hot_reload`), or when `pubspec.lock`/`pubspec.yaml`/a native project file changed since the build (call `launch_app(relaunch: true)`). No line means the app runs what is on disk.
 - **Visual Inspection**: Use `capture_screenshot` to view the screen layout with coordinates.
 - **Hierarchy Inspection**: Use `get_widget_tree` for a DevTools-style summary tree of the app's own widgets. Password fields show as `•`; credentials in logs, URLs, network bodies, errors and credential-named state (`password=…`, `?api_key=…`, Bearer tokens, JWTs) are masked in every tool (docs/security-review.md).
@@ -84,6 +86,8 @@ When interacting with a Flutter app using FlutterPilot:
 - **Same flow on every device**: `run_on_devices(steps: [{tool: "tap_widget", arguments: {key: "Log in"}}, {tool: "assert_widget", arguments: {text: "Welcome"}}])` runs the steps on all registered devices at once (each on its own connection; `devices: [...]` picks some) and reports which steps passed where and how the final screens differ: route, tappable elements, new errors with the last one's message. Listed once two devices are registered.
 
 ### 8. Crash Fix Loop
+- **A call the app did not answer** ends with `WHY: …`: the UI isolate busy in Dart code with the stack where it was interrupted (a loop or long computation at that file:line), paused in a debugger, blocked outside Dart, or idle (the call itself was waiting). A hot restart cannot interrupt code that never returns: fix it and `launch_app(relaunch: true)`. `hot_reload` checks the app answers first and says so in 5 s.
+- A relaunch keeps the stopped app's output in `.dart_tool/flutterpilot_run.prev.log`.
 1. When a crash occurs, call `get_errors` (`report: true` for the full crash report) — it includes the exception, your source frame (file:line) and, for layout errors, the culprit widget's location.
    If the app died in native code (an Objective-C/Swift/Kotlin exception or a signal; macOS, iOS simulator, Android), any tool's "not running" error says so, with the exception message, then (the OS writes the report ~20 s later) the frames where it was thrown and the report path.
 2. Fix the Dart source, then `hot_reload` (`restart: true` for main()/static initializer/provider-definition changes).

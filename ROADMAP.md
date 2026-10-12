@@ -699,6 +699,37 @@ No new tools; field-tested on Windows in `../pos_lab` (findings #320–325).
   main isolate; only a hand-spawned isolate with no error listener is
   silent — untested whether the VM service reports it).
 
+## 14. What agent transcripts showed — done (2026-10-11/12)
+
+Found by reading 1,563 tool calls from real sessions on one app (now kept by
+the server itself: `flutterpilot stats`).
+
+- Agents rebuilt the app instead of hot-restarting it: `launch_app` (refuses
+  with an app running, outlives the session), server instructions, the
+  `• Code:` line when the app is behind the disk, compile errors returned by
+  a failed `hot_reload`.
+- Follow-up calls nobody needed: `wait_for` / `navigate_to` end with the
+  screen, `navigate_to(waitFor:)`, the batching tip, "Tappable now" as a
+  difference, SQL errors naming the real columns.
+- Dead ends: `WHY:` on a call the app did not answer, `• Starting:` before
+  runApp, `• Versions:` when SDK and server differ (protocol number, raise
+  both together), doctor for a stale server binary and `tool/` entrypoints.
+- A `Unit` workflow (Linux + Windows) on every PR; the device `CI` workflow
+  is still disabled.
+
+**Not proven yet** (do these before trusting them):
+
+1. `WHY:` branches other than "busy in Dart code": paused in a debugger,
+   blocked outside Dart, idle. Only wording is unit-tested.
+2. `launch_app` on iOS, Android and web; the `• Code:` relaunch check on a
+   device whose clock differs from the host's.
+3. The `• Versions:` "older SDK" line against a real protocol-1 app.
+4. Whether the batching tip and shorter responses change behaviour: read
+   `flutterpilot stats` on a real project after a week.
+5. On a real app, 1.4 s frames after two hours hidden were seen once and
+   not reproduced; `flutterpilot_run.prev.log` now survives a relaunch, and
+   `profile_action` on the slow app is the next step if it returns.
+
 ## Where things are
 
 - `docs/field-test-findings.md` — every tool observation (88 rows), latency.

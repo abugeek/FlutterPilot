@@ -127,6 +127,24 @@ void main() {
     expect(launchLogTail(log), contains('no_such_script.sh'));
   });
 
+  test('a new launch keeps the previous output', () {
+    final log = File('${tmp.path}/$launchLogFile')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('Slow frame 1454 ms on /home/owner\n');
+    startLaunchLog(tmp);
+    expect(log.readAsStringSync(), isEmpty);
+    expect(
+      File('${tmp.path}/$previousLaunchLogFile').readAsStringSync(),
+      contains('Slow frame 1454 ms'),
+    );
+    // A launch that printed nothing does not replace it.
+    startLaunchLog(tmp);
+    expect(
+      File('${tmp.path}/$previousLaunchLogFile').readAsStringSync(),
+      contains('Slow frame 1454 ms'),
+    );
+  });
+
   test('the log tail keeps the last lines', () {
     final log = [for (var i = 0; i < 100; i++) 'line $i', ''].join('\n');
     final tail = launchLogTail(log, lines: 3);

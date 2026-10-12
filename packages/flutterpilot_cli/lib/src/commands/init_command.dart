@@ -81,16 +81,20 @@ const appPlugins = {
 String? wiringSymbol(String wiring) =>
     RegExp(r'\b[A-Z]\w*Pilot\w*\b').firstMatch(wiring)?[0];
 
-/// All of the app's own Dart code (lib/), concatenated.
+/// All of the app's own Dart code, concatenated: `lib/`, and `tool/` and
+/// `bin/`, where an app keeps a dev-only entrypoint that wires FlutterPilot
+/// (`flutter run -t tool/pilot_main.dart`) so that `lib/` never imports it.
 String appSources(String project) {
-  final lib = Directory(p.join(project, 'lib'));
-  if (!lib.existsSync()) return '';
   final buffer = StringBuffer();
-  for (final f in lib.listSync(recursive: true)) {
-    if (f is File && f.path.endsWith('.dart')) {
-      try {
-        buffer.writeln(f.readAsStringSync());
-      } catch (_) {}
+  for (final name in const ['lib', 'tool', 'bin']) {
+    final dir = Directory(p.join(project, name));
+    if (!dir.existsSync()) continue;
+    for (final f in dir.listSync(recursive: true)) {
+      if (f is File && f.path.endsWith('.dart')) {
+        try {
+          buffer.writeln(f.readAsStringSync());
+        } catch (_) {}
+      }
     }
   }
   return buffer.toString();
