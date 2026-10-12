@@ -422,7 +422,7 @@ Highest value first. Each should answer a *why*, not just dump data.
    was thrown (system frames on top skipped) and the report path. Android:
    `adb logcat -b crash` (Kotlin/Java `FATAL EXCEPTION` or a native signal
    with its abort message), unit-tested only (no emulator here). Not
-   covered: a physical iPhone (reports stay on the phone; `devicectl`), and
+   covered: (a physical iPhone's reports are fetched with `devicectl` since 2026-10-12), and
    an app that dies before FlutterPilot connected (no pid to match).
    Findings #232–235.
 
@@ -746,21 +746,16 @@ the server itself: `flutterpilot stats`).
   adb forward remade and a direct connection from logcat after `flutter run`
   and the adb server were killed (the app kept its state), the SDK's
   keep-awake. `flutterpilot doctor` lists plugged-in phones. On a physical
-  iPhone only the lock state (`devicectl`) and the launch-failure hints are
-  checked: the phone locked again within seconds, so a build + install could
-  not be watched.
+  iPhone (iPhone 15 Pro Max, iOS 27): `launch_app` (signed with a personal
+  team via `FLUTTER_XCODE_DEVELOPMENT_TEAM`), taps, `native_open_app`
+  (`devicectl device process launch`), the lock state, and the crash report
+  of a SIGABRT fetched from the phone (`devicectl … systemCrashLogs`). idb
+  cannot drive a physical iPhone, so the other `native_*` tools stay hidden
+  there.
 
 **Still open:**
 
-0. A physical iPhone, with the phone kept unlocked (Settings → Display →
-   Auto-Lock → Never for the session) and a Team set
-   (`FLUTTER_XCODE_DEVELOPMENT_TEAM`): `launch_app`, the SDK's keep-awake on
-   iOS, `native_open_app` through `devicectl device process launch` (needs
-   the bundle id: `devicectl device info apps`), and crash reports from
-   `devicectl device info files --domain-type systemCrashLogs` (`parseIpsReport`
-   already reads the `.ips`). The output formats were not seen while the
-   phone was locked, so none of it is written yet.
-1. `launch_app` on Windows and Linux desktops and on a physical iPhone
+1. `launch_app` on Windows and Linux desktops
    (the server's launcher and CLI unit tests do run on Windows in CI).
 2. On a real app, 1.4 s frames after two hours hidden were seen once and
    not reproduced; `flutterpilot_run.prev.log` now survives a relaunch, and

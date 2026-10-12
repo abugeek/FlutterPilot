@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'android_device.dart';
+import 'ios_device.dart';
 
 /// Why the app died outside Dart (ROADMAP §5.8): an Objective-C, Swift or
 /// Kotlin exception, or a signal. The VM connection only says the app is
@@ -248,6 +249,7 @@ class CrashTarget {
     required this.since,
     this.simulatorUdid,
     this.adbSerial,
+    this.iosDevice,
   });
 
   final int pid;
@@ -257,6 +259,9 @@ class CrashTarget {
 
   /// The adb device an Android app runs on (several can be attached).
   final String? adbSerial;
+
+  /// The physical iPhone's devicectl identifier.
+  final String? iosDevice;
 }
 
 /// Finds out, once the connection to [target] dropped, whether it crashed
@@ -308,10 +313,32 @@ class NativeCrashWatch {
     }
   }
 
+  Future<void> _iosDeviceCrashLoop() async {
+    final device = target.iosDevice;
+    if (device == null) return;
+    // The first look is the one callers wait for.
+    final deadline = DateTime.now().add(reportWait);
+    for (var i = 0; DateTime.now().isBefore(deadline); i++) {
+      if (i > 0) await Future<void>.delayed(const Duration(seconds: 3));
+      if (i == 2 && !_decided.isCompleted) _decided.complete();
+      final reports = await recentIosCrashReports(
+        device,
+        target.since.subtract(const Duration(minutes: 5)),
+      );
+      for (final r in reports) {
+        final parsed = parseIpsReport(r.content, path: r.name);
+        if (parsed != null && parsed.pid == target.pid) {
+          _crash = parsed.crash;
+          return;
+        }
+      }
+    }
+  }
+
   Future<void> _apple() async {
-    // A phone's crashes stay on the phone.
+    // A phone's crashes stay on the phone: fetched with devicectl.
     if (target.operatingSystem == 'ios' && target.simulatorUdid == null) {
-      return;
+      return _iosDeviceCrashLoop();
     }
     // The log can lag behind the connection closing, by seconds on a busy
     // machine (CI). Callers wait for the first few looks only; a crash

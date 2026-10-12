@@ -23,6 +23,7 @@ import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
 import 'src/hang_diagnosis.dart';
+import 'src/ios_device.dart';
 import 'src/launch_failure.dart';
 import 'src/http_detail.dart';
 import 'src/image_budget.dart';
@@ -515,6 +516,10 @@ abstract class _FlutterPilotServerBase {
   // ignore: unused_element
   Future<String?> _adoptAndroidApp();
 
+  /// The physical iPhone and bundle id behind the connection, if it is one.
+  // ignore: unused_element
+  ({String device, String bundleId})? get _iosDeviceApp;
+
   /// How the last lost connection was restored, said once in the summary.
   String? _connectionNote;
 
@@ -965,6 +970,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               operatingSystem: vm.operatingSystem!,
               since: DateTime.now(),
               simulatorUdid: _simulatorApp?.udid,
+              iosDevice: _iosDeviceApp?.device,
               adbSerial: vm.operatingSystem == 'android'
                   ? await _androidSerial(null)
                   : null,
