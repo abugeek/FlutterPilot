@@ -25,21 +25,38 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     String? operatingSystem, {
     int? pid,
   }) async {
+    _nativeOs = operatingSystem;
     final ios = operatingSystem == 'ios' && Platform.isMacOS;
+    final android = operatingSystem == 'android';
+    _adb = android ? await findAdb() : null;
+    _androidPackage = android && _adb != null && pid != null
+        ? await androidPackageOfPid(_adb!, await _androidSerial(null), pid)
+        : null;
     if (ios) _idb = await _findIdb();
     _simulatorApp = ios && pid != null ? await _findSimulatorApp(pid) : null;
     final idb = ios && _idb != null;
     final xcrun = ios && await _onPath('xcrun');
     if (staticTools) return;
     for (final MapEntry(key: name, value: tool) in _nativeTools.entries) {
-      final usable = switch (name) {
-        'native_screenshot' => xcrun,
-        'native_open_app' => xcrun && _simulatorApp != null,
-        _ => idb,
-      };
+      final usable = android
+          ? _adb != null
+          : switch (name) {
+              'native_screenshot' => xcrun,
+              'native_open_app' => xcrun && _simulatorApp != null,
+              _ => idb,
+            };
       if (tool.enabled != usable) usable ? tool.enable() : tool.disable();
     }
   }
+
+  /// The connected app's operating system (`ios`, `android`, ...).
+  String? _nativeOs;
+
+  /// The adb executable, when the connected app runs on Android.
+  String? _adb;
+
+  /// The Android application id of the connected app.
+  String? _androidPackage;
 
   /// The simulator app behind the connection. Simulator apps are processes
   /// on this Mac, so the VM's pid leads to the app bundle and the simulator
@@ -233,6 +250,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           'on top.',
       inputSchema: ToolInputSchema(
         properties: {
+          'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -240,6 +258,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        if (_nativeOs == 'android') {
+          return _androidNative('native_screenshot', p);
+        }
         if (!Platform.isMacOS) {
           return CallToolResult(
             isError: true,
@@ -316,6 +337,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         properties: {
           'x': JsonSchema.number(description: 'X in points.'),
           'y': JsonSchema.number(description: 'Y in points.'),
+          'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -324,6 +346,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['x', 'y'],
       ),
       callback: (p, e) async {
+        if (_nativeOs == 'android') return _androidNative('native_tap', p);
         if (!Platform.isMacOS) {
           return CallToolResult(
             isError: true,
@@ -372,6 +395,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(description: 'Text to type.'),
+          'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -380,6 +404,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['text'],
       ),
       callback: (p, e) async {
+        if (_nativeOs == 'android') return _androidNative('native_text', p);
         if (!Platform.isMacOS) {
           return CallToolResult(
             isError: true,
@@ -423,8 +448,17 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'button': JsonSchema.string(
-            enumValues: ['APPLE_PAY', 'HOME', 'LOCK', 'SIDE_BUTTON', 'SIRI'],
+            enumValues: [
+              'APPLE_PAY',
+              'HOME',
+              'LOCK',
+              'SIDE_BUTTON',
+              'SIRI',
+              'BACK',
+              'WAKEUP',
+            ],
           ),
+          'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -433,6 +467,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['button'],
       ),
       callback: (p, e) async {
+        if (_nativeOs == 'android') return _androidNative('native_button', p);
         if (!Platform.isMacOS) {
           return CallToolResult(
             isError: true,
@@ -476,6 +511,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           'alerts the Flutter tree does not have. Use before native_tap.',
       inputSchema: ToolInputSchema(
         properties: {
+          'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
                 'Target simulator UDID. Omit to auto-detect when exactly one simulator is booted.',
@@ -483,6 +519,9 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        if (_nativeOs == 'android') {
+          return _androidNative('native_describe_screen', p);
+        }
         if (!Platform.isMacOS) {
           return CallToolResult(
             isError: true,
@@ -526,6 +565,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
           'every other tool fails until then.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
+        if (_nativeOs == 'android') return _androidNative('native_open_app', p);
         final app = _simulatorApp;
         if (app == null) {
           return CallToolResult(
@@ -567,6 +607,194 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+  }
+  // ---------------------------------------------------------------------------
+  // Android (adb)
+  // ---------------------------------------------------------------------------
+
+  /// The adb serial of the connected app's device: the [p] `serial`, else the
+  /// device whose forwarded port is the VM service's, else the only device.
+  Future<String?> _androidSerial(Map<String, dynamic>? p) async {
+    final explicit = p?['serial']?.toString();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final adbPath = _adb ?? await findAdb();
+    if (adbPath == null) return null;
+    final port = Uri.tryParse(_activeContext?.uri ?? '')?.port;
+    if (port != null && port != 0) {
+      final forwards = await adb(adbPath, null, ['forward', '--list']);
+      final serial = forwards == null
+          ? null
+          : serialForForwardedPort(forwards.stdout as String, port);
+      if (serial != null) return serial;
+    }
+    final devices = await adb(adbPath, null, ['devices', '-l']);
+    final ready = devices == null
+        ? const <AdbDevice>[]
+        : parseAdbDevices(devices.stdout as String).where((d) => d.ready);
+    return ready.length == 1 ? ready.first.serial : null;
+  }
+
+  CallToolResult _androidError(String message) =>
+      CallToolResult(isError: true, content: [TextContent(text: message)]);
+
+  Future<CallToolResult> _androidNative(
+    String tool,
+    Map<String, dynamic> p,
+  ) async {
+    final adbPath = _adb ?? await findAdb();
+    if (adbPath == null) {
+      return _androidError(
+        'adb was not found. Install the Android SDK platform-tools, or set '
+        'ANDROID_HOME. tap_widget/enter_text work without it for anything '
+        'inside the Flutter app.',
+      );
+    }
+    final serial = await _androidSerial(p);
+    if (serial == null) {
+      final devices = await adb(adbPath, null, ['devices', '-l']);
+      final list = devices == null
+          ? ''
+          : parseAdbDevices(devices.stdout as String)
+                .map((d) => '  - ${d.serial} (${d.state}, ${d.model ?? '?'})')
+                .join('\n');
+      return _androidError(
+        'Which Android device? ${list.isEmpty ? 'None is attached.' : 'Pass serial:\n$list'}',
+      );
+    }
+    Future<CallToolResult> failed(String what, ProcessResult? r) async {
+      final state = await readAndroidDeviceState(adbPath, serial);
+      final why = state?.problem;
+      return _androidError(
+        '$what failed${r == null ? ' (adb did not answer)' : ': ${r.stderr}'}'
+        '${why == null ? '' : '\nThe device may be the cause: $why. Wake and unlock it.'}',
+      );
+    }
+
+    switch (tool) {
+      case 'native_screenshot':
+        final r = await adb(adbPath, serial, [
+          'exec-out',
+          'screencap',
+          '-p',
+        ], stdoutEncoding: null);
+        final bytes = r?.stdout;
+        if (r == null ||
+            r.exitCode != 0 ||
+            bytes is! List<int> ||
+            bytes.isEmpty) {
+          return failed('adb screencap', r);
+        }
+        return CallToolResult(
+          content: [
+            ImageContent(
+              data: fitBase64Png(base64Encode(bytes)),
+              mimeType: 'image/png',
+            ),
+            TextContent(
+              text:
+                  'Native screenshot of $serial (system dialogs included; '
+                  'coordinates are screen pixels, the ones native_tap takes).',
+            ),
+          ],
+        );
+      case 'native_tap':
+        final x = (p['x'] as num).round(), y = (p['y'] as num).round();
+        final r = await adb(adbPath, serial, [
+          'shell',
+          'input',
+          'tap',
+          '$x',
+          '$y',
+        ]);
+        if (r == null || r.exitCode != 0) return failed('adb input tap', r);
+        return CallToolResult(
+          content: [TextContent(text: 'Native tap at ($x, $y) on $serial.')],
+        );
+      case 'native_text':
+        final text = p['text'].toString();
+        final escaped = escapeAdbInputText(text);
+        if (escaped == null) {
+          return _androidError(
+            'adb can only type ASCII. Use enter_text for a field of the app.',
+          );
+        }
+        final r = await adb(adbPath, serial, [
+          'shell',
+          'input',
+          'text',
+          escaped,
+        ]);
+        if (r == null || r.exitCode != 0) return failed('adb input text', r);
+        return CallToolResult(
+          content: [TextContent(text: 'Native text entered on $serial.')],
+        );
+      case 'native_button':
+        final button = p['button'].toString();
+        final key = androidButtons[button];
+        if (key == null) {
+          return _androidError(
+            '$button is not an Android button. Use: ${androidButtons.keys.join(', ')}.',
+          );
+        }
+        final r = await adb(adbPath, serial, [
+          'shell',
+          'input',
+          'keyevent',
+          key,
+        ]);
+        if (r == null || r.exitCode != 0) {
+          return failed('adb input keyevent', r);
+        }
+        return CallToolResult(
+          content: [TextContent(text: 'Pressed $button on $serial.')],
+        );
+      case 'native_describe_screen':
+        final r = await adb(adbPath, serial, [
+          'exec-out',
+          'uiautomator',
+          'dump',
+          '/dev/tty',
+        ], timeout: const Duration(seconds: 25));
+        final out = r?.stdout as String?;
+        if (r == null ||
+            r.exitCode != 0 ||
+            out == null ||
+            !out.contains('<hierarchy')) {
+          return failed('uiautomator dump', r);
+        }
+        return CallToolResult(
+          content: [TextContent(text: describeAndroidScreen(out))],
+        );
+      case 'native_open_app':
+        final package = _androidPackage;
+        if (package == null) {
+          return _androidError('The app\'s package name could not be read.');
+        }
+        final r = await adb(adbPath, serial, [
+          'shell',
+          'monkey',
+          '-p',
+          package,
+          '-c',
+          'android.intent.category.LAUNCHER',
+          '1',
+        ]);
+        if (r == null || r.exitCode != 0) return failed('adb monkey', r);
+        final deadline = DateTime.now().add(const Duration(seconds: 3));
+        while (_activeContext?.lifecycle != null &&
+            _activeContext?.lifecycle != 'resumed' &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text: 'Brought $package to the foreground (app state kept).',
+            ),
+          ],
+        );
+    }
+    return _androidError('Unknown native tool $tool.');
   }
 }
 

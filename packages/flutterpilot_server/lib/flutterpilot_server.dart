@@ -11,6 +11,7 @@ import 'package:mcp_dart/mcp_dart.dart';
 import 'package:vm_service/vm_service.dart';
 
 import 'src/action_chain.dart';
+import 'src/android_device.dart';
 import 'src/app_root.dart';
 import 'src/app_launcher.dart';
 import 'src/batch_nudge.dart';
@@ -915,6 +916,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               operatingSystem: vm.operatingSystem!,
               since: DateTime.now(),
               simulatorUdid: _simulatorApp?.udid,
+              adbSerial: vm.operatingSystem == 'android'
+                  ? await _androidSerial(null)
+                  : null,
             );
     } catch (_) {
       // Visibility is best-effort; the tools still explain themselves.

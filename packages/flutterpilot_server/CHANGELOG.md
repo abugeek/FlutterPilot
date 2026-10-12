@@ -1,5 +1,13 @@
 ## Unreleased
 
+- The `native_*` tools work on Android (emulator or phone) through `adb`:
+  `native_describe_screen` lists system dialogs and notifications with tap
+  points (uiautomator), `native_tap`, `native_text`, `native_button` (HOME,
+  BACK, POWER, WAKEUP), `native_screenshot` and `native_open_app`. `adb` is
+  found on PATH, in `ANDROID_HOME`/`ANDROID_SDK_ROOT` or the SDK's default
+  folder (it was only looked up on PATH, so crash lookup silently failed);
+  the device is the one `flutter run` forwarded the VM service from, else the
+  only one attached, else `serial`.
 - `exec_sql_query` without `sql` lists the tables with their columns, and
   the first successful query on a table ends with that table's columns
   (once per table and connection): the next query has names to use instead

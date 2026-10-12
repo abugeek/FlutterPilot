@@ -4,9 +4,9 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40756 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41087 bytes. An app is shown only the tools that work for it.
 
-`native_*` tools are listed to agents only when the connected app runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is installed.
+`native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
 ## `connect_app`
 
@@ -238,6 +238,7 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_tap`
@@ -248,6 +249,7 @@ Taps the simulator screen at x/y in points, e.g. a permission alert's "Allow", w
 |---|---|---:|---|
 | `x` | number | yes | X in points. |
 | `y` | number | yes | Y in points. |
+| `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_text`
@@ -257,6 +259,7 @@ Types text into whatever has focus on the simulator, through the real iOS keyboa
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `text` | string | yes | Text to type. |
+| `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_button`
@@ -265,7 +268,8 @@ Presses a simulator hardware button. HOME backgrounds the app (iOS then suspends
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `button` | string: APPLE_PAY \| HOME \| LOCK \| SIDE_BUTTON \| SIRI | yes |  |
+| `button` | string: APPLE_PAY \| HOME \| LOCK \| SIDE_BUTTON \| SIRI \| BACK \| WAKEUP | yes |  |
+| `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_describe_screen`
@@ -276,6 +280,7 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_open_app`

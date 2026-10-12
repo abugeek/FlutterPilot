@@ -84,8 +84,9 @@ Future<void> main() async {
       ..writeln()
       ..writeln(
         '`native_*` tools are listed to agents only when the connected app '
-        'runs on iOS and `idb` (or `xcrun`, for `native_screenshot`) is '
-        'installed.',
+        'runs on an iOS simulator and `idb` (or `xcrun`, for '
+        '`native_screenshot`) is installed, or on Android and `adb` is found '
+        '(PATH, ANDROID_HOME or the SDK folder).',
       )
       ..writeln();
     for (final rawTool in tools) {
