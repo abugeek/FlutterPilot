@@ -113,8 +113,9 @@ plugin), add `--static-tools` (`flutterpilot mcp install --static-tools`):
 every tool is listed from the start, and one that can't work on the
 connected app says why when called.
 
-A client that counts tools across every server it runs (Cursor has
-historically capped around 40) can ask for the short set instead:
+A client that counts tools across every server it runs can ask for the short
+set instead (checked 2026-10-14: Cursor's docs state no tool limit; VS Code's
+Copilot allows 128 tools per request; Claude Code no fixed cap):
 `flutterpilot mcp install --tools core` writes `--tools core`, and
 `flutterpilot doctor` shows which profile each config uses. `all` is the
 default; `--tools core` is a subset that still has to work for the app (a

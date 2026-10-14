@@ -87,8 +87,8 @@ void main() {
           .toolListJson(listed)
           .map((tool) => jsonEncode(tool..remove('annotations')).length)
           .fold(0, (a, b) => a + b);
-      // 29 tools; the count limit is a client's ~40 minus the Dart MCP
-      // server's code tools.
+      // 29 tools; the count limit is VS Code's 128 tools per request
+      // (2026-10-14) minus the Dart MCP server's 4 and a small server's 5.
       expect(listed.length, lessThanOrEqualTo(30));
       // 20 363 bytes on 2026-10-14, plus 300 (task 09 C).
       expect(bytes, lessThanOrEqualTo(20663));
