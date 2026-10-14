@@ -297,10 +297,12 @@ class McpInstallCommand extends Command<void> {
     if (clients.contains(McpClient.cursor) &&
         argResults!['tools'] as String == 'all') {
       // 29 = coreTools in flutterpilot_server/lib/src/tool_profiles.dart.
+      // Re-measured 2026-10-14 (task 12): Cursor's docs state no tool limit,
+      // so this is advice about a shorter list, not a cap to fit.
       stdout.writeln(
-        'Cursor limits tools across every server it runs (~40); '
-        'flutterpilot mcp install --client cursor --tools core lists '
-        '29 for the app.',
+        'Cursor no longer states a tool limit (checked 2026-10-14), but a '
+        'shorter list is cheaper: flutterpilot mcp install --client cursor '
+        '--tools core lists 29 for the app, plus the Dart MCP server\'s 4.',
       );
     }
     if (clients.contains(McpClient.codex)) {
@@ -365,8 +367,9 @@ class McpInstallCommand extends Command<void> {
   /// The Dart MCP server's feature categories FlutterPilot covers: hot
   /// reload/restart, runtime errors, the widget inspector, Flutter Driver
   /// and app launching (`flutter`), and its DTD/VM service connection
-  /// (`dart_tooling_daemon`). What stays is the code side: analyze_files,
-  /// lsp, pub, pub_dev_search and reading dependencies.
+  /// (`dart_tooling_daemon`). What stays is the code side: 4 tools on Dart
+  /// 3.13.4 (checked 2026-10-14) — `rip_grep_packages`, `read_package_uris`,
+  /// `pub_dev_search`, `pub`.
   static const dartMcpDisabled = 'flutter,dart_tooling_daemon';
 
   /// The official Dart MCP server's entry: it takes the project from the

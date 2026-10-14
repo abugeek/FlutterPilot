@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/tool_profiles.dart';
@@ -25,9 +27,54 @@ void main() {
     });
 
     test('the core set stays small enough for a client tool limit', () {
-      // Cursor has historically counted ~40 across every server it runs; the
-      // Dart MCP server adds a handful of code tools beside FlutterPilot.
+      // Re-measured 2026-10-14 (task 12): the only documented number is VS
+      // Code's 128 tools per request (code.visualstudio.com/docs/agents/run/
+      // tools); Cursor's docs state no limit. 29 core + the Dart MCP server's
+      // 4 + a small server's 5 = 38.
       expect(coreTools.length, lessThanOrEqualTo(30));
+    });
+
+    test('every place that names the core count names the real one', () {
+      // The count is written out by hand in the help text, the server README
+      // and two top-level docs, so it can go stale silently when a tool joins
+      // or leaves the set. Whitespace is flattened first: the Dart strings are
+      // split across lines.
+      final packageRoot = Directory.current;
+      final repoRoot = packageRoot.parent.parent;
+      String flat(File file) =>
+          file.readAsStringSync().replaceAll(RegExp(r'\s+'), ' ');
+      final named = <String, String>{
+        'lib/src/cli.dart (--tools help)': flat(
+          File('${packageRoot.path}/lib/src/cli.dart'),
+        ),
+        'packages/flutterpilot_server/README.md': flat(
+          File('${packageRoot.path}/README.md'),
+        ),
+        'CLAUDE.md': flat(File('${repoRoot.path}/CLAUDE.md')),
+      };
+      // isTrue rather than contains: a failure then prints the reason only,
+      // not the whole flattened file.
+      for (final entry in named.entries) {
+        expect(
+          entry.value.contains('a short set (${coreTools.length} names)'),
+          isTrue,
+          reason: '${entry.key} does not name ${coreTools.length} tools',
+        );
+      }
+      // The CLI hint says it in the other order ("lists 29 for the app").
+      final hint = flat(
+        File(
+          '${repoRoot.path}/packages/flutterpilot_cli/lib/src/commands/'
+          'mcp_command.dart',
+        ),
+      );
+      expect(
+        hint.contains('lists ${coreTools.length} for the app'),
+        isTrue,
+        reason:
+            'the Cursor hint in mcp install does not name '
+            '${coreTools.length}',
+      );
     });
 
     test('all is the default and lists more than core', () {

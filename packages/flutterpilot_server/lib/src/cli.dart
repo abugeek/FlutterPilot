@@ -61,8 +61,8 @@ Future<void> runFlutterPilotServer(List<String> args) async {
       allowed: ['core', 'all'],
       defaultsTo: 'all',
       help:
-          'Which tools to list. "core": a short set for a client that counts '
-          'tools across every server it runs (Cursor: ~40); "all" (default): '
+          'Which tools to list. "core": a short set (29 names) for a client '
+          'that counts tools across every server it runs; "all" (default): '
           'every tool that works for the app.',
     )
     ..addFlag(
