@@ -25,7 +25,17 @@
   project's `.mcp.json`).
 - `flutterpilot stats`: how agents used FlutterPilot in this project (tools
   called, failures, timings, what followed what) from the MCP server's call
-  log; `--clear` deletes the log.
+  log; takes several app folders or log files and combines them, reports the
+  tools that were listed but never called and each tool's response size as
+  avg/p50/p90, `--json` prints the same data as JSON, and `--clear` deletes
+  the log(s).
+- `flutterpilot mcp install --tools core` writes the short tool profile into
+  the client's server config, for a client that counts tools across every
+  server it runs.
+- `flutterpilot doctor` says which tool profile a config uses (`--tools core`).
+- `flutterpilot init --local` writes POSIX paths into the app's pubspec
+  (`../FlutterPilot/packages/...` instead of `..\FlutterPilot\...`), so
+  `path_not_posix` no longer fires and analyze stays clean.
 
 ## 0.1.0
 

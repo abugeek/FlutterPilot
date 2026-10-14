@@ -1,5 +1,40 @@
 ## Unreleased
 
+- **Breaking:** `swipe_widget`, `drag_widget`, `pinch_zoom`, `focus_widget` and
+  `set_slider_value` are now one `gesture_widget(key, gesture: swipe | drag |
+  pinch | focus | slide)`. The old names still work as steps inside
+  `execute_action_chain`, `run_on_devices`, `profile_action` and a leak
+  `cycle`; called directly they are unknown tools.
+- `--tools core|all` on the server: `core` lists a short set (29 names) for a
+  client that counts tools across every server it runs; `all` is the default
+  and lists every tool that works for the app. `flutterpilot doctor` says
+  which profile a config uses.
+- `assert_widget`, `wait_for`, `verify_feature(finish: true)` and
+  `run_on_devices` answer with `structuredContent` beside their text — a
+  machine-readable verdict (`passed`, `met`/`timedOut`, per-criterion
+  verdicts, per-device step counts) so a client need not parse prose.
+- The arguments of a step another tool runs (`steps[]`, a `cycle`,
+  `profile_action`, `run_on_devices`) are brought to the schema's types before
+  the step runs (`"5"` becomes 5, a JSON-string array becomes the array); a
+  value that cannot be read is refused with an example instead of a cast error
+  that reads as "the app is busy, retry".
+- Every capped list says how much was cut and how to see the rest — "Showing
+  100 of 342 matching log entries (newest kept). Narrow with level, query,
+  sinceSeconds or logger, or raise limit (max 500)." — from one helper
+  (`src/truncation.dart`); a list that was not cut gets no line.
+- `get_debug_logs` includes what the app printed before FlutterPilot connected
+  (the SDK buffered it from app start), merged with the server's own capture
+  and deduplicated, so it no longer disagrees with `get_app_summary`.
+- `get_app_summary`'s "Uncaught Errors" and `get_errors` mark entries from
+  before the last hot reload or restart ("N uncaught exceptions from before
+  the last reload (the reload may have fixed them)") instead of presenting
+  them as current.
+- Windows: `launch_app` starts `flutter` (`flutter.bat`) through `cmd.exe`, or
+  a `.bat`/`.cmd` launch command, and a relaunch stops the whole process tree
+  (`taskkill /T`) so no build or app is left behind; file paths the server
+  prints use `/`.
+- The call log writes a `listed` line when the set of listed tools changes, so
+  `flutterpilot stats` can tell a tool that was offered from one that was not.
 - Faster, measured on the example app against the field-session numbers in
   `flutterpilot stats`:
   - `navigate_to` skips its second wait for the animation (the app settles
