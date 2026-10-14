@@ -14,6 +14,7 @@ import 'src/action_chain.dart';
 import 'src/android_device.dart';
 import 'src/app_root.dart';
 import 'src/app_launcher.dart';
+import 'src/arg_coercion.dart';
 import 'src/batch_nudge.dart';
 import 'src/build_mode.dart';
 import 'src/call_log.dart';
@@ -74,6 +75,13 @@ final _log = logging.Logger('FlutterPilotServer');
 /// Zone key run_on_devices sets to send each call to one device.
 const _pinnedDevice = #flutterpilotPinnedDevice;
 
+/// A tool's argument gate: its arguments brought to the schema's types, or the
+/// refusal an agent should see.
+typedef _ArgGate =
+    ({Map<String, dynamic> args, String? problem}) Function(
+      Map<String, dynamic> args,
+    );
+
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
   bool get staticTools;
@@ -84,6 +92,11 @@ abstract class _FlutterPilotServerBase {
   /// Every tool's callback by name, for tools that run another tool
   /// (profile_action).
   final Map<String, ToolFunction> _toolCallbacks = {};
+
+  /// Every tool's argument gate by name (see [_tool]), for tests: it refuses
+  /// an unknown name, a missing required argument, or a value that does not
+  /// fit the schema, without running the callback.
+  final Map<String, _ArgGate> _toolArgGates = {};
 
   /// What changed on disk since the connected app loaded it (edited Dart
   /// files, a changed pubspec.lock), as one line, or null when the app runs
@@ -255,29 +268,51 @@ abstract class _FlutterPilotServerBase {
     // nothing (field test #280). Checked here so the tools that run other
     // tools (profile_action, run_on_devices, a leak-check cycle) refuse too.
     final properties = inputSchema?.properties?.keys ?? const <String>[];
-    Future<CallToolResult> checked(
+    // Read once, at registration: the schema knows what each argument should
+    // be, so a string sent for an array or a number for a string is brought to
+    // its type here instead of throwing a cast error deep in a tool, which an
+    // agent reads as "the app is busy, retry" (task 02).
+    final argTypes = argTypesFromSchema(inputSchema?.toJson());
+    final requiredArgs = inputSchema?.required ?? const <String>[];
+    // The argument gate: an unknown name, a missing required argument, or a
+    // value that cannot be brought to its schema type. Split out of [checked]
+    // so the fuzz test (task 02 §D) can check every tool's arguments without
+    // running its callback — some callbacks launch a build.
+    ({Map<String, dynamic> args, String? problem}) gate(
       Map<String, dynamic> args,
-      RequestHandlerExtra extra,
-    ) async {
+    ) {
       final unknown = unknownToolArguments(args.keys, [
         ...properties,
         'deviceId', // refused with its own message in _registerTool
       ]);
-      if (unknown.isEmpty) return callback(withFormerNames(args), extra);
-      return CallToolResult(
-        isError: true,
-        content: [
-          TextContent(
-            text:
-                '$name has no ${unknown.map((a) => '"$a"').join(', ')} '
-                'parameter${unknown.length == 1 ? '' : 's'}; nothing was '
-                'done. ${properties.isEmpty ? 'It takes no arguments.' : 'It takes: ${properties.join(', ')}.'}',
-          ),
-        ],
-      );
+      if (unknown.isNotEmpty) {
+        return (
+          args: args,
+          problem:
+              '$name has no ${unknown.map((a) => '"$a"').join(', ')} '
+              'parameter${unknown.length == 1 ? '' : 's'}; nothing was '
+              'done. ${properties.isEmpty ? 'It takes no arguments.' : 'It takes: ${properties.join(', ')}.'}',
+        );
+      }
+      return coerceArguments(name, args, argTypes, required: requiredArgs);
+    }
+
+    Future<CallToolResult> checked(
+      Map<String, dynamic> args,
+      RequestHandlerExtra extra,
+    ) async {
+      final (args: coerced, problem: problem) = gate(args);
+      if (problem != null) {
+        return CallToolResult(
+          isError: true,
+          content: [TextContent(text: problem)],
+        );
+      }
+      return callback(withFormerNames(coerced), extra);
     }
 
     _toolCallbacks[name] = checked;
+    _toolArgGates[name] = gate;
     return _allTools[name] = _registerTool(
       name,
       description: description,
@@ -454,15 +489,18 @@ abstract class _FlutterPilotServerBase {
             content: [TextContent(text: '$name threw ${e.runtimeType}')],
           ),
         );
+        // A type or format error is the arguments not matching the schema, not
+        // a busy app: "retry" sends the agent round the same broken call
+        // (task 02). coerceArguments catches these first, so this is the
+        // safety net.
+        final text = e is TypeError || e is FormatException
+            ? "$name: the arguments do not match its schema. Call tools/list "
+                  "to see $name's parameters; nothing was done."
+            : '$name failed: $e. If the app was busy or reloading, retry; '
+                  'call get_app_summary to check its state.';
         return CallToolResult(
           isError: true,
-          content: [
-            TextContent(
-              text:
-                  '$name failed: $e. If the app was busy or reloading, retry; '
-                  'call get_app_summary to check its state.',
-            ),
-          ],
+          content: [TextContent(text: text)],
         );
       }
     },
@@ -1453,6 +1491,41 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           ).toJson(),
     ];
   }
+
+  /// The argument gate alone, for tests (task 02 §D): null when [args] are
+  /// acceptable to [name]'s schema, else the refusal an agent would see.
+  String? checkArgumentsForTest(String name, Map<String, dynamic> args) {
+    final gate = _toolArgGates[name];
+    if (gate == null) {
+      throw ArgumentError.value(name, 'name', 'is not a registered tool');
+    }
+    return gate(args).problem;
+  }
+
+  /// Runs a tool's checked callback directly — the unknown-argument check,
+  /// argument coercion, then the tool's own callback — with no transport and
+  /// no app (task 02 §D). Kept off the MCP surface: a test has no other way to
+  /// reach the checks that run before a callback.
+  Future<CallToolResult> callToolForTest(
+    String name,
+    Map<String, dynamic> args,
+  ) {
+    final callback = _toolCallbacks[name];
+    if (callback == null) {
+      throw ArgumentError.value(name, 'name', 'is not a registered tool');
+    }
+    return Future.sync(() => callback(args, _testExtra));
+  }
+
+  /// A [RequestHandlerExtra] for [callToolForTest]. Tools that run other tools
+  /// pass it along; none of them reaches transport from a test.
+  static final RequestHandlerExtra _testExtra = RequestHandlerExtra(
+    signal: BasicAbortController().signal,
+    requestId: 0,
+    sendNotification: (_, {relatedTask}) async {},
+    sendRequest: <T extends BaseResultData>(_, resultFactory, _) async =>
+        resultFactory(const {}),
+  );
 
   /// The registered devices (tests add some without running apps).
   FleetManager get fleet => _fleetManager;

@@ -32,4 +32,12 @@ void main() {
     });
     expect(withFormerNames({'since_seconds': 5}), {'since_seconds': 5});
   });
+
+  // Task 02: coercion runs before the aliases are copied, so the value an
+  // alias receives is the coerced one (a number sent for a text key becomes
+  // its string).
+  test('a coerced value is what the alias copies', () {
+    expect(normalizeToolParams({'target': 3})['key'], '3');
+    expect(normalizeToolParams({'target': true})['key'], 'true');
+  });
 }
