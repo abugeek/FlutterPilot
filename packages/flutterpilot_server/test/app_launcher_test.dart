@@ -74,6 +74,137 @@ void main() {
     });
   });
 
+  group('prepareLaunch', () {
+    LaunchCommand flutterRun(String? device) => LaunchCommand([
+      'flutter',
+      'run',
+      if (device != null) ...['-d', device],
+    ], fromConfig: false);
+
+    test('a relaunch keeps the device the running app is on', () async {
+      final stopped = <String>[];
+      final plan = await prepareLaunch(
+        relaunch: true,
+        chooseDevice: true,
+        runningPlatform: 'windows',
+        // The running app names its device, so nothing is listed (field
+        // test #346).
+        listDevices: () async => throw StateError('no listing needed'),
+        commandFor: flutterRun,
+        stop: () async => stopped.add('stopped'),
+      );
+      expect(plan.refusal, isNull);
+      expect(plan.device, 'windows');
+      expect(plan.deviceWasRunning, isTrue);
+      expect('${plan.command}', 'flutter run -d windows');
+      expect(stopped, ['stopped'], reason: 'the app it replaces is stopped');
+    });
+
+    test('the device the caller asked for wins over the running one', () async {
+      var stopped = false;
+      final plan = await prepareLaunch(
+        relaunch: true,
+        chooseDevice: true,
+        requested: ' chrome ',
+        runningPlatform: 'windows',
+        listDevices: () async => throw StateError('no listing needed'),
+        commandFor: flutterRun,
+        stop: () async => stopped = true,
+      );
+      expect(plan.device, 'chrome');
+      expect(plan.deviceWasRunning, isFalse);
+      expect(stopped, isTrue);
+    });
+
+    test(
+      'several devices and nothing running refuse, before stopping',
+      () async {
+        var stopped = false;
+        final plan = await prepareLaunch(
+          relaunch: true,
+          chooseDevice: true,
+          // Nothing is connected: no platform names the device.
+          runningPlatform: null,
+          listDevices: () async => ['windows', 'chrome', 'edge'],
+          commandFor: (_) => fail('a refusal must not resolve a command'),
+          stop: () async => stopped = true,
+        );
+        expect(plan.refusal, contains('windows, chrome, edge'));
+        expect(plan.refusal, contains('launch_app(device: "windows")'));
+        expect(plan.command, isNull);
+        expect(stopped, isFalse, reason: 'the app stays up');
+      },
+    );
+
+    test('one device keeps a fresh launch working as before', () async {
+      final plan = await prepareLaunch(
+        relaunch: false,
+        chooseDevice: true,
+        listDevices: () async => ['windows'],
+        commandFor: flutterRun,
+        stop: () async => fail('a fresh launch has nothing to stop'),
+      );
+      expect(plan.refusal, isNull);
+      // `flutter run` picks the only device, as it did before.
+      expect(plan.device, isNull);
+      expect('${plan.command}', 'flutter run');
+    });
+
+    test('a command that cannot be resolved does not stop the app', () async {
+      var stopped = false;
+      await expectLater(
+        prepareLaunch(
+          relaunch: true,
+          chooseDevice: true,
+          requested: 'windows',
+          listDevices: () async => const [],
+          commandFor: (_) => throw const FormatException('bad launch.json'),
+          stop: () async => stopped = true,
+        ),
+        throwsFormatException,
+      );
+      expect(stopped, isFalse);
+    });
+
+    test(
+      "the project's own command decides, so no device is refused",
+      () async {
+        var stopped = false;
+        final plan = await prepareLaunch(
+          relaunch: true,
+          // launch.json carries the command, so `device` is not ours.
+          chooseDevice: false,
+          requested: 'chrome',
+          runningPlatform: 'windows',
+          listDevices: () async => ['windows', 'chrome', 'edge'],
+          commandFor: (device) {
+            expect(device, isNull);
+            return const LaunchCommand(['./scripts/run.sh'], fromConfig: true);
+          },
+          stop: () async => stopped = true,
+        );
+        expect(plan.refusal, isNull);
+        expect(plan.device, isNull);
+        expect(stopped, isTrue);
+      },
+    );
+  });
+
+  group('deviceForPlatform', () {
+    test('names the desktop device, not a browser or a phone', () {
+      // A desktop app runs on the device called windows/macos/linux; a
+      // browser or a phone id cannot be read off the platform (field test
+      // #346).
+      expect(deviceForPlatform('windows'), 'windows');
+      expect(deviceForPlatform('macos'), 'macos');
+      expect(deviceForPlatform('linux'), 'linux');
+      expect(deviceForPlatform('android'), isNull);
+      expect(deviceForPlatform('ios'), isNull);
+      expect(deviceForPlatform('linux', isWeb: true), isNull);
+      expect(deviceForPlatform(null), isNull);
+    });
+  });
+
   test('flutterAppsUnder finds apps, not packages or build output', () {
     app('apps/mobile');
     app('packages/ui', main: false);
