@@ -225,7 +225,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     final files = dartFilesChangedSince(before.root, before.since);
     if (files.isEmpty) return '';
     try {
-      final result = await Process.run('dart', [
+      final result = await runProgram([
+        'dart',
         'analyze',
         '--format=machine',
         ...files,

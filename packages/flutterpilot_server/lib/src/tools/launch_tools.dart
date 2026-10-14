@@ -270,7 +270,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     }
     final pid = runningLaunchPid(root);
     if (pid != null) {
-      Process.killPid(pid);
+      await killLaunchTree(pid);
       for (var i = 0; i < 20 && runningLaunchPid(root) != null; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }

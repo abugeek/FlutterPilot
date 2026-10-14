@@ -71,8 +71,15 @@ CodeFreshness codeFreshness(
   required DateTime codeLoaded,
   required DateTime appStarted,
 }) {
-  String relative(String path) =>
-      path.startsWith('$root/') ? path.substring(root.length + 1) : path;
+  // With forward slashes, the way app files are named everywhere else in a
+  // tool's answer: `Directory.list` gives `lib\ui\tile.dart` on Windows
+  // (field test #341).
+  String relative(String path) {
+    final posix = path.replaceAll(r'\', '/');
+    final prefix = '${root.replaceAll(r'\', '/')}/';
+    return posix.startsWith(prefix) ? posix.substring(prefix.length) : posix;
+  }
+
   // The build itself writes files a moment before the app starts.
   final builtBy = appStarted.add(const Duration(seconds: 2));
   final relaunch = <String>[];

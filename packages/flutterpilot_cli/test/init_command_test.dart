@@ -178,6 +178,20 @@ $firebaseDeps''');
         p.normalize(p.join(tempDir.path, sdkPath)),
         p.join(repoRoot, 'packages', 'flutterpilot_sdk'),
       );
+      // The path goes into a committed file: a Windows `..\FlutterPilot\…`
+      // trips the path_not_posix lint in an app that enables it (#326).
+      expect(sdkPath, isNot(contains(r'\')));
+    });
+
+    test('relativePosix writes every separator as /', () {
+      final app = p.join(Directory.systemTemp.path, 'app');
+      final repo = p.join(Directory.systemTemp.path, 'repo');
+      final path = InitCommand.relativePosix(
+        p.join(repo, 'packages', 'flutterpilot_sdk'),
+        from: app,
+      );
+      expect(path, endsWith('/packages/flutterpilot_sdk'));
+      expect(path, isNot(contains(r'\')));
     });
 
     test('patchMain is idempotent', () {

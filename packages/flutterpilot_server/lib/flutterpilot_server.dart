@@ -47,6 +47,7 @@ import 'src/screen_memory.dart';
 import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
+import 'src/start_command.dart';
 import 'src/structured_results.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';

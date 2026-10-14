@@ -9,8 +9,8 @@ so it is run by hand before and after surface changes, never in CI.
 ## Running it
 
 The lab apps (`../fp_lab_shop`, `../fp_lab_notes`) must already be running; the
-runner starts the *server*, not the app (`launch_app` cannot start `flutter` on
-Windows — see finding #327 in `docs/field-test-findings.md`).
+runner starts the *server*, not the app. Pass `--launch` to have the runner
+start each app with `launch_app` instead.
 
 ```powershell
 cd ../fp_lab_shop && flutter run -d windows        # terminal 1
@@ -27,8 +27,8 @@ Options:
 --tasks a,b        Run only these task ids.
 --apps fp_lab_shop Run only these lab apps.
 --repeat N         Runs per task (default 3).
---launch           Call launch_app first (broken on Windows; the app must be
-                   started with `flutter run`).
+--launch           Call launch_app first, instead of expecting the app to be
+                   running already.
 --server-args "…"  Extra server arguments (task 08 uses "--tools core").
 --compare path     Compare against a baseline summary.json; exits 1 on a
                    regression (a drop in the pass rate, or a task that passed

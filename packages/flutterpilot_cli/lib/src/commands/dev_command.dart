@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 
 import 'mcp_command.dart';
+import '../start_command.dart';
 
 /// Command to run the Flutter app and auto-launch FlutterPilot server.
 class DevCommand extends Command<void> {
@@ -57,11 +58,12 @@ class DevCommand extends Command<void> {
     }
     stdout.writeln('🚀 Starting Flutter app: flutter ${flutterArgs.join(" ")}');
 
-    final process = await Process.start(
+    // `flutter` is `flutter.bat` on Windows: a bare name is not found without
+    // a shell (field test #327).
+    final process = await startProgram([
       'flutter',
-      flutterArgs,
-      mode: ProcessStartMode.normal,
-    );
+      ...flutterArgs,
+    ], mode: ProcessStartMode.normal);
 
     final uriRegex = RegExp(
       r'http://(127\.0\.0\.1|localhost):(\d+)/([a-zA-Z0-9_-]+=*)',

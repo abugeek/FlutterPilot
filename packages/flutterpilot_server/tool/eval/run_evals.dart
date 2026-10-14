@@ -35,8 +35,7 @@ Future<void> main(List<String> argv) async {
     ..addFlag(
       'launch',
       negatable: false,
-      help:
-          'Start each app with launch_app first (broken on Windows; see README).',
+      help: 'Start each app with launch_app first.',
     )
     ..addOption(
       'server-args',
@@ -117,7 +116,9 @@ Future<void> main(List<String> argv) async {
     );
     try {
       if (args['launch'] as bool) {
-        await session.call('launch_app', {'relaunch': true});
+        // The device is named: `flutter run` with no `-d` refuses when a web
+        // device is connected too ("More than one device connected").
+        await session.call('launch_app', {'relaunch': true, 'device': device});
       }
       await _waitForApp(session);
       apps[app] = AppInfo(
