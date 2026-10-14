@@ -63,6 +63,12 @@ tools that always work beat many tools that sometimes work.
   `--tools core` is 29 names (20 363 bytes) — 28 for `fp_lab_shop`, 25 for
   `fp_lab_notes` after plugin gating — so 29 + 4 + 5 fits with room and
   nothing was cut.
+- Rounds 1–2 are one branch (2026-10-14, task 13): #125–#127 merged into #124
+  (`--no-ff`), the findings file and this roadmap hand-merged, the missing
+  `## Unreleased` entries written (server, CLI, Dio plugin), and the last two
+  findings fixed — `smoke` reads the route table from the `Routes: ` line, not
+  the `Path params:` map before it (#344), and the e2e waits for the app to
+  exit and retries its scratch-folder delete on Windows (#340).
 
 ### How to work (the method that found every real bug so far)
 
