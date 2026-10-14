@@ -135,6 +135,23 @@ void main() {
         {'met': false, 'waitedMs': 0, 'timedOut': false, 'condition': 'none'},
       );
     });
+
+    test("the app's own status decides a timed-out wait when it comes", () {
+      // waitForAnimation answers `status: timeout` or `settled`; that flag is
+      // the app's word, so it wins over the clock (which also carries the
+      // round trip to the app).
+      Map<String, dynamic> verdict(bool? timedOut) => waitForVerdict(
+        condition: 'animations',
+        met: false,
+        waitedMs: 3400,
+        timeoutMs: 3000,
+        timedOut: timedOut,
+      );
+      expect(verdict(true)['timedOut'], isTrue);
+      expect(verdict(false)['timedOut'], isFalse);
+      // Without one (every other condition) the clock still decides.
+      expect(verdict(null)['timedOut'], isTrue);
+    });
   });
 
   group('verify_feature', () {
@@ -401,5 +418,14 @@ void main() {
       ).readAsStringSync();
       expect(source, contains(entry.value), reason: entry.key);
     }
+  });
+
+  test("wait_for takes the animation pass's timed-out flag from the app", () {
+    // The only wait whose answer says whether it ran out its deadline: its
+    // callback is not reachable without a live app, so this reads the wiring.
+    final source = File(
+      p.join('lib', 'src', 'tools', 'ui_automation_tools.dart'),
+    ).readAsStringSync();
+    expect(source, contains("timedOut: res.data?['status'] == 'timeout'"));
   });
 }

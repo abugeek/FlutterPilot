@@ -93,16 +93,20 @@ Map<String, dynamic> assertWidgetVerdict({
 /// `timedOut` is `waitedMs` reaching the timeout the extension was given: the
 /// SDK's own timeout answer is an error whose message says so, and reading
 /// that message back would be parsing the text. A wait that failed for another
-/// reason (no app, a refusal) returns long before its deadline.
+/// reason (no app, a refusal) returns long before its deadline. [timedOut]
+/// passes the app's own flag for the one wait whose answer carries it
+/// (`ext.flutterpilot.waitForAnimation`'s `status`), so that branch does not
+/// depend on the copied default timeout.
 Map<String, dynamic> waitForVerdict({
   required String condition,
   required bool met,
   required int waitedMs,
   required int timeoutMs,
+  bool? timedOut,
 }) => {
   'met': met,
   'waitedMs': waitedMs,
-  'timedOut': !met && timeoutMs > 0 && waitedMs >= timeoutMs,
+  'timedOut': timedOut ?? (!met && timeoutMs > 0 && waitedMs >= timeoutMs),
   'condition': condition,
 };
 
