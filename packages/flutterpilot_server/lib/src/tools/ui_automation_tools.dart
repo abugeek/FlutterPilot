@@ -1061,6 +1061,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               'Tools: ${(_chainStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
             );
           }
+          final refusal = stepProfileRefusal(step.tool);
+          if (refusal != null) {
+            return error('Step ${steps.length + 1}: $refusal');
+          }
           steps.add(step);
         }
         if (steps.isEmpty) return error('steps is empty.');

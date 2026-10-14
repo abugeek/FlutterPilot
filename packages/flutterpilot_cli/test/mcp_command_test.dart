@@ -50,6 +50,42 @@ void main() {
     expect(vscode['args'], ['run', serverScript, '-p', r'${workspaceFolder}']);
   });
 
+  test('--tools core is written into every config shape', () async {
+    await install([
+      '-c',
+      'claude',
+      '-c',
+      'codex',
+      '-c',
+      'zed',
+      '--tools',
+      'core',
+    ]);
+    final claude = read('.mcp.json')['mcpServers']['flutterpilot'];
+    expect(claude['args'], containsAllInOrder(['--tools', 'core']));
+    final toml = File(
+      p.join(app.path, '.codex', 'config.toml'),
+    ).readAsStringSync();
+    expect(toml, contains('"--tools","core","-p",'));
+    final zed = read('.zed/settings.json')['context_servers']['flutterpilot'];
+    expect(zed['args'], containsAllInOrder(['--tools', 'core']));
+  });
+
+  test('the default profile writes no --tools', () async {
+    await install(['-c', 'claude', '-c', 'cursor']);
+    for (final path in ['.mcp.json', '.cursor/mcp.json']) {
+      final entry = read(path)['mcpServers']['flutterpilot'];
+      expect(entry['args'], isNot(contains('--tools')), reason: path);
+    }
+  });
+
+  test('--tools only takes core or all', () async {
+    await expectLater(
+      Future.sync(() => install(['-c', 'claude', '--tools', 'short'])),
+      throwsA(isA<UsageException>()),
+    );
+  });
+
   test('without a server beside the CLI, builds one from a package that '
       'depends on flutterpilot_server', () async {
     final home = Directory.systemTemp.createTempSync('fp_home_');

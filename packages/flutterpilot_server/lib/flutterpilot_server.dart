@@ -49,6 +49,7 @@ import 'src/sql_hints.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';
 import 'src/truncation.dart';
+import 'src/tool_profiles.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/web_limits.dart';
@@ -89,8 +90,28 @@ typedef _ArgGate =
 abstract class _FlutterPilotServerBase {
   bool get staticTools;
 
+  /// Which tools are listed (`--tools core|all`).
+  ToolProfile get toolProfile;
+
+  /// Whether [name] is listed at all under the active profile, before asking
+  /// whether it works for the app.
+  bool profileListsTool(String name) =>
+      toolProfile == ToolProfile.all || coreTools.contains(name);
+
+  /// The refusal for a step that names a tool the profile hides, or null.
+  /// A hidden-but-callable tool would be confusing: refuse it.
+  String? stepProfileRefusal(String tool) => profileListsTool(tool)
+      ? null
+      : '"$tool" is not listed in the core profile; start the server with '
+            '--tools all to use it.';
+
   /// Every registered tool by name, for showing only the usable ones.
   final Map<String, RegisteredTool> _allTools = {};
+
+  /// The tools currently listed: enabled by the last visibility pass (and,
+  /// under `--tools core`, inside [coreTools]).
+  Iterable<String> get listedToolNames =>
+      _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
 
   /// Every tool's callback by name, for tools that run another tool
   /// (profile_action).
@@ -723,6 +744,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   final bool staticTools;
 
+  /// Which tools are listed (`--tools core|all`): a client that counts tools
+  /// across servers asks for [ToolProfile.core] and gets [coreTools].
+  @override
+  final ToolProfile toolProfile;
+
   FlutterPilotServer({
     String? vmServiceUri,
     this.allowDestructive = false,
@@ -730,6 +756,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     this.remoteAccessToken,
     Directory? projectRoot,
     bool staticTools = false,
+    this.toolProfile = ToolProfile.all,
     bool callLog = true,
   }) : callLog =
            callLog && Platform.environment['FLUTTERPILOT_NO_CALL_LOG'] == null,
@@ -1469,6 +1496,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerScenarioTools();
     _registerVerificationTools();
     _registerPluginIntegrationTools();
+    // A client with a tool limit (--tools core) never sees the rest, from the
+    // first tools/list: updateToolVisibility would be too late. This also
+    // covers --static-tools + --tools core, which lists exactly coreTools.
+    if (toolProfile == ToolProfile.core) {
+      for (final MapEntry(key: name, value: tool) in _allTools.entries) {
+        if (!coreTools.contains(name)) tool.disable();
+      }
+    }
   }
 
   /// Names of every registered tool, listed or not.
@@ -1533,10 +1568,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   /// The registered devices (tests add some without running apps).
   FleetManager get fleet => _fleetManager;
-
-  /// Names of the tools currently listed to MCP clients.
-  Iterable<String> get listedToolNames =>
-      _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
 
   /// The last listed set written to the call log, to write one line per change
   /// rather than one per check (startup and the first connection can see the
@@ -1622,13 +1653,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         true when needs != null => needs.any(extensions.contains),
         _ => true,
       };
-      if (tool.enabled == usable) continue;
+      // A tool outside the profile is never listed, even when it would work.
+      final listed = usable && profileListsTool(name);
+      if (tool.enabled == listed) continue;
       changed = true;
       try {
         // Set the flag without mcp_dart's per-tool list_changed notification.
-        (tool as dynamic).enabled = usable;
+        (tool as dynamic).enabled = listed;
       } catch (_) {
-        usable ? tool.enable() : tool.disable();
+        listed ? tool.enable() : tool.disable();
       }
     }
     if (changed) {

@@ -101,6 +101,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         'maxScreenshotBaselineBytes': _Constants.maxScreenshotBaselineBytes,
         'maxToolResponseBytes': _Constants.maxToolResponseBytes,
       },
+      'tools': {
+        'profile': toolProfile.name,
+        if (toolProfile == ToolProfile.core)
+          'note':
+              'core profile (--tools core): a client with a tool limit gets '
+              '${coreTools.length} tools. Start the server with --tools all '
+              'for the rest.',
+        'listed': listedToolNames.length,
+      },
       'plugins': pluginStatus,
       'sdkProtocol': {
         'server': sdkProtocol,
@@ -329,6 +338,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
               'Step ${steps.length + 1}: "$tool" can\'t run on devices. '
               'Tools: ${(_fleetStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
             );
+          }
+          final refusal = stepProfileRefusal(step.tool);
+          if (refusal != null) {
+            return error('Step ${steps.length + 1}: $refusal');
           }
           steps.add(step);
         }

@@ -365,7 +365,14 @@ class DoctorCommand extends Command<void> {
         );
         continue;
       }
-      configured.add(client.label);
+      final toolsAt = launch.args.indexOf('--tools');
+      final profile =
+          toolsAt >= 0 &&
+              toolsAt + 1 < launch.args.length &&
+              launch.args[toolsAt + 1] == 'core'
+          ? ' (core tools)'
+          : '';
+      configured.add('${client.label}$profile');
     }
     if (warning != null) return warning;
     return configured.isEmpty

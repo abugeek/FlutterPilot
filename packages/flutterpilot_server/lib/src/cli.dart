@@ -4,6 +4,7 @@ import 'package:logging/logging.dart' as logging;
 
 import '../flutterpilot_server.dart';
 import 'app_launcher.dart';
+import 'tool_profiles.dart';
 
 /// The `flutterpilot_server` command: parses [args], starts the MCP server
 /// on stdio and runs until SIGINT. The executable (bin/) is just this, so a
@@ -55,6 +56,15 @@ Future<void> runFlutterPilotServer(List<String> args) async {
           'says why when called.',
       negatable: false,
     )
+    ..addOption(
+      'tools',
+      allowed: ['core', 'all'],
+      defaultsTo: 'all',
+      help:
+          'Which tools to list. "core": a short set for a client that counts '
+          'tools across every server it runs (Cursor: ~40); "all" (default): '
+          'every tool that works for the app.',
+    )
     ..addFlag(
       'call-log',
       defaultsTo: true,
@@ -102,6 +112,7 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     remoteAccessToken: remoteToken,
     projectRoot: projectRoot,
     staticTools: results['static-tools'] as bool,
+    toolProfile: ToolProfile.byName(results['tools'] as String),
     callLog: results['call-log'] as bool,
   );
 

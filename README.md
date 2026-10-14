@@ -113,8 +113,15 @@ plugin), add `--static-tools` (`flutterpilot mcp install --static-tools`):
 every tool is listed from the start, and one that can't work on the
 connected app says why when called.
 
-By hand:
+A client that counts tools across every server it runs (Cursor has
+historically capped around 40) can ask for the short set instead:
+`flutterpilot mcp install --tools core` writes `--tools core`, and
+`flutterpilot doctor` shows which profile each config uses. `all` is the
+default; `--tools core` is a subset that still has to work for the app (a
+zero-code app sees fewer), and it refuses a step that names a tool it does
+not list.
 
+By hand:
 Build the server once (fast startup, no `dart` on the IDE's PATH needed):
 ```bash
 cd packages/flutterpilot_server && dart compile exe bin/flutterpilot_server.dart -o build/flutterpilot_server
