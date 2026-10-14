@@ -800,6 +800,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     // Start MCP server over stdio
     final stdioTransport = StdioServerTransport();
     await server.connect(stdioTransport);
+    _recordListedTools();
     _log.info('FlutterPilot MCP Server started 🚀');
   }
 
@@ -1534,6 +1535,22 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   Iterable<String> get listedToolNames =>
       _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
 
+  /// The last listed set written to the call log, to write one line per change
+  /// rather than one per check (startup and the first connection can see the
+  /// same set).
+  String? _listedRecorded;
+
+  /// Writes the set of tools this session offers to the call log, so stats can
+  /// name what was listed but never called (task 03 §B). Called at startup and
+  /// on every change; the log's privacy promise covers it (names only).
+  void _recordListedTools() {
+    final names = listedToolNames.toList()..sort();
+    final key = names.join('\n');
+    if (key == _listedRecorded) return;
+    _listedRecorded = key;
+    _callLog?.recordListed(names);
+  }
+
   Timer? _visibilityTimer;
 
   /// Extensions arrive in bursts (~70 at startup, again after a hot
@@ -1611,7 +1628,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         usable ? tool.enable() : tool.disable();
       }
     }
-    if (changed) server.sendToolListChanged();
+    if (changed) {
+      server.sendToolListChanged();
+      _recordListedTools();
+    }
   }
 
   // ---------------------------------------------------------------------------
