@@ -355,6 +355,17 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    details (idb commands, pointer maths). `tool_registration_test` rejects
    selling phrases and descriptions over 600 chars. Responses lost their
    emoji banners too (audit, action chain, compare, connect).
+4. **Argument robustness:** done — one place before any tool callback brings
+   each argument to the schema's type where the intent is unambiguous
+   (`"100"` → 100, `12.0` → 12, `"true"` → true, a stringified `"[{...}]"` or
+   `"{...}"` for an array/object, a case-folded enum) and otherwise refuses,
+   naming the argument, the expected type and an example. A cast error used to
+   reach `_registerTool`'s catch-all, which answered "the app was busy, retry"
+   and sent the agent round the same broken call; a type error now points at
+   `tools/list`. `arg_coercion_test` covers every rule (including nested
+   `steps[].arguments`); `tool_argument_fuzz_test` fuzzes all 67 tools. A
+   property whose schema declares no `type` at all (`set_state.value`,
+   `mock_platform_channel.result`/`event`) passes through untouched.
 
 ## 5. DevTools parity — what developers actually open DevTools for
 
