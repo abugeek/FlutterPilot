@@ -196,7 +196,7 @@ For programmatically interacting with the UI
 - `tap_widget` — Tap by key
 - `enter_text` — Type text
 - `scroll` — Scroll widgets
-- `set_slider_value` — Change slider
+- `gesture_widget` — Swipe, drag, pinch, focus, slide
 - (+ 11 more interaction tools)
 
 ### **Navigation & Routing** (8 tools)

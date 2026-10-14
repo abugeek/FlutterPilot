@@ -173,8 +173,9 @@ paddings, borders and radii), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
-(`"back"` for system back), `swipe_widget`, `drag_widget`,
-`scroll_into_view`, `toggle_checkbox`, `set_slider_value`.
+(`"back"` for system back), `gesture_widget` (`gesture`: swipe / drag /
+pinch / focus / slide),
+`scroll_into_view`, `toggle_checkbox`.
 Batch known sequences with `execute_action_chain` (steps are tool calls,
 with `wait_for` / `assert_widget` between them) or `fill_form`. Every action reports
 its own result — route change, what appeared/disappeared, tappable elements

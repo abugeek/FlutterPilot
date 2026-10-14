@@ -111,7 +111,7 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 |---|---|
 | Connection & fleet | `connect_app`, `register_device`, `switch_device`, `list_connected_devices` |
 | Seeing the app | `get_app_summary` (`setup`), `get_widget_tree` (`diff`), `get_interactive_elements`, `get_widget_properties`, `inspect_widget` (source file:line, `layout`), `get_semantics_tree`, `capture_screenshot`, `get_navigation_stack` |
-| Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox`, `focus_widget`, `navigate_to` |
+| Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `gesture_widget` (`gesture`: swipe / drag / pinch / focus / slide), `toggle_checkbox`, `navigate_to` |
 | Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` (layout + accessibility: labels, contrast, reading order), `generate_test` (record a flow, write it as an integration_test, run it), `verify_feature` (acceptance criteria → pass/fail report with evidence) |
 | Rendering | `set_app_settings` (theme, locale, textScale, keyboardInset, orientation, windowSize, debug overlays) |
 | Errors & logs | `get_errors` (`report`), `get_debug_logs` |

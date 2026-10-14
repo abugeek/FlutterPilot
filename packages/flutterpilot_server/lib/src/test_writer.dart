@@ -6,7 +6,7 @@ class GeneratedTest {
 
   final String source;
 
-  /// Recorded steps a test can't replay (navigate_to, set_slider_value…).
+  /// Recorded steps a test can't replay (navigate_to, a gesture slide…).
   final List<String> skipped;
 
   /// Steps found by position: they break when the screen's content changes.

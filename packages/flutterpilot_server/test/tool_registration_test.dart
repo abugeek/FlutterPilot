@@ -16,7 +16,9 @@ void main() {
     });
 
     test('stays within the tool budget (ROADMAP §4.2: 60–80)', () {
-      expect(names.length, lessThanOrEqualTo(80));
+      // 63 after task 04 merged the five gesture tools into `gesture_widget`.
+      // The limit is the current count + 5.
+      expect(names.length, lessThanOrEqualTo(68));
     });
 
     test('plugin-gated and zero-code tools name registered tools', () {
@@ -56,7 +58,9 @@ void main() {
       // +200 (2026-10-12): launch_app(waitSeconds), so a 5-minute iPhone
       // build is not one blind call.
       // Every tool (--static-tools).
-      expect(listBytes((_) => true), lessThanOrEqualTo(41300));
+      // Lowered (task 04): the gesture tools became `gesture_widget`:
+      // 63 tools, 40 597 bytes.
+      expect(listBytes((_) => true), lessThanOrEqualTo(40800));
       // An app with the SDK and no plugin, not on an iOS simulator.
       expect(
         listBytes(
@@ -67,7 +71,8 @@ void main() {
         // +100 (2026-10-12) for audit_screen_health(routes) and
         // get_state(name): a sweep was three calls a screen without them.
         // +100 (2026-10-12) for launch_app(waitSeconds).
-        lessThanOrEqualTo(29500),
+        // Lowered (task 04) with `gesture_widget`.
+        lessThanOrEqualTo(29000),
       );
       // An app without the SDK. +100 (2026-10-12) for
       // launch_app(waitSeconds).

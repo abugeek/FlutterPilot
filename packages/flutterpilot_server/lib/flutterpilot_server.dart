@@ -23,6 +23,7 @@ import 'src/cpu_profile.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
+import 'src/gesture.dart';
 import 'src/hang_diagnosis.dart';
 import 'src/ios_device.dart';
 import 'src/launch_failure.dart';
@@ -38,6 +39,7 @@ import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
+import 'src/retired_tools.dart';
 import 'src/scenario.dart';
 import 'src/signing_team.dart';
 import 'src/screen_memory.dart';
@@ -1672,7 +1674,7 @@ run_on_devices runs the same steps on every registered device and compares.
 - `press_key(key)` — enter/tab/escape/arrows/shortcuts; "back" = system back (never quits from the root)
 - `fill_form(fields, submitWith)` — several fields (+ checkboxes) in one call
 - `execute_action_chain(steps)` — a known sequence in one call: taps, text, keys, scrolls, with `wait_for` / `assert_widget` between them (`[{tool, arguments}]`, as in `run_on_devices`)
-- `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox` (also a checkbox inside a tappable row), `focus_widget`
+- `gesture_widget(key, gesture)` — swipe (direction, distance), drag (fromKey, toKey), pinch (scale), focus, slide (value); `scroll_into_view`, `toggle_checkbox` (also a checkbox inside a tappable row)
 - `navigate_to(route)` — jump to a route (action push/replace with go_router; deepLink:true)
 Every action reports whether the route changed, a widget-tree diff and what is tappable now: read it before re-checking.
 
