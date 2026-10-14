@@ -29,6 +29,11 @@ tools that always work beat many tools that sometimes work.
   connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
   secure_storage, supabase in `../notes_app`; firebase (Auth + Firestore,
   emulators) in `../firebase_app`; plain hive in `../hive_app`.
+- MCP-curation lab apps (2026-10-14): `../fp_lab_shop` (Riverpod, go_router,
+  Dio, sqflite, shared_preferences), `../fp_lab_notes` (Bloc, Drift, Hive CE,
+  secure storage, connectivity), `../fp_lab_plain` (zero-code). Each is its own
+  git repo; planted defects and the tool calls that find them are in its
+  `LAB.md`.
 
 ### How to work (the method that found every real bug so far)
 

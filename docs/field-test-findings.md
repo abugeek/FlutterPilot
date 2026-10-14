@@ -595,3 +595,23 @@ checkout `Form` whose Pay button is disabled until its fields are valid.
 - trivial read (nav stack): 15–30 ms; get_widget_tree: 40–120 ms; get_app_summary: ~100–180 ms
 - tap_widget with post-action state: 300–450 ms (first calls after hot restart: 1–2 s, JIT)
 - hot_reload ~300 ms; hot_restart ~350–500 ms
+
+## MCP curation lab apps (Windows, 2026-10-14)
+
+Findings from building three purpose-made lab apps for the MCP-curation work
+(`../fp_lab_shop`, `../fp_lab_notes`, `../fp_lab_plain`), driven through
+`packages/flutterpilot_server/tool/fp_bridge.dart` on Windows. Each app is its
+own git repo; the planted defects and the tool calls that find them are in its
+`LAB.md`.
+
+| # | Feature | Result | Notes |
+|---|---|---|---|
+| 326 | `init --local` on Windows | ⚠️ | writes dependency paths with backslashes (`path: ..\FlutterPilot\packages\flutterpilot_sdk`) into the app's pubspec, which trips the `path_not_posix` lint and leaves analyze non-clean. Rewrote them to forward slashes. |
+| 327 | `launch_app` on Windows | ❌ | `flutter` is `flutter.bat`; the server starts it without a shell: `"flutter run …" exited with code 127 before the app was up … Could not start "flutter": The system cannot find the file specified`. Only attaching to a `flutter run` app works. |
+| 328 | `hot_restart` | ⚠️ | no such tool; restart is `hot_reload(restart: true)`. Asking for `hot_restart` returns `RPC ERROR: {code: -32602, message: Tool 'hot_restart' not found}` with no hint. |
+| 329 | `get_debug_logs` vs `get_app_summary` | ⚠️ | `get_debug_logs` only sees output emitted after FlutterPilot connects; the summary's "Recent Console Logs" reads the SDK's own buffer and shows pre-connect output too. A startup log line is visible in the summary but missing from `get_debug_logs` until the app restarts while connected. `get_debug_logs(clear: true)` also returns an empty result. |
+| 330 | `get_network_logs` argument check | ⚠️ | read-only and declares no parameters, yet `clear: true` was silently accepted and ignored; `get_errors(clear: true)` is refused with a helpful error. |
+| 331 | `sqlite3_flutter_libs` from `pub add` | ⚠️ | selected `^0.6.0+eol` (an end-of-life build) for a new Drift app. |
+| 332 | `smoke` and text scale | ⚠️ | `smoke` never calls `set_app_settings`, so it audits at the ambient text scale; a defect defined as "overflows at text scale 2" is only caught if it also overflows at the default scale. |
+| 333 | `scenario(save:)` with a Bloc state | ⚠️ | `Not saved (set_state can only restore bool/number/String): SettingsBloc (SettingsState)` — a Bloc/Cubit settings screen can't be pinned by a scenario. |
+| 334 | `get_app_summary` "Uncaught Errors" | ⚠️ | still listed a fixed error after `hot_reload` (same `State` id) until a real restart; `get_errors(report: true)` correctly said "No crash reports available". |
