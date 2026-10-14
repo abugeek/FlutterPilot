@@ -75,14 +75,14 @@
   app: fp_lab_shop
   scenario: eval_base
   prompt: >
-    In the running shop app, simulate the device having no network connection,
-    then look at the home route `/`. Quote the main message the product list
-    shows. Answer with that message.
+    In the running shop app, clear any mocked HTTP responses, then make the
+    device's network unavailable, and reload the product list. Quote the main
+    message the list shows. Answer with that message.
   answer: Could not load products
   match: exact
   tags: [network]
-  expected_tools: [simulate_network]
-  max_calls: 8
+  expected_tools: [mock_http_response, simulate_network]
+  max_calls: 10
 
 - id: shop_checkout_disabled
   app: fp_lab_shop
@@ -143,8 +143,8 @@
   scenario: eval_base
   prompt: >
     In the running shop app, open a product's detail screen and go back to the
-    list, five times in a row. Which app class keeps instances alive afterwards
-    — one more per visit? Answer with the class name.
+    list, five times in a row. Which `State` class keeps instances alive
+    afterwards — one more per visit? Answer with the State class name.
   answer: _ProductDetailScreenState
   match: exact
   tags: [memory]
