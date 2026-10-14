@@ -75,13 +75,13 @@
   app: fp_lab_shop
   scenario: eval_base
   prompt: >
-    In the running shop app, clear any mocked HTTP responses, then make the
-    device's network unavailable, and reload the product list. Quote the main
-    message the list shows. Answer with that message.
+    In the running shop app, make the device's network unavailable, and reload
+    the product list. Quote the main message the list shows. Answer with that
+    message.
   answer: Could not load products
   match: exact
   tags: [network]
-  expected_tools: [mock_http_response, simulate_network]
+  expected_tools: [simulate_network]
   max_calls: 10
 
 - id: shop_checkout_disabled

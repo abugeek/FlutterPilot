@@ -257,6 +257,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    // No `clear: true` here, unlike get_debug_logs and get_http_profile:
+    // ext.flutterpilot.getNetworkLogs takes no parameters and answers from the
+    // plugin's own ring buffer, so emptying it needs a parameter on that
+    // extension or a new one — an SDK protocol change (round 1/2 rule). The
+    // eval runner's `shop_detail_requests` counts entries in the newest
+    // window instead (field test #330).
     _registerAppTool(
       name: 'get_network_logs',
       description:

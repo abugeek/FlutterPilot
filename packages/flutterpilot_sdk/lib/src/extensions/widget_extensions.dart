@@ -1713,6 +1713,10 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       final selector =
           parameters['selector'] ?? parameters['target'] ?? parameters['key'];
+      // 3000 is the default the server's `wait_for` copies (its `timeoutOf`
+      // fallback in packages/flutterpilot_server/lib/src/tools/
+      // ui_automation_tools.dart, which points back here): change one, change
+      // the other.
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
 

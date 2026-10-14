@@ -87,6 +87,13 @@ class DioPilotInterceptor extends Interceptor {
     }
   }
 
+  /// The condition every request is put under until this is called again:
+  /// [NetworkCondition.offline] fails a request before it reaches the network
+  /// *or a mock* — offline means no server answers, and a mock stands in for
+  /// one — while the slow conditions delay a mocked answer too. What
+  /// `ext.flutterpilot.simulateNetwork` sets.
+  static void simulate(NetworkCondition condition) => _condition = condition;
+
   static void register() {
     if (!_initialized) {
       _initialized = true;
@@ -189,7 +196,7 @@ class DioPilotInterceptor extends Interceptor {
             'condition must be: normal | slow_3g | fast_4g | offline',
           );
       }
-      _condition = condition;
+      simulate(condition);
       return ServiceExtensionResponse.result(
         json.encode({'status': 'success', 'condition': conditionStr}),
       );
@@ -291,7 +298,31 @@ class DioPilotInterceptor extends Interceptor {
       'timestamp': DateTime.now().toIso8601String(),
     });
 
-    // Check mocks first — mocks take priority over network condition simulation.
+    // The network condition comes before the mocks: a mock stands in for the
+    // server, and `offline` means no request reaches any server, so a mocked
+    // URL fails the same way an unmocked one does. The slow conditions put
+    // their delay on a mocked answer too. The mocks are kept — `normal`
+    // brings the mocked answers back (field test #335).
+    final condition = _condition;
+    if (condition == NetworkCondition.offline) {
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.connectionError,
+          message: '[FlutterPilot] Network simulated offline',
+        ),
+        true,
+      );
+      return;
+    }
+    final conditionDelay = switch (condition) {
+      NetworkCondition.slow3g => const Duration(milliseconds: 1500),
+      NetworkCondition.fast4g => const Duration(milliseconds: 100),
+      _ => null,
+    };
+    if (conditionDelay != null) await Future.delayed(conditionDelay);
+
+    // A mock answers without the network at all.
     final uri = options.uri.toString();
     MapEntry<String, Map<String, dynamic>>? mockEntry;
     for (final entry in _mocks.entries) {
@@ -356,26 +387,6 @@ class DioPilotInterceptor extends Interceptor {
       return;
     }
 
-    // Capture condition snapshot to avoid race with simulateNetwork
-    final condition = _condition;
-    switch (condition) {
-      case NetworkCondition.offline:
-        handler.reject(
-          DioException(
-            requestOptions: options,
-            type: DioExceptionType.connectionError,
-            message: '[FlutterPilot] Network simulated offline',
-          ),
-          true,
-        );
-        return;
-      case NetworkCondition.slow3g:
-        await Future.delayed(const Duration(milliseconds: 1500));
-      case NetworkCondition.fast4g:
-        await Future.delayed(const Duration(milliseconds: 100));
-      case NetworkCondition.normal:
-        break;
-    }
     handler.next(options);
   }
 
@@ -421,7 +432,7 @@ class DioPilotInterceptor extends Interceptor {
   static void reset() {
     _logs.clear();
     _mocks.clear();
-    _condition = NetworkCondition.normal;
+    simulate(NetworkCondition.normal);
     _initialized = false;
   }
 

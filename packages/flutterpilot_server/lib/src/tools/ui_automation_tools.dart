@@ -313,6 +313,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         }
         final fromRoute =
             (res.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+        // 5000 is waitForWidget's own default when timeoutMs is absent; that
+        // literal carries a comment pointing back here
+        // (flutterpilot_sdk/lib/src/extensions/navigation_extensions.dart).
         final waitRes = await _callExtensionRaw(
           'ext.flutterpilot.waitForWidget',
           {
@@ -790,6 +793,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           required bool met,
           required int timeoutMs,
           int? waitedMs,
+          bool? timedOut,
         }) async {
           final after = await _screenAfterData(route: route);
           return CallToolResult(
@@ -800,6 +804,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 met: met,
                 waitedMs: waitedMs ?? watch.elapsedMilliseconds,
                 timeoutMs: timeoutMs,
+                timedOut: timedOut,
               ),
               if (after.route != null) 'route': Redaction.text(after.route!),
             },
@@ -822,9 +827,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
         );
         final timeout = p['timeoutMs']?.toString();
-        // The extension's own defaults (3000 for the widget condition and for
-        // animations, 5000 for route and state), so `timedOut` means the wait
-        // used its whole deadline.
+        // The defaults the extensions use when `timeoutMs` is absent — 3000 for
+        // the widget condition (widget_extensions.dart) and animations, 5000
+        // for route (navigation_extensions.dart) and state
+        // (state_extensions.dart) — so a clock-based `timedOut` means the wait
+        // used its whole deadline. Each of those literals carries a comment
+        // pointing back here: change one, change the other.
         int timeoutOf(int fallback) => int.tryParse(timeout ?? '') ?? fallback;
         final selector = p['selector'] ?? p['target'] ?? p['key'];
         if (selector != null) {
@@ -905,6 +913,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             condition: 'animations',
             met: settled,
             timeoutMs: t,
+            // The app's own answer says which of the two it is, so this one
+            // is not inferred from the clock and the copied default.
+            timedOut: res.data?['status'] == 'timeout',
           );
         }
         return withVerdict(

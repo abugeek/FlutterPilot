@@ -546,7 +546,25 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         }
         final res = await _callExtensionRaw('ext.flutterpilot.getErrors', p);
         if (res.isError) return res.toCallToolResult();
-        final text = formatErrors(res.data!);
+        final data = res.data ?? const <String, dynamic>{};
+        // An error from before the last reload is not an uncaught exception of
+        // the code now running: get_errors(report: true) already refuses to
+        // treat it as one (field test #334). Show it, marked, rather than drop
+        // the app's only copy — the report is built on demand and may never
+        // have been.
+        final split = errorsByReload(
+          ((data['errors'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+          _activeContext?.lastReload,
+        );
+        final sinceText = split.since.isEmpty && split.before.isNotEmpty
+            ? 'No uncaught exceptions since the last reload.'
+            : formatErrors({'errors': split.since, 'sdkMode': data['sdkMode']});
+        final text = split.before.isEmpty
+            ? sinceText
+            : '$sinceText\n\n${beforeReloadNote(split.before.length)}:\n'
+                  '${formatErrors({'errors': split.before, 'sdkMode': data['sdkMode']})}';
         return CallToolResult(
           content: [
             TextContent(
@@ -564,6 +582,29 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     );
 
     // -- get_logs / get_debug_logs --------------------------------------------
+    /// The console lines the SDK buffered before this server connected (field
+    /// test #329): the app snapshot carries its newest 15, merged in by
+    /// [preConnectionLogs]. Empty without the SDK (zero-code apps keep no such
+    /// buffer). One snapshot per call: on fp_lab_shop that takes
+    /// get_debug_logs from ~1ms to ~5ms, and a per-connection cache was not
+    /// worth the staleness it brings.
+    Future<List<Map<String, dynamic>>> preConnectionLogsFromApp(
+      List<Map<String, dynamic>> serverLogs,
+    ) async {
+      if (_activeContext?.hasSdk != true) return const [];
+      final res = await _callExtensionRaw(
+        'ext.flutterpilot.getAppSnapshot',
+        {},
+      );
+      if (res.isError) return const [];
+      return preConnectionLogs(
+        sdkLogs: ((res.data?['recentLogs'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
+        serverLogs: serverLogs,
+      );
+    }
+
     Future<CallToolResult> executeGetLogs(Map<String, dynamic> params) async {
       final levelFilter = params['level'] as String?;
       final loggerFilter = params['logger'] as String?;
@@ -574,7 +615,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       final rawLimit = (params['limit'] as int?) ?? 100;
       final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
 
-      var entries = _activeDebugLogs;
+      final serverEntries = _activeDebugLogs;
+      final preConnection = await preConnectionLogsFromApp(serverEntries);
+      var entries = [...preConnection, ...serverEntries];
       if (levelFilter != null && levelFilter.isNotEmpty) {
         entries = entries.where((e) => e['level'] == levelFilter).toList();
       }
@@ -611,10 +654,13 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           content: [
             TextContent(
-              text:
-                  'No console logs matching the filter since FlutterPilot '
-                  'connected (print, debugPrint and dart:developer log output '
-                  'is captured from then on).',
+              text: _activeContext?.hasSdk == false
+                  ? 'No console logs matching the filter. This app has no '
+                        'FlutterPilot SDK, so output from before FlutterPilot '
+                        'connected is not available.'
+                  : 'No console logs matching the filter since FlutterPilot '
+                        'connected (print, debugPrint and dart:developer log '
+                        'output is captured from then on).',
             ),
           ],
         );
@@ -668,13 +714,18 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             'Narrow with level, query, sinceSeconds or logger, or raise '
             'limit (max ${_Constants.debugLogBufferMax}).',
       );
+      final zeroCode = _activeContext?.hasSdk == false
+          ? '\nThis app has no FlutterPilot SDK: output from before '
+                'FlutterPilot connected is not available.'
+          : '';
       return CallToolResult(
         content: [
           TextContent(
             text:
-                '${entries.length} log entries (${compacted.length} compacted, '
-                'buffer total: ${_activeDebugLogs.length}):\n'
-                '${note == null ? '' : '$note\n'}$lines',
+                '${entries.length} log entries (${compacted.length} compacted'
+                '${preConnection.isEmpty ? '' : ', ${preConnection.length} from before FlutterPilot connected'}'
+                ', buffer total: ${serverEntries.length}):\n'
+                '${note == null ? '' : '$note\n'}$lines$zeroCode',
           ),
         ],
       );
@@ -714,9 +765,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_debug_logs',
       description:
-          'What the app printed since FlutterPilot connected: print(), '
-          'debugPrint() and dart:developer log(). clear:true empties the '
-          'captured logs instead, for a clean baseline before a test.',
+          'What the app printed: print(), debugPrint() and dart:developer '
+          'log(), plus what the SDK buffered before connecting. clear:true '
+          'empties the captured logs instead, for a clean baseline before a '
+          'test.',
       inputSchema: ToolInputSchema(
         properties: {
           'level': JsonSchema.string(
