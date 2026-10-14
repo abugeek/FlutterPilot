@@ -2,6 +2,7 @@ import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/tool_profiles.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
+import 'package:mcp_dart/mcp_dart.dart';
 import 'package:test/test.dart';
 
 /// `--tools core` (task 08): a client that counts tools across every server
@@ -85,6 +86,30 @@ void main() {
       expect(server().stepProfileRefusal('gesture_widget'), isNull);
     });
 
+    test(
+      'a retired step name is translated before the profile sees it',
+      () async {
+        // Task 09 B: translate the retired name, then check the profile. A step
+        // that still says swipe_widget runs as gesture_widget, so under
+        // --tools core the refusal names gesture_widget, the tool it became.
+        final result = await server(profile: ToolProfile.core).callToolForTest(
+          'execute_action_chain',
+          const {
+            'steps': [
+              {
+                'tool': 'swipe_widget',
+                'arguments': {'key': 'todo_1', 'direction': 'down'},
+              },
+            ],
+          },
+        );
+        expect(result.isError, isTrue);
+        expect(_textOf(result), contains('not listed in the core profile'));
+        expect(_textOf(result), contains('gesture_widget'));
+        expect(_textOf(result), isNot(contains('swipe_widget')));
+      },
+    );
+
     test('an unknown profile name is rejected', () {
       expect(ToolProfile.byName('all'), ToolProfile.all);
       expect(ToolProfile.byName('core'), ToolProfile.core);
@@ -92,3 +117,9 @@ void main() {
     });
   });
 }
+
+/// The text of a tool result.
+String _textOf(CallToolResult result) => result.content
+    .whereType<TextContent>()
+    .map((content) => content.text)
+    .join('\n');
