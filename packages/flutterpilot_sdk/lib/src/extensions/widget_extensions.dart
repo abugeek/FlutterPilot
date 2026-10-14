@@ -1374,10 +1374,7 @@ extension _WidgetExtensions on FlutterPilot {
       final tapX = globalOffset.dx + trackPadding + fraction * trackWidth;
       final tapY = globalOffset.dy + renderBox.size.height / 2;
       await InteractionManager.tapAt(Offset(tapX, tapY), label: target);
-      TestRecorder.add(
-        'skipped',
-        data: {'what': 'set_slider_value $target to $clamped'},
-      );
+      TestRecorder.add('skipped', data: {'what': 'slider $target to $clamped'});
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',

@@ -939,7 +939,7 @@ Future<void> main(List<String> args) async {
         false,
         react,
       );
-      await check('pinch_zoom', 'gesture_widget', {
+      await check('pinch zoom', 'gesture_widget', {
         'gesture': 'pinch',
         'key': 'zoomable',
         'scale': 2.0,

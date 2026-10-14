@@ -72,14 +72,17 @@ void main() {
     test('a step naming a tool the profile hides is refused', () {
       final core = server(profile: ToolProfile.core);
       expect(core.stepProfileRefusal('tap_widget'), isNull);
-      // Not a gesture tool (task 04 renamed those) and not in the short set.
+      // The merged gesture tool is deliberately not in the short set.
       expect(
-        core.stepProfileRefusal('swipe_widget'),
+        core.stepProfileRefusal('gesture_widget'),
         contains('not listed in the core profile'),
       );
-      expect(core.stepProfileRefusal('swipe_widget'), contains('--tools all'));
+      expect(
+        core.stepProfileRefusal('gesture_widget'),
+        contains('--tools all'),
+      );
       // Under `all` the same step is allowed.
-      expect(server().stepProfileRefusal('swipe_widget'), isNull);
+      expect(server().stepProfileRefusal('gesture_widget'), isNull);
     });
 
     test('an unknown profile name is rejected', () {

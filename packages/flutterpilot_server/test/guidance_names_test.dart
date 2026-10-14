@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/param_aliases.dart';
+import 'package:flutterpilot_server/src/retired_tools.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -40,6 +41,11 @@ void main() {
         name.startsWith('flutterpilot_')) {
       return null;
     }
+    // A merged tool: say which tool it became, so the fix is obvious.
+    final retired = retiredTools[name];
+    if (retired != null) {
+      return '$at: "$name" was merged into ${retired.tool}; update the text';
+    }
     return '$at: "$name" is not a registered tool (merged or renamed? see '
         'TOOLS.generated.md)';
   }
@@ -70,6 +76,15 @@ void main() {
     add('CLAUDE.md');
     add('README.md');
     add('skills/flutterpilot/SKILL.md');
+    // The landing page shows real calls and is user-facing too. Strip the tags
+    // so attributes and class names are not read as prose.
+    final site = File(p.join(repoRoot, 'site/index.html'));
+    if (site.existsSync()) {
+      sources['site/index.html'] = site
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n')
+          .replaceAll(RegExp(r'<[^>]*>'), ' ');
+    }
     for (final file in Directory(
       p.join(repoRoot, 'docs'),
     ).listSync().whereType<File>()) {

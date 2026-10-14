@@ -432,7 +432,7 @@ When talking to Claude, you can reference tool categories:
 - `tap_widget` — Simulate tap (gesture: double/long/secondary)
 - `enter_text` — Type in text fields
 - `scroll_into_view` — Scroll a widget into view
-- `swipe_widget` / `drag_widget` — Swipe and drag
+- `gesture_widget` — Swipe, drag, pinch, focus or slide (gesture: swipe|drag|pinch|focus|slide)
 - `press_key` — Keys and shortcuts (`press_key("back")` goes back)
 - (+ more interaction tools)
 
