@@ -74,6 +74,7 @@ Add to `.cursor/settings.json`:
 | `--project-root <path>` | ❌ No | `cwd` | The Flutter app's folder, to find the app `flutter run` started there |
 | `--allow-destructive` | ❌ No | false | Allow tools that change app data or call real services (secure storage writes, Supabase sign-out, Firebase events). SQL stays read-only. |
 | `--timeout <ms>` | ❌ No | 10000 | Tool call timeout in milliseconds |
+| `--tools core\|all` | No | `all` | Which tools to list. `core`: a short set (29 names) for a client that counts tools across every server it runs (Cursor: ~40); `all` (default): every tool that works for the app. Always a subset: a zero-code app sees fewer. |
 
 ### Examples
 

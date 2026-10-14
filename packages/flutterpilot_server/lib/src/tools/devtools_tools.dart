@@ -51,6 +51,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Got ${jsonEncode(step)}.',
         );
       }
+      final refusal = stepProfileRefusal(tool);
+      if (refusal != null) return fail(refusal);
       final args = step['arguments'];
       steps.add((
         tool: tool,
@@ -608,6 +610,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         final action = tool == null ? null : _toolCallbacks[tool];
         if (tool != null && action == null) {
           return fail('Tool "$tool" is not available.');
+        }
+        if (tool != null) {
+          final refusal = stepProfileRefusal(tool);
+          if (refusal != null) return fail(refusal);
         }
         final context = await _deviceContextForParameters(params);
         if (context?.isWeb == true) {

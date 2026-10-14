@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41087 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41182 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -436,6 +436,7 @@ Builds and starts the app (flutter run, or the command in flutterpilot/launch.js
 | `mode` | string: debug \| profile | no | Default debug. |
 | `project` | string | no | App folder, if several. |
 | `relaunch` | boolean | no | Stop the running app and rebuild. |
+| `waitSeconds` | integer | no | Return early if still building (default 600). |
 
 ## `get_state`
 

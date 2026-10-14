@@ -355,6 +355,18 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    details (idb commands, pointer maths). `tool_registration_test` rejects
    selling phrases and descriptions over 600 chars. Responses lost their
    emoji banners too (audit, action chain, compare, connect).
+4. **A core profile for a client with a tool limit (task 08):** done —
+   `--tools core|all` on the server and `flutterpilot mcp install --tools
+   core` (`all` is the default: nothing changes for existing users).
+   `coreTools` (`lib/src/tool_profiles.dart`) is 29 names: every tool task 01's
+   14 eval tasks name, plus what an agent needs to recover
+   (`get_app_summary`, `get_errors`, `get_debug_logs`, `hot_reload`,
+   `launch_app`) and the interaction basics — 20 392 bytes, and 29 + the Dart
+   MCP server's ~5 code tools still fits Cursor's ~40 across servers. It is
+   *intersected* with what works for the app (a zero-code app sees
+   `coreTools ∩ zeroCodeTools`), never added to it, and a step that names a
+   hidden tool is refused instead of running hidden. `get_app_summary(setup:
+   true)` and `flutterpilot doctor` say which profile is in use.
 
 ## 5. DevTools parity — what developers actually open DevTools for
 

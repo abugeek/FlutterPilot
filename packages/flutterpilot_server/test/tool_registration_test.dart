@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/tool_annotations.dart';
+import 'package:flutterpilot_server/src/tool_profiles.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 import 'package:test/test.dart';
 
@@ -75,6 +76,24 @@ void main() {
       // An app without the SDK. +100 (2026-10-12) for
       // launch_app(waitSeconds).
       expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9700));
+    });
+
+    test('the core profile fits a client with a tool limit', () {
+      // --tools core (task 08): the short set for a client that counts tools
+      // across every server it runs. Budget for the whole core list.
+      final core = FlutterPilotServer(
+        vmServiceUri: 'ws://localhost:8888',
+        staticTools: true,
+        toolProfile: ToolProfile.core,
+      );
+      final listed = core.listedToolNames.toList();
+      final bytes = core
+          .toolListJson(listed)
+          .map((tool) => jsonEncode(tool..remove('annotations')).length)
+          .fold(0, (a, b) => a + b);
+      expect(listed.length, lessThanOrEqualTo(30));
+      // 29 tools, 20 392 bytes when written.
+      expect(bytes, lessThanOrEqualTo(20700));
     });
 
     test('every tool says what it does to the app', () {
