@@ -29,6 +29,11 @@ tools that always work beat many tools that sometimes work.
   connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
   secure_storage, supabase in `../notes_app`; firebase (Auth + Firestore,
   emulators) in `../firebase_app`; plain hive in `../hive_app`.
+- Responses that cut a list say what was cut and how to see the rest
+  (2026-10-14, task 07): "Showing 100 of 342 matching log entries (newest
+  kept). Narrow with level, query, sinceSeconds or logger, or raise limit
+  (max 500)." One helper, `src/truncation.dart`; no line when the list is
+  complete.
 
 ### How to work (the method that found every real bug so far)
 
@@ -355,6 +360,15 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    details (idb commands, pointer maths). `tool_registration_test` rejects
    selling phrases and descriptions over 600 chars. Responses lost their
    emoji banners too (audit, action chain, compare, connect).
+4. **Capped lists say so:** done (2026-10-14) — every server-side cap ends its
+   response with one line from a single helper (`src/truncation.dart`), e.g.
+   "Showing 100 of 342 matching log entries (newest kept). Narrow with level,
+   query, sinceSeconds or logger, or raise limit (max 500)." Covered:
+   `get_debug_logs`, `get_state(history: true)`, `exec_sql_query`,
+   `get_http_profile`, `get_memory_details(classes: true)`, `get_app_summary`,
+   `query_supabase_table` and `query_firestore`; a list that was not cut gets
+   no line, and an uncounted total reads "at least N+1". Caps that live in the
+   SDK are unchanged (protocol frozen) and named as candidates.
 
 ## 5. DevTools parity — what developers actually open DevTools for
 

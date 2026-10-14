@@ -205,14 +205,27 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         '$error',
       );
     }
-    if (elements.length > 15) {
-      summary.writeln('  ... and ${elements.length - 15} more elements');
-    }
+    final elementNote = truncationNote(
+      shown: elements.length > 15 ? 15 : elements.length,
+      total: elements.length,
+      what: 'tappable elements (first kept)',
+      how: 'get_interactive_elements lists them all.',
+    );
+    if (elementNote != null) summary.writeln('  $elementNote');
     if (logs.isNotEmpty) {
       summary.writeln('• Recent Console Logs (${logs.length}):');
       for (final log in logs.take(5)) {
         summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
       }
+      final logNote = truncationNote(
+        shown: logs.length > 5 ? 5 : logs.length,
+        total: logs.length,
+        what: 'recent console logs (newest kept)',
+        how:
+            'get_debug_logs(level, query, sinceSeconds, logger, limit) has '
+            'the rest.',
+      );
+      if (logNote != null) summary.writeln('  $logNote');
     }
 
     return CallToolResult(

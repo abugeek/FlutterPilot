@@ -93,11 +93,17 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         final rowCount = json['rowCount'] ?? 0;
         final rows = json['rows'] as List? ?? [];
         if (rows.isEmpty) return 'Table "$table": 0 rows returned.';
+        final note = truncationNote(
+          shown: rows.length > 50 ? 50 : rows.length,
+          total: rowCount is num ? rowCount.toInt() : rows.length,
+          what: 'rows',
+          how: 'Raise limit (1–200) or narrow with filter.',
+        );
         final buf = StringBuffer('Table "$table": $rowCount row(s)\n');
         for (final row in rows.take(50)) {
           buf.writeln('  ${jsonEncode(row)}');
         }
-        if (rowCount > 50) buf.writeln('  ... and ${rowCount - 50} more rows');
+        if (note != null) buf.writeln('  $note');
         return buf.toString();
       },
     );
@@ -286,12 +292,18 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         }
         final docs = json['docs'] as List? ?? const [];
         if (docs.isEmpty) return 'Collection $path: no documents match$from.';
-        final more = docs.length == json['limit']
-            ? ' (limit reached; there may be more)'
-            : '';
+        final note = docs.length == json['limit']
+            ? truncationNote(
+                shown: docs.length,
+                total: null,
+                what: 'documents',
+                how: 'Raise limit (1–100) or narrow with where/orderBy.',
+              )
+            : null;
         return [
-          'Collection $path: ${docs.length} document(s)$from$more',
+          'Collection $path: ${docs.length} document(s)$from',
           for (final d in docs) '- ${d['id']}: ${jsonEncode(d['data'])}',
+          ?note,
         ].join('\n');
       },
     );
