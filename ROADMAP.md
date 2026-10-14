@@ -45,6 +45,13 @@ tools that always work beat many tools that sometimes work.
   kept). Narrow with level, query, sinceSeconds or logger, or raise limit
   (max 500)." One helper, `src/truncation.dart`; no line when the list is
   complete.
+- The core profile's tool limit is measured, not remembered (2026-10-14, task
+  12): Cursor's MCP docs state no tool limit, VS Code's Copilot errors above
+  128 tools per request, Claude Code states no fixed per-server cap, and the
+  official Dart MCP server as `mcp install` writes it lists 4 (Dart 3.13.4).
+  `--tools core` is 29 names (20 363 bytes) — 28 for `fp_lab_shop`, 25 for
+  `fp_lab_notes` after plugin gating — so 29 + 4 + 5 fits with room and
+  nothing was cut.
 
 ### How to work (the method that found every real bug so far)
 
@@ -421,8 +428,11 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    `coreTools` (`lib/src/tool_profiles.dart`) is 29 names: every tool task 01's
    14 eval tasks name, plus what an agent needs to recover
    (`get_app_summary`, `get_errors`, `get_debug_logs`, `hot_reload`,
-   `launch_app`) and the interaction basics - 20 363 bytes, and 29 + the Dart
-   MCP server's ~5 code tools still fits Cursor's ~40 across servers. It is
+   `launch_app`) and the interaction basics - 20 363 bytes. Task 12 re-measured the limit it has to fit
+   (2026-10-14): Cursor's MCP docs state no tool limit any more, VS Code's
+   Copilot errors above 128 tools per request, Claude Code states no fixed
+   per-server cap, and the Dart MCP server as `mcp install` writes it lists 4
+   - so 29 + 4 + 5 fits with room and nothing was cut. It is
    *intersected* with what works for the app (a zero-code app sees
    `coreTools ∩ zeroCodeTools`), never added to it, and a step that names a
    hidden tool is refused instead of running hidden. `get_app_summary(setup:
