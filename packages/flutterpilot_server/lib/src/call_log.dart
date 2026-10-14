@@ -7,6 +7,10 @@ import 'dart:io';
 /// wait_for's response came from reading agent transcripts by hand; this
 /// keeps the same numbers for any project.
 ///
+/// A second kind of line, one per session whenever the listed set changes
+/// ([recordListed]), records the tool names the session was offered, so stats
+/// can name what was available but never called.
+///
 /// Only the tool's name, time, size and a failure's kind are kept: no
 /// arguments, no result text, nothing the app showed.
 class CallLog {
@@ -40,6 +44,21 @@ class CallLog {
       if (file.existsSync() && file.lengthSync() > maxBytes) _trim();
       file.writeAsStringSync(
         '${jsonEncode({'t': (at ?? DateTime.now()).toUtc().toIso8601String(), 's': session, 'tool': tool, 'ms': ms, 'chars': chars, if (isError) 'err': failureKind(error ?? '')})}\n',
+        mode: FileMode.append,
+      );
+    } catch (_) {
+      // A log that can't be written must never fail a tool call.
+    }
+  }
+
+  /// One line when the set of tools a session is offered changes: the names
+  /// alone, so `flutterpilot stats` can say what was listed but never called.
+  /// No arguments, no app data, the same promise as a call line.
+  void recordListed(Iterable<String> tools) {
+    try {
+      if (file.existsSync() && file.lengthSync() > maxBytes) _trim();
+      file.writeAsStringSync(
+        '${jsonEncode({'t': DateTime.now().toUtc().toIso8601String(), 's': session, 'listed': tools.toList()..sort()})}\n',
         mode: FileMode.append,
       );
     } catch (_) {

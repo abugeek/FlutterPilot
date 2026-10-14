@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/tool_annotations.dart';
+import 'package:flutterpilot_server/src/tool_list_bytes.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 import 'package:test/test.dart';
 
@@ -46,10 +45,8 @@ void main() {
     // What an agent pays for before it calls anything: the name,
     // description and schema of each listed tool (annotations go to the
     // client, not the model). Raise a budget only for a tool that earns it.
-    int listBytes(bool Function(String name) listed) => server
-        .toolListJson(names.where(listed))
-        .map((tool) => jsonEncode(tool..remove('annotations')).length)
-        .fold(0, (a, b) => a + b);
+    int listBytes(bool Function(String name) listed) =>
+        toolListTotal(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
       // +800 each for launch_app (2026-10-11): it replaces a pkill, a nohup

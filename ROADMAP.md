@@ -355,6 +355,17 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    details (idb commands, pointer maths). `tool_registration_test` rejects
    selling phrases and descriptions over 600 chars. Responses lost their
    emoji banners too (audit, action chain, compare, connect).
+4. **Measure the surface:** done — `dart run
+   packages/flutterpilot_server/tool/tool_list_report.dart` prints what each
+   app profile pays for `tools/list` (bytes per tool, sorted, with a total and
+   a token estimate) for `all`, `sdk_no_plugins`, `sdk_dio`, `sdk_lab_shop`,
+   `sdk_lab_notes`, `zero_code` and `profile_build`; `--json` writes the same
+   for the tool-merging task. The measure is one function
+   (`src/tool_list_bytes.dart`) the budget test and the report share. The
+   server now writes the tools a session was offered to the call log when the
+   list changes, and `flutterpilot stats` names what was listed but never
+   called, adds p50/p90 response size (an average hides the one 40 KB
+   `get_widget_tree`), takes several logs and has `--json`.
 
 ## 5. DevTools parity — what developers actually open DevTools for
 
