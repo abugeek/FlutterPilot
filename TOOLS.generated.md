@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40597 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40614 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -65,7 +65,7 @@ _Read-only._
 
 ## `get_debug_logs`
 
-What the app printed since FlutterPilot connected: print(), debugPrint() and dart:developer log(). clear:true empties the captured logs instead, for a clean baseline before a test.
+What the app printed: print(), debugPrint() and dart:developer log(), plus what the SDK buffered before connecting. clear:true empties the captured logs instead, for a clean baseline before a test.
 
 _Read-only._
 

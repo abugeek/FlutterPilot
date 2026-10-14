@@ -20,6 +20,7 @@ import 'src/build_mode.dart';
 import 'src/call_log.dart';
 import 'src/code_freshness.dart';
 import 'src/cpu_profile.dart';
+import 'src/debug_log_merge.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
