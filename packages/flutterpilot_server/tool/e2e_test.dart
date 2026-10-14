@@ -1688,7 +1688,7 @@ Future<void> main(List<String> args) async {
       } finally {
         hidden.renameSync(uriFile.path);
       }
-      elsewhere.deleteSync(recursive: true);
+      await deleteWithRetries(elsewhere);
     } else {
       print(
         '⏭ no .dart_tool/flutterpilot_vm_uri on $device: roots check skipped',
@@ -1966,10 +1966,42 @@ Future<void> main(List<String> args) async {
     copy?.kill();
     server?.kill();
     flutter?.kill();
-    work.deleteSync(recursive: true);
+    // Wait for them to go before deleting: a `flutter run` killed a moment
+    // ago, and the app it started, still hold the app's files on Windows
+    // (field test #340).
+    for (final p in [copy, server, flutter]) {
+      if (p == null) continue;
+      await p.exitCode.timeout(const Duration(seconds: 5), onTimeout: () => -1);
+    }
+    await deleteWithRetries(work);
   }
   print(failed == 0 ? '\nE2E passed' : '\nE2E: $failed failed');
   exit(failed == 0 ? 0 : 1);
+}
+
+/// Deletes [dir], retrying for a few seconds.
+///
+/// On Windows a just-killed `flutter run` and the app it started keep their
+/// files open for a moment, and deleting then throws errno 32. Cleanup never
+/// fails the run — the checks are the result — so after [within] this says what
+/// it could not delete and returns (field test #340).
+Future<void> deleteWithRetries(
+  Directory dir, {
+  Duration within = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(within);
+  while (true) {
+    try {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      return;
+    } on FileSystemException catch (e) {
+      if (DateTime.now().isAfter(deadline)) {
+        print('⚠️  could not delete ${dir.path} (not a check): $e');
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+  }
 }
 
 /// Minimal line-delimited JSON-RPC client for the MCP stdio transport.
