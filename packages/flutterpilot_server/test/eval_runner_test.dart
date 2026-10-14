@@ -388,6 +388,29 @@ void main() {
     expect(written, isNot(contains('SENTINEL')));
     expect(written, isNot(contains(_sentinelKey)));
   });
+
+  group('the committed task set', () {
+    // Only a paid run reads tasks.yaml otherwise, so validate it first: a
+    // duplicate id, an empty prompt or answer, an unknown app or match mode
+    // should fail here, before the maintainer spends money (task 01 §5).
+    final tasks = loadTasks('tool/eval/tasks.yaml');
+
+    test('has the 14 tasks from the spec, each well formed', () {
+      expect(tasks, hasLength(14));
+      expect(tasks.map((t) => t.id).toSet(), hasLength(tasks.length));
+      for (final task in tasks) {
+        expect(task.id, isNotEmpty);
+        expect(task.prompt, isNotEmpty, reason: task.id);
+        expect(task.answer, isNotEmpty, reason: task.id);
+        expect(task.prompt, isNot(contains('ANSWER:')), reason: task.id);
+        expect(defaultScenarios, contains(task.app), reason: task.id);
+      }
+    });
+
+    test('covers both lab apps', () {
+      expect(tasks.map((t) => t.app).toSet(), {'fp_lab_shop', 'fp_lab_notes'});
+    });
+  });
 }
 
 AgentRun _run({
