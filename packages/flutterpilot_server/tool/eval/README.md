@@ -49,11 +49,14 @@ The runner never prints, logs or writes the key; it goes only in the
 (gitignored) and a `summary.json` with a `cost_usd` computed from the API's own
 `usage` (input, output, cache read, cache write) at published Sonnet prices.
 
-Before the first full run, one task was run once to measure the cost and
-extrapolate. **Measured cost of one full suite (14 tasks × 3 runs): TODO after
-the approved baseline run.** A single task is a few tens of thousands of input
-tokens (the tool list is ~30 KB, sent once per turn but cached across turns) and
-well under a cent to a few cents.
+**No baseline run has happened yet.** The paid Messages API call needs a key
+that was not available when this landed, so `tool/eval/baseline.json` is not
+committed and `--compare` has nothing to compare against. When a key is
+available: run one task once, get the cost approved, then run `--repeat 3`, copy
+`summary.json` to `tool/eval/baseline.json`, and record the cost and wall time
+here. A single task is a few tens of thousands of input tokens (the tool list is
+~30 KB, sent once per turn but cached across turns) and well under a cent to a
+few cents.
 
 ## What a result means
 
@@ -89,5 +92,6 @@ well under a cent to a few cents.
 - Resets between runs: `scenario(load:)`, the app settings, the network and
   channel mocks, the logs/histories, then an assertion that the scenario's route
   is showing. A failed reset makes the run `error`, never `fail`.
-- The baseline is `tool/eval/baseline.json`, committed with the model, device,
-  server commit, lab-app commits and the tool-list sizes (see `summary.json`).
+- The baseline (once run) is `tool/eval/baseline.json`, committed with the model,
+  device, server commit, lab-app commits and the tool-list sizes (see
+  `summary.json`).

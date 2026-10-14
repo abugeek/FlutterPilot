@@ -18,6 +18,11 @@ tools that always work beat many tools that sometimes work.
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
   drives it through the MCP server over stdio. 32/32 checks pass on macOS
   (also runs in CI on `macos-latest`).
+- `packages/flutterpilot_server/tool/eval/` — agent evals (2026-10-14): a small
+  Messages API loop drives the task-00 lab apps and reports which tools a model
+  picked and how many calls, tokens and seconds each task cost, so curation
+  changes can prove they did not make agents worse. Baseline numbers are pending
+  a paid run (task 01).
 - Field-test app: `../hn_reader` (sibling of this repo, its own git history):
   Hacker News reader with Riverpod 3, go_router 18, Dio (+ Algolia search),
   sqflite bookmarks, shared_preferences theme, connectivity banner, right-click
