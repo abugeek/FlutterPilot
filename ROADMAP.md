@@ -45,6 +45,17 @@ tools that always work beat many tools that sometimes work.
   kept). Narrow with level, query, sinceSeconds or logger, or raise limit
   (max 500)." One helper, `src/truncation.dart`; no line when the list is
   complete.
+- Round-1 field-test fixes (2026-10-14, task 11): `simulate_network(offline)`
+  now beats `mock_http_response` — a mock stands in for the server, offline
+  means no request reaches one — and `slow_3g`/`fast_4g` delay a mocked answer
+  too (`packages/plugins/flutterpilot_dio`). `get_debug_logs` merges what the
+  app printed before the connection from the SDK's own buffer (deduped by
+  time; a zero-code app is told it isn't available). `get_app_summary`'s
+  uncaught errors carry the same "before the last reload" mark as
+  `get_errors`, from one function (`src/error_freshness.dart`).
+  `flutterpilot smoke` audits every screen at text scale 2 as well
+  (`--no-text-scale`, report per pass). `TOOLS.generated.md` gained a
+  freshness test, so a tool change can't leave it stale again.
 
 ### How to work (the method that found every real bug so far)
 
