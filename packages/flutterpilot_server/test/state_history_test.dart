@@ -40,13 +40,20 @@ void main() {
 
   test('changes read as a timeline, oldest first', () {
     expect(formatStateHistory(changes, dropped: 2).split('\n'), [
-      'State changes, oldest first (5; 2 older ones dropped):',
+      'State changes, oldest first (5):',
+      'Showing 5 of 7 recent state changes (oldest first). Clear the history '
+          'before the action you care about (clear: true) to see only its '
+          'changes.',
       '01:04:12.100  riverpod  cartProvider: created 0',
       '01:04:12.110  riverpod  cartProvider: 0 → 3',
       '01:04:12.200  navigation  push /cart',
       '01:04:13.000  bloc  AuthCubit: in → out',
       '01:04:13.004  riverpod  cartProvider: disposed (was 3)',
     ]);
+  });
+
+  test('a complete history gets no truncation note', () {
+    expect(formatStateHistory(changes), isNot(contains('Showing')));
   });
 
   test('type keeps one plugin and the route changes', () {

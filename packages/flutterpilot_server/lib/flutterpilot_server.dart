@@ -46,6 +46,7 @@ import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';
+import 'src/truncation.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/web_limits.dart';

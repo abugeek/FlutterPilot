@@ -583,6 +583,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           return t != null && t.isAfter(cutoff);
         }).toList();
       }
+      final matched = entries.length;
       if (entries.length > limit) {
         entries = entries.sublist(entries.length - limit);
       }
@@ -639,12 +640,21 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       flushPrevious();
 
       final lines = compacted.join('\n');
+      final note = truncationNote(
+        shown: entries.length,
+        total: matched,
+        what: 'matching log entries (newest kept)',
+        how:
+            'Narrow with level, query, sinceSeconds or logger, or raise '
+            'limit (max ${_Constants.debugLogBufferMax}).',
+      );
       return CallToolResult(
         content: [
           TextContent(
             text:
                 '${entries.length} log entries (${compacted.length} compacted, '
-                'buffer total: ${_activeDebugLogs.length}):\n$lines',
+                'buffer total: ${_activeDebugLogs.length}):\n'
+                '${note == null ? '' : '$note\n'}$lines',
           ),
         ],
       );

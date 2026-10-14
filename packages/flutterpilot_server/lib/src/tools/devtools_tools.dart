@@ -457,9 +457,17 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         members.sort(
           (a, b) => (b.bytesCurrent ?? 0).compareTo(a.bytesCurrent ?? 0),
         );
-        final top = members.take(limit);
+        final top = members.take(limit).toList();
+        final note = truncationNote(
+          shown: top.length,
+          total: members.length,
+          what: 'classes by heap usage (largest first)',
+          how: 'Raise limit (max 500).',
+        );
         final buf = StringBuffer(
-          'Top $limit classes by heap usage (from ${members.length} total):\n'
+          'Top ${top.length} classes by heap usage'
+          '${note == null ? ' (from ${members.length} total)' : ''}:\n'
+          '${note == null ? '' : '$note\n'}'
           '${'Class'.padRight(40)} ${'Bytes'.padLeft(12)} ${'Instances'.padLeft(12)}\n'
           '${'-' * 66}\n',
         );
@@ -968,11 +976,17 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
-        final shown = filtered.reversed.take(limit);
+        final shown = filtered.reversed.take(limit).toList();
+        final note = truncationNote(
+          shown: shown.length,
+          total: filtered.length,
+          what: 'HTTP requests (newest first)',
+          how: 'Narrow with url or statusFilter, or raise limit (max 500).',
+        );
         final buf = StringBuffer(
-          '${filtered.length} HTTP requests'
-          '${filtered.length > limit ? ' (last $limit shown)' : ''}; '
-          'get_http_profile(id: N) for one in full:\n',
+          '${filtered.length} HTTP requests; get_http_profile(id: N) for one '
+          'in full:'
+          '${note == null ? '' : '\n$note'}\n',
         );
         for (final req in shown) {
           final method = req['method'] ?? '?';
