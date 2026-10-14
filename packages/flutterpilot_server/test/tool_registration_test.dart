@@ -55,32 +55,23 @@ void main() {
         toolListTotal(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // +800 each for launch_app (2026-10-11): it replaces a pkill, a nohup
-      // and a polling loop per relaunch, and is listed with no app at all.
-      // +300 (2026-10-12): the native tools also drive Android (serial,
-      // BACK, WAKEUP).
-      // +200 (2026-10-12): launch_app(waitSeconds), so a 5-minute iPhone
-      // build is not one blind call.
-      // Every tool (--static-tools).
-      // Lowered (task 04): the gesture tools became `gesture_widget`:
-      // 63 tools, 40 597 bytes.
-      expect(listBytes((_) => true), lessThanOrEqualTo(40800));
-      // An app with the SDK and no plugin, not on an iOS simulator.
+      // Measured 2026-10-14, after task 04 merged the five gesture tools into
+      // `gesture_widget`; each limit is that profile's measurement plus 300
+      // (task 09 C, from `tool/tool_list_report.dart`).
+      // Every tool (--static-tools): 63 tools, 40 597 bytes.
+      expect(listBytes((_) => true), lessThanOrEqualTo(40897));
+      // An app with the SDK and no plugin, not on an iOS simulator:
+      // 28 841 bytes.
       expect(
         listBytes(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        // +100 (2026-10-12) for audit_screen_health(routes) and
-        // get_state(name): a sweep was three calls a screen without them.
-        // +100 (2026-10-12) for launch_app(waitSeconds).
-        // Lowered (task 04) with `gesture_widget`.
-        lessThanOrEqualTo(29000),
+        lessThanOrEqualTo(29141),
       );
-      // An app without the SDK. +100 (2026-10-12) for
-      // launch_app(waitSeconds).
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9700));
+      // An app without the SDK: 9 674 bytes.
+      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9974));
     });
 
     test('the core profile fits a client with a tool limit', () {
@@ -96,9 +87,11 @@ void main() {
           .toolListJson(listed)
           .map((tool) => jsonEncode(tool..remove('annotations')).length)
           .fold(0, (a, b) => a + b);
+      // 29 tools; the count limit is a client's ~40 minus the Dart MCP
+      // server's code tools.
       expect(listed.length, lessThanOrEqualTo(30));
-      // 29 tools, 20 392 bytes when written.
-      expect(bytes, lessThanOrEqualTo(20700));
+      // 20 363 bytes on 2026-10-14, plus 300 (task 09 C).
+      expect(bytes, lessThanOrEqualTo(20663));
     });
 
     test('every tool says what it does to the app', () {
