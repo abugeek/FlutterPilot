@@ -629,7 +629,7 @@ void main() {
 
 ### "HTTP mocks from DioPilot not working"
 
-**Problem**: `add_http_mock` succeeds but requests still hit real endpoints.
+**Problem**: `mock_http_response` succeeds but requests still hit real endpoints.
 
 **Cause**: Dio instance not using DioPilotInterceptor.
 
@@ -871,7 +871,7 @@ flutter devtools  # Opens http://localhost:9100
 
 ### Q: Can I mock multiple endpoints at once?
 
-**A**: Yes, call `add_http_mock` multiple times, once per endpoint.
+**A**: Yes, call `mock_http_response` multiple times, once per urlPattern.
 
 ### Q: What if my widget key is null?
 

@@ -421,41 +421,40 @@ Create a comprehensive test suite.
 
 When talking to Claude, you can reference tool categories:
 
-### Screenshots & Layout (5 tools)
+### Screenshots & Layout
 - `capture_screenshot` — Get visual
 - `get_widget_tree` — Widget hierarchy
 - `get_widget_properties` — Specific widget details
 - `get_semantics_tree` — Accessibility tree
-- `compare_screenshots` — Visual regression
+- `compare_screenshot` — Visual regression
 
-### UI Automation (15 tools)
-- `tap_widget` — Simulate tap
+### UI Automation
+- `tap_widget` — Simulate tap (gesture: double/long/secondary)
 - `enter_text` — Type in text fields
-- `scroll` — Scroll widgets
-- `drag` — Drag and drop
-- `longpress` — Long press gesture
+- `scroll_into_view` — Scroll a widget into view
+- `swipe_widget` / `drag_widget` — Swipe and drag
+- `press_key` — Keys and shortcuts (`press_key("back")` goes back)
 - (+ more interaction tools)
 
-### State Inspection (19 tools)
+### State Inspection
 - `get_state` — Bloc state
 - `get_state` — Riverpod state
 - `get_app_summary` — Current route, errors
 - (+ state manager plugins)
 
-### Navigation (8 tools)
-- `navigate_to` — Jump to route
+### Navigation
+- `navigate_to` — Jump to route (go/push/replace; back is `press_key("back")`)
 - `get_navigation_stack` — View route history
-- `pop_route` — Go back
 
 ### Network (3 tools via Dio plugin)
-- `add_http_mock` — Mock endpoint
+- `mock_http_response` — Mock endpoint
 - `simulate_network` — Slow/offline
 - `get_network_logs` — Request history
 
-### Capabilities (1 tool)
+### Capabilities
 - `get_app_summary(setup: true)` — Loaded plugins status
 
-See [TOOLS.md](../TOOLS.md) for complete reference.
+See [TOOLS.generated.md](../TOOLS.generated.md) for the complete reference.
 
 ---
 
