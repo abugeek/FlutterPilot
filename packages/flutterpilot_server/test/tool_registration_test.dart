@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
@@ -160,5 +161,29 @@ void main() {
       final s2 = FlutterPilotServer(vmServiceUri: 'ws://localhost:8889');
       expect(s2.server, isNotNull);
     });
+
+    test(
+      'every result rebuild in the tool wrapper keeps structured content',
+      () {
+        // The wrappers in _registerTool() (batch-nudge tip, image down-scaling,
+        // phone state, native crash, hang diagnosis) rebuild a result on its way
+        // out: each spreads the content it was given, and each must go through
+        // keepingStructured() so a machine-readable result is not dropped.
+        for (final path in const [
+          'lib/flutterpilot_server.dart',
+          'lib/src/tools/native_automation_tools.dart',
+        ]) {
+          final source = File(path).readAsStringSync();
+          final rebuilds = RegExp(r'\.\.\.result\.content').allMatches(source);
+          final kept = RegExp(r'keepingStructured\(').allMatches(source);
+          expect(
+            kept.length,
+            greaterThanOrEqualTo(rebuilds.length),
+            reason:
+                '$path rebuilds a result without keeping its structuredContent',
+          );
+        }
+      },
+    );
   });
 }

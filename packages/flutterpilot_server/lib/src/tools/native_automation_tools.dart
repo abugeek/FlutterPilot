@@ -887,7 +887,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     final state = await _phoneState();
     final problem = state?.problem;
     if (state == null || problem == null) return result;
-    return CallToolResult(
+    return keepingStructured(
+      result,
       isError: true,
       content: [
         ...result.content,

@@ -5,6 +5,7 @@
 //   curl -s localhost:8765 -d '{"name":"get_app_summary","arguments":{}}'
 // Images are saved to tool/.fp/shots/; every call is appended to
 // tool/.fp/calls.jsonl (tool, ms, isError, chars) to measure latency/size.
+// A result's structuredContent, when it has one, is printed after the text.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -103,6 +104,13 @@ Future<void> main(List<String> args) async {
         } else {
           out.writeln(c['text']);
         }
+      }
+      // A tool whose answer is a verdict (assert_widget, wait_for, ...) also
+      // returns it as machine-readable content; show it, so a field check can
+      // see what a program would read.
+      final structured = result?['structuredContent'];
+      if (structured != null) {
+        out.writeln('[structuredContent] ${jsonEncode(structured)}');
       }
     }
     final isError = res['error'] != null || result?['isError'] == true;
