@@ -11,8 +11,9 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 63 MCP tools (+launch_app, 2026-10-11; 164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
-  (a Dio-only app 43, zero-code 15). SDK + 12 plugins + server + CLI. All packages
+- 63 MCP tools (§4.2 merged families into one tool with a parameter; §4.7 merged the five
+  gesture tools into `gesture_widget(gesture: ...)`); an app sees only the tools that work
+  for it (a Dio-only app 43, zero-code 15). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
@@ -363,19 +364,6 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    the sqflite/drift table listers (`exec_sql_query` on sqlite_master).
    `tool_registration_test` fails above 80. Round 11 of
    `docs/field-test-findings.md`.
-4. **Consolidate the gesture tools (task 04):** done — `swipe_widget`,
-   `drag_widget`, `pinch_zoom`, `focus_widget` and `set_slider_value` became
-   one `gesture_widget(key, gesture: swipe | drag | pinch | focus | slide)`.
-   A mode's arguments are refused in another mode, and a step that still
-   names an old tool runs the new one (`src/retired_tools.dart`, so
-   `execute_action_chain`, `run_on_devices`, `profile_action` and a leak
-   `cycle` keep working). `sdk_lab_shop` 52 → 48 tools and 34 179 → 33 594
-   bytes (−1.7 %); the merged tool is 1 495 bytes, 26 % under the 2 022 the
-   five cost. The task's other candidates (C1, C2, C4, C5) were left alone:
-   each merged description came out less than 25 % shorter than the tools it
-   replaced, the task's own test for whether a merge is worth it, so the whole
-   list was worth ~3 % against the 15 % the task asked for — the tools are
-   already one-per-family with short descriptions.
 3. **Tool descriptions:** done — every description says what the tool
    returns and when to use it (or what to use instead); no "CALL THIS",
    "PREREQUISITES", speed claims or emoji, no "needs the X plugin" (plugin
@@ -391,7 +379,7 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    reach `_registerTool`'s catch-all, which answered "the app was busy, retry"
    and sent the agent round the same broken call; a type error now points at
    `tools/list`. `arg_coercion_test` covers every rule (including nested
-   `steps[].arguments`); `tool_argument_fuzz_test` fuzzes all 67 tools. A
+   `steps[].arguments`); `tool_argument_fuzz_test` fuzzes all 63 tools. A
    property whose schema declares no `type` at all (`set_state.value`,
    `mock_platform_channel.result`/`event`) passes through untouched.
 5. **Measure the surface:** done — `dart run
@@ -414,13 +402,26 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    `query_supabase_table` and `query_firestore`; a list that was not cut gets
    no line, and an uncounted total reads "at least N+1". Caps that live in the
    SDK are unchanged (protocol frozen) and named as candidates.
+7. **Consolidate the gesture tools (task 04):** done — `swipe_widget`,
+   `drag_widget`, `pinch_zoom`, `focus_widget` and `set_slider_value` became
+   one `gesture_widget(key, gesture: swipe | drag | pinch | focus | slide)`.
+   A mode's arguments are refused in another mode, and a step that still
+   names an old tool runs the new one (`src/retired_tools.dart`, so
+   `execute_action_chain`, `run_on_devices`, `profile_action` and a leak
+   `cycle` keep working). `sdk_lab_shop` 52 → 48 tools and 34 179 → 33 594
+   bytes (−1.7 %); the merged tool is 1 495 bytes, 26 % under the 2 022 the
+   five cost. The task's other candidates (C1, C2, C4, C5) were left alone:
+   each merged description came out less than 25 % shorter than the tools it
+   replaced, the task's own test for whether a merge is worth it, so the whole
+   list was worth ~3 % against the 15 % the task asked for — the tools are
+   already one-per-family with short descriptions.
 8. **A core profile for a client with a tool limit (task 08):** done —
    `--tools core|all` on the server and `flutterpilot mcp install --tools
    core` (`all` is the default: nothing changes for existing users).
    `coreTools` (`lib/src/tool_profiles.dart`) is 29 names: every tool task 01's
    14 eval tasks name, plus what an agent needs to recover
    (`get_app_summary`, `get_errors`, `get_debug_logs`, `hot_reload`,
-   `launch_app`) and the interaction basics — 20 392 bytes, and 29 + the Dart
+   `launch_app`) and the interaction basics - 20 363 bytes, and 29 + the Dart
    MCP server's ~5 code tools still fits Cursor's ~40 across servers. It is
    *intersected* with what works for the app (a zero-code app sees
    `coreTools ∩ zeroCodeTools`), never added to it, and a step that names a
