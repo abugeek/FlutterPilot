@@ -615,3 +615,17 @@ own git repo; the planted defects and the tool calls that find them are in its
 | 332 | `smoke` and text scale | ⚠️ | `smoke` never calls `set_app_settings`, so it audits at the ambient text scale; a defect defined as "overflows at text scale 2" is only caught if it also overflows at the default scale. |
 | 333 | `scenario(save:)` with a Bloc state | ⚠️ | `Not saved (set_state can only restore bool/number/String): SettingsBloc (SettingsState)` — a Bloc/Cubit settings screen can't be pinned by a scenario. |
 | 334 | `get_app_summary` "Uncaught Errors" | ⚠️ | still listed a fixed error after `hot_reload` (same `State` id) until a real restart; `get_errors(report: true)` correctly said "No crash reports available". |
+
+## MCP curation round 1 (Windows, 2026-10-14)
+
+Found while the nine round-1 PRs (#115–#123) were written. Each was left out of
+this file so it would not conflict with #115, which was open at the time; they
+are added here once the nine are in one branch (task 09 E).
+
+| # | Feature | Result | Notes |
+|---|---|---|---|
+| 335 | `simulate_network(offline)` vs a mocked request | ⚠️ | the network condition does not reach a request that `mock_http_response` answers (#116): the mock is the endpoint, so the app never sees the network go away. |
+| 336 | the call log's startup `listed` line | ⚠️→fixed (#118) | the first `listed` line is the pre-connection set (every plugin tool), not what the session ends up offered, and two identical lines were written at startup; #118 records the set only when it changes. |
+| 337 | 13 stale tool names in the docs | ⚠️→fixed (#122) | #122's name check found 13 mentions of tools that no longer exist — a merged or renamed name left behind in a doc. The check now fails on them; #120's merge and #122 fixed the text. |
+| 338 | the committed `TOOLS.generated.md` was stale | ⚠️→fixed (#121, #123) | it was missing `launch_app(waitSeconds)` on `main`; it is generated from the running registration, and every round-1 PR that changed the list regenerated it. |
+| 339 | `mcp_dart` validates `tools/call` arguments itself | ⚠️ | a top-level argument is checked against `inputSchema` before the callback (`-32602`), so #117's coercion only runs for steps another tool runs (`steps[]`, a `cycle`, `profile_action`); a direct call with a stringified argument never reaches it. |
