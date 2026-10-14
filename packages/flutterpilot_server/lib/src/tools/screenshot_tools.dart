@@ -93,7 +93,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             text:
                 '${stale == null ? '' : '• Code: $stale\n'}'
                 '${device == null ? '' : '• Device: $device. ${deviceState!.fix}\n'}'
-                '${zeroCodeSummary(basic.data!)}'
+                '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload)}'
                 '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
           ),
         ],
@@ -185,9 +185,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         '${diagnosis ?? ''} Call profile_frame_budget for details.',
       );
     }
-    summary.writeln(
-      '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
+    // The reload's fix may already have landed: an error from before it is not
+    // an uncaught exception of the code now running (field test #334). Same
+    // rule as get_errors, marked the same way.
+    final errorSplit = errorsByReload(
+      errors.whereType<Map<String, dynamic>>().toList(),
+      _activeContext?.lastReload,
     );
+    summary.writeln(
+      '• Uncaught Errors (${errorSplit.since.length}): ${errorSplit.since.isEmpty ? "None" : errorSplit.since.map((err) => err['exception']).join("; ")}',
+    );
+    if (errorSplit.before.isNotEmpty) {
+      summary.writeln(
+        '• ${beforeReloadNote(errorSplit.before.length)}: '
+        '${errorSplit.before.map((err) => err['exception']).join("; ")}. '
+        'get_errors(report: true) has the crash report when one was built.',
+      );
+    }
     summary.writeln('• Tappable Elements (${elements.length}):');
     for (final el in elements.take(15)) {
       final label = el['text']?.toString() ?? '';

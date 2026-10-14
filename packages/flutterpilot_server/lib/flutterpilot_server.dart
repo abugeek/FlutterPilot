@@ -35,6 +35,7 @@ import 'src/memory_leaks.dart';
 import 'src/native_crash.dart';
 import 'src/state_history.dart';
 import 'src/device_runtime_context.dart';
+import 'src/error_freshness.dart';
 import 'src/param_aliases.dart';
 import 'src/permission_hint.dart';
 import 'src/phone_state.dart';

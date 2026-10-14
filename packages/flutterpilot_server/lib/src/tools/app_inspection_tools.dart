@@ -546,7 +546,25 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         }
         final res = await _callExtensionRaw('ext.flutterpilot.getErrors', p);
         if (res.isError) return res.toCallToolResult();
-        final text = formatErrors(res.data!);
+        final data = res.data ?? const <String, dynamic>{};
+        // An error from before the last reload is not an uncaught exception of
+        // the code now running: get_errors(report: true) already refuses to
+        // treat it as one (field test #334). Show it, marked, rather than drop
+        // the app's only copy — the report is built on demand and may never
+        // have been.
+        final split = errorsByReload(
+          ((data['errors'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+          _activeContext?.lastReload,
+        );
+        final sinceText = split.since.isEmpty && split.before.isNotEmpty
+            ? 'No uncaught exceptions since the last reload.'
+            : formatErrors({'errors': split.since, 'sdkMode': data['sdkMode']});
+        final text = split.before.isEmpty
+            ? sinceText
+            : '$sinceText\n\n${beforeReloadNote(split.before.length)}:\n'
+                  '${formatErrors({'errors': split.before, 'sdkMode': data['sdkMode']})}';
         return CallToolResult(
           content: [
             TextContent(

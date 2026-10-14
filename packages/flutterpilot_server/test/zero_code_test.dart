@@ -198,6 +198,47 @@ void main() {
     },
   );
 
+  test('zeroCodeSummary marks errors from before the last reload', () {
+    final data = <String, dynamic>{
+      'flutterVersion': '3.x',
+      'heapUsageMb': 80,
+      'texts': <String>[],
+      'keys': <String>[],
+      'errors': [
+        {
+          'exception': 'Overflow',
+          'widget': 'Row lib/main.dart:4:1',
+          'timestamp': '2026-10-14T15:00:00.000Z',
+        },
+        {'exception': 'RangeError', 'timestamp': '2026-10-14T15:20:00.000Z'},
+      ],
+    };
+    final text = zeroCodeSummary(
+      data,
+      lastReload: DateTime.parse('2026-10-14T15:10:00.000Z'),
+    );
+
+    // The one before the reload is counted apart, not as a current error.
+    expect(text, contains('• Errors (1), details in get_errors:'));
+    expect(text, contains('RangeError'));
+    expect(
+      text,
+      contains(
+        '1 uncaught exception from before the last reload (the reload may '
+        'have fixed it): Overflow',
+      ),
+    );
+
+    final onlyBefore = zeroCodeSummary({
+      ...data,
+      'errors': [
+        {'exception': 'Overflow', 'timestamp': '2026-10-14T15:00:00.000Z'},
+      ],
+    }, lastReload: DateTime.parse('2026-10-14T15:10:00.000Z'));
+    expect(onlyBefore, contains('• Errors: none since the last reload'));
+    expect(onlyBefore, contains('Overflow'));
+  });
+
   group('cropToScreen', () {
     String png(img.Image image) => base64Encode(img.encodePng(image));
 

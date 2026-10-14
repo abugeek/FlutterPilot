@@ -614,7 +614,7 @@ own git repo; the planted defects and the tool calls that find them are in its
 | 331 | `sqlite3_flutter_libs` from `pub add` | ⚠️ | selected `^0.6.0+eol` (an end-of-life build) for a new Drift app. |
 | 332 | `smoke` and text scale | ⚠️ | `smoke` never calls `set_app_settings`, so it audits at the ambient text scale; a defect defined as "overflows at text scale 2" is only caught if it also overflows at the default scale. |
 | 333 | `scenario(save:)` with a Bloc state | ⚠️ | `Not saved (set_state can only restore bool/number/String): SettingsBloc (SettingsState)` — a Bloc/Cubit settings screen can't be pinned by a scenario. |
-| 334 | `get_app_summary` "Uncaught Errors" | ⚠️ | still listed a fixed error after `hot_reload` (same `State` id) until a real restart; `get_errors(report: true)` correctly said "No crash reports available". |
+| 334 | `get_app_summary` "Uncaught Errors" | ⚠️→fixed (task 11) | still listed a fixed error after `hot_reload` (same `State` id) until a real restart, while `get_errors(report: true)` said "No crash reports available". Both tools now split the app's errors at the last reload with one function, `errorsByReload`: what came since it is listed as current, what came before is marked "N uncaught exceptions from before the last reload (the reload may have fixed them)". Marked rather than dropped because the crash report is built on demand and may never have been: dropping would leave no copy of that stack anywhere. The zero-code summary follows the same rule. No reload since the server connected means nothing is claimed to be before one. |
 
 ## MCP curation round 1 (Windows, 2026-10-14)
 
