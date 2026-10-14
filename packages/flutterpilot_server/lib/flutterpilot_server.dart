@@ -14,14 +14,18 @@ import 'src/action_chain.dart';
 import 'src/android_device.dart';
 import 'src/app_root.dart';
 import 'src/app_launcher.dart';
+import 'src/arg_coercion.dart';
 import 'src/batch_nudge.dart';
 import 'src/build_mode.dart';
 import 'src/call_log.dart';
 import 'src/code_freshness.dart';
 import 'src/cpu_profile.dart';
+import 'src/debug_log_merge.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
+import 'src/generated/guidance.g.dart';
+import 'src/gesture.dart';
 import 'src/hang_diagnosis.dart';
 import 'src/ios_device.dart';
 import 'src/launch_failure.dart';
@@ -31,20 +35,26 @@ import 'src/memory_leaks.dart';
 import 'src/native_crash.dart';
 import 'src/state_history.dart';
 import 'src/device_runtime_context.dart';
+import 'src/error_freshness.dart';
 import 'src/param_aliases.dart';
 import 'src/permission_hint.dart';
 import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
+import 'src/retired_tools.dart';
 import 'src/scenario.dart';
 import 'src/signing_team.dart';
 import 'src/screen_memory.dart';
 import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
+import 'src/start_command.dart';
+import 'src/structured_results.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';
+import 'src/truncation.dart';
+import 'src/tool_profiles.dart';
 import 'src/verification.dart';
 import 'src/vm_discovery.dart';
 import 'src/web_limits.dart';
@@ -52,6 +62,7 @@ import 'src/window_size.dart';
 import 'src/zero_code.dart';
 
 export 'src/cli.dart' show runFlutterPilotServer;
+export 'src/generated/guidance.g.dart' show serverInstructions, guidePrompt;
 
 part 'src/constants.dart';
 part 'src/tools/app_inspection_tools.dart';
@@ -74,16 +85,48 @@ final _log = logging.Logger('FlutterPilotServer');
 /// Zone key run_on_devices sets to send each call to one device.
 const _pinnedDevice = #flutterpilotPinnedDevice;
 
+/// A tool's argument gate: its arguments brought to the schema's types, or the
+/// refusal an agent should see.
+typedef _ArgGate =
+    ({Map<String, dynamic> args, String? problem}) Function(
+      Map<String, dynamic> args,
+    );
+
 /// Base class exposing the members that tool mixins need.
 abstract class _FlutterPilotServerBase {
   bool get staticTools;
 
+  /// Which tools are listed (`--tools core|all`).
+  ToolProfile get toolProfile;
+
+  /// Whether [name] is listed at all under the active profile, before asking
+  /// whether it works for the app.
+  bool profileListsTool(String name) =>
+      toolProfile == ToolProfile.all || coreTools.contains(name);
+
+  /// The refusal for a step that names a tool the profile hides, or null.
+  /// A hidden-but-callable tool would be confusing: refuse it.
+  String? stepProfileRefusal(String tool) => profileListsTool(tool)
+      ? null
+      : '"$tool" is not listed in the core profile; start the server with '
+            '--tools all to use it.';
+
   /// Every registered tool by name, for showing only the usable ones.
   final Map<String, RegisteredTool> _allTools = {};
+
+  /// The tools currently listed: enabled by the last visibility pass (and,
+  /// under `--tools core`, inside [coreTools]).
+  Iterable<String> get listedToolNames =>
+      _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
 
   /// Every tool's callback by name, for tools that run another tool
   /// (profile_action).
   final Map<String, ToolFunction> _toolCallbacks = {};
+
+  /// Every tool's argument gate by name (see [_tool]), for tests: it refuses
+  /// an unknown name, a missing required argument, or a value that does not
+  /// fit the schema, without running the callback.
+  final Map<String, _ArgGate> _toolArgGates = {};
 
   /// What changed on disk since the connected app loaded it (edited Dart
   /// files, a changed pubspec.lock), as one line, or null when the app runs
@@ -233,12 +276,25 @@ abstract class _FlutterPilotServerBase {
   /// that waited or navigated (as tap_widget's response ends): field
   /// sessions followed 51 of 199 wait_for calls with get_app_summary. Empty
   /// for an app whose SDK predates `screenNow`.
-  Future<String> _screenAfter({bool route = true}) async {
+  Future<String> _screenAfter({bool route = true}) async =>
+      (await _screenAfterData(route: route)).text;
+
+  /// As [_screenAfter], and the route the app is on, for a tool that returns
+  /// it in a structured result.
+  Future<({String text, String? route})> _screenAfterData({
+    bool route = true,
+  }) async {
     final res = await _callExtensionRaw('ext.flutterpilot.screenNow', {});
-    if (res.isError) return '';
-    final current = (res.data?['postActionState'] as Map?)?['route'];
+    if (res.isError) return (text: '', route: null);
+    final current = (res.data?['postActionState'] as Map?)?['route']
+        ?.toString();
     final named = route && current != null && current != 'Unknown';
-    return '${named ? '\nRoute: $current.' : ''}${_screenNow(res.data, memory: _activeContext?.screenMemory)}';
+    return (
+      text:
+          '${named ? '\nRoute: $current.' : ''}'
+          '${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
+      route: current == null || current == 'Unknown' ? null : current,
+    );
   }
 
   /// Registers a tool. An unexpected exception becomes an error that names
@@ -255,29 +311,51 @@ abstract class _FlutterPilotServerBase {
     // nothing (field test #280). Checked here so the tools that run other
     // tools (profile_action, run_on_devices, a leak-check cycle) refuse too.
     final properties = inputSchema?.properties?.keys ?? const <String>[];
-    Future<CallToolResult> checked(
+    // Read once, at registration: the schema knows what each argument should
+    // be, so a string sent for an array or a number for a string is brought to
+    // its type here instead of throwing a cast error deep in a tool, which an
+    // agent reads as "the app is busy, retry" (task 02).
+    final argTypes = argTypesFromSchema(inputSchema?.toJson());
+    final requiredArgs = inputSchema?.required ?? const <String>[];
+    // The argument gate: an unknown name, a missing required argument, or a
+    // value that cannot be brought to its schema type. Split out of [checked]
+    // so the fuzz test (task 02 §D) can check every tool's arguments without
+    // running its callback — some callbacks launch a build.
+    ({Map<String, dynamic> args, String? problem}) gate(
       Map<String, dynamic> args,
-      RequestHandlerExtra extra,
-    ) async {
+    ) {
       final unknown = unknownToolArguments(args.keys, [
         ...properties,
         'deviceId', // refused with its own message in _registerTool
       ]);
-      if (unknown.isEmpty) return callback(withFormerNames(args), extra);
-      return CallToolResult(
-        isError: true,
-        content: [
-          TextContent(
-            text:
-                '$name has no ${unknown.map((a) => '"$a"').join(', ')} '
-                'parameter${unknown.length == 1 ? '' : 's'}; nothing was '
-                'done. ${properties.isEmpty ? 'It takes no arguments.' : 'It takes: ${properties.join(', ')}.'}',
-          ),
-        ],
-      );
+      if (unknown.isNotEmpty) {
+        return (
+          args: args,
+          problem:
+              '$name has no ${unknown.map((a) => '"$a"').join(', ')} '
+              'parameter${unknown.length == 1 ? '' : 's'}; nothing was '
+              'done. ${properties.isEmpty ? 'It takes no arguments.' : 'It takes: ${properties.join(', ')}.'}',
+        );
+      }
+      return coerceArguments(name, args, argTypes, required: requiredArgs);
+    }
+
+    Future<CallToolResult> checked(
+      Map<String, dynamic> args,
+      RequestHandlerExtra extra,
+    ) async {
+      final (args: coerced, problem: problem) = gate(args);
+      if (problem != null) {
+        return CallToolResult(
+          isError: true,
+          content: [TextContent(text: problem)],
+        );
+      }
+      return callback(withFormerNames(coerced), extra);
     }
 
     _toolCallbacks[name] = checked;
+    _toolArgGates[name] = gate;
     return _allTools[name] = _registerTool(
       name,
       description: description,
@@ -328,7 +406,8 @@ abstract class _FlutterPilotServerBase {
         return null;
       }().timeout(const Duration(seconds: 12));
       if (why == null) return result;
-      return CallToolResult(
+      return keepingStructured(
+        result,
         isError: true,
         content: [
           ...result.content,
@@ -346,7 +425,8 @@ abstract class _FlutterPilotServerBase {
   Future<CallToolResult> _withNativeCrash(CallToolResult result) async {
     final crash = await _nativeCrash?.current();
     if (crash == null) return result;
-    return CallToolResult(
+    return keepingStructured(
+      result,
       isError: true,
       content: [
         ...result.content,
@@ -419,11 +499,12 @@ abstract class _FlutterPilotServerBase {
           args,
           result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
           isError: result.isError == true,
+          structured: result.structuredContent,
         );
         final tip = _batchNudge.after(name, isError: result.isError == true);
         if (tip != null) {
-          result = CallToolResult(
-            isError: result.isError,
+          result = keepingStructured(
+            result,
             content: [
               ...result.content,
               TextContent(text: tip),
@@ -434,8 +515,8 @@ abstract class _FlutterPilotServerBase {
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
         }
-        return CallToolResult(
-          isError: result.isError,
+        return keepingStructured(
+          result,
           content: [
             for (final c in result.content)
               c is ImageContent
@@ -454,15 +535,18 @@ abstract class _FlutterPilotServerBase {
             content: [TextContent(text: '$name threw ${e.runtimeType}')],
           ),
         );
+        // A type or format error is the arguments not matching the schema, not
+        // a busy app: "retry" sends the agent round the same broken call
+        // (task 02). coerceArguments catches these first, so this is the
+        // safety net.
+        final text = e is TypeError || e is FormatException
+            ? "$name: the arguments do not match its schema. Call tools/list "
+                  "to see $name's parameters; nothing was done."
+            : '$name failed: $e. If the app was busy or reloading, retry; '
+                  'call get_app_summary to check its state.';
         return CallToolResult(
           isError: true,
-          content: [
-            TextContent(
-              text:
-                  '$name failed: $e. If the app was busy or reloading, retry; '
-                  'call get_app_summary to check its state.',
-            ),
-          ],
+          content: [TextContent(text: text)],
         );
       }
     },
@@ -579,19 +663,6 @@ abstract class _FlutterPilotServerBase {
   CallToolResult _destructiveOperationDenied();
 }
 
-/// Sent once when a client connects, and the only FlutterPilot text an
-/// agent has before it reads a tool (clients that load tool schemas on
-/// demand keep this in context instead): how to start and what not to
-/// repeat. What a single tool does belongs in its description.
-const serverInstructions = '''
-FlutterPilot inspects and drives a running Flutter app (flutter run, debug or profile build).
-- No app running: launch_app. Start with get_app_summary: route, what can be tapped (labels and keys), errors, logs. Only tools that work for the connected app are listed; without flutterpilot_sdk in the app it can be inspected but not driven, and the summary says so.
-- Find a widget by its key, a selector ("ElevatedButton['Log in']") or its visible text.
-- Actions (tap_widget, enter_text, press_key, fill_form, ...) report what they changed: route, widget diff, what is tappable now, new errors. Read that before taking a screenshot or reading the tree again.
-- When the steps are known, send them in one call: fill_form, execute_action_chain, tap_widget(waitFor: ...).
-- Check an outcome with assert_widget or wait_for (milliseconds, no sleeping) and layout with audit_screen_health.
-- After editing Dart code: hot_reload, then get_errors. hot_reload(restart: true) loads every changed Dart file and runs main() again: use it after a git checkout or for a stuck app. Keep the app running; launch_app(relaunch: true) rebuilds it (minutes): only for pubspec.yaml, assets or native code changes.''';
-
 /// FlutterPilot MCP Server — bridges AI agents to a running Flutter app.
 class FlutterPilotServer extends _FlutterPilotServerBase
     with
@@ -682,6 +753,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   final bool staticTools;
 
+  /// Which tools are listed (`--tools core|all`): a client that counts tools
+  /// across servers asks for [ToolProfile.core] and gets [coreTools].
+  @override
+  final ToolProfile toolProfile;
+
   FlutterPilotServer({
     String? vmServiceUri,
     this.allowDestructive = false,
@@ -689,6 +765,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     this.remoteAccessToken,
     Directory? projectRoot,
     bool staticTools = false,
+    this.toolProfile = ToolProfile.all,
     bool callLog = true,
   }) : callLog =
            callLog && Platform.environment['FLUTTERPILOT_NO_CALL_LOG'] == null,
@@ -762,6 +839,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     // Start MCP server over stdio
     final stdioTransport = StdioServerTransport();
     await server.connect(stdioTransport);
+    _recordListedTools();
     _log.info('FlutterPilot MCP Server started 🚀');
   }
 
@@ -1427,6 +1505,14 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _registerScenarioTools();
     _registerVerificationTools();
     _registerPluginIntegrationTools();
+    // A client with a tool limit (--tools core) never sees the rest, from the
+    // first tools/list: updateToolVisibility would be too late. This also
+    // covers --static-tools + --tools core, which lists exactly coreTools.
+    if (toolProfile == ToolProfile.core) {
+      for (final MapEntry(key: name, value: tool) in _allTools.entries) {
+        if (!coreTools.contains(name)) tool.disable();
+      }
+    }
   }
 
   /// Names of every registered tool, listed or not.
@@ -1454,12 +1540,59 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     ];
   }
 
+  /// The argument gate alone, for tests (task 02 §D): null when [args] are
+  /// acceptable to [name]'s schema, else the refusal an agent would see.
+  String? checkArgumentsForTest(String name, Map<String, dynamic> args) {
+    final gate = _toolArgGates[name];
+    if (gate == null) {
+      throw ArgumentError.value(name, 'name', 'is not a registered tool');
+    }
+    return gate(args).problem;
+  }
+
+  /// Runs a tool's checked callback directly — the unknown-argument check,
+  /// argument coercion, then the tool's own callback — with no transport and
+  /// no app (task 02 §D). Kept off the MCP surface: a test has no other way to
+  /// reach the checks that run before a callback.
+  Future<CallToolResult> callToolForTest(
+    String name,
+    Map<String, dynamic> args,
+  ) {
+    final callback = _toolCallbacks[name];
+    if (callback == null) {
+      throw ArgumentError.value(name, 'name', 'is not a registered tool');
+    }
+    return Future.sync(() => callback(args, _testExtra));
+  }
+
+  /// A [RequestHandlerExtra] for [callToolForTest]. Tools that run other tools
+  /// pass it along; none of them reaches transport from a test.
+  static final RequestHandlerExtra _testExtra = RequestHandlerExtra(
+    signal: BasicAbortController().signal,
+    requestId: 0,
+    sendNotification: (_, {relatedTask}) async {},
+    sendRequest: <T extends BaseResultData>(_, resultFactory, _) async =>
+        resultFactory(const {}),
+  );
+
   /// The registered devices (tests add some without running apps).
   FleetManager get fleet => _fleetManager;
 
-  /// Names of the tools currently listed to MCP clients.
-  Iterable<String> get listedToolNames =>
-      _allTools.entries.where((e) => e.value.enabled).map((e) => e.key);
+  /// The last listed set written to the call log, to write one line per change
+  /// rather than one per check (startup and the first connection can see the
+  /// same set).
+  String? _listedRecorded;
+
+  /// Writes the set of tools this session offers to the call log, so stats can
+  /// name what was listed but never called (task 03 §B). Called at startup and
+  /// on every change; the log's privacy promise covers it (names only).
+  void _recordListedTools() {
+    final names = listedToolNames.toList()..sort();
+    final key = names.join('\n');
+    if (key == _listedRecorded) return;
+    _listedRecorded = key;
+    _callLog?.recordListed(names);
+  }
 
   Timer? _visibilityTimer;
 
@@ -1529,16 +1662,21 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         true when needs != null => needs.any(extensions.contains),
         _ => true,
       };
-      if (tool.enabled == usable) continue;
+      // A tool outside the profile is never listed, even when it would work.
+      final listed = usable && profileListsTool(name);
+      if (tool.enabled == listed) continue;
       changed = true;
       try {
         // Set the flag without mcp_dart's per-tool list_changed notification.
-        (tool as dynamic).enabled = usable;
+        (tool as dynamic).enabled = listed;
       } catch (_) {
-        usable ? tool.enable() : tool.disable();
+        listed ? tool.enable() : tool.disable();
       }
     }
-    if (changed) server.sendToolListChanged();
+    if (changed) {
+      server.sendToolListChanged();
+      _recordListedTools();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1559,64 +1697,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           messages: [
             PromptMessage(
               role: PromptMessageRole.user,
-              content: TextContent(
-                text: '''# FlutterPilot — AI Agent Guide
-
-You are connected to a live Flutter app via FlutterPilot. Every tool
-targets the active device (see list_connected_devices / switch_device);
-run_on_devices runs the same steps on every registered device and compares.
-
-## First steps
-1. `get_app_summary` — route, tappable elements (labels + keys), errors, logs, window visibility (`setup: true`: connection and plugins, when a tool is missing)
-2. `capture_screenshot` — what the user sees
-3. `get_widget_tree` — keys and structure (diff:true: only what changed)
-4. `inspect_widget(key | x,y)` — the file:line in the app's code that draws a widget, and the app widgets above it
-
-## Acting
-- `tap_widget(key)` — key, `Type['text']` selector, exact visible text, or x/y; gesture: double / long / secondary; waitFor: a widget to wait for after the tap
-- `enter_text(key, text)` — type into a field ("" clears it); `press_key("enter")` submits
-- `press_key(key)` — enter/tab/escape/arrows/shortcuts; "back" = system back (never quits from the root)
-- `fill_form(fields, submitWith)` — several fields (+ checkboxes) in one call
-- `execute_action_chain(steps)` — a known sequence in one call: taps, text, keys, scrolls, with `wait_for` / `assert_widget` between them (`[{tool, arguments}]`, as in `run_on_devices`)
-- `scroll_into_view`, `swipe_widget`, `drag_widget`, `pinch_zoom`, `set_slider_value`, `toggle_checkbox` (also a checkbox inside a tappable row), `focus_widget`
-- `navigate_to(route)` — jump to a route (action push/replace with go_router; deepLink:true)
-Every action reports whether the route changed, a widget-tree diff and what is tappable now: read it before re-checking.
-
-## Waiting and checking
-- `wait_for(key | route | animations | state+expectedValue | frames)` — poll, never sleep
-- `assert_widget(text | key [+enabled] | type+count)` — milliseconds, against the running app
-- `compare_screenshot(name, save:true)` then `compare_screenshot(name)` — visual regression
-- `audit_screen_health` — overflows and small tap targets (with `set_app_settings(textScale: 2)`)
-
-## Reading state
-- `get_errors` (report:true: full crash report), `get_debug_logs` (clear:true)
-- `get_navigation_stack` — routes (go_router: params, routes:true, history:true)
-- `get_state` / `set_state` — Riverpod and Bloc (plugins); `get_state(history: true)`: the recent changes in order (old → new, created, disposed, route changes) when a value is not what you expect
-- `get_network_logs`, `mock_http_response`, `simulate_network` — Dio plugin
-- `mock_platform_channel` — answer a plugin's native calls (location, permission, camera) or deliver its events (a scanned barcode); no argument lists the calls the app made
-- `get_http_profile` — any dart:io client (clear:true for a baseline)
-- storage: `exec_sql_query`, `get_shared_preferences`, `get_hive_contents`, `get_secure_storage`
-
-## Changing how the app renders
-- `set_app_settings` — theme, locale, textScale, keyboardInset (lay out as with an open keyboard), orientation, windowSize, debugPaint, repaintRainbow, slowAnimations
-- `inspect_widget(key, style: true)` — text size/weight/color, paddings, fills, borders, radii: check a design spec in numbers, not from a screenshot
-
-## Performance
-- `profile_frame_budget` — p50/p90/p99 build/raster, jank
-- `profile_action(tool, arguments)` — CPU profile of one action: the app functions it ran (self/total ms, file:line), and for janky frames build/layout/paint/raster and the app widgets that rebuilt
-- `get_memory_details` (classes:true: top classes by heap) — compare before/after a screen for leaks
-
-## Fixing
-1. `get_errors` → your source frame (file:line)
-2. edit the Dart source → `hot_reload` (restart:true for main()/static initializers/provider definitions)
-3. repeat the steps; `assert_widget` / `get_errors` to confirm
-
-## Keep the app running
-- Building the app again takes minutes; `hot_reload` under a second.
-- `hot_reload(restart: true)` recompiles every changed Dart file and runs main() again: use it after a git checkout/merge too, and to get out of a stuck screen or a bad app state.
-- Run the app again only for pubspec.yaml (dependencies, assets), native code, --dart-define values, another device or build mode, or a dead process. Don't kill it when a task is done.
-''',
-              ),
+              content: TextContent(text: guidePrompt),
             ),
           ],
         );

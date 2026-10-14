@@ -52,14 +52,16 @@ String compileErrorsIn(String output, {int max = 8, int maxChars = 2000}) {
 }
 
 /// The errors in `dart analyze --format=machine` [output], as
-/// `path:line:col: message`, paths relative to [root].
+/// `path:line:col: message`, paths relative to [root] with forward slashes
+/// (the analyzer prints them in the platform's own style, field test #341).
 String analyzerErrorsIn(String output, String root, {int max = 8}) {
   final errors = <String>[];
   for (final line in output.split('\n')) {
     final parts = line.split('|');
     if (parts.length < 8 || parts[0] != 'ERROR') continue;
-    var path = parts[3];
-    if (path.startsWith('$root/')) path = path.substring(root.length + 1);
+    var path = parts[3].replaceAll(r'\', '/');
+    final prefix = '${root.replaceAll(r'\', '/')}/';
+    if (path.startsWith(prefix)) path = path.substring(prefix.length);
     errors.add('$path:${parts[4]}:${parts[5]}: ${parts.sublist(7).join('|')}');
   }
   final shown = errors.take(max).join('\n');
@@ -68,9 +70,11 @@ String analyzerErrorsIn(String output, String root, {int max = 8}) {
       : shown;
 }
 
-/// The folder with the pubspec.yaml above [file], or null.
+/// The folder with the pubspec.yaml above [file], or null. [file] may come
+/// from a `file:` URI and hold either separator (a Windows path walks up on
+/// `\`, field test #342).
 String? projectRootOfFile(String file, {bool Function(String)? exists}) {
-  var dir = file;
+  var dir = file.replaceAll(r'\', '/');
   while (true) {
     final cut = dir.lastIndexOf('/');
     if (cut <= 0) return null;

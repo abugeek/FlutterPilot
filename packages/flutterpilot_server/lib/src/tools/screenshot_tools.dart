@@ -93,7 +93,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             text:
                 '${stale == null ? '' : '• Code: $stale\n'}'
                 '${device == null ? '' : '• Device: $device. ${deviceState!.fix}\n'}'
-                '${zeroCodeSummary(basic.data!)}'
+                '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload)}'
                 '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
           ),
         ],
@@ -185,9 +185,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         '${diagnosis ?? ''} Call profile_frame_budget for details.',
       );
     }
-    summary.writeln(
-      '• Uncaught Errors (${errors.length}): ${errors.isEmpty ? "None" : errors.map((err) => err['exception']).join("; ")}',
+    // The reload's fix may already have landed: an error from before it is not
+    // an uncaught exception of the code now running (field test #334). Same
+    // rule as get_errors, marked the same way.
+    final errorSplit = errorsByReload(
+      errors.whereType<Map<String, dynamic>>().toList(),
+      _activeContext?.lastReload,
     );
+    summary.writeln(
+      '• Uncaught Errors (${errorSplit.since.length}): ${errorSplit.since.isEmpty ? "None" : errorSplit.since.map((err) => err['exception']).join("; ")}',
+    );
+    if (errorSplit.before.isNotEmpty) {
+      summary.writeln(
+        '• ${beforeReloadNote(errorSplit.before.length)}: '
+        '${errorSplit.before.map((err) => err['exception']).join("; ")}. '
+        'get_errors(report: true) has the crash report when one was built.',
+      );
+    }
     summary.writeln('• Tappable Elements (${elements.length}):');
     for (final el in elements.take(15)) {
       final label = el['text']?.toString() ?? '';
@@ -205,14 +219,27 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         '$error',
       );
     }
-    if (elements.length > 15) {
-      summary.writeln('  ... and ${elements.length - 15} more elements');
-    }
+    final elementNote = truncationNote(
+      shown: elements.length > 15 ? 15 : elements.length,
+      total: elements.length,
+      what: 'tappable elements (first kept)',
+      how: 'get_interactive_elements lists them all.',
+    );
+    if (elementNote != null) summary.writeln('  $elementNote');
     if (logs.isNotEmpty) {
       summary.writeln('• Recent Console Logs (${logs.length}):');
       for (final log in logs.take(5)) {
         summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
       }
+      final logNote = truncationNote(
+        shown: logs.length > 5 ? 5 : logs.length,
+        total: logs.length,
+        what: 'recent console logs (newest kept)',
+        how:
+            'get_debug_logs(level, query, sinceSeconds, logger, limit) has '
+            'the rest.',
+      );
+      if (logNote != null) summary.writeln('  $logNote');
     }
 
     return CallToolResult(

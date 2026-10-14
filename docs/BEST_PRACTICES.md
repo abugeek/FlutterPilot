@@ -254,7 +254,7 @@ void main() {
   FlutterPilot.initialize();
   
   // ❌ DON'T add mocks here
-  // add_http_mock('/api/users', {...})
+  // mock_http_response(urlPattern: '/api/users', ...)
   
   runApp(MyApp());
 }
@@ -406,9 +406,9 @@ When tools fail, they return structured error:
 For unreliable operations (network mocking setup):
 
 ```
-Try #1: add_http_mock → fails (timeout)
+Try #1: mock_http_response → fails (timeout)
 Wait 2 seconds
-Try #2: add_http_mock → succeeds
+Try #2: mock_http_response → succeeds
 ```
 
 ### ✅ Do: Handle Validation Errors
@@ -509,7 +509,7 @@ Only load plugins you actually need.
 1. Capture screenshot of expected state
 2. Save as "login_screen_golden.png"
 3. Run app and capture current screenshot
-4. Compare using compare_screenshots
+4. Compare using compare_screenshot
 5. Flag if different
 ```
 

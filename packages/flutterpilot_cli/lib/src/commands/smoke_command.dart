@@ -50,6 +50,14 @@ class SmokeCommand extends Command<void> {
             'Stop the running app and build it again (for --device, a '
             'changed pubspec or native code).',
       )
+      ..addFlag(
+        'text-scale',
+        defaultsTo: true,
+        help:
+            'Audit each screen at text scale '
+            '${ScreenResult.textScale2.toInt()} too, reported as its own pass '
+            '(--no-text-scale: only the app\'s own scale).',
+      )
       ..addOption(
         'server',
         help:
@@ -147,6 +155,16 @@ class SmokeCommand extends Command<void> {
     if (!routes.contains(start)) routes.insert(0, start);
 
     final screens = <ScreenResult>[];
+    // A large-text pass per screen: the app's own scale and 2. Off when
+    // --no-text-scale, or once an app has shown it cannot set the scale.
+    var largeText = argResults!['text-scale'] as bool;
+    var scalePassRan = false;
+    if (largeText) {
+      stdout.writeln(
+        'Auditing each screen at text scale 1 and '
+        '${ScreenResult.textScale2.toInt()}…',
+      );
+    }
     for (final route in routes) {
       stdout.writeln('  $route');
       if (route != start || screens.isNotEmpty) {
@@ -167,6 +185,38 @@ class SmokeCommand extends Command<void> {
         stderr.writeln('\n${audit.text}');
         return true;
       }
+      var largeAudit = '';
+      if (largeText) {
+        final set = await s.call('set_app_settings', {
+          'textScale': ScreenResult.textScale2,
+        });
+        if (set.isError) {
+          // No SDK in the app (zero-code) or no text scale to set: say so
+          // once, then audit the rest at the app's own scale only.
+          largeText = false;
+          stderr.writeln(
+            '\nText scale ${ScreenResult.textScale2.toInt()} not tested: '
+            '${set.text.split('\n').first}',
+          );
+        } else {
+          try {
+            final large = await s.call('audit_screen_health', {});
+            if (large.isError) {
+              largeText = false;
+              stderr.writeln(
+                '\nLarge-text pass stopped: ${large.text.split('\n').first}',
+              );
+            } else {
+              largeAudit = large.text;
+              scalePassRan = true;
+            }
+          } finally {
+            // Back to the app's own scale before the next screen: every run
+            // leaves it as it found it, even one that fails here.
+            await s.call('set_app_settings', {'textScale': 0});
+          }
+        }
+      }
       final errors = await s.call('get_errors', {});
       final errorText =
           errors.isError ||
@@ -177,6 +227,7 @@ class SmokeCommand extends Command<void> {
       final result = ScreenResult(
         route,
         audit: audit.isError ? 'Audit failed: ${audit.text}' : audit.text,
+        auditLarge: largeAudit.isEmpty ? null : largeAudit,
         errors: errorText,
       );
       String? shotName;
@@ -191,6 +242,7 @@ class SmokeCommand extends Command<void> {
         ScreenResult(
           route,
           audit: result.audit,
+          auditLarge: result.auditLarge,
           errors: result.errors,
           shot: shotName,
         ),
@@ -205,6 +257,7 @@ class SmokeCommand extends Command<void> {
       device: device,
       app: p.basename(project),
       note: note,
+      textScalePass: scalePassRan,
     );
     File(p.join(out.path, 'report.md')).writeAsStringSync(report);
     final bad = screens.where((x) => !x.ok).length;

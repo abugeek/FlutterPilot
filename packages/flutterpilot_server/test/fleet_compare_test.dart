@@ -21,6 +21,7 @@ void main() {
           text: ok
               ? '(12ms)\nTapped'
               : '(3ms)\nWidget not found: "Welcome"\nHINT: …',
+          structured: null,
         ),
     ])
     ..route = route

@@ -247,6 +247,32 @@ void main() {
     );
   });
 
+  test('MCP config: the tool profile a client uses is shown', () {
+    pubspec([]);
+    write(
+      '.mcp.json',
+      jsonEncode({
+        'mcpServers': {
+          'flutterpilot': {
+            'command': Platform.resolvedExecutable,
+            'args': [
+              'run',
+              p.join(app.path, 'pubspec.yaml'),
+              '--tools',
+              'core',
+              '-p',
+              app.path,
+            ],
+          },
+        },
+      }),
+    );
+    expect(
+      DoctorCommand.checkMcpConfig(app.path, home: app.path).title,
+      'MCP config: Claude Code (core tools)',
+    );
+  });
+
   test('runtime: SDK and each plugin must have registered', () {
     pubspec(['dio']);
     expect(

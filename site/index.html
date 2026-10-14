@@ -102,7 +102,7 @@
     <li>
       <h3>Take the network away, pull to refresh</h3>
       <pre><span class="call">simulate_network(condition: "offline")</span>  <span class="ms">1 ms</span>
-<span class="call">swipe_widget(key: "todo_1", direction: "down")</span>  <span class="ms">650 ms</span>
+<span class="call">gesture_widget(key: "todo_1", gesture: "swipe", direction: "down")</span>  <span class="ms">650 ms</span>
 Pulled to refresh. Route unchanged (/). Widget tree: +7 / -36 / ~0.
   + _LoadError
   + Text["Couldn't load todos"]
@@ -159,7 +159,7 @@ Hot reload applied.</pre>
 Widget tapped "Retry"; then appeared "todo_1". Route unchanged (/).
 
 <span class="call">mock_http_response(urlPattern: "/todos", statusCode: 500, body: '{"error":"server_down"}')</span>
-<span class="call">swipe_widget(key: "todo_1", direction: "down")</span>  <span class="ms">624 ms</span>
+<span class="call">gesture_widget(key: "todo_1", gesture: "swipe", direction: "down")</span>  <span class="ms">624 ms</span>
   + Text["Couldn't load todos (HTTP 500)"]
 <span class="call">assert_widget(text: "Couldn't load todos (HTTP 500)")</span>  <span class="ms">1 ms</span>
 <span class="ok">{"status": "passed"}</span></pre>

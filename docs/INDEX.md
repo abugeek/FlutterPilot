@@ -188,7 +188,7 @@ For capturing visuals and understanding UI structure
 - `capture_screenshot` — Get PNG
 - `get_widget_tree` — Widget hierarchy
 - `get_widget_properties` — Read widget state
-- `compare_screenshots` — Visual regression
+- `compare_screenshot` — Visual regression
 - `compare_screenshot(save: true)` — Save for regression
 
 ### **UI Automation** (15 tools)
@@ -196,7 +196,7 @@ For programmatically interacting with the UI
 - `tap_widget` — Tap by key
 - `enter_text` — Type text
 - `scroll` — Scroll widgets
-- `set_slider_value` — Change slider
+- `gesture_widget` — Swipe, drag, pinch, focus, slide
 - (+ 11 more interaction tools)
 
 ### **Navigation & Routing** (8 tools)
@@ -225,11 +225,11 @@ For deep inspection like DevTools
 
 ### **Network** (via Dio plugin)
 For HTTP mocking and inspection
-- `add_http_mock` — Mock endpoint
+- `mock_http_response` — Mock endpoint
 - `get_network_logs` — Request log
 - `simulate_network` — Network conditions
 
-**See [TOOLS.md](../TOOLS.md) for complete reference with examples.**
+**See [TOOLS.generated.md](../TOOLS.generated.md) for the complete reference.**
 
 ---
 

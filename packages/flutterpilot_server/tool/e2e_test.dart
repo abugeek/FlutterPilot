@@ -20,7 +20,7 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 ///
 /// Covers: init wiring, widget tree, enter_text, press_key, secondary tap,
 /// text scale and locale on an unwired MaterialApp,
-/// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
+/// gesture_widget, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot restart.
 Future<void> main(List<String> args) async {
   final d = args.indexOf('-d');
@@ -877,7 +877,7 @@ Future<void> main(List<String> args) async {
       // Keyboard (ROADMAP §3.11): each key reaches the app once, and in a
       // text field editing keys edit it (desktop editing normally comes from
       // the OS input client, which synthesized key events never reach).
-      await check('nothing focused', 'focus_widget', {});
+      await check('nothing focused', 'gesture_widget', {'gesture': 'focus'});
       await check(
         'a key arrives once',
         'press_key',
@@ -939,7 +939,8 @@ Future<void> main(List<String> args) async {
         false,
         react,
       );
-      await check('pinch_zoom', 'pinch_zoom', {
+      await check('pinch zoom', 'gesture_widget', {
+        'gesture': 'pinch',
         'key': 'zoomable',
         'scale': 2.0,
       });
@@ -1287,8 +1288,8 @@ Future<void> main(List<String> args) async {
       });
       await check(
         'pull to refresh waits for the refresh',
-        'swipe_widget',
-        {'key': 'Row 0', 'direction': 'down'},
+        'gesture_widget',
+        {'gesture': 'swipe', 'key': 'Row 0', 'direction': 'down'},
         ['Pulled to refresh', 'Refreshed 1'],
       );
       await check('back from the list', 'press_key', {'key': 'back'}, ['Send']);
@@ -1687,7 +1688,7 @@ Future<void> main(List<String> args) async {
       } finally {
         hidden.renameSync(uriFile.path);
       }
-      elsewhere.deleteSync(recursive: true);
+      await deleteWithRetries(elsewhere);
     } else {
       print(
         '⏭ no .dart_tool/flutterpilot_vm_uri on $device: roots check skipped',
@@ -1965,10 +1966,42 @@ Future<void> main(List<String> args) async {
     copy?.kill();
     server?.kill();
     flutter?.kill();
-    work.deleteSync(recursive: true);
+    // Wait for them to go before deleting: a `flutter run` killed a moment
+    // ago, and the app it started, still hold the app's files on Windows
+    // (field test #340).
+    for (final p in [copy, server, flutter]) {
+      if (p == null) continue;
+      await p.exitCode.timeout(const Duration(seconds: 5), onTimeout: () => -1);
+    }
+    await deleteWithRetries(work);
   }
   print(failed == 0 ? '\nE2E passed' : '\nE2E: $failed failed');
   exit(failed == 0 ? 0 : 1);
+}
+
+/// Deletes [dir], retrying for a few seconds.
+///
+/// On Windows a just-killed `flutter run` and the app it started keep their
+/// files open for a moment, and deleting then throws errno 32. Cleanup never
+/// fails the run — the checks are the result — so after [within] this says what
+/// it could not delete and returns (field test #340).
+Future<void> deleteWithRetries(
+  Directory dir, {
+  Duration within = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(within);
+  while (true) {
+    try {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      return;
+    } on FileSystemException catch (e) {
+      if (DateTime.now().isAfter(deadline)) {
+        print('⚠️  could not delete ${dir.path} (not a check): $e');
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 250));
+    }
+  }
 }
 
 /// Minimal line-delimited JSON-RPC client for the MCP stdio transport.

@@ -24,12 +24,8 @@ class Verification {
     'fill_form',
     'execute_action_chain',
     'scroll_into_view',
-    'swipe_widget',
-    'drag_widget',
+    'gesture_widget',
     'toggle_checkbox',
-    'set_slider_value',
-    'focus_widget',
-    'pinch_zoom',
     'navigate_to',
     'mock_http_response',
     'mock_platform_channel',
@@ -53,6 +49,7 @@ class Verification {
     Map<String, dynamic> args,
     String resultText, {
     required bool isError,
+    Map<String, dynamic>? structured,
   }) {
     final c = current;
     if (c == null) return;
@@ -64,7 +61,7 @@ class Verification {
         // Checks show what was asserted; actions show their response,
         // which already masks what was typed into password fields.
         what: isCheck ? _describeArgs(args) : null,
-        result: _firstLine(resultText),
+        result: _firstLine(resultText, structured),
         isError: isError,
         isCheck: isCheck,
       ),
@@ -78,13 +75,20 @@ class Verification {
 
   /// The response's first line, without the error category and the
   /// advice meant for the agent.
-  static String _firstLine(String text) {
+  ///
+  /// A check's pass comes from its structured result when it has one
+  /// (`assert_widget` used to answer pass/fail as JSON in its text, sniffed
+  /// here); the text stays the fallback, and the string shown is the same.
+  static String _firstLine(String text, [Map<String, dynamic>? structured]) {
     var line = text
         .split('\n')
         .map((l) => l.trim())
         .firstWhere((l) => l.isNotEmpty, orElse: () => '')
         .replaceFirst(RegExp(r'^\[\w+\] '), '');
-    if (line.startsWith('{"status":"passed"')) return 'passed';
+    if (structured?['passed'] == true ||
+        line.startsWith('{"status":"passed"')) {
+      return 'passed';
+    }
     for (final advice in [' Nothing changed in', ' If it starts', ' HINT:']) {
       final i = line.indexOf(advice);
       if (i > 0) line = line.substring(0, i);

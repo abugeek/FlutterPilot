@@ -185,7 +185,7 @@ class InitCommand extends Command<void> {
           : 'packages/plugins/$package';
       if (local != null) {
         return {
-          'path': p.relative(
+          'path': InitCommand.relativePosix(
             p.absolute(local, subdir),
             from: p.absolute(rootPath),
           ),
@@ -325,6 +325,15 @@ class InitCommand extends Command<void> {
       'Cursor, VS Code, Codex, Gemini CLI and more), then flutterpilot dev (runs the app so the server finds it).',
     );
   }
+
+  /// [to] relative to [from], with forward slashes. The path is written into
+  /// pubspec.yaml, which is committed: on Windows `p.relative` gives
+  /// `..\FlutterPilot\…` (or `D:\…` when the app is on another drive), and
+  /// either trips the `path_not_posix` lint in an app that enables it (field
+  /// test #326). A Windows file name cannot contain a backslash, so replacing
+  /// the separator is enough.
+  static String relativePosix(String to, {required String from}) =>
+      p.relative(p.absolute(to), from: p.absolute(from)).replaceAll(r'\', '/');
 
   /// Whether flutterpilot_sdk is published on pub.dev (so `init` can use
   /// hosted versions). Offline or slow: false, and git is used.

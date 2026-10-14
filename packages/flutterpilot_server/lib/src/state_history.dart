@@ -1,3 +1,5 @@
+import 'truncation.dart';
+
 /// `get_state(history: true)`: the app's recent state and route changes as
 /// lines, oldest first — `12:04:12.110  riverpod  cart: 3 → 0`.
 ///
@@ -16,9 +18,17 @@ String formatStateHistory(
     return 'No state changes observed since the app started'
         '${cleared ? '' : ' (or since the history was cleared)'}.';
   }
+  final note = truncationNote(
+    shown: shown.length,
+    total: dropped > 0 ? shown.length + dropped : shown.length,
+    what: 'recent state changes (oldest first)',
+    how:
+        'Clear the history before the action you care about (clear: true) '
+        'to see only its changes.',
+  );
   final lines = [
-    'State changes, oldest first (${shown.length}'
-        '${dropped > 0 ? '; $dropped older ones dropped' : ''}):',
+    'State changes, oldest first (${shown.length}):',
+    ?note,
     for (final c in shown) _line(c),
     if (cleared) 'History cleared.',
   ];

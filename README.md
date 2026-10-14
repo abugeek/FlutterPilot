@@ -9,7 +9,7 @@
 
 > **See it work:** [`site/index.html`](site/index.html) walks through a recorded session on the example app (a missing offline message found, located, fixed with hot reload and checked, with the real tool output and before/after screenshots).
 
-> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with a broad, versioned tool set for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage. Call `get_capabilities` to discover the exact runtime set.
+> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with a broad, versioned tool set for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage. Call `get_app_summary(setup: true)` to see the connected app's plugins.
 
 ## 🚀 Quick Start (Choose Your Workflow)
 
@@ -113,8 +113,16 @@ plugin), add `--static-tools` (`flutterpilot mcp install --static-tools`):
 every tool is listed from the start, and one that can't work on the
 connected app says why when called.
 
-By hand:
+A client that counts tools across every server it runs can ask for the short
+set instead (checked 2026-10-14: Cursor's docs state no tool limit; VS Code's
+Copilot allows 128 tools per request; Claude Code no fixed cap):
+`flutterpilot mcp install --tools core` writes `--tools core`, and
+`flutterpilot doctor` shows which profile each config uses. `all` is the
+default; `--tools core` is a subset that still has to work for the app (a
+zero-code app sees fewer), and it refuses a step that names a tool it does
+not list.
 
+By hand:
 Build the server once (fast startup, no `dart` on the IDE's PATH needed):
 ```bash
 cd packages/flutterpilot_server && dart compile exe bin/flutterpilot_server.dart -o build/flutterpilot_server
@@ -173,8 +181,9 @@ paddings, borders and radii), `capture_screenshot`.
 
 **Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
 `waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
-(`"back"` for system back), `swipe_widget`, `drag_widget`,
-`scroll_into_view`, `toggle_checkbox`, `set_slider_value`.
+(`"back"` for system back), `gesture_widget` (`gesture`: swipe / drag /
+pinch / focus / slide),
+`scroll_into_view`, `toggle_checkbox`.
 Batch known sequences with `execute_action_chain` (steps are tool calls,
 with `wait_for` / `assert_widget` between them) or `fill_form`. Every action reports
 its own result — route change, what appeared/disappeared, tappable elements

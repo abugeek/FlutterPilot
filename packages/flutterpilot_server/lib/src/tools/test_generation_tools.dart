@@ -138,7 +138,7 @@ mixin _TestGenerationToolsMixin
     final file = File('${app.root}/integration_test/${name}_test.dart');
     file.parent.createSync(recursive: true);
     file.writeAsStringSync(test.source);
-    await Process.run('dart', ['format', file.path]);
+    await runProgram(['dart', 'format', file.path]);
     final formatted = file.readAsStringSync();
     final relative = 'integration_test/${name}_test.dart';
 
@@ -290,7 +290,7 @@ mixin _TestGenerationToolsMixin
         return _crashTarget?.simulatorUdid;
       case 'android':
         try {
-          final r = await Process.run('flutter', ['devices', '--machine']);
+          final r = await runProgram(['flutter', 'devices', '--machine']);
           final devices = (jsonDecode(r.stdout as String) as List)
               .cast<Map<String, dynamic>>();
           return devices

@@ -11,13 +11,19 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 67 MCP tools (+launch_app, 2026-10-11; 164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
-  (a Dio-only app 45, zero-code 15). SDK + 12 plugins + server + CLI. All packages
+- 63 MCP tools (§4.2 merged families into one tool with a parameter; §4.7 merged the five
+  gesture tools into `gesture_widget(gesture: ...)`); an app sees only the tools that work
+  for it (a Dio-only app 43, zero-code 15). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
   drives it through the MCP server over stdio. 32/32 checks pass on macOS
   (also runs in CI on `macos-latest`).
+- `packages/flutterpilot_server/tool/eval/` — agent evals (2026-10-14): a small
+  Messages API loop drives the task-00 lab apps and reports which tools a model
+  picked and how many calls, tokens and seconds each task cost, so curation
+  changes can prove they did not make agents worse. Baseline numbers are pending
+  a paid run (task 01).
 - Field-test app: `../hn_reader` (sibling of this repo, its own git history):
   Hacker News reader with Riverpod 3, go_router 18, Dio (+ Algolia search),
   sqflite bookmarks, shared_preferences theme, connectivity banner, right-click
@@ -29,6 +35,40 @@ tools that always work beat many tools that sometimes work.
   connectivity (read-only) in `../hn_reader`; bloc, drift, hive_ce,
   secure_storage, supabase in `../notes_app`; firebase (Auth + Firestore,
   emulators) in `../firebase_app`; plain hive in `../hive_app`.
+- MCP-curation lab apps (2026-10-14): `../fp_lab_shop` (Riverpod, go_router,
+  Dio, sqflite, shared_preferences), `../fp_lab_notes` (Bloc, Drift, Hive CE,
+  secure storage, connectivity), `../fp_lab_plain` (zero-code). Each is its own
+  git repo; planted defects and the tool calls that find them are in its
+  `LAB.md`.
+- Responses that cut a list say what was cut and how to see the rest
+  (2026-10-14, task 07): "Showing 100 of 342 matching log entries (newest
+  kept). Narrow with level, query, sinceSeconds or logger, or raise limit
+  (max 500)." One helper, `src/truncation.dart`; no line when the list is
+  complete.
+- Round-1 field-test fixes (2026-10-14, task 11): `simulate_network(offline)`
+  now beats `mock_http_response` — a mock stands in for the server, offline
+  means no request reaches one — and `slow_3g`/`fast_4g` delay a mocked answer
+  too (`packages/plugins/flutterpilot_dio`). `get_debug_logs` merges what the
+  app printed before the connection from the SDK's own buffer (deduped by
+  time; a zero-code app is told it isn't available). `get_app_summary`'s
+  uncaught errors carry the same "before the last reload" mark as
+  `get_errors`, from one function (`src/error_freshness.dart`).
+  `flutterpilot smoke` audits every screen at text scale 2 as well
+  (`--no-text-scale`, report per pass). `TOOLS.generated.md` gained a
+  freshness test, so a tool change can't leave it stale again.
+- The core profile's tool limit is measured, not remembered (2026-10-14, task
+  12): Cursor's MCP docs state no tool limit, VS Code's Copilot errors above
+  128 tools per request, Claude Code states no fixed per-server cap, and the
+  official Dart MCP server as `mcp install` writes it lists 4 (Dart 3.13.4).
+  `--tools core` is 29 names (20 363 bytes) — 28 for `fp_lab_shop`, 25 for
+  `fp_lab_notes` after plugin gating — so 29 + 4 + 5 fits with room and
+  nothing was cut.
+- Rounds 1–2 are one branch (2026-10-14, task 13): #125–#127 merged into #124
+  (`--no-ff`), the findings file and this roadmap hand-merged, the missing
+  `## Unreleased` entries written (server, CLI, Dio plugin), and the last two
+  findings fixed — `smoke` reads the route table from the `Routes: ` line, not
+  the `Path params:` map before it (#344), and the e2e waits for the app to
+  exit and retries its scratch-folder delete on Windows (#340).
 
 ### How to work (the method that found every real bug so far)
 
@@ -355,6 +395,66 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    details (idb commands, pointer maths). `tool_registration_test` rejects
    selling phrases and descriptions over 600 chars. Responses lost their
    emoji banners too (audit, action chain, compare, connect).
+4. **Argument robustness:** done — one place before any tool callback brings
+   each argument to the schema's type where the intent is unambiguous
+   (`"100"` → 100, `12.0` → 12, `"true"` → true, a stringified `"[{...}]"` or
+   `"{...}"` for an array/object, a case-folded enum) and otherwise refuses,
+   naming the argument, the expected type and an example. A cast error used to
+   reach `_registerTool`'s catch-all, which answered "the app was busy, retry"
+   and sent the agent round the same broken call; a type error now points at
+   `tools/list`. `arg_coercion_test` covers every rule (including nested
+   `steps[].arguments`); `tool_argument_fuzz_test` fuzzes all 63 tools. A
+   property whose schema declares no `type` at all (`set_state.value`,
+   `mock_platform_channel.result`/`event`) passes through untouched.
+5. **Measure the surface:** done — `dart run
+   packages/flutterpilot_server/tool/tool_list_report.dart` prints what each
+   app profile pays for `tools/list` (bytes per tool, sorted, with a total and
+   a token estimate) for `all`, `sdk_no_plugins`, `sdk_dio`, `sdk_lab_shop`,
+   `sdk_lab_notes`, `zero_code` and `profile_build`; `--json` writes the same
+   for the tool-merging task. The measure is one function
+   (`src/tool_list_bytes.dart`) the budget test and the report share. The
+   server now writes the tools a session was offered to the call log when the
+   list changes, and `flutterpilot stats` names what was listed but never
+   called, adds p50/p90 response size (an average hides the one 40 KB
+   `get_widget_tree`), takes several logs and has `--json`.
+6. **Capped lists say so:** done (2026-10-14) — every server-side cap ends its
+   response with one line from a single helper (`src/truncation.dart`), e.g.
+   "Showing 100 of 342 matching log entries (newest kept). Narrow with level,
+   query, sinceSeconds or logger, or raise limit (max 500)." Covered:
+   `get_debug_logs`, `get_state(history: true)`, `exec_sql_query`,
+   `get_http_profile`, `get_memory_details(classes: true)`, `get_app_summary`,
+   `query_supabase_table` and `query_firestore`; a list that was not cut gets
+   no line, and an uncounted total reads "at least N+1". Caps that live in the
+   SDK are unchanged (protocol frozen) and named as candidates.
+7. **Consolidate the gesture tools (task 04):** done — `swipe_widget`,
+   `drag_widget`, `pinch_zoom`, `focus_widget` and `set_slider_value` became
+   one `gesture_widget(key, gesture: swipe | drag | pinch | focus | slide)`.
+   A mode's arguments are refused in another mode, and a step that still
+   names an old tool runs the new one (`src/retired_tools.dart`, so
+   `execute_action_chain`, `run_on_devices`, `profile_action` and a leak
+   `cycle` keep working). `sdk_lab_shop` 52 → 48 tools and 34 179 → 33 594
+   bytes (−1.7 %); the merged tool is 1 495 bytes, 26 % under the 2 022 the
+   five cost. The task's other candidates (C1, C2, C4, C5) were left alone:
+   each merged description came out less than 25 % shorter than the tools it
+   replaced, the task's own test for whether a merge is worth it, so the whole
+   list was worth ~3 % against the 15 % the task asked for — the tools are
+   already one-per-family with short descriptions.
+8. **A core profile for a client with a tool limit (task 08):** done —
+   `--tools core|all` on the server and `flutterpilot mcp install --tools
+   core` (`all` is the default: nothing changes for existing users).
+   `coreTools` (`lib/src/tool_profiles.dart`) is 29 names: every tool task 01's
+   14 eval tasks name, plus what an agent needs to recover
+   (`get_app_summary`, `get_errors`, `get_debug_logs`, `hot_reload`,
+   `launch_app`) and the interaction basics - 20 363 bytes. Task 12
+   re-measured the limit it has to fit (2026-10-14): Cursor's MCP docs state
+   no tool limit any more, VS Code's Copilot errors above 128 tools per
+   request, Claude Code states no fixed per-server cap, and the Dart MCP
+   server as `mcp install` writes it lists 4 - so 29 + 4 + 5 fits with room
+   and nothing was cut. It is *intersected* with what works for the app (a
+   zero-code app sees `coreTools ∩ zeroCodeTools`), never added to it, and a
+   step that names a hidden tool is refused instead of running hidden.
+   `get_app_summary(setup: true)` and `flutterpilot doctor` say which profile
+   is in use.
 
 ## 5. DevTools parity — what developers actually open DevTools for
 
@@ -443,7 +543,7 @@ obscured text becomes `--dart-define` values, never written.
 `integration_test` to dev_dependencies if missing, **runs it** on the same
 device (`flutter test -d`) and reports passed, or the step it failed at with
 the framework's message. Not replayed (listed in the response):
-`navigate_to`, `set_slider_value`, keys without a test equivalent. Not
+`navigate_to`, a gesture slide, keys without a test equivalent. Not
 recorded: taps by the user's own hand. Findings #236–239.
 
 ## 7. ~~State time travel done right~~ — done (2026-09-29), as scenarios
@@ -588,7 +688,7 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - ~~**Example app**~~ — done (2026-10-01): replaced by a small todo app
   (Dio, Riverpod, go_router, shared_preferences) with a widget test and a
   walkthrough in its README, run through the bridge. It found three bugs:
-  mocked error statuses reached the app as successes, `swipe_widget` never
+  mocked error statuses reached the app as successes, a swipe never
   pulled to refresh on Apple physics (§1.8's open item), and controls named
   only by `semanticLabel` couldn't be found. Findings #276–280.
 

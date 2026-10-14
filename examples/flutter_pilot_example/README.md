@@ -50,7 +50,7 @@ Each step is one tool call, and each response already says what changed.
 3. **Break the server.** `mock_http_response(urlPattern: "/todos",
    statusCode: 500, body: '{"error":"server_down"}')`. The app's Dio now
    fails the way it would against a real 500.
-4. **Reload.** `swipe_widget(key: "todo_1", direction: "down")` →
+4. **Reload.** `gesture_widget(key: "todo_1", gesture: "swipe", direction: "down")` →
    "Pulled to refresh", and the diff shows `Text["Couldn't load todos (HTTP 500)"]`
    and a Retry button.
 5. **Assert it.** `assert_widget(text: "Couldn't load todos (HTTP 500)")` →
@@ -77,7 +77,7 @@ keeps them (see the root README).
 ## Walkthrough: no connection (a fix made with FlutterPilot)
 
 1. `simulate_network(condition: "offline")`, then
-   `swipe_widget(key: "todo_1", direction: "down")` → the diff showed
+   `gesture_widget(key: "todo_1", gesture: "swipe", direction: "down")` → the diff showed
    `Text["Couldn't load todos"]`: the same message as any other failure, so
    a user couldn't tell the problem was on their side.
 2. `inspect_widget(key: "Couldn't load todos")` → `lib/screens.dart:126`

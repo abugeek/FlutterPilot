@@ -280,4 +280,68 @@ void main() {
       expect(response.data, [1, 2]);
     });
   });
+
+  group('the network condition reaches a mocked request too', () {
+    Dio dio() =>
+        Dio(BaseOptions(baseUrl: 'https://api.example.com'))
+          ..interceptors.add(DioPilotInterceptor());
+
+    tearDown(() {
+      DioPilotInterceptor.clearMocks();
+      DioPilotInterceptor.simulate(NetworkCondition.normal);
+    });
+
+    test(
+      'offline fails a mocked URL the way it fails an unmocked one',
+      () async {
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        DioPilotInterceptor.simulate(NetworkCondition.offline);
+        await expectLater(
+          dio().get<List<dynamic>>('/todos'),
+          throwsA(
+            isA<DioException>()
+                .having((e) => e.type, 'type', DioExceptionType.connectionError)
+                .having((e) => e.message, 'message', contains('offline')),
+          ),
+        );
+        // The mock is kept, not cleared: `normal` brings its answer back.
+        DioPilotInterceptor.simulate(NetworkCondition.normal);
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+      },
+    );
+
+    test(
+      'offline beats a mocked error: the request never reaches the mock',
+      () async {
+        DioPilotInterceptor.mock('/pay', error: 'timeout', delayMs: 50);
+        DioPilotInterceptor.simulate(NetworkCondition.offline);
+        await expectLater(
+          dio().post<void>('/pay'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.type,
+              'type',
+              DioExceptionType.connectionError,
+            ),
+          ),
+        );
+      },
+    );
+
+    for (final (condition, atLeastMs) in [
+      (NetworkCondition.fast4g, 90),
+      (NetworkCondition.slow3g, 1400),
+    ]) {
+      test('${condition.name} delays a mocked answer', () async {
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        DioPilotInterceptor.simulate(condition);
+        final started = DateTime.now();
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+        expect(
+          DateTime.now().difference(started).inMilliseconds,
+          greaterThanOrEqualTo(atLeastMs),
+        );
+      });
+    }
+  });
 }

@@ -257,6 +257,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
+    // No `clear: true` here, unlike get_debug_logs and get_http_profile:
+    // ext.flutterpilot.getNetworkLogs takes no parameters and answers from the
+    // plugin's own ring buffer, so emptying it needs a parameter on that
+    // extension or a new one — an SDK protocol change (round 1/2 rule). The
+    // eval runner's `shop_detail_requests` counts entries in the newest
+    // window instead (field test #330).
     _registerAppTool(
       name: 'get_network_logs',
       description:
@@ -416,14 +422,18 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
+        final pluginTotal = (res.data?['total'] as num?)?.toInt();
+        final note = truncationNote(
+          shown: rows.length > 50 ? 50 : rows.length,
+          total: res.data?['truncated'] == true ? pluginTotal : rows.length,
+          what: 'rows (first kept)',
+          how: 'Page with LIMIT/OFFSET in the SQL, or narrow with WHERE.',
+        );
         final buf = StringBuffer('${rows.length} row(s)');
-        if (res.data?['truncated'] == true) {
-          buf.write(' (truncated from ${res.data?['total']})');
-        }
+        if (note != null) buf.write('\n$note');
         for (final row in rows.take(50)) {
           buf.write('\n${jsonEncode(row)}');
         }
-        if (rows.length > 50) buf.write('\n… ${rows.length - 50} more');
         // The first time a table is read, its columns: the next query on it
         // then has names to use instead of guesses (6 of 39 queries in
         // field sessions failed on a guessed column).

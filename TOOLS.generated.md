@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 67
+Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41087 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40614 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -40,8 +40,10 @@ Runs the same steps on several registered devices at once (e.g. iPhone, Android 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, drag_widget, enter_text, execute_action_chain, fill_form, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, set_slider_value, simulate_network, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, enter_text, execute_action_chain, fill_form, gesture_widget, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, simulate_network, tap_widget, toggle_checkbox, wait_for. |
 | `devices` | array | no | Registered device names (list_connected_devices); default: all of them. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{devices: [{id: string, passedSteps: int, totalSteps: int, failedStep?: int, route?: string, errors: int}], same: bool}`
 
 ## `switch_device`
 
@@ -63,7 +65,7 @@ _Read-only._
 
 ## `get_debug_logs`
 
-What the app printed since FlutterPilot connected: print(), debugPrint() and dart:developer log(). clear:true empties the captured logs instead, for a clean baseline before a test.
+What the app printed: print(), debugPrint() and dart:developer log(), plus what the SDK buffered before connecting. clear:true empties the captured logs instead, for a clean baseline before a test.
 
 _Read-only._
 
@@ -123,17 +125,23 @@ Presses a key on the focused widget: enter (submits a text field), tab, escape (
 | `key` | string | yes | E.g. "enter", "tab", "escape", "back", "arrowDown", "space", "backspace", or a single character. |
 | `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
 
-## `pinch_zoom`
+## `gesture_widget`
 
-Two-finger pinch on a widget or at x/y. Reports what changed.
+Drives a widget with a gesture other than a tap: swipe (scroll a list, dismiss a card, open a drawer, pull to refresh), drag one widget onto another, pinch to zoom, focus a field (or unfocus), or slide a Slider to value. Pass gesture and that gesture's arguments; another gesture's arguments are refused. Reports what changed.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `scale` | number | yes | Above 1 zooms in, below 1 zooms out. |
-| `key` | string | no | Key or selector of the widget. |
-| `identifier` | string | no | Semantics identifier of the target widget. |
-| `x` | number | no | Center of the pinch, with y. |
+| `gesture` | string: swipe \| drag \| pinch \| focus \| slide | yes | Which gesture to perform. |
+| `key` | string | no | Key or selector of the widget. Omitted for gesture: focus to unfocus everything; for pinch, x/y or identifier may name the target instead. |
+| `direction` | string: up \| down \| left \| right | no | gesture: swipe. |
+| `distance` | number | no | gesture: swipe — logical pixels; positive = down/right. |
+| `fromKey` | string | no | gesture: drag — key or selector to drag. |
+| `toKey` | string | no | gesture: drag — key or selector to drop it on. |
+| `scale` | number | no | gesture: pinch — above 1 zooms in, below 1 out. |
+| `identifier` | string | no | gesture: pinch — semantics identifier of the target. |
+| `x` | number | no | gesture: pinch — center x, with y. |
 | `y` | number | no |  |
+| `value` | number | no | gesture: slide — the Slider value (clamped to its min/max). |
 
 ## `scroll_into_view`
 
@@ -142,42 +150,6 @@ Scrolls the lists on screen until the widget (key, selector or text) is on scree
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or text of the widget. |
-
-## `swipe_widget`
-
-Swipes on a widget up/down/left/right: scroll a list, dismiss a card, open a drawer, pull to refresh (down on a list at its top). Reports what changed.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Key or selector of the widget to swipe on. |
-| `direction` | string: up \| down \| left \| right | yes |  |
-| `distance` | number | no | Scroll distance in logical pixels. Positive = down/right, negative = up/left. |
-
-## `drag_widget`
-
-Drags one widget onto another (drag-and-drop, reordering). Reports what changed.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `fromKey` | string | yes | Key or selector of the widget to drag. |
-| `toKey` | string | yes | Key or selector of the widget to drop it on. |
-
-## `focus_widget`
-
-Focuses the widget found by key (opens the software keyboard for a TextField). Without a key, removes focus from everything and dismisses the keyboard.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Key or selector. Omit to unfocus everything. |
-
-## `set_slider_value`
-
-Moves a Slider to a value (clamped to its min/max) the way a user would, so onChanged fires.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Key or selector of the Slider. |
-| `value` | number | yes |  |
 
 ## `toggle_checkbox`
 
@@ -212,6 +184,8 @@ _Read-only._
 | `frames` | integer | no | Pump this many frames (1–120). |
 | `timeoutMs` | integer | no | Default 5000 (3000 for key). |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{met: bool, waitedMs: int, timedOut: bool, condition: "key"|"route"|"state"|"frames"|"animations"|"none", route?: string}`
+
 ## `audit_screen_health`
 
 Layout and accessibility check of the current screen: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. Use after set_app_settings(textScale/locale/theme) or a UI change.
@@ -228,7 +202,7 @@ Runs a known sequence of steps in one call, stopping at the first that fails: ta
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "enter_text", "arguments": {"key": "Title", "text": "Groceries"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, drag_widget, enter_text, fill_form, navigate_to, press_key, scroll_into_view, set_slider_value, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "enter_text", "arguments": {"key": "Title", "text": "Groceries"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, navigate_to, press_key, scroll_into_view, tap_widget, toggle_checkbox, wait_for. |
 
 ## `native_screenshot`
 
@@ -436,6 +410,7 @@ Builds and starts the app (flutter run, or the command in flutterpilot/launch.js
 | `mode` | string: debug \| profile | no | Default debug. |
 | `project` | string | no | App folder, if several. |
 | `relaunch` | boolean | no | Stop the running app and rebuild. |
+| `waitSeconds` | integer | no | Return early if still building (default 600). |
 
 ## `get_state`
 
@@ -575,6 +550,8 @@ _Read-only._
 | `type` | string | no | Widget type to count (e.g. "ListTile"). |
 | `count` | integer | no | Expected count of type. |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none", expected?: string, found?: int, reason?: string}`
+
 ## `get_memory_details`
 
 Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab). Leak check: cycle (action tool calls that end where they started, e.g. open a screen then press back) runs times rounds; returns the classes that gained instances every round, where they are defined and what keeps one alive.
@@ -643,6 +620,8 @@ Checks a feature against acceptance criteria and writes a pass/fail report with 
 | `scenario` | string | no | With criteria: load this scenario first. |
 | `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
 | `finish` | boolean | no | Close the last criterion and write the report. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{feature: string, criteria: [{index: int, text: string, verdict: "passed"|"failed"|"not_verified", warnings: int}], report: string} (finish: true only)`
 
 ## `get_supabase_auth`
 

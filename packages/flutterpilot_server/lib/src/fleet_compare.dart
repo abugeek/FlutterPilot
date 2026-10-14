@@ -5,8 +5,9 @@ class DeviceRun {
 
   final String device;
 
-  /// Outcome of each step that ran (a device stops at its first failure).
-  final steps = <({bool ok, String text})>[];
+  /// Outcome of each step that ran (a device stops at its first failure),
+  /// with the step's structured result when it returned one.
+  final steps = <({bool ok, String text, Map<String, dynamic>? structured})>[];
 
   /// Set when the device could not be reached at all.
   String? unreachable;
@@ -47,8 +48,18 @@ class DeviceRun {
   }
 }
 
+/// A string short enough for a table cell.
+String _clip(String line) =>
+    line.length > 160 ? '${line.substring(0, 160)}…' : line;
+
 /// The first line of a tool's response, short enough for a table cell.
-String _gist(String text) {
+///
+/// A step whose result is structured says why it failed itself (`reason`), so
+/// the message does not have to be dug out of the text; the same string comes
+/// out either way.
+String _gist(String text, [Map<String, dynamic>? structured]) {
+  final reason = structured?['reason'];
+  if (reason is String && reason.isNotEmpty) return _clip(reason.trim());
   var line = text
       .split('\n')
       .map((l) => l.trim())
@@ -58,13 +69,14 @@ String _gist(String text) {
       );
   // "[extensionError] ASSERTION FAILED: …" → "ASSERTION FAILED: …"
   line = line.replaceFirst(RegExp(r'^\[\w+\] '), '');
-  return line.length > 160 ? '${line.substring(0, 160)}…' : line;
+  return _clip(line);
 }
 
 /// The report run_on_devices returns: each step's outcome per device, then
-/// how the devices' final screens differ. Devices that agree are grouped,
-/// so a flow that works everywhere reads in a few lines.
-String describeFleetRun(
+/// how the devices' final screens differ, and whether every device was
+/// reached and agreed (for its structured result). Devices that agree are
+/// grouped, so a flow that works everywhere reads in a few lines.
+({String text, bool same}) fleetReport(
   List<({String tool, Map<String, dynamic> arguments})> steps,
   List<DeviceRun> runs,
 ) {
@@ -95,7 +107,8 @@ String describeFleetRun(
         '✅ all'
       else if (passed.isNotEmpty)
         '✅ ${passed.join(', ')}',
-      for (final r in failed) '❌ ${r.device}: ${_gist(r.steps[i].text)}',
+      for (final r in failed)
+        '❌ ${r.device}: ${_gist(r.steps[i].text, r.steps[i].structured)}',
       if (skipped.isNotEmpty) '– ${skipped.join(', ')} (stopped earlier)',
     ];
     if (passed.length != reached.length) stepsDiffer = true;
@@ -151,7 +164,8 @@ String describeFleetRun(
       '— switch_device + get_errors for details',
     );
   }
-  if (diffs.isEmpty && !stepsDiffer && reached.length == runs.length) {
+  final same = diffs.isEmpty && !stepsDiffer && reached.length == runs.length;
+  if (same) {
     out.write('All devices agree: same steps passed, same final screen.');
   } else if (diffs.isNotEmpty) {
     out.write(
@@ -160,8 +174,14 @@ String describeFleetRun(
   } else {
     out.write('Final screens match.');
   }
-  return out.toString();
+  return (text: out.toString(), same: same);
 }
+
+/// The report text alone.
+String describeFleetRun(
+  List<({String tool, Map<String, dynamic> arguments})> steps,
+  List<DeviceRun> runs,
+) => fleetReport(steps, runs).text;
 
 /// Compact arguments: {key: "Log in"} → (key: "Log in").
 String _args(Map<String, dynamic> args) {

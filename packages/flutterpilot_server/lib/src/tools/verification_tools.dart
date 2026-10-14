@@ -257,17 +257,10 @@ mixin _VerificationToolsMixin
               : 'on ${context!.operatingSystem}',
         ),
       );
+    final result = verifyFeatureResult(v, report.path);
     return CallToolResult(
-      content: [
-        TextContent(
-          text: [
-            '${v.feature}: ${v.headline}.',
-            for (final c in v.criteria)
-              '${c.index}. ${c.verdict.label} ${c.text} — ${c.reason}',
-            'Report: ${report.path} (with a screenshot per criterion).',
-          ].join('\n'),
-        ),
-      ],
+      content: [TextContent(text: result.text)],
+      structuredContent: result.structured,
     );
   }
 }

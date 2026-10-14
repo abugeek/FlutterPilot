@@ -260,19 +260,37 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        const nothingToCheck =
+            'Say what to check: text, key (optionally with enabled), '
+            'or type with count.';
         final target = p['target'] ?? p['key'];
         final _ExtensionResult res;
+        // What the check is, and what it saw: a text, key or enabled check
+        // sees one widget when it passes, and a count check reads the count
+        // back from the payload its text is built from too.
+        late final String check;
+        String? expected;
+        int? found;
         if (p['text'] != null) {
+          check = 'text';
+          expected = p['text'].toString();
+          found = 1;
           res = await _callExtensionRaw('ext.flutterpilot.assertTextVisible', {
             'text': p['text'].toString(),
             if (p['exact'] != null) 'exact': p['exact'].toString(),
           });
         } else if (p['type'] != null && p['count'] != null) {
+          check = 'count';
+          expected = '${p['count']} ${p['type']}';
           res = await _callExtensionRaw('ext.flutterpilot.assertWidgetCount', {
             'type': p['type'].toString(),
             'count': p['count'].toString(),
           });
+          found = (res.data?['count'] as num?)?.toInt();
         } else if (target != null && p['enabled'] != null) {
+          check = p['enabled'] == true ? 'enabled' : 'disabled';
+          expected = target.toString();
+          found = 1;
           res = await _callExtensionRaw(
             p['enabled'] == true
                 ? 'ext.flutterpilot.assertWidgetEnabled'
@@ -280,23 +298,36 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             {'key': target.toString()},
           );
         } else if (target != null) {
+          check = 'key';
+          expected = target.toString();
+          found = 1;
           res = await _callExtensionRaw(
             'ext.flutterpilot.assertWidgetVisible',
             {'key': target.toString()},
           );
         } else {
-          return CallToolResult(
-            isError: true,
-            content: [
-              TextContent(
-                text:
-                    'Say what to check: text, key (optionally with enabled), '
-                    'or type with count.',
-              ),
-            ],
+          return withVerdict(
+            CallToolResult(
+              isError: true,
+              content: [TextContent(text: nothingToCheck)],
+            ),
+            assertWidgetVerdict(
+              check: 'none',
+              passed: false,
+              reason: nothingToCheck,
+            ),
           );
         }
-        return res.toCallToolResult();
+        return withVerdict(
+          res.toCallToolResult(),
+          assertWidgetVerdict(
+            check: check,
+            expected: expected,
+            passed: !res.isError,
+            found: res.isError ? null : found,
+            reason: res.isError ? res.errorMessage : null,
+          ),
+        );
       },
     );
   }

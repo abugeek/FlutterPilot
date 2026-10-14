@@ -8,6 +8,8 @@ import 'dart:convert';
 
 import 'package:image/image.dart' as img;
 
+import 'error_freshness.dart';
+
 /// Tools that work against an app without the SDK. Proven on a plain
 /// `flutter create` app; everything else is hidden until the SDK is found.
 const Set<String> zeroCodeTools = {
@@ -214,8 +216,10 @@ String _shortenFileUris(String text) => text.replaceAllMapped(
   (m) => _shortPath(m.group(0)!),
 );
 
-/// `get_app_summary` text for an app without the SDK.
-String zeroCodeSummary(Map<String, dynamic> data) {
+/// `get_app_summary` text for an app without the SDK. [lastReload] splits the
+/// errors the way the SDK path does (field test #334): a zero-code app keeps
+/// its error records across a hot reload too.
+String zeroCodeSummary(Map<String, dynamic> data, {DateTime? lastReload}) {
   // Distinct items in order, repeats counted: a list of 40 rows with the
   // same label must not push everything else out.
   String quoted(Iterable<Object?> items, int max) {
@@ -232,7 +236,12 @@ String zeroCodeSummary(Map<String, dynamic> data) {
 
   final texts = (data['texts'] as List?) ?? const [];
   final keys = (data['keys'] as List?) ?? const [];
-  final errors = ((data['errors'] as List?) ?? const []).whereType<Map>();
+  final errorSplit = errorsByReload(
+    ((data['errors'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList(),
+    lastReload,
+  );
   final out = StringBuffer()
     ..writeln(
       '• Mode: zero-code — flutterpilot_sdk is not in this app, so '
@@ -244,18 +253,28 @@ String zeroCodeSummary(Map<String, dynamic> data) {
     ..writeln('• Flutter: ${data['flutterVersion']}')
     ..writeln('• Heap: ${data['heapUsageMb']} MB');
   final counts = <String, int>{};
-  for (final e in errors) {
+  for (final e in errorSplit.since) {
     final widget = e['widget'] != null ? ' — ${e['widget']}' : '';
     final line = '${e['exception']}$widget';
     counts[line] = (counts[line] ?? 0) + 1;
   }
   if (counts.isEmpty) {
-    out.writeln('• Errors: none');
+    out.writeln(
+      errorSplit.before.isEmpty
+          ? '• Errors: none'
+          : '• Errors: none since the last reload',
+    );
   } else {
     out.writeln('• Errors (${counts.length}), details in get_errors:');
     for (final MapEntry(key: line, value: n) in counts.entries.take(3)) {
       out.writeln('  - $line${n > 1 ? ' (x$n)' : ''}');
     }
+  }
+  if (errorSplit.before.isNotEmpty) {
+    out.writeln(
+      '• ${beforeReloadNote(errorSplit.before.length)}: '
+      '${errorSplit.before.map((e) => e['exception']).join('; ')}',
+    );
   }
   out.writeln(
     '• Text in the widget tree (${texts.length}): ${quoted(texts, 25)}',

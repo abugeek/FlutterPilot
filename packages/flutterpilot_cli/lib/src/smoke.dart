@@ -9,14 +9,21 @@ import 'dart:io';
 /// The route paths of a `get_navigation_stack(routes: true)` answer that can
 /// be visited as they are: go_router's table (nested paths joined), without
 /// parameters (`:id`) or wildcards. Empty when there is no table.
+///
+/// The JSON to read is the one after the `Routes: ` label. The same answer
+/// prints `Path params: {id: 1}` (and `Query params: {…}`) first, and those
+/// braces are not JSON, so scanning for the first `{` found no table on any
+/// route with parameters (field test #344). The list is always growable: the
+/// caller adds the current route to it.
 List<String> routePaths(String toolText) {
-  final start = toolText.indexOf('{');
-  if (start < 0) return const [];
+  final line = RegExp(
+    r'(?:^|\n)[ \t]*Routes:[ \t]*(\{.*)',
+  ).firstMatch(toolText);
   Object? json;
   try {
-    json = jsonDecode(toolText.substring(start, toolText.lastIndexOf('}') + 1));
+    json = jsonDecode(line?.group(1) ?? '');
   } catch (_) {
-    return const [];
+    return <String>[];
   }
   final out = <String>[];
   void walk(Object? routes, String parent) {
@@ -54,12 +61,26 @@ int uncaughtErrors(String summary) =>
     0;
 
 /// What was found on one screen.
+///
+/// A screen is audited twice by default: at the app's current text scale and
+/// at [textScale2]. Large text reflows a screen — a row that fits at 1.0 can
+/// overflow at 2.0 — so both passes are kept apart in the report.
 class ScreenResult {
-  ScreenResult(this.route, {this.audit = '', this.errors = '', this.shot});
+  ScreenResult(
+    this.route, {
+    this.audit = '',
+    this.auditLarge,
+    this.errors = '',
+    this.shot,
+  });
   final String route;
 
-  /// The audit_screen_health answer.
+  /// The audit_screen_health answer at the app's current text scale.
   final String audit;
+
+  /// The audit_screen_health answer at [textScale2], null when that pass was
+  /// not run (--no-text-scale, or an app that cannot set the scale).
+  final String? auditLarge;
 
   /// The get_errors answer (empty when there are none).
   final String errors;
@@ -67,25 +88,38 @@ class ScreenResult {
   /// Screenshot file name in the report folder.
   final String? shot;
 
-  bool get auditClean => audit.startsWith('No layout overflows');
+  /// The text scale the second pass uses.
+  static const double textScale2 = 2;
+
+  bool get baseAuditClean => audit.startsWith('No layout overflows');
+  bool get largeAuditClean =>
+      auditLarge == null || auditLarge!.startsWith('No layout overflows');
+  bool get auditClean => baseAuditClean && largeAuditClean;
   bool get hasErrors => errors.isNotEmpty;
   bool get ok => auditClean && !hasErrors;
 }
 
 /// The report: a table, then each screen with its findings.
+///
+/// [textScalePass] says the screens were audited at [ScreenResult.textScale2]
+/// as well, so the reader knows why a screen can have findings in the second
+/// block only.
 String smokeReport(
   List<ScreenResult> screens, {
   required DateTime at,
   String? device,
   String? app,
   String? note,
+  bool textScalePass = false,
 }) {
   final bad = screens.where((s) => !s.ok).length;
+  final scale = ScreenResult.textScale2.toInt();
   final b = StringBuffer()
     ..writeln('# FlutterPilot smoke — ${app ?? 'app'}')
     ..writeln()
     ..writeln(
       '${at.toIso8601String()}${device == null ? '' : ' · $device'} · '
+      '${textScalePass ? 'text scale 1 and $scale · ' : ''}'
       '${screens.length} screen${screens.length == 1 ? '' : 's'}, '
       '${bad == 0 ? 'all clean' : '$bad with findings'}',
     )
@@ -98,10 +132,14 @@ String smokeReport(
     ..writeln('| Screen | Layout & accessibility | Errors |')
     ..writeln('|---|---|---|');
   for (final s in screens) {
-    b.writeln(
-      '| `${s.route}` | ${s.auditClean ? 'clean' : 'findings'} | '
-      '${s.hasErrors ? 'yes' : 'none'} |',
-    );
+    // 'findings at 2x' tells the two passes apart: the screen is fine at the
+    // app's own scale but not with large text.
+    final layout = s.auditClean
+        ? 'clean'
+        : s.baseAuditClean
+        ? 'findings at ${scale}x'
+        : 'findings';
+    b.writeln('| `${s.route}` | $layout | ${s.hasErrors ? 'yes' : 'none'} |');
   }
   for (final s in screens.where((s) => !s.ok)) {
     b
@@ -112,9 +150,17 @@ String smokeReport(
       b
         ..writeln('![${s.route}](${s.shot})')
         ..writeln();
-    if (!s.auditClean)
+    if (!s.baseAuditClean) {
+      // With a second pass, name this one so the blocks below are readable.
+      if (s.auditLarge != null) b.writeln("At the app's text scale:");
       b
         ..writeln(_capped(s.audit.trim()))
+        ..writeln();
+    }
+    if (!s.largeAuditClean)
+      b
+        ..writeln('At text scale $scale:')
+        ..writeln(_capped(s.auditLarge!.trim()))
         ..writeln();
     if (s.hasErrors)
       b

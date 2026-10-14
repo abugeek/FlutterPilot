@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutterpilot_server/flutterpilot_server.dart';
 import 'package:flutterpilot_server/src/plugin_tools.dart';
 import 'package:flutterpilot_server/src/tool_annotations.dart';
+import 'package:flutterpilot_server/src/tool_list_bytes.dart';
+import 'package:flutterpilot_server/src/tool_profiles.dart';
 import 'package:flutterpilot_server/src/zero_code.dart';
 import 'package:test/test.dart';
 
@@ -17,7 +20,9 @@ void main() {
     });
 
     test('stays within the tool budget (ROADMAP §4.2: 60–80)', () {
-      expect(names.length, lessThanOrEqualTo(80));
+      // 63 after task 04 merged the five gesture tools into `gesture_widget`.
+      // The limit is the current count + 5.
+      expect(names.length, lessThanOrEqualTo(68));
     });
 
     test('plugin-gated and zero-code tools name registered tools', () {
@@ -46,35 +51,47 @@ void main() {
     // What an agent pays for before it calls anything: the name,
     // description and schema of each listed tool (annotations go to the
     // client, not the model). Raise a budget only for a tool that earns it.
-    int listBytes(bool Function(String name) listed) => server
-        .toolListJson(names.where(listed))
-        .map((tool) => jsonEncode(tool..remove('annotations')).length)
-        .fold(0, (a, b) => a + b);
+    int listBytes(bool Function(String name) listed) =>
+        toolListTotal(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // +800 each for launch_app (2026-10-11): it replaces a pkill, a nohup
-      // and a polling loop per relaunch, and is listed with no app at all.
-      // +300 (2026-10-12): the native tools also drive Android (serial,
-      // BACK, WAKEUP).
-      // +200 (2026-10-12): launch_app(waitSeconds), so a 5-minute iPhone
-      // build is not one blind call.
-      // Every tool (--static-tools).
-      expect(listBytes((_) => true), lessThanOrEqualTo(41300));
-      // An app with the SDK and no plugin, not on an iOS simulator.
+      // Measured 2026-10-14, after task 04 merged the five gesture tools into
+      // `gesture_widget`; each limit is that profile's measurement plus 300
+      // (task 09 C, from `tool/tool_list_report.dart`).
+      // Every tool (--static-tools): 63 tools, 40 597 bytes.
+      expect(listBytes((_) => true), lessThanOrEqualTo(40897));
+      // An app with the SDK and no plugin, not on an iOS simulator:
+      // 28 841 bytes.
       expect(
         listBytes(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        // +100 (2026-10-12) for audit_screen_health(routes) and
-        // get_state(name): a sweep was three calls a screen without them.
-        // +100 (2026-10-12) for launch_app(waitSeconds).
-        lessThanOrEqualTo(29500),
+        lessThanOrEqualTo(29141),
       );
-      // An app without the SDK. +100 (2026-10-12) for
-      // launch_app(waitSeconds).
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9700));
+      // An app without the SDK: 9 674 bytes.
+      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9974));
+    });
+
+    test('the core profile fits a client with a tool limit', () {
+      // --tools core (task 08): the short set for a client that counts tools
+      // across every server it runs. Budget for the whole core list.
+      final core = FlutterPilotServer(
+        vmServiceUri: 'ws://localhost:8888',
+        staticTools: true,
+        toolProfile: ToolProfile.core,
+      );
+      final listed = core.listedToolNames.toList();
+      final bytes = core
+          .toolListJson(listed)
+          .map((tool) => jsonEncode(tool..remove('annotations')).length)
+          .fold(0, (a, b) => a + b);
+      // 29 tools; the count limit is VS Code's 128 tools per request
+      // (2026-10-14) minus the Dart MCP server's 4 and a small server's 5.
+      expect(listed.length, lessThanOrEqualTo(30));
+      // 20 363 bytes on 2026-10-14, plus 300 (task 09 C).
+      expect(bytes, lessThanOrEqualTo(20663));
     });
 
     test('every tool says what it does to the app', () {
@@ -137,5 +154,29 @@ void main() {
       final s2 = FlutterPilotServer(vmServiceUri: 'ws://localhost:8889');
       expect(s2.server, isNotNull);
     });
+
+    test(
+      'every result rebuild in the tool wrapper keeps structured content',
+      () {
+        // The wrappers in _registerTool() (batch-nudge tip, image down-scaling,
+        // phone state, native crash, hang diagnosis) rebuild a result on its way
+        // out: each spreads the content it was given, and each must go through
+        // keepingStructured() so a machine-readable result is not dropped.
+        for (final path in const [
+          'lib/flutterpilot_server.dart',
+          'lib/src/tools/native_automation_tools.dart',
+        ]) {
+          final source = File(path).readAsStringSync();
+          final rebuilds = RegExp(r'\.\.\.result\.content').allMatches(source);
+          final kept = RegExp(r'keepingStructured\(').allMatches(source);
+          expect(
+            kept.length,
+            greaterThanOrEqualTo(rebuilds.length),
+            reason:
+                '$path rebuilds a result without keeping its structuredContent',
+          );
+        }
+      },
+    );
   });
 }
