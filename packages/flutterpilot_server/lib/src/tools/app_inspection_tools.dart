@@ -9,10 +9,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     'enter_text',
     'press_key',
     'scroll_into_view',
-    'swipe_widget',
-    'drag_widget',
+    'gesture_widget',
     'toggle_checkbox',
-    'set_slider_value',
     'fill_form',
     'execute_action_chain',
     'navigate_to',
@@ -320,20 +318,19 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final steps = <({String tool, Map<String, dynamic> arguments})>[];
         for (final s in (p['steps'] as List?) ?? const []) {
           final tool = s is Map ? s['tool']?.toString() : null;
-          if (tool == null ||
-              !_fleetStepTools.contains(tool) ||
-              !_toolCallbacks.containsKey(tool)) {
+          final args = Map<String, dynamic>.from(
+            (s is Map ? s['arguments'] : null) as Map? ?? const {},
+          );
+          final step = tool == null ? null : translateRetiredStep(tool, args);
+          if (step == null ||
+              !_fleetStepTools.contains(step.tool) ||
+              !_toolCallbacks.containsKey(step.tool)) {
             return error(
               'Step ${steps.length + 1}: "$tool" can\'t run on devices. '
               'Tools: ${(_fleetStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
             );
           }
-          steps.add((
-            tool: tool,
-            arguments: Map<String, dynamic>.from(
-              (s as Map)['arguments'] as Map? ?? const {},
-            ),
-          ));
+          steps.add(step);
         }
         if (steps.isEmpty) return error('steps is empty.');
         final ids = [

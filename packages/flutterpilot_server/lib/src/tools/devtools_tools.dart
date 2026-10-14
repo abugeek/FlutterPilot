@@ -8,13 +8,10 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     'enter_text',
     'press_key',
     'scroll_into_view',
-    'swipe_widget',
-    'drag_widget',
-    'pinch_zoom',
+    'gesture_widget',
     'fill_form',
     'execute_action_chain',
     'toggle_checkbox',
-    'set_slider_value',
     'navigate_to',
     'hot_reload',
   };
@@ -41,9 +38,16 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     final steps = <({String tool, Map<String, dynamic> arguments})>[];
     for (final step in (params['cycle'] as List? ?? const [])) {
       final tool = step is Map ? step['tool'] : null;
-      if (tool is! String ||
-          !_profilableTools.contains(tool) ||
-          !_toolCallbacks.containsKey(tool)) {
+      final args = step is Map ? step['arguments'] : null;
+      final translated = tool is! String
+          ? null
+          : translateRetiredStep(
+              tool,
+              args is Map ? Map<String, dynamic>.from(args) : {},
+            );
+      if (translated == null ||
+          !_profilableTools.contains(translated.tool) ||
+          !_toolCallbacks.containsKey(translated.tool)) {
         return fail(
           'Each cycle step is {"tool": <action tool>, "arguments": {...}}; '
           'action tools: '
@@ -51,11 +55,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'Got ${jsonEncode(step)}.',
         );
       }
-      final args = step['arguments'];
-      steps.add((
-        tool: tool,
-        arguments: args is Map ? Map<String, dynamic>.from(args) : {},
-      ));
+      steps.add(translated);
     }
     if (steps.isEmpty) {
       return fail(
@@ -594,15 +594,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       callback: (params, extra) async {
         CallToolResult fail(String text) =>
             CallToolResult(isError: true, content: [TextContent(text: text)]);
-        final tool = params['tool'] as String?;
-        final arguments = params['arguments'] is Map
+        final rawTool = params['tool'] as String?;
+        var arguments = params['arguments'] is Map
             ? Map<String, dynamic>.from(params['arguments'] as Map)
             : <String, dynamic>{};
+        final translated = rawTool == null
+            ? null
+            : translateRetiredStep(rawTool, arguments);
+        final tool = translated?.tool;
+        if (translated != null) arguments = translated.arguments;
         if (tool != null && !_profilableTools.contains(tool)) {
           return fail(
             'profile_action runs an action tool: '
             '${(_profilableTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}. '
-            'Got "$tool".',
+            'Got "$rawTool".',
           );
         }
         final action = tool == null ? null : _toolCallbacks[tool];

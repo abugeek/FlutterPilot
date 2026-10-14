@@ -127,10 +127,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     'enter_text',
     'press_key',
     'scroll_into_view',
-    'swipe_widget',
-    'drag_widget',
+    'gesture_widget',
     'toggle_checkbox',
-    'set_slider_value',
     'fill_form',
     'navigate_to',
     'assert_widget',
@@ -491,36 +489,152 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'pinch_zoom',
+      'gesture_widget',
       description:
-          'Two-finger pinch on a widget or at x/y. Reports what changed.',
+          'Drives a widget with a gesture other than a tap: swipe (scroll a '
+          'list, dismiss a card, open a drawer, pull to refresh), drag one '
+          'widget onto another, pinch to zoom, focus a field (or unfocus), or '
+          'slide a Slider to value. Pass gesture and that gesture\'s '
+          'arguments; another gesture\'s arguments are refused. Reports what '
+          'changed.',
       inputSchema: ToolInputSchema(
         properties: {
-          'scale': JsonSchema.number(
-            description: 'Above 1 zooms in, below 1 zooms out.',
+          'gesture': JsonSchema.string(
+            enumValues: ['swipe', 'drag', 'pinch', 'focus', 'slide'],
+            description: 'Which gesture to perform.',
           ),
           'key': JsonSchema.string(
-            description: 'Key or selector of the widget.',
+            description:
+                'Key or selector of the widget. Omitted for gesture: focus '
+                'to unfocus everything; for pinch, x/y or identifier may '
+                'name the target instead.',
+          ),
+          'direction': JsonSchema.string(
+            enumValues: ['up', 'down', 'left', 'right'],
+            description: 'gesture: swipe.',
+          ),
+          'distance': JsonSchema.number(
+            description:
+                'gesture: swipe — logical pixels; positive = down/right.',
+          ),
+          'fromKey': JsonSchema.string(
+            description: 'gesture: drag — key or selector to drag.',
+          ),
+          'toKey': JsonSchema.string(
+            description: 'gesture: drag — key or selector to drop it on.',
+          ),
+          'scale': JsonSchema.number(
+            description: 'gesture: pinch — above 1 zooms in, below 1 out.',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier of the target widget.',
+            description: 'gesture: pinch — semantics identifier of the target.',
           ),
-          'x': JsonSchema.number(description: 'Center of the pinch, with y.'),
+          'x': JsonSchema.number(
+            description: 'gesture: pinch — center x, with y.',
+          ),
           'y': JsonSchema.number(),
+          'value': JsonSchema.number(
+            description:
+                'gesture: slide — the Slider value (clamped to its min/max).',
+          ),
         },
-        required: ['scale'],
+        required: ['gesture'],
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.pinchZoomWidget',
-          p,
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(text: _formatActionFeedback('Pinch zoom', p, res)),
-          ],
-        );
+        CallToolResult error(String text) =>
+            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        final problem = gestureRequestError(p);
+        if (problem != null) return error(problem);
+        switch (p['gesture']) {
+          case 'swipe':
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.swipeWidget',
+              {
+                'key': (p['key'] ?? p['target']).toString(),
+                'direction': p['direction'].toString(),
+                if (p['distance'] != null) 'distance': p['distance'].toString(),
+              },
+            );
+            if (res.isError) return res.toCallToolResult();
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text: _formatActionDelta(
+                    res.data,
+                    verb: res.data?['pullToRefresh'] == true
+                        ? 'Pulled to refresh'
+                        : 'Swipe complete',
+                    memory: _activeContext?.screenMemory,
+                  ),
+                ),
+              ],
+            );
+          case 'drag':
+            final res = await _callExtensionRaw('ext.flutterpilot.dragWidget', {
+              'fromKey': p['fromKey'] ?? p['key'],
+              'toKey': p['toKey'],
+            });
+            if (res.isError) return res.toCallToolResult();
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text: _formatActionDelta(
+                    res.data,
+                    verb: 'Drag complete',
+                    memory: _activeContext?.screenMemory,
+                  ),
+                ),
+              ],
+            );
+          case 'pinch':
+            final res =
+                await _callExtensionRaw('ext.flutterpilot.pinchZoomWidget', {
+                  'scale': p['scale'],
+                  if (p['key'] != null) 'key': p['key'],
+                  if (p['identifier'] != null) 'identifier': p['identifier'],
+                  if (p['x'] != null) 'x': p['x'],
+                  if (p['y'] != null) 'y': p['y'],
+                });
+            if (res.isError) return res.toCallToolResult();
+            return CallToolResult(
+              content: [
+                TextContent(text: _formatActionFeedback('Pinch zoom', p, res)),
+              ],
+            );
+          case 'focus':
+            final target = p['target'] ?? p['key'];
+            if (target == null) {
+              final res = await _callExtensionRaw(
+                'ext.flutterpilot.unfocusAll',
+                {},
+              );
+              return res.isError
+                  ? res.toCallToolResult()
+                  : CallToolResult(
+                      content: [
+                        TextContent(text: 'Focus removed; keyboard dismissed.'),
+                      ],
+                    );
+            }
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.focusWidget',
+              {'key': target.toString()},
+            );
+            return res.isError
+                ? res.toCallToolResult()
+                : CallToolResult(
+                    content: [TextContent(text: 'Focused "$target".')],
+                  );
+          case 'slide':
+            final res =
+                await _callExtensionRaw('ext.flutterpilot.setSliderValue', {
+                  'key': (p['key'] ?? p['target']).toString(),
+                  'value': p['value'].toString(),
+                });
+            return res.toCallToolResult();
+          default:
+            return error('Unknown gesture "${p['gesture']}".');
+        }
       },
     );
 
@@ -542,149 +656,6 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         'ext.flutterpilot.scrollIntoView',
         p,
       ).then((res) => res.toCallToolResult()),
-    );
-
-    _tool(
-      'swipe_widget',
-      description:
-          'Swipes on a widget up/down/left/right: scroll a list, dismiss a '
-          'card, open a drawer, pull to refresh (down on a list at its top). '
-          'Reports what changed.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'Key or selector of the widget to swipe on.',
-          ),
-          'direction': JsonSchema.string(
-            enumValues: ['up', 'down', 'left', 'right'],
-          ),
-          'distance': JsonSchema.number(
-            description:
-                'Scroll distance in logical pixels. Positive = down/right, negative = up/left.',
-          ),
-        },
-        required: ['direction'],
-      ),
-      callback: (p, e) async {
-        final args = {
-          'key': (p['key'] ?? p['target']).toString(),
-          'direction': p['direction'] as String,
-          if (p['distance'] != null) 'distance': p['distance'].toString(),
-        };
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.swipeWidget',
-          args,
-        );
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionDelta(
-                res.data,
-                verb: res.data?['pullToRefresh'] == true
-                    ? 'Pulled to refresh'
-                    : 'Swipe complete',
-                memory: _activeContext?.screenMemory,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'drag_widget',
-      description:
-          'Drags one widget onto another (drag-and-drop, reordering). Reports '
-          'what changed.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'fromKey': JsonSchema.string(
-            description: 'Key or selector of the widget to drag.',
-          ),
-          'toKey': JsonSchema.string(
-            description: 'Key or selector of the widget to drop it on.',
-          ),
-        },
-        required: ['fromKey', 'toKey'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.dragWidget', p);
-        if (res.isError) return res.toCallToolResult();
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: _formatActionDelta(
-                res.data,
-                verb: 'Drag complete',
-                memory: _activeContext?.screenMemory,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    _tool(
-      'focus_widget',
-      description:
-          'Focuses the widget found by key (opens the software keyboard for a '
-          'TextField). Without a key, removes focus from everything and '
-          'dismisses the keyboard.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'Key or selector. Omit to unfocus everything.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final target = p['target'] ?? p['key'];
-        if (target == null) {
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.unfocusAll',
-            {},
-          );
-          return res.isError
-              ? res.toCallToolResult()
-              : CallToolResult(
-                  content: [
-                    TextContent(text: 'Focus removed; keyboard dismissed.'),
-                  ],
-                );
-        }
-        final res = await _callExtensionRaw('ext.flutterpilot.focusWidget', {
-          'key': target.toString(),
-        });
-        return res.isError
-            ? res.toCallToolResult()
-            : CallToolResult(
-                content: [TextContent(text: 'Focused "$target".')],
-              );
-      },
-    );
-
-    _tool(
-      'set_slider_value',
-      description:
-          'Moves a Slider to a value (clamped to its min/max) the way a user '
-          'would, so onChanged fires.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'Key or selector of the Slider.',
-          ),
-          'value': JsonSchema.number(),
-        },
-        required: ['value'],
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.setSliderValue', {
-          'key': (p['key'] ?? p['target']).toString(),
-          'value': p['value'].toString(),
-        });
-        return res.toCallToolResult();
-      },
     );
 
     _tool(
@@ -1077,7 +1048,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             CallToolResult(isError: true, content: [TextContent(text: text)]);
         final steps = <({String tool, Map<String, dynamic> arguments})>[];
         for (final s in (p['steps'] as List?) ?? const []) {
-          final step = chainStep(s);
+          final raw = chainStep(s);
+          final step = raw == null
+              ? null
+              : translateRetiredStep(raw.tool, raw.arguments);
           if (step == null ||
               !_chainStepTools.contains(step.tool) ||
               !_toolCallbacks.containsKey(step.tool)) {

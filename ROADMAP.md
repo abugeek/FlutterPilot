@@ -11,8 +11,8 @@ tools that always work beat many tools that sometimes work.
 
 ## 0. State as of 2026-09-30
 
-- 67 MCP tools (+launch_app, 2026-10-11; 164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
-  (a Dio-only app 45, zero-code 15). SDK + 12 plugins + server + CLI. All packages
+- 63 MCP tools (+launch_app, 2026-10-11; 164 → 129 → 62, §4.2; +inspect_widget, profile_action, §5.1–5.2; +generate_test, §6; +scenario, §7; +verify_feature, §8; −get_flight_log, §9; +run_on_devices, §8; +mock_platform_channel, §11; −get_capabilities, now get_app_summary(setup: true)); an app sees only those that work for it
+  (a Dio-only app 43, zero-code 15). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
 - `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
@@ -348,6 +348,19 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    the sqflite/drift table listers (`exec_sql_query` on sqlite_master).
    `tool_registration_test` fails above 80. Round 11 of
    `docs/field-test-findings.md`.
+4. **Consolidate the gesture tools (task 04):** done — `swipe_widget`,
+   `drag_widget`, `pinch_zoom`, `focus_widget` and `set_slider_value` became
+   one `gesture_widget(key, gesture: swipe | drag | pinch | focus | slide)`.
+   A mode's arguments are refused in another mode, and a step that still
+   names an old tool runs the new one (`src/retired_tools.dart`, so
+   `execute_action_chain`, `run_on_devices`, `profile_action` and a leak
+   `cycle` keep working). `sdk_lab_shop` 52 → 48 tools and 34 179 → 33 594
+   bytes (−1.7 %); the merged tool is 1 495 bytes, 26 % under the 2 022 the
+   five cost. The task's other candidates (C1, C2, C4, C5) were left alone:
+   each merged description came out less than 25 % shorter than the tools it
+   replaced, the task's own test for whether a merge is worth it, so the whole
+   list was worth ~3 % against the 15 % the task asked for — the tools are
+   already one-per-family with short descriptions.
 3. **Tool descriptions:** done — every description says what the tool
    returns and when to use it (or what to use instead); no "CALL THIS",
    "PREREQUISITES", speed claims or emoji, no "needs the X plugin" (plugin
@@ -443,7 +456,7 @@ obscured text becomes `--dart-define` values, never written.
 `integration_test` to dev_dependencies if missing, **runs it** on the same
 device (`flutter test -d`) and reports passed, or the step it failed at with
 the framework's message. Not replayed (listed in the response):
-`navigate_to`, `set_slider_value`, keys without a test equivalent. Not
+`navigate_to`, a gesture slide, keys without a test equivalent. Not
 recorded: taps by the user's own hand. Findings #236–239.
 
 ## 7. ~~State time travel done right~~ — done (2026-09-29), as scenarios
@@ -588,7 +601,7 @@ Review each the same way as PR #1 — keep, fix, or delete:
 - ~~**Example app**~~ — done (2026-10-01): replaced by a small todo app
   (Dio, Riverpod, go_router, shared_preferences) with a widget test and a
   walkthrough in its README, run through the bridge. It found three bugs:
-  mocked error statuses reached the app as successes, `swipe_widget` never
+  mocked error statuses reached the app as successes, a swipe never
   pulled to refresh on Apple physics (§1.8's open item), and controls named
   only by `semanticLabel` couldn't be found. Findings #276–280.
 

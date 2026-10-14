@@ -20,7 +20,7 @@ import 'package:flutterpilot_server/src/zero_code.dart';
 ///
 /// Covers: init wiring, widget tree, enter_text, press_key, secondary tap,
 /// text scale and locale on an unwired MaterialApp,
-/// pinch_zoom, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
+/// gesture_widget, interactive elements, covered-route assertions, tap_widget, Dio mock + network logs,
 /// hot_reload applying an edited source file with state kept, hot restart.
 Future<void> main(List<String> args) async {
   final d = args.indexOf('-d');
@@ -877,7 +877,7 @@ Future<void> main(List<String> args) async {
       // Keyboard (ROADMAP §3.11): each key reaches the app once, and in a
       // text field editing keys edit it (desktop editing normally comes from
       // the OS input client, which synthesized key events never reach).
-      await check('nothing focused', 'focus_widget', {});
+      await check('nothing focused', 'gesture_widget', {'gesture': 'focus'});
       await check(
         'a key arrives once',
         'press_key',
@@ -939,7 +939,8 @@ Future<void> main(List<String> args) async {
         false,
         react,
       );
-      await check('pinch_zoom', 'pinch_zoom', {
+      await check('pinch_zoom', 'gesture_widget', {
+        'gesture': 'pinch',
         'key': 'zoomable',
         'scale': 2.0,
       });
@@ -1287,8 +1288,8 @@ Future<void> main(List<String> args) async {
       });
       await check(
         'pull to refresh waits for the refresh',
-        'swipe_widget',
-        {'key': 'Row 0', 'direction': 'down'},
+        'gesture_widget',
+        {'gesture': 'swipe', 'key': 'Row 0', 'direction': 'down'},
         ['Pulled to refresh', 'Refreshed 1'],
       );
       await check('back from the list', 'press_key', {'key': 'back'}, ['Send']);
