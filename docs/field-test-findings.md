@@ -624,7 +624,7 @@ are added here once the nine are in one branch (task 09 E).
 
 | # | Feature | Result | Notes |
 |---|---|---|---|
-| 335 | `simulate_network(offline)` vs a mocked request | ⚠️ | the network condition does not reach a request that `mock_http_response` answers (#116): the mock is the endpoint, so the app never sees the network go away. |
+| 335 | `simulate_network(offline)` vs a mocked request | ⚠️→fixed (task 11) | the network condition did not reach a request that `mock_http_response` answers (#116): the mock was the endpoint, so the app never saw the network go away. The condition now runs before the mock lookup: offline fails a mocked URL the same way it fails an unmocked one, `slow_3g`/`fast_4g` delay a mocked answer too, and the mocks are kept (`normal` brings them back). `shop_offline` no longer asks the agent to clear the mocks first. |
 | 336 | the call log's startup `listed` line | ⚠️→fixed (#118) | the first `listed` line is the pre-connection set (every plugin tool), not what the session ends up offered, and two identical lines were written at startup; #118 records the set only when it changes. |
 | 337 | 13 stale tool names in the docs | ⚠️→fixed (#122) | #122's name check found 13 mentions of tools that no longer exist — a merged or renamed name left behind in a doc. The check now fails on them; #120's merge and #122 fixed the text. |
 | 338 | the committed `TOOLS.generated.md` was stale | ⚠️→fixed (#121, #123) | it was missing `launch_app(waitSeconds)` on `main`; it is generated from the running registration, and every round-1 PR that changed the list regenerated it. |
