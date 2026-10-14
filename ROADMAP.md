@@ -69,6 +69,16 @@ tools that always work beat many tools that sometimes work.
   findings fixed — `smoke` reads the route table from the `Routes: ` line, not
   the `Path params:` map before it (#344), and the e2e waits for the app to
   exit and retries its scratch-folder delete on Windows (#340).
+- A relaunch cannot leave the app down (2026-10-14, task 14):
+  `launch_app(relaunch: true)` with no `device` now keeps the device the
+  running app is on — the VM's platform names `windows`/`macos`/`linux` — and
+  says so, instead of stopping the app and then letting `flutter run` fail with
+  "More than one device connected" (#346, found in task 13's field check). When
+  the device cannot be told it refuses *before* stopping anything, naming the
+  ids from `flutter devices --machine` and the call to make; a fresh launch
+  with one device and a project's own `launch.json` command are unchanged. One
+  function decides that order (`prepareLaunch`, `src/app_launcher.dart`), and
+  the unit tests inject the stop and device-list functions.
 
 ### How to work (the method that found every real bug so far)
 
