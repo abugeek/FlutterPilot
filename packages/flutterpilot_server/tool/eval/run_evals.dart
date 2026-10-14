@@ -35,8 +35,7 @@ Future<void> main(List<String> argv) async {
     ..addFlag(
       'launch',
       negatable: false,
-      help:
-          'Start each app with launch_app first (broken on Windows; see README).',
+      help: 'Start each app with launch_app first.',
     )
     ..addOption(
       'server-args',
