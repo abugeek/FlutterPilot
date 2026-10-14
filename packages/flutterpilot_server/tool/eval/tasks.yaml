@@ -1,0 +1,191 @@
+# Eval tasks for the MCP-curation work (task 01). Each answer comes from a
+# planted defect in a lab app's LAB.md, or from the app's source; every one is
+# verified by hand through tool/fp_bridge.dart before it is trusted (README.md).
+# A task whose answer you or the model reach two ways is ambiguous: rewrite it.
+#
+# Prompts deliberately avoid the answer's keywords, so the model has to discover
+# them with the tools. `expected_tools` is reported, never enforced.
+
+- id: shop_fav_source
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, every product card carries a small heart button
+    that saves the product. Give the source location that creates that button
+    as `lib/path/file.dart:LINE` — the file and the line where the button
+    widget is built.
+  answer: lib/widgets/product_card.dart:25
+  match: exact
+  tags: [inspection, layout]
+  expected_tools: [inspect_widget]
+  max_calls: 8
+
+- id: shop_overflow_scale
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, set the text scale to 2.0 and check the routes
+    `/`, `/cart`, `/checkout` and `/settings`. Which of them has a horizontal
+    layout overflow? Answer with the route, or `none`.
+  answer: /checkout
+  match: exact
+  tags: [layout, settings]
+  expected_tools: [set_app_settings, audit_screen_health]
+  max_calls: 8
+
+- id: shop_unnamed_controls
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    On the shop's home route `/`, how many controls can a screen reader not
+    name — that is, controls with no accessible label? Answer with the number.
+  answer: "1"
+  match: number
+  tags: [a11y]
+  expected_tools: [audit_screen_health]
+  max_calls: 6
+
+- id: shop_detail_requests
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, open the very first product shown on the home
+    list. Exactly how many HTTP requests does opening that product's detail
+    screen make? Answer with the number.
+  answer: "2"
+  match: number
+  tags: [network]
+  expected_tools: [tap_widget, get_network_logs]
+  max_calls: 8
+
+- id: shop_server_down
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, make the request that lists products answer with
+    HTTP status 500 (the products endpoint), then reload the list. What is the
+    text of the button the list offers? Answer with the button text.
+  answer: Retry
+  match: exact
+  tags: [network, errors]
+  expected_tools: [mock_http_response]
+  max_calls: 10
+
+- id: shop_offline
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, simulate the device having no network connection,
+    then look at the home route `/`. Quote the main message the product list
+    shows. Answer with that message.
+  answer: Could not load products
+  match: exact
+  tags: [network]
+  expected_tools: [simulate_network]
+  max_calls: 8
+
+- id: shop_checkout_disabled
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, go to the checkout route. Fill in the customer
+    name and the email, and touch nothing else. The "Place order" button is
+    still disabled. Which field's label is the first one blocking it? Answer
+    with the field's label.
+  answer: Phone
+  match: exact
+  tags: [forms, a11y]
+  expected_tools: [fill_form]
+  max_calls: 10
+
+- id: shop_crash
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, navigate to the detail route for the product whose
+    id is 0. That screen throws an uncaught exception. What is the exception's
+    type? Answer with the type name.
+  answer: RangeError
+  match: exact
+  tags: [errors]
+  expected_tools: [navigate_to, get_errors]
+  max_calls: 8
+
+- id: shop_dark_pref
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, open the settings route and turn on the Dark mode
+    switch. Which stored preference key changes when you do, and to what
+    value? Answer as `key=value`.
+  answer: dark_mode=true
+  match: exact
+  tags: [preferences]
+  expected_tools: [toggle_checkbox, get_shared_preferences]
+  max_calls: 10
+
+- id: shop_cart_total_hotspot
+  app: fp_lab_shop
+  scenario: cart_with_items
+  prompt: >
+    In the running shop app the cart already has items in it. Open the cart
+    route and profile the action that opens it. Which function defined in the
+    app's own code takes the most self time? Answer with its name, as
+    `ClassName.methodName`.
+  answer: CartScreen._expensiveTotal
+  match: exact
+  tags: [performance]
+  expected_tools: [profile_action]
+  max_calls: 10
+
+- id: shop_leak
+  app: fp_lab_shop
+  scenario: eval_base
+  prompt: >
+    In the running shop app, open a product's detail screen and go back to the
+    list, five times in a row. Which app class keeps instances alive afterwards
+    — one more per visit? Answer with the class name.
+  answer: _ProductDetailScreenState
+  match: exact
+  tags: [memory]
+  expected_tools: [get_memory_details]
+  max_calls: 6
+
+- id: notes_count
+  app: fp_lab_notes
+  scenario: notes_base
+  prompt: >
+    In the running notes app, how many rows does the `notes` table hold? Answer
+    with the number.
+  answer: "250"
+  match: number
+  tags: [database]
+  expected_tools: [exec_sql_query]
+  max_calls: 5
+
+- id: notes_bloc_history
+  app: fp_lab_notes
+  scenario: notes_base
+  prompt: >
+    In the running notes app, open the settings route and flip the Dark theme
+    switch twice, so it ends where it started. Then read the state history.
+    What theme value was in effect immediately before the last change? Answer
+    with the theme — `dark` or `light`.
+  answer: dark
+  match: exact
+  tags: [state]
+  expected_tools: [tap_widget, get_state]
+  max_calls: 10
+
+- id: notes_locked_key
+  app: fp_lab_notes
+  scenario: notes_base
+  prompt: >
+    In the running notes app, the app writes one secret through the secure
+    storage plugin while it starts. What is the name of the key it uses? Answer
+    with the key name only.
+  answer: lock_pin
+  match: exact
+  tags: [secure-storage]
+  expected_tools: [get_secure_storage]
+  max_calls: 5

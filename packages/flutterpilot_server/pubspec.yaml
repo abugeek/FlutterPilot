@@ -27,3 +27,6 @@ dev_dependencies:
   lints: ^6.0.0
   mocktail: ^1.0.4
   test: ^1.25.6
+  # tool/eval reads its task list from tasks.yaml. Already a transitive
+  # dependency; declared so importing it directly is not a lint.
+  yaml: ^3.1.3
