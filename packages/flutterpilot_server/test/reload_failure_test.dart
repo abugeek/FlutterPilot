@@ -114,4 +114,33 @@ void main() {
     );
     expect(projectRootOfFile('/elsewhere/main.dart', exists: exists), isNull);
   });
+
+  // A Windows app: the analyzer prints `D:\app\lib\a.dart`, the entrypoint URI
+  // is `file:///D:/app/lib/main.dart`, and both have to come out as app
+  // folders named with forward slashes (field tests #341, #342).
+  test('a Windows analyzer path loses the app folder, backslashes and all', () {
+    final errors = analyzerErrorsIn(
+      r'ERROR|SYNTACTIC_ERROR|EXPECTED_TOKEN|D:\app\lib\screens.dart|44|23|6|Expected to find ",".'
+          '\n',
+      r'D:\app',
+    );
+    expect(errors, 'lib/screens.dart:44:23: Expected to find ",".');
+  });
+
+  test('a Windows entrypoint walks up its own separator', () {
+    bool exists(String path) => path == 'D:/app/pubspec.yaml';
+    expect(
+      projectRootOfFile(r'D:\app\tool\pilot_main.dart', exists: exists),
+      'D:/app',
+    );
+    // The server composes `$root/$name` from it, so forward slashes matter.
+    expect(
+      projectRootOfFile(r'D:\app\lib\src\main.dart', exists: exists),
+      'D:/app',
+    );
+    expect(
+      projectRootOfFile(r'D:\elsewhere\main.dart', exists: exists),
+      isNull,
+    );
+  });
 }
