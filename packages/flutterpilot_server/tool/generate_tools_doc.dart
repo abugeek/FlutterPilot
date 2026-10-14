@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutterpilot_server/src/structured_results.dart';
+
 /// Generates a schema-derived MCP tool reference.
 ///
 /// Run from the repository root:
@@ -116,6 +118,14 @@ Future<void> main() async {
             '${(property['description'] ?? '').toString().replaceAll('|', '\\|')} |',
           );
         }
+      }
+      final shape = structuredShapes[name];
+      if (shape != null) {
+        output.writeln();
+        output.writeln(
+          '**Structured result** (`structuredContent`, a machine-readable twin '
+          'of the text; no `outputSchema` is declared): `$shape`',
+        );
       }
       output.writeln();
     }

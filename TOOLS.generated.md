@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41087 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41182 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -42,6 +42,8 @@ Runs the same steps on several registered devices at once (e.g. iPhone, Android 
 |---|---|---:|---|
 | `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, drag_widget, enter_text, execute_action_chain, fill_form, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, set_slider_value, simulate_network, swipe_widget, tap_widget, toggle_checkbox, wait_for. |
 | `devices` | array | no | Registered device names (list_connected_devices); default: all of them. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{devices: [{id: string, passedSteps: int, totalSteps: int, failedStep?: int, route?: string, errors: int}], same: bool}`
 
 ## `switch_device`
 
@@ -211,6 +213,8 @@ _Read-only._
 | `expectedValue` | string | no | Substring expected in the state's value. |
 | `frames` | integer | no | Pump this many frames (1–120). |
 | `timeoutMs` | integer | no | Default 5000 (3000 for key). |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{met: bool, waitedMs: int, timedOut: bool, condition: "key"|"route"|"state"|"frames"|"animations"|"none", route?: string}`
 
 ## `audit_screen_health`
 
@@ -436,6 +440,7 @@ Builds and starts the app (flutter run, or the command in flutterpilot/launch.js
 | `mode` | string: debug \| profile | no | Default debug. |
 | `project` | string | no | App folder, if several. |
 | `relaunch` | boolean | no | Stop the running app and rebuild. |
+| `waitSeconds` | integer | no | Return early if still building (default 600). |
 
 ## `get_state`
 
@@ -575,6 +580,8 @@ _Read-only._
 | `type` | string | no | Widget type to count (e.g. "ListTile"). |
 | `count` | integer | no | Expected count of type. |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none", expected?: string, found?: int, reason?: string}`
+
 ## `get_memory_details`
 
 Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab). Leak check: cycle (action tool calls that end where they started, e.g. open a screen then press back) runs times rounds; returns the classes that gained instances every round, where they are defined and what keeps one alive.
@@ -643,6 +650,8 @@ Checks a feature against acceptance criteria and writes a pass/fail report with 
 | `scenario` | string | no | With criteria: load this scenario first. |
 | `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
 | `finish` | boolean | no | Close the last criterion and write the report. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{feature: string, criteria: [{index: int, text: string, verdict: "passed"|"failed"|"not_verified", warnings: int}], report: string} (finish: true only)`
 
 ## `get_supabase_auth`
 

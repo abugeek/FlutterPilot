@@ -367,7 +367,11 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                     .whereType<TextContent>()
                     .map((c) => c.text)
                     .join('\n');
-                run.steps.add((ok: res.isError != true, text: text));
+                run.steps.add((
+                  ok: res.isError != true,
+                  text: text,
+                  structured: res.structuredContent,
+                ));
                 if (res.isError == true) break;
               }
               final snapshot = await _callExtensionRaw(
@@ -387,9 +391,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         final failed = runs.any(
           (r) => r.unreachable != null || r.steps.any((s) => !s.ok),
         );
+        final report = fleetReport(steps, runs);
         return CallToolResult(
           isError: failed,
-          content: [TextContent(text: describeFleetRun(steps, runs))],
+          content: [TextContent(text: report.text)],
+          structuredContent: fleetVerdict(
+            runs,
+            stepsRequested: steps.length,
+            same: report.same,
+          ),
         );
       },
     );

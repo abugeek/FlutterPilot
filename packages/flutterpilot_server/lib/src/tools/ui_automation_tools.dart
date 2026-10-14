@@ -808,77 +808,151 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        // What was waited for, then the screen as it is now.
-        Future<CallToolResult> waited(String text, {bool route = true}) async =>
-            CallToolResult(
-              content: [
-                TextContent(text: '$text${await _screenAfter(route: route)}'),
-              ],
-            );
+        // What was waited for, then the screen as it is now: the same text as
+        // always, plus the structured twin of the outcome (met, waitedMs,
+        // timedOut, condition, and the route when the app reports one).
+        final watch = Stopwatch()..start();
+        Future<CallToolResult> waited(
+          String text, {
+          bool route = true,
+          required String condition,
+          required bool met,
+          required int timeoutMs,
+          int? waitedMs,
+        }) async {
+          final after = await _screenAfterData(route: route);
+          return CallToolResult(
+            content: [TextContent(text: '$text${after.text}')],
+            structuredContent: {
+              ...waitForVerdict(
+                condition: condition,
+                met: met,
+                waitedMs: waitedMs ?? watch.elapsedMilliseconds,
+                timeoutMs: timeoutMs,
+              ),
+              if (after.route != null) 'route': Redaction.text(after.route!),
+            },
+          );
+        }
+
+        // A wait that errored never met its condition; its structured result
+        // says so instead of leaving that to the error alone.
+        CallToolResult unmet(
+          String condition,
+          int timeoutMs,
+          _ExtensionResult res,
+        ) => withVerdict(
+          res.toCallToolResult(),
+          waitForVerdict(
+            condition: condition,
+            met: false,
+            waitedMs: watch.elapsedMilliseconds,
+            timeoutMs: timeoutMs,
+          ),
+        );
         final timeout = p['timeoutMs']?.toString();
+        // The extension's own defaults (3000 for the widget condition and for
+        // animations, 5000 for route and state), so `timedOut` means the wait
+        // used its whole deadline.
+        int timeoutOf(int fallback) => int.tryParse(timeout ?? '') ?? fallback;
         final selector = p['selector'] ?? p['target'] ?? p['key'];
         if (selector != null) {
+          final t = timeoutOf(3000);
           final res = await _callExtensionRaw(
             'ext.flutterpilot.waitForCondition',
             {'selector': selector.toString(), 'timeoutMs': ?timeout},
           );
-          if (res.isError) return res.toCallToolResult();
+          if (res.isError) return unmet('key', t, res);
           return waited(
             '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
+            condition: 'key',
+            met: true,
+            timeoutMs: t,
+            waitedMs: (res.data?['elapsedMs'] as num?)?.toInt(),
           );
         }
         if (p['route'] != null) {
+          final t = timeoutOf(5000);
           final res = await _callExtensionRaw('ext.flutterpilot.waitForRoute', {
             'route': p['route'].toString(),
             'timeoutMs': ?timeout,
           });
-          if (res.isError) return res.toCallToolResult();
-          return waited('On route "${p['route']}".', route: false);
+          if (res.isError) return unmet('route', t, res);
+          return waited(
+            'On route "${p['route']}".',
+            route: false,
+            condition: 'route',
+            met: true,
+            timeoutMs: t,
+          );
         }
         if (p['state'] != null) {
+          final t = timeoutOf(5000);
           final res = await _callExtensionRaw('ext.flutterpilot.waitForState', {
             'type': await _stateTypeOf(p['state'].toString()),
             'name': p['state'].toString(),
             'expectedValue': p['expectedValue']?.toString() ?? '',
             'timeoutMs': ?timeout,
           });
-          if (res.isError) return res.toCallToolResult();
+          if (res.isError) return unmet('state', t, res);
           final value = '${res.data?['value']}';
           return waited(
             '${p['state']} is '
             '${value.length > 200 ? '${value.substring(0, 200)}…' : value}.',
+            condition: 'state',
+            met: true,
+            timeoutMs: t,
           );
         }
         if (p['frames'] != null) {
+          final t = timeoutOf(5000);
           final count = ((p['frames'] as num).toInt()).clamp(1, 120);
           final res = await _callExtensionRaw('ext.flutterpilot.pumpFrames', {
             'count': count.toString(),
           });
-          if (res.isError) return res.toCallToolResult();
-          return waited('Pumped $count frames.');
+          if (res.isError) return unmet('frames', t, res);
+          return waited(
+            'Pumped $count frames.',
+            condition: 'frames',
+            met: true,
+            timeoutMs: t,
+          );
         }
         if (p['animations'] == true) {
+          final t = timeoutOf(3000);
           final res = await _callExtensionRaw(
             'ext.flutterpilot.waitForAnimation',
             {'timeoutMs': ?timeout},
           );
-          if (res.isError) return res.toCallToolResult();
+          if (res.isError) return unmet('animations', t, res);
+          final settled = res.data?['status'] == 'settled';
           return waited(
-            res.data?['status'] == 'settled'
+            settled
                 ? 'Animations settled.'
                 : 'Animations were still running at the timeout (a looping '
                       'animation or a spinner?).',
+            condition: 'animations',
+            met: settled,
+            timeoutMs: t,
           );
         }
-        return CallToolResult(
-          isError: true,
-          content: [
-            TextContent(
-              text:
-                  'Say what to wait for: key, route, animations: true, state '
-                  '(with expectedValue) or frames.',
-            ),
-          ],
+        return withVerdict(
+          CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'Say what to wait for: key, route, animations: true, state '
+                    '(with expectedValue) or frames.',
+              ),
+            ],
+          ),
+          waitForVerdict(
+            condition: 'none',
+            met: false,
+            waitedMs: 0,
+            timeoutMs: 0,
+          ),
         );
       },
     );

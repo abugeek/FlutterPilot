@@ -43,6 +43,7 @@ import 'src/screen_memory.dart';
 import 'src/sdk_protocol.dart';
 import 'src/self_heal_manager.dart';
 import 'src/sql_hints.dart';
+import 'src/structured_results.dart';
 import 'src/test_writer.dart';
 import 'src/tool_annotations.dart';
 import 'src/verification.dart';
@@ -233,12 +234,25 @@ abstract class _FlutterPilotServerBase {
   /// that waited or navigated (as tap_widget's response ends): field
   /// sessions followed 51 of 199 wait_for calls with get_app_summary. Empty
   /// for an app whose SDK predates `screenNow`.
-  Future<String> _screenAfter({bool route = true}) async {
+  Future<String> _screenAfter({bool route = true}) async =>
+      (await _screenAfterData(route: route)).text;
+
+  /// As [_screenAfter], and the route the app is on, for a tool that returns
+  /// it in a structured result.
+  Future<({String text, String? route})> _screenAfterData({
+    bool route = true,
+  }) async {
     final res = await _callExtensionRaw('ext.flutterpilot.screenNow', {});
-    if (res.isError) return '';
-    final current = (res.data?['postActionState'] as Map?)?['route'];
+    if (res.isError) return (text: '', route: null);
+    final current = (res.data?['postActionState'] as Map?)?['route']
+        ?.toString();
     final named = route && current != null && current != 'Unknown';
-    return '${named ? '\nRoute: $current.' : ''}${_screenNow(res.data, memory: _activeContext?.screenMemory)}';
+    return (
+      text:
+          '${named ? '\nRoute: $current.' : ''}'
+          '${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
+      route: current == null || current == 'Unknown' ? null : current,
+    );
   }
 
   /// Registers a tool. An unexpected exception becomes an error that names
@@ -328,7 +342,8 @@ abstract class _FlutterPilotServerBase {
         return null;
       }().timeout(const Duration(seconds: 12));
       if (why == null) return result;
-      return CallToolResult(
+      return keepingStructured(
+        result,
         isError: true,
         content: [
           ...result.content,
@@ -346,7 +361,8 @@ abstract class _FlutterPilotServerBase {
   Future<CallToolResult> _withNativeCrash(CallToolResult result) async {
     final crash = await _nativeCrash?.current();
     if (crash == null) return result;
-    return CallToolResult(
+    return keepingStructured(
+      result,
       isError: true,
       content: [
         ...result.content,
@@ -419,11 +435,12 @@ abstract class _FlutterPilotServerBase {
           args,
           result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
           isError: result.isError == true,
+          structured: result.structuredContent,
         );
         final tip = _batchNudge.after(name, isError: result.isError == true);
         if (tip != null) {
-          result = CallToolResult(
-            isError: result.isError,
+          result = keepingStructured(
+            result,
             content: [
               ...result.content,
               TextContent(text: tip),
@@ -434,8 +451,8 @@ abstract class _FlutterPilotServerBase {
         if (!images.any((i) => i.data.length > maxImageBase64Chars)) {
           return result;
         }
-        return CallToolResult(
-          isError: result.isError,
+        return keepingStructured(
+          result,
           content: [
             for (final c in result.content)
               c is ImageContent

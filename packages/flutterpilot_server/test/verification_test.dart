@@ -47,6 +47,34 @@ void main() {
     expect(md, contains('Nothing was done or checked for it.'));
   });
 
+  test('a check reads its pass from the structured result, not the text', () {
+    final v = start();
+    v.current = v.criteria[0];
+    // The text says nothing about passing: the structured result does.
+    v.record(
+      'assert_widget',
+      {'text': 'Wrong password'},
+      'Checked.',
+      isError: false,
+      structured: const {'passed': true, 'check': 'text'},
+    );
+    expect(v.criteria[0].verdict, Verdict.pass);
+    expect(
+      v.toMarkdown(),
+      contains('✔ `assert_widget` (text: "Wrong password") → passed'),
+    );
+    // The text-and-no-structured-content path is unchanged.
+    final t = start();
+    t.current = t.criteria[0];
+    t.record(
+      'assert_widget',
+      {'text': 'Wrong password'},
+      '{"status":"passed","text":"Wrong password"}',
+      isError: false,
+    );
+    expect(t.toMarkdown(), contains('→ passed'));
+  });
+
   test('a failed check fails it, naming a failed action before it', () {
     final v = start();
     v.current = v.criteria[1];
