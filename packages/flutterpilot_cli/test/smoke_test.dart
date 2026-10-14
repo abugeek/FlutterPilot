@@ -3,16 +3,49 @@ import 'package:test/test.dart';
 
 void main() {
   test('routePaths joins nested go_router paths, drops parameters', () {
-    const text = '''{"stack":["/"],"routes":[
-      {"type":"GoRoute","path":"/","children":[
-        {"type":"GoRoute","path":"item/:id"},
-        {"type":"GoRoute","path":"about"}]},
-      {"type":"ShellRoute","children":[{"type":"GoRoute","path":"/settings","children":[
-        {"type":"GoRoute","path":"profile"}]}]},
-      {"type":"GoRoute","path":"/files/*"}]}''';
+    // The `get_navigation_stack(routes: true)` answer around the table, as
+    // the server writes it: the `Path params:` map comes first.
+    const text =
+        'Navigation stack: / → /product/1\n'
+        'go_router location: /product/1\n'
+        'Path params: {id: 1}\n'
+        'Can pop: true\n'
+        '  Matched: /product/1 → /product/:id\n'
+        'Routes: {"routes":['
+        '{"type":"GoRoute","path":"/","children":['
+        '{"type":"GoRoute","path":"item/:id"},'
+        '{"type":"GoRoute","path":"about"}]},'
+        '{"type":"ShellRoute","children":[{"type":"GoRoute","path":"/settings",'
+        '"children":[{"type":"GoRoute","path":"profile"}]}]},'
+        '{"type":"GoRoute","path":"/files/*"}]}';
     expect(routePaths(text), ['/', '/about', '/settings', '/settings/profile']);
+  });
+
+  test('routePaths reads the Routes line, not the Path params before it', () {
+    // #344: the `Path params: {id: 0}` map was read as the table, the JSON
+    // did not decode, and the caller's insert into the empty result threw.
+    const text =
+        'Navigation stack: /product/1\n'
+        'go_router location: /product/1\n'
+        'Path params: {id: 1}\n'
+        'Can pop: true\n'
+        'Routes: {"routes":[{"type":"GoRoute","path":"/","children":['
+        '{"type":"GoRoute","path":"product/:id"}]}]}';
+    final routes = routePaths(text);
+    expect(routes, ['/']);
+    // The caller adds the current route to what it got: growable, always.
+    expect(() => routes.insert(0, '/product/1'), returnsNormally);
+    expect(routes.first, '/product/1');
+  });
+
+  test('routePaths is empty, and still growable, without a table', () {
     expect(routePaths('no table here'), isEmpty);
     expect(routePaths('{"stack":[]}'), isEmpty);
+    // A truncated answer (the server cuts at 64 KB): the table cannot be
+    // read, and the caller still adds the current route to what it got.
+    final empty = routePaths('Routes: {"routes":[{"type":"GoRoute"');
+    expect(empty, isEmpty);
+    expect(() => empty.insert(0, '/'), returnsNormally);
   });
 
   test('summary fields', () {

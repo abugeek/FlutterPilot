@@ -9,14 +9,21 @@ import 'dart:io';
 /// The route paths of a `get_navigation_stack(routes: true)` answer that can
 /// be visited as they are: go_router's table (nested paths joined), without
 /// parameters (`:id`) or wildcards. Empty when there is no table.
+///
+/// The JSON to read is the one after the `Routes: ` label. The same answer
+/// prints `Path params: {id: 1}` (and `Query params: {…}`) first, and those
+/// braces are not JSON, so scanning for the first `{` found no table on any
+/// route with parameters (field test #344). The list is always growable: the
+/// caller adds the current route to it.
 List<String> routePaths(String toolText) {
-  final start = toolText.indexOf('{');
-  if (start < 0) return const [];
+  final line = RegExp(
+    r'(?:^|\n)[ \t]*Routes:[ \t]*(\{.*)',
+  ).firstMatch(toolText);
   Object? json;
   try {
-    json = jsonDecode(toolText.substring(start, toolText.lastIndexOf('}') + 1));
+    json = jsonDecode(line?.group(1) ?? '');
   } catch (_) {
-    return const [];
+    return <String>[];
   }
   final out = <String>[];
   void walk(Object? routes, String parent) {
