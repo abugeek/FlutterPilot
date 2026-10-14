@@ -16,6 +16,7 @@ FlutterPilot is an AI-native runtime introspection, active control, and autonomo
 - **Dev Runner**: `flutterpilot dev` wraps `flutter run` and prints the VM service URI; it does not start the MCP server.
 - **End-to-end check**: `dart run tool/e2e_test.dart [-d device]` (in `packages/flutterpilot_server`) creates a fresh app, runs `init --local`, launches it, and drives it through the MCP server. Run it after changing the server, SDK, or CLI.
 - **Zero-Code Mode**: Without `flutterpilot_sdk` the app can be inspected but not driven: only the tools that work are listed (summary, widget tree, screenshots, errors, logs, hot reload/restart, theme and debug-paint toggles, memory/HTTP profiles). `get_app_summary` says so; `flutterpilot init` adds taps, text entry, navigation and assertions.
+- **Agent-facing text is generated**: `serverInstructions`, the `flutterpilot_guide` prompt and `skills/flutterpilot/SKILL.md` all come from `packages/flutterpilot_server/guidance/` (a section shared by two of them lives in `guidance/partials/`). After editing there, run `dart run tool/generate_guidance.dart` in `packages/flutterpilot_server`; a test fails when a generated file is stale, so don't edit `lib/src/generated/guidance.g.dart` or `SKILL.md` by hand.
 
 ## Core Principles & Recommended Workflows
 

@@ -361,7 +361,7 @@ void main() {
 **Server Tools**: 
 - `get_network_logs` — HTTP request/response log
 - `simulate_network` — offline, slow 3G, fast 4G
-- `add_http_mock` — Mock endpoint with status/body
+- `mock_http_response` — Mock endpoint with status/body
 - `mock_http_response(clear: true)` — Remove mocks
 
 **Capabilities**: Log inspection, condition simulation, response mocking
