@@ -127,6 +127,49 @@ void main() {
     expect(launchLogTail(log), contains('no_such_script.sh'));
   });
 
+  test('the supervisor starts a batch file named in the app folder', () async {
+    // `flutter` is `flutter.bat` on Windows: the supervisor resolves such a
+    // name instead of failing with "The system cannot find the file
+    // specified" (field test #327).
+    File(
+      '${tmp.path}/on_path.bat',
+    ).writeAsStringSync('@echo off\r\necho started from a batch file\r\n');
+    final code = await superviseLaunch([tmp.path, 'on_path.bat']);
+    final log = File('${tmp.path}/$launchLogFile').readAsStringSync();
+    expect(log, contains('started from a batch file'));
+    expect(code, 0);
+  }, skip: Platform.isWindows ? false : 'Windows only');
+
+  test('killLaunchTree ends the launch shell and what it started', () async {
+    final calls = <(String, List<String>)>[];
+    await killLaunchTree(
+      4321,
+      isWindows: true,
+      run: (executable, arguments) async {
+        calls.add((executable, arguments));
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+    expect(calls, hasLength(1));
+    expect(calls.single.$1, 'taskkill');
+    // `/T` is the point: the launch is cmd.exe running flutter.bat, and its
+    // build and app are children of it (field test #327).
+    expect(calls.single.$2, ['/T', '/F', '/PID', '4321']);
+  });
+
+  test('killLaunchTree outside Windows does not go through taskkill', () async {
+    var called = false;
+    await killLaunchTree(
+      999999999,
+      isWindows: false,
+      run: (executable, arguments) async {
+        called = true;
+        return ProcessResult(0, 0, '', '');
+      },
+    );
+    expect(called, isFalse);
+  });
+
   test('a new launch keeps the previous output', () {
     final log = File('${tmp.path}/$launchLogFile')
       ..createSync(recursive: true)

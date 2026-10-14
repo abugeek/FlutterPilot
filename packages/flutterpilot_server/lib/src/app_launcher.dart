@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'start_command.dart';
 import 'vm_discovery.dart';
 
 /// `flutter run`'s output, for a launch that fails or is still building.
@@ -241,11 +242,12 @@ Future<int> superviseLaunch(List<String> args) async {
   final sink = log.openWrite(mode: FileMode.append);
   int code;
   try {
-    final process = await Process.start(
+    // `flutter` is `flutter.bat` on Windows: without a shell it is not found
+    // and the launch dies with code 127 (field test #327).
+    final process = await startProgram([
       args[1],
-      args.sublist(2),
-      workingDirectory: root.path,
-    );
+      ...args.sublist(2),
+    ], workingDirectory: root.path);
     pidFile.writeAsStringSync('${process.pid}');
     await Future.wait([
       process.stdout.forEach(sink.add),
@@ -263,6 +265,31 @@ Future<int> superviseLaunch(List<String> args) async {
     pidFile.deleteSync();
   } catch (_) {}
   return code;
+}
+
+/// Ends the launch command [pid] and everything it started. On Windows a
+/// launch is `cmd.exe` running a batch file (`flutter.bat`), and killing only
+/// that shell leaves the build and the app behind: `taskkill /T` takes the
+/// whole tree down (field test #327).
+Future<void> killLaunchTree(
+  int pid, {
+  bool? isWindows,
+  Future<ProcessResult> Function(String, List<String>)? run,
+}) async {
+  if (!(isWindows ?? Platform.isWindows)) {
+    Process.killPid(pid);
+    return;
+  }
+  try {
+    await (run ?? Process.run)('taskkill', [
+      '/T',
+      '/F',
+      '/PID',
+      '$pid',
+    ]).timeout(const Duration(seconds: 15));
+  } catch (_) {
+    // It exited between the check and the kill: nothing left to end.
+  }
 }
 
 /// Where a running launch is, from the end of [log] (what `flutter run`
