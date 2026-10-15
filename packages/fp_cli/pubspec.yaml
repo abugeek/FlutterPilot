@@ -1,4 +1,4 @@
-name: flutterpilot_cli
+name: fp_cli
 description: "Official CLI for FlutterPilot — 1-command init, dev runner, and diagnostics for AI-driven Flutter development."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
@@ -15,7 +15,8 @@ environment:
   sdk: ^3.11.0
 
 executables:
-  flutterpilot: flutterpilot
+  fp: fp
+  flutterpilot: fp
 
 dependencies:
   args: ^2.7.0

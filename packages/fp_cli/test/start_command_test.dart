@@ -1,4 +1,4 @@
-import 'package:flutterpilot_cli/src/start_command.dart';
+import 'package:fp_cli/src/start_command.dart';
 import 'package:test/test.dart';
 
 void main() {

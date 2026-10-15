@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutterpilot_cli/src/call_stats.dart';
+import 'package:fp_cli/src/call_stats.dart';
 import 'package:test/test.dart';
 
 void main() {

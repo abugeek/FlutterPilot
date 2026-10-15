@@ -1,4 +1,4 @@
-// Keep in step with packages/flutterpilot_cli/lib/src/dtd_discovery.dart
+// Keep in step with packages/fp_cli/lib/src/dtd_discovery.dart
 // (doctor uses it; the CLI doesn't depend on the server).
 import 'dart:async';
 import 'dart:convert';

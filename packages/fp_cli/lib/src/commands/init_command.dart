@@ -12,66 +12,57 @@ const _repoUrl = 'https://github.com/abugeek/FlutterPilot.git';
 /// Shared by `init` (adds the plugin) and `doctor` (checks it is wired).
 const appPlugins = {
   'flutter_riverpod': (
-    'flutterpilot_riverpod',
+    'fp_riverpod',
     'ProviderScope(observers: [RiverpodPilotObserver()], child: ...)',
   ),
   'riverpod': (
-    'flutterpilot_riverpod',
+    'fp_riverpod',
     'ProviderScope(observers: [RiverpodPilotObserver()], child: ...)',
   ),
-  'flutter_bloc': ('flutterpilot_bloc', 'Bloc.observer = BlocPilotObserver();'),
-  'bloc': ('flutterpilot_bloc', 'Bloc.observer = BlocPilotObserver();'),
+  'flutter_bloc': ('fp_bloc', 'Bloc.observer = BlocPilotObserver();'),
+  'bloc': ('fp_bloc', 'Bloc.observer = BlocPilotObserver();'),
   'dio': (
-    'flutterpilot_dio',
+    'fp_dio',
     'DioPilotInterceptor.register();  // in main(), so its tools are listed '
         'before the first request; and dio.interceptors.add('
         'DioPilotInterceptor()) on every Dio you create',
   ),
-  'drift': (
-    'flutterpilot_drift',
-    "DriftPilotInspector.registerDatabase('main', db);",
-  ),
-  'hive': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
-  'hive_flutter': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
-  'hive_ce': ('flutterpilot_hive', 'HivePilotInspector.registerBox(box);'),
-  'hive_ce_flutter': (
-    'flutterpilot_hive',
-    'HivePilotInspector.registerBox(box);',
-  ),
+  'drift': ('fp_drift', "DriftPilotInspector.registerDatabase('main', db);"),
+  'hive': ('fp_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_flutter': ('fp_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_ce': ('fp_hive', 'HivePilotInspector.registerBox(box);'),
+  'hive_ce_flutter': ('fp_hive', 'HivePilotInspector.registerBox(box);'),
   'shared_preferences': (
-    'flutterpilot_shared_preferences',
+    'fp_shared_preferences',
     'SharedPrefsPilotInspector.register(await SharedPreferences.getInstance());',
   ),
-  'go_router': (
-    'flutterpilot_gorouter',
-    'GoRouterPilotInspector.register(router);',
-  ),
+  'go_router': ('fp_gorouter', 'GoRouterPilotInspector.register(router);'),
   'supabase_flutter': (
-    'flutterpilot_supabase',
+    'fp_supabase',
     'SupabasePilotInspector.register(Supabase.instance.client);',
   ),
   // Not firebase_core: the plugin brings Auth + Firestore, which an app
   // using only e.g. Analytics shouldn't get.
   'firebase_auth': (
-    'flutterpilot_firebase',
+    'fp_firebase',
     'FirebasePilotInspector.register(auth: FirebaseAuth.instance, '
         'firestore: FirebaseFirestore.instance);',
   ),
   'cloud_firestore': (
-    'flutterpilot_firebase',
+    'fp_firebase',
     'FirebasePilotInspector.register(auth: FirebaseAuth.instance, '
         'firestore: FirebaseFirestore.instance);',
   ),
   'flutter_secure_storage': (
-    'flutterpilot_secure_storage',
+    'fp_secure_storage',
     'SecureStoragePilotInspector.register(storage);',
   ),
   'connectivity_plus': (
-    'flutterpilot_connectivity',
+    'fp_connectivity',
     'ConnectivityPilotInspector.register();',
   ),
   'sqflite': (
-    'flutterpilot_sqflite',
+    'fp_sqflite',
     "SqflitePilotInspector.registerDatabase('main', db);",
   ),
 };
@@ -154,7 +145,7 @@ class InitCommand extends Command<void> {
     }
     if (local != null &&
         !File(
-          p.join(local, 'packages', 'flutterpilot_sdk', 'pubspec.yaml'),
+          p.join(local, 'packages', 'fp_sdk', 'pubspec.yaml'),
         ).existsSync()) {
       throw UsageException(
         '--local "$local" is not a FlutterPilot checkout.',
@@ -180,7 +171,7 @@ class InitCommand extends Command<void> {
 
     // A local checkout, this release from pub.dev, or git.
     Object source(String package) {
-      final subdir = package == 'flutterpilot_sdk'
+      final subdir = package == 'fp_sdk'
           ? 'packages/$package'
           : 'packages/plugins/$package';
       if (local != null) {
@@ -213,32 +204,26 @@ class InitCommand extends Command<void> {
     // Regular dependencies (not dev_dependencies): lib/main.dart imports them.
     // FlutterPilot.initialize() is a no-op in release builds.
     final editor = YamlEditor(pubspecContent);
-    for (final package in ['flutterpilot_sdk', ...detected.keys]) {
+    for (final package in ['fp_sdk', ...detected.keys]) {
       editor.update(['dependencies', package], source(package));
     }
-    // Plugins depend on hosted flutterpilot_sdk; from git or a checkout,
+    // Plugins depend on hosted fp_sdk; from git or a checkout,
     // force them onto the same source. From pub.dev they already are: drop
     // an override an earlier git init left.
     final overrides = yaml['dependency_overrides'];
     if (hosted) {
-      if (overrides is Map && overrides.containsKey('flutterpilot_sdk')) {
+      if (overrides is Map && overrides.containsKey('fp_sdk')) {
         if (overrides.length == 1) {
           editor.remove(['dependency_overrides']);
         } else {
-          editor.remove(['dependency_overrides', 'flutterpilot_sdk']);
+          editor.remove(['dependency_overrides', 'fp_sdk']);
         }
       }
     } else if (detected.isNotEmpty) {
       if (yaml['dependency_overrides'] == null) {
-        editor.update(
-          ['dependency_overrides'],
-          {'flutterpilot_sdk': source('flutterpilot_sdk')},
-        );
+        editor.update(['dependency_overrides'], {'fp_sdk': source('fp_sdk')});
       } else {
-        editor.update([
-          'dependency_overrides',
-          'flutterpilot_sdk',
-        ], source('flutterpilot_sdk'));
+        editor.update(['dependency_overrides', 'fp_sdk'], source('fp_sdk'));
       }
     }
     if (editor.toString() == pubspecContent) {
@@ -299,7 +284,7 @@ class InitCommand extends Command<void> {
         mainFile.existsSync() ? mainFile.readAsStringSync() : '',
         trackerAdded: trackerAdded,
         trackedBefore: trackedBefore,
-        goRouter: detected.containsKey('flutterpilot_gorouter'),
+        goRouter: detected.containsKey('fp_gorouter'),
       ),
     );
     // Only the plugins the app doesn't use yet (a re-run lists none).
@@ -335,13 +320,13 @@ class InitCommand extends Command<void> {
   static String relativePosix(String to, {required String from}) =>
       p.relative(p.absolute(to), from: p.absolute(from)).replaceAll(r'\', '/');
 
-  /// Whether flutterpilot_sdk is published on pub.dev (so `init` can use
+  /// Whether fp_sdk is published on pub.dev (so `init` can use
   /// hosted versions). Offline or slow: false, and git is used.
   static Future<bool> onPubDev() async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
     try {
       final req = await client.getUrl(
-        Uri.parse('https://pub.dev/api/packages/flutterpilot_sdk'),
+        Uri.parse('https://pub.dev/api/packages/fp_sdk'),
       );
       final res = await req.close().timeout(const Duration(seconds: 3));
       await res.drain<void>();
@@ -412,7 +397,7 @@ class InitCommand extends Command<void> {
     required bool goRouter,
   }) {
     if (goRouter) {
-      return '  2. Route tracking (go_router): wire flutterpilot_gorouter '
+      return '  2. Route tracking (go_router): wire fp_gorouter '
           '(step 3) for full locations like /story/42; until then routes are '
           "named after the on-screen page's path pattern.";
     }
@@ -493,7 +478,7 @@ class InitCommand extends Command<void> {
 
   /// Every injected snippet references the SDK; make sure it's imported.
   static String ensureImport(String content) {
-    const import = "import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';";
+    const import = "import 'package:fp_sdk/fp_sdk.dart';";
     if (content.contains(import)) return content;
     if (!content.contains('FlutterPilot') &&
         !content.contains('NavigationTracker')) {

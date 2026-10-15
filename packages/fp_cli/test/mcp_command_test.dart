@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:args/command_runner.dart';
-import 'package:flutterpilot_cli/flutterpilot_cli.dart';
+import 'package:fp_cli/fp_cli.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -11,9 +11,9 @@ void main() {
   final serverScript = p.join(
     repo,
     'packages',
-    'flutterpilot_server',
+    'fp_server',
     'bin',
-    'flutterpilot_server.dart',
+    'fp_server.dart',
   );
   const launch = (command: '/bin/fp', args: <String>[]);
 
@@ -87,10 +87,10 @@ void main() {
   });
 
   test('without a server beside the CLI, builds one from a package that '
-      'depends on flutterpilot_server', () async {
+      'depends on fp_server', () async {
     final home = Directory.systemTemp.createTempSync('fp_home_');
     addTearDown(() => home.deleteSync(recursive: true));
-    final serverPath = p.join(repo, 'packages', 'flutterpilot_server');
+    final serverPath = p.join(repo, 'packages', 'fp_server');
     final r = await Process.run(
       Platform.resolvedExecutable,
       [
@@ -117,7 +117,7 @@ void main() {
       contains(jsonEncode(serverPath)),
     );
     expect(
-      File(p.join(host, 'bin', 'flutterpilot_server.dart')).readAsStringSync(),
+      File(p.join(host, 'bin', 'fp_server.dart')).readAsStringSync(),
       contains('runFlutterPilotServer(args)'),
     );
     // Resolved, so `dart run` works.
@@ -127,7 +127,7 @@ void main() {
     );
     expect(read('.mcp.json')['mcpServers']['flutterpilot']['args'], [
       'run',
-      p.join(host, 'bin', 'flutterpilot_server.dart'),
+      p.join(host, 'bin', 'fp_server.dart'),
       '-p',
       p.normalize(app.path),
     ]);

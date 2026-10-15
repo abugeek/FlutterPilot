@@ -128,7 +128,7 @@ Future<void> main(List<String> args) async {
       await sh('flutter', ['pub', 'add', 'dio'], cwd: app);
       await sh('dart', [
         'run',
-        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+        '${repo}packages/fp_cli/bin/fp.dart',
         'init',
         '--local',
         repo,
@@ -137,7 +137,7 @@ Future<void> main(List<String> args) async {
       await sh('flutter', ['pub', 'get'], cwd: app);
       await sh('dart', [
         'run',
-        '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+        '${repo}packages/fp_cli/bin/fp.dart',
         'mcp',
         'install',
         '--client',
@@ -1524,7 +1524,7 @@ Future<void> main(List<String> args) async {
         'dart',
         [
           'run',
-          '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+          '${repo}packages/fp_cli/bin/fp.dart',
           'doctor',
           '-p',
           app,
@@ -1667,7 +1667,7 @@ Future<void> main(List<String> args) async {
             'dart',
             [
               'run',
-              '${repo}packages/flutterpilot_cli/bin/flutterpilot.dart',
+              '${repo}packages/fp_cli/bin/fp.dart',
               'doctor',
               '-p',
               app,

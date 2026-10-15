@@ -4,7 +4,7 @@ import 'dart:io';
 /// be published (SDK, plugins, server, CLI), and fails on any warning or
 /// error. Nothing is published.
 ///
-/// Plugins depend on the hosted flutterpilot_sdk, which pub.dev doesn't
+/// Plugins depend on the hosted fp_sdk, which pub.dev doesn't
 /// have until the SDK is published: a package without its own
 /// pubspec_overrides.yaml gets a temporary one pointing at the checkout's
 /// SDK (pub then prints a hint about it, which is expected).
@@ -20,10 +20,10 @@ Future<void> main() async {
           .toList()
         ..sort();
   final packages = [
-    'packages/flutterpilot_sdk',
+    'packages/fp_sdk',
     ...plugins,
-    'packages/flutterpilot_server',
-    'packages/flutterpilot_cli',
+    'packages/fp_server',
+    'packages/fp_cli',
   ];
 
   final problems = <String>[];
@@ -34,13 +34,13 @@ Future<void> main() async {
     final overrides = File('$dir/pubspec_overrides.yaml');
     final temporary =
         !overrides.existsSync() &&
-        RegExp(r'^\s+flutterpilot_sdk:', multiLine: true).hasMatch(pubspec);
+        RegExp(r'^\s+fp_sdk:', multiLine: true).hasMatch(pubspec);
     if (temporary) {
       overrides.writeAsStringSync(
         'dependency_overrides:\n'
-        '  flutterpilot_sdk:\n'
+        '  fp_sdk:\n'
         '    path: ${'../' * normalized.split('/').length}'
-        'packages/flutterpilot_sdk\n',
+        'packages/fp_sdk\n',
       );
     }
     try {

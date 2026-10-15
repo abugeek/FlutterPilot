@@ -64,7 +64,7 @@ jobs:
           dart test
 
       - name: CLI
-        working-directory: packages/flutterpilot_cli
+        working-directory: packages/fp_cli
         run: |
           dart pub get
           dart test

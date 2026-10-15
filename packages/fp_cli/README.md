@@ -1,15 +1,16 @@
-# FlutterPilot CLI (`flutterpilot_cli`)
+# FlutterPilot CLI (`fp_cli`)
 
 Official Command-Line Interface for FlutterPilot — 1-command init, development runner, and environment diagnostics for AI-driven Flutter development.
 
 ## 📦 Installation
 
-To install `flutterpilot` globally via Dart:
+To install the CLI globally via Dart (provides both the `fp` and
+`flutterpilot` executables):
 
 ```bash
-dart pub global activate --source path /path/to/FlutterPilot/packages/flutterpilot_cli
+dart pub global activate --source path /path/to/FlutterPilot/packages/fp_cli
 # Or from git:
-# dart pub global activate --source git https://github.com/abugeek/FlutterPilot.git --git-path packages/flutterpilot_cli
+# dart pub global activate --source git https://github.com/abugeek/FlutterPilot.git --git-path packages/fp_cli
 ```
 
 ---
@@ -25,7 +26,7 @@ flutterpilot init
 
 **What it does:**
 - Scans `pubspec.yaml` for popular dependencies (`riverpod`, `bloc`, `dio`, `drift`, `hive`, `shared_preferences`, `supabase_flutter`, `firebase_auth`/`cloud_firestore`, `go_router`, `connectivity_plus`, `flutter_secure_storage`, `sqflite`).
-- Adds `flutterpilot_sdk: ^0.1.0` and matching plugins to `dev_dependencies`.
+- Adds `fp_sdk: ^0.1.0` and matching plugins to `dev_dependencies`.
 - Patches `lib/main.dart` with `WidgetsFlutterBinding.ensureInitialized();` and `FlutterPilot.initialize();`.
 - Runs `flutter pub get`.
 

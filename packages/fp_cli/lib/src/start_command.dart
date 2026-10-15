@@ -1,4 +1,4 @@
-// Keep in step with packages/flutterpilot_server/lib/src/start_command.dart
+// Keep in step with packages/fp_server/lib/src/start_command.dart
 // (the CLI doesn't depend on the server).
 /// Starting a program the way a shell would, so `flutter` is found and run:
 /// on Windows it is `flutter.bat`, and `Process.start('flutter', …)` fails
