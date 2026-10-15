@@ -14,16 +14,16 @@ dependencies:
   go_router: ^18.0.1
   shared_preferences: ^2.5.5
 
-  flutterpilot_sdk:
-    path: ../../packages/flutterpilot_sdk
-  flutterpilot_dio:
-    path: ../../packages/plugins/flutterpilot_dio
-  flutterpilot_gorouter:
-    path: ../../packages/plugins/flutterpilot_gorouter
-  flutterpilot_riverpod:
-    path: ../../packages/plugins/flutterpilot_riverpod
-  flutterpilot_shared_preferences:
-    path: ../../packages/plugins/flutterpilot_shared_preferences
+  fp_sdk:
+    path: ../../packages/fp_sdk
+  fp_dio:
+    path: ../../packages/plugins/fp_dio
+  fp_gorouter:
+    path: ../../packages/plugins/fp_gorouter
+  fp_riverpod:
+    path: ../../packages/plugins/fp_riverpod
+  fp_shared_preferences:
+    path: ../../packages/plugins/fp_shared_preferences
 
 dev_dependencies:
   flutter_test:
@@ -33,7 +33,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-# The plugins depend on flutterpilot_sdk from pub.dev; use this checkout's.
+# The plugins depend on fp_sdk from pub.dev; use this checkout's.
 dependency_overrides:
-  flutterpilot_sdk:
-    path: ../../packages/flutterpilot_sdk
+  fp_sdk:
+    path: ../../packages/fp_sdk

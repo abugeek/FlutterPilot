@@ -1,0 +1,25 @@
+name: fp_gorouter
+description: "GoRouter inspector plugin for FlutterPilot — exposes route state, navigation stack, and configuration to AI agents."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - go-router
+  - mcp
+  - ai
+  - debugging
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  go_router: ">=13.0.0 <19.0.0"
+  fp_sdk: ^0.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

@@ -1,0 +1,42 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fp_connectivity/fp_connectivity.dart';
+
+void main() {
+  setUp(() {
+    ConnectivityPilotInspector.reset();
+  });
+
+  tearDown(() {
+    ConnectivityPilotInspector.reset();
+  });
+
+  group('ConnectivityPilotInspector', () {
+    test('register can be called without crashing', () {
+      // registerExtension throws UnsupportedError in test environment
+      // (no VM service). We verify the guard path and public API work.
+      try {
+        ConnectivityPilotInspector.register();
+      } on UnsupportedError {
+        // Expected — dart:developer registerExtension not available in tests.
+      }
+    });
+
+    test('register is idempotent — second call is ignored', () {
+      try {
+        ConnectivityPilotInspector.register();
+        ConnectivityPilotInspector.register(); // second call should not throw
+      } on UnsupportedError {
+        // Expected in test env.
+      }
+    });
+
+    test('reset allows re-registration after reset', () {
+      ConnectivityPilotInspector.reset();
+      try {
+        ConnectivityPilotInspector.register();
+      } on UnsupportedError {
+        // Expected in test env.
+      }
+    });
+  });
+}

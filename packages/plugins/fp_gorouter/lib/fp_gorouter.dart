@@ -1,0 +1,332 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:developer';
+import 'package:flutter/widgets.dart';
+import 'package:fp_sdk/fp_sdk.dart';
+import 'package:go_router/go_router.dart';
+
+/// Registers a VM service extension, silently ignoring duplicate registration.
+///
+/// In production apps, extensions are registered once. In test environments,
+/// reset() + re-register() would cause `ArgumentError: Extension already
+/// registered` because the VM service registry is process-scoped.
+void _safeRegisterExtension(
+  String method,
+  Future<ServiceExtensionResponse> Function(String, Map<String, String>)
+  handler,
+) {
+  try {
+    registerExtension(method, handler);
+  } on ArgumentError {
+    // Extension already registered — safe to ignore during hot-restart or
+    // re-initialization in test environments.
+  }
+}
+
+/// FlutterPilot plugin that exposes GoRouter navigation state to AI agents.
+///
+/// Provides visibility into:
+/// - **Current location**: URI, path parameters, query parameters
+/// - **Route configuration**: registered routes and their paths
+/// - **Navigation history**: recent route changes
+/// - **Programmatic navigation**: go, push, pop via MCP tools
+///
+/// ## Setup
+/// ```dart
+/// final router = GoRouter(routes: [...]);
+/// GoRouterPilotInspector.register(router);
+/// ```
+class GoRouterPilotInspector {
+  GoRouterPilotInspector._();
+
+  static bool _registered = false;
+  static GoRouter? _router;
+  static final List<Map<String, dynamic>> _navigationHistory = [];
+  static const int _maxHistory = 50;
+  static VoidCallback? _routerListener;
+
+  /// Registers a [GoRouter] instance with FlutterPilot.
+  ///
+  /// Call once after creating your GoRouter, typically in your app setup:
+  /// ```dart
+  /// final router = GoRouter(routes: [...]);
+  /// GoRouterPilotInspector.register(router);
+  /// ```
+  static void register(GoRouter router) {
+    FlutterPilot.registerCapability(
+      'gorouter',
+      version: '1',
+      extensions: [
+        'ext.flutterpilot.getGoRouterConfig',
+        'ext.flutterpilot.getGoRouterHistory',
+        'ext.flutterpilot.getGoRouterState',
+        'ext.flutterpilot.goRouterNavigate',
+      ],
+      mutating: true,
+    );
+    if (!FlutterPilot.isInitialized) {
+      debugPrint(
+        '[FlutterPilot] GoRouterPilotInspector.register called before '
+        'FlutterPilot.initialize(). Extensions will not be registered.',
+      );
+      return;
+    }
+    if (_registered) return;
+    _registered = true;
+    NavigationTracker.stackProvider = () {
+      final matches = router.routerDelegate.currentConfiguration.matches;
+      if (matches.isEmpty) return const [];
+      return [for (final m in matches) m.matchedLocation]
+        ..last = router.state.uri.toString();
+    };
+    _router = router;
+    NavigationTracker.customNavigateHandler = (route) async {
+      await navigateChecked(router, 'go', route);
+      return true;
+    };
+    NavigationTracker.customPopHandler = () async {
+      try {
+        if (router.canPop()) {
+          router.pop();
+          return true;
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    };
+    _listenRouteChanges();
+    _registerExtensions();
+  }
+
+  /// Clears all tracked state. Call on hot-restart to prevent stale data.
+  static void reset() {
+    NavigationTracker.customNavigateHandler = null;
+    NavigationTracker.customPopHandler = null;
+    if (_routerListener != null && _router != null) {
+      _router!.routerDelegate.removeListener(_routerListener!);
+    }
+    _routerListener = null;
+    NavigationTracker.stackProvider = null;
+    _navigationHistory.clear();
+    _router = null;
+    _registered = false;
+  }
+
+  /// Runs a go/push/replace and throws when [location] matches no route.
+  /// go_router then shows its error page; the app is put back where it was,
+  /// so the agent is not told it arrived.
+  @visibleForTesting
+  static Future<void> navigateChecked(
+    GoRouter router,
+    String action,
+    String location,
+  ) async {
+    final before = router.routerDelegate.currentConfiguration.uri.toString();
+    switch (action) {
+      case 'push':
+        unawaited(router.push<Object?>(location));
+      case 'replace':
+        router.replace<Object?>(location);
+      default:
+        router.go(location);
+    }
+    // An async redirect lands the new configuration by the next frame.
+    WidgetsBinding.instance.scheduleFrame();
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+    } catch (_) {}
+    final now = router.routerDelegate.currentConfiguration;
+    final last = now.matches.isEmpty ? null : now.matches.last;
+    // A push to an unknown route adds an error page on top of the stack.
+    final pushedError = last is ImperativeRouteMatch && last.matches.isError;
+    if (!now.isError && !pushedError) return;
+    if (pushedError) {
+      router.pop();
+    } else {
+      router.go(before);
+    }
+    throw StateError(
+      'No route matches "$location". Routes: '
+      '${routePaths(router.configuration.routes).join(', ')}',
+    );
+  }
+
+  /// Full paths of [routes] and their children, as `navigate_to` takes them.
+  @visibleForTesting
+  static List<String> routePaths(List<RouteBase> routes, [String parent = '']) {
+    String join(String path) => path.startsWith('/')
+        ? path
+        : parent.endsWith('/')
+        ? '$parent$path'
+        : '$parent/$path';
+    return [
+      for (final route in routes)
+        if (route is GoRoute) ...[
+          join(route.path),
+          ...routePaths(route.routes, join(route.path)),
+        ] else
+          ...routePaths(route.routes, parent),
+    ];
+  }
+
+  static void _listenRouteChanges() {
+    _routerListener = () {
+      final router = _router;
+      if (router != null) {
+        _navigationHistory.add({
+          // Not router.state: it throws while go_router shows its error page.
+          'location': router.routerDelegate.currentConfiguration.uri.toString(),
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+        while (_navigationHistory.length > _maxHistory) {
+          _navigationHistory.removeAt(0);
+        }
+      }
+    };
+    _router?.routerDelegate.addListener(_routerListener!);
+  }
+
+  static void _registerExtensions() {
+    // -- ext.flutterpilot.getGoRouterState ------------------------------------
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterState', (
+      method,
+      parameters,
+    ) async {
+      final router = _router;
+      if (router == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'GoRouter not registered.',
+        );
+      }
+
+      final config = router.routerDelegate.currentConfiguration;
+      // config.uri ignores routes added with push(); state is the top-most.
+      final location = router.state.uri.toString();
+
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'currentLocation': location,
+          'pathParameters': config.pathParameters,
+          'queryParameters': config.uri.queryParameters,
+          'matchedRoutes': config.matches.map((m) {
+            return {
+              'matchedLocation': m.matchedLocation,
+              'route': m.route is GoRoute
+                  ? (m.route as GoRoute).path
+                  : m.route.runtimeType.toString(),
+            };
+          }).toList(),
+          'canPop': router.canPop(),
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.getGoRouterConfig -----------------------------------
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterConfig', (
+      method,
+      parameters,
+    ) async {
+      final router = _router;
+      if (router == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'GoRouter not registered.',
+        );
+      }
+
+      List<Map<String, dynamic>> extractRoutes(List<RouteBase> routes) {
+        return routes.map((route) {
+          final data = <String, dynamic>{'type': route.runtimeType.toString()};
+          if (route is GoRoute) {
+            data['path'] = route.path;
+            data['name'] = route.name;
+            if (route.routes.isNotEmpty) {
+              data['children'] = extractRoutes(route.routes);
+            }
+          } else if (route is ShellRoute) {
+            data['type'] = 'ShellRoute';
+            if (route.routes.isNotEmpty) {
+              data['children'] = extractRoutes(route.routes);
+            }
+          }
+          return data;
+        }).toList();
+      }
+
+      return ServiceExtensionResponse.result(
+        json.encode({'routes': extractRoutes(router.configuration.routes)}),
+      );
+    });
+
+    // -- ext.flutterpilot.getGoRouterHistory -----------------------------------
+    _safeRegisterExtension('ext.flutterpilot.getGoRouterHistory', (
+      method,
+      parameters,
+    ) async {
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'history': _navigationHistory,
+          'count': _navigationHistory.length,
+        }),
+      );
+    });
+
+    // -- ext.flutterpilot.goRouterNavigate ------------------------------------
+    _safeRegisterExtension('ext.flutterpilot.goRouterNavigate', (
+      method,
+      parameters,
+    ) async {
+      final router = _router;
+      if (router == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'GoRouter not registered.',
+        );
+      }
+
+      final location = parameters['location'];
+      final action = parameters['action'] ?? 'go';
+
+      if (location == null && action != 'pop') {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'Missing "location" parameter (required for go/push).',
+        );
+      }
+
+      try {
+        switch (action) {
+          case 'push':
+          case 'replace':
+            await navigateChecked(router, action, location!);
+          case 'pop':
+            if (router.canPop()) {
+              router.pop();
+            } else {
+              return ServiceExtensionResponse.error(
+                ServiceExtensionResponse.extensionError,
+                'Cannot pop — already at root route.',
+              );
+            }
+          case 'go':
+          default:
+            await navigateChecked(router, 'go', location!);
+        }
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'action': action,
+            'location': location,
+          }),
+        );
+      } catch (e) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          'Navigation failed: $e',
+        );
+      }
+    });
+  }
+}
