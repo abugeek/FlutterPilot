@@ -44,11 +44,14 @@ Future<void> main() async {
     }
     try {
       final flutter = RegExp(r'sdk:\s*flutter').hasMatch(pubspec);
-      final r = await Process.run(flutter ? 'flutter' : 'dart', [
-        'pub',
-        'publish',
-        '--dry-run',
-      ], workingDirectory: dir);
+      // runInShell: on Windows `flutter` is `flutter.bat`, and calling it
+      // without a shell fails with "The system cannot find the file specified".
+      final r = await Process.run(
+        flutter ? 'flutter' : 'dart',
+        ['pub', 'publish', '--dry-run'],
+        workingDirectory: dir,
+        runInShell: true,
+      );
       final out = '${r.stdout}${r.stderr}';
       final summary = RegExp(r'Package has (\d+) warnings?').firstMatch(out);
       final warnings = int.tryParse(summary?[1] ?? '') ?? -1;
