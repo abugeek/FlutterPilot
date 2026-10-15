@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:args/command_runner.dart';
-import 'package:flutterpilot_cli/flutterpilot_cli.dart';
+import 'package:fp_cli/fp_cli.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
@@ -47,7 +47,7 @@ Future<void> main() async {
 
       final first = await initOutput();
       expect(first, contains('✅ Updated pubspec.yaml.'));
-      expect(first, contains('flutterpilot_dio:  DioPilotInterceptor'));
+      expect(first, contains('fp_dio:  DioPilotInterceptor'));
       final main = File(p.join(tempDir.path, 'lib', 'main.dart'));
       main.writeAsStringSync(
         '${main.readAsStringSync()}\n// DioPilotInterceptor.register();\n',
@@ -57,9 +57,9 @@ Future<void> main() async {
       final second = await initOutput();
       expect(pubspec.readAsStringSync(), before);
       expect(second, contains('pubspec.yaml already has FlutterPilot'));
-      expect(second, isNot(contains('flutterpilot_dio:  ')));
+      expect(second, isNot(contains('fp_dio:  ')));
       // Riverpod is still not wired: it is still listed.
-      expect(second, contains('flutterpilot_riverpod:  '));
+      expect(second, contains('fp_riverpod:  '));
     });
 
     test('adds the Firebase plugin for Auth/Firestore, not firebase_core '
@@ -80,13 +80,13 @@ $firebaseDeps''');
       expect(
         (await depsFor(
           '  firebase_core: ^4.0.0\n  firebase_analytics: ^12.0.0\n',
-        )).containsKey('flutterpilot_firebase'),
+        )).containsKey('fp_firebase'),
         isFalse,
       );
       expect(
         (await depsFor(
           '  firebase_core: ^4.0.0\n  cloud_firestore: ^6.0.0\n',
-        )).containsKey('flutterpilot_firebase'),
+        )).containsKey('fp_firebase'),
         isTrue,
       );
     });
@@ -110,8 +110,8 @@ $firebaseDeps''');
               )
               as YamlMap;
       final deps = yaml['dependencies'] as YamlMap;
-      expect(deps['flutterpilot_sdk'], '^$flutterpilotVersion');
-      expect(deps['flutterpilot_dio'], '^$flutterpilotVersion');
+      expect(deps['fp_sdk'], '^$flutterpilotVersion');
+      expect(deps['fp_dio'], '^$flutterpilotVersion');
       expect(yaml['dependency_overrides'], isNull);
     });
 
@@ -132,29 +132,17 @@ $firebaseDeps''');
                 as YamlMap;
         final deps = yaml['dependencies'] as YamlMap;
 
-        expect(
-          deps['flutterpilot_sdk']['git']['path'],
-          'packages/flutterpilot_sdk',
-        );
-        expect(
-          deps['flutterpilot_dio']['git']['path'],
-          'packages/plugins/flutterpilot_dio',
-        );
-        expect(deps['flutterpilot_riverpod'], isNotNull);
-        expect(deps.containsKey('flutterpilot_bloc'), isFalse);
+        expect(deps['fp_sdk']['git']['path'], 'packages/fp_sdk');
+        expect(deps['fp_dio']['git']['path'], 'packages/plugins/fp_dio');
+        expect(deps['fp_riverpod'], isNotNull);
+        expect(deps.containsKey('fp_bloc'), isFalse);
         expect(yaml['dev_dependencies'], isNull);
-        expect(
-          yaml['dependency_overrides']['flutterpilot_sdk']['git'],
-          isNotNull,
-        );
+        expect(yaml['dependency_overrides']['fp_sdk']['git'], isNotNull);
 
         final main = File(
           p.join(tempDir.path, 'lib', 'main.dart'),
         ).readAsStringSync();
-        expect(
-          main,
-          contains("import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';"),
-        );
+        expect(main, contains("import 'package:fp_sdk/fp_sdk.dart';"));
         expect(
           main,
           contains(
@@ -172,11 +160,10 @@ $firebaseDeps''');
                 File(p.join(tempDir.path, 'pubspec.yaml')).readAsStringSync(),
               )
               as YamlMap;
-      final sdkPath =
-          yaml['dependencies']['flutterpilot_sdk']['path'] as String;
+      final sdkPath = yaml['dependencies']['fp_sdk']['path'] as String;
       expect(
         p.normalize(p.join(tempDir.path, sdkPath)),
-        p.join(repoRoot, 'packages', 'flutterpilot_sdk'),
+        p.join(repoRoot, 'packages', 'fp_sdk'),
       );
       // The path goes into a committed file: a Windows `..\FlutterPilot\…`
       // trips the path_not_posix lint in an app that enables it (#326).
@@ -187,10 +174,10 @@ $firebaseDeps''');
       final app = p.join(Directory.systemTemp.path, 'app');
       final repo = p.join(Directory.systemTemp.path, 'repo');
       final path = InitCommand.relativePosix(
-        p.join(repo, 'packages', 'flutterpilot_sdk'),
+        p.join(repo, 'packages', 'fp_sdk'),
         from: app,
       );
-      expect(path, endsWith('/packages/flutterpilot_sdk'));
+      expect(path, endsWith('/packages/fp_sdk'));
       expect(path, isNot(contains(r'\')));
     });
 
@@ -281,7 +268,7 @@ void main() {
           'MaterialApp.router(routerConfig: router)',
           goRouter: true,
         );
-        expect(out, contains('flutterpilot_gorouter'));
+        expect(out, contains('fp_gorouter'));
         expect(out, isNot(contains('already wired')));
       });
 
@@ -309,7 +296,7 @@ void main() {
     test('ensureImport adds the SDK import when injected code needs it', () {
       expect(
         InitCommand.ensureImport('x(NavigationTracker())'),
-        startsWith("import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';"),
+        startsWith("import 'package:fp_sdk/fp_sdk.dart';"),
       );
       expect(InitCommand.ensureImport('plain()'), 'plain()');
     });

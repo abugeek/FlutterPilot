@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'package:args/command_runner.dart';
-import 'package:flutterpilot_cli/flutterpilot_cli.dart';
+import 'package:fp_cli/fp_cli.dart';
 
-void main(List<String> args) async {
+Future<void> main(List<String> args) async {
   final runner =
       CommandRunner<void>(
           'flutterpilot',

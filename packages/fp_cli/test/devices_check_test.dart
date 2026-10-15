@@ -1,4 +1,4 @@
-import 'package:flutterpilot_cli/src/devices_check.dart';
+import 'package:fp_cli/src/devices_check.dart';
 import 'package:test/test.dart';
 
 void main() {

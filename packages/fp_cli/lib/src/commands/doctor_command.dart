@@ -31,18 +31,18 @@ class DoctorCheck {
 
 /// The service extension each plugin registers once it is wired.
 const pluginExtensions = {
-  'flutterpilot_bloc': 'ext.flutterpilot.getBlocStates',
-  'flutterpilot_connectivity': 'ext.flutterpilot.getConnectivity',
-  'flutterpilot_dio': 'ext.flutterpilot.getNetworkLogs',
-  'flutterpilot_drift': 'ext.flutterpilot.queryDrift',
-  'flutterpilot_firebase': 'ext.flutterpilot.getFirebaseAuth',
-  'flutterpilot_gorouter': 'ext.flutterpilot.getGoRouterConfig',
-  'flutterpilot_hive': 'ext.flutterpilot.getHiveContents',
-  'flutterpilot_riverpod': 'ext.flutterpilot.getRiverpodStates',
-  'flutterpilot_secure_storage': 'ext.flutterpilot.getSecureStorageKeys',
-  'flutterpilot_shared_preferences': 'ext.flutterpilot.getSharedPreferences',
-  'flutterpilot_sqflite': 'ext.flutterpilot.querySqflite',
-  'flutterpilot_supabase': 'ext.flutterpilot.getSupabaseAuth',
+  'fp_bloc': 'ext.flutterpilot.getBlocStates',
+  'fp_connectivity': 'ext.flutterpilot.getConnectivity',
+  'fp_dio': 'ext.flutterpilot.getNetworkLogs',
+  'fp_drift': 'ext.flutterpilot.queryDrift',
+  'fp_firebase': 'ext.flutterpilot.getFirebaseAuth',
+  'fp_gorouter': 'ext.flutterpilot.getGoRouterConfig',
+  'fp_hive': 'ext.flutterpilot.getHiveContents',
+  'fp_riverpod': 'ext.flutterpilot.getRiverpodStates',
+  'fp_secure_storage': 'ext.flutterpilot.getSecureStorageKeys',
+  'fp_shared_preferences': 'ext.flutterpilot.getSharedPreferences',
+  'fp_sqflite': 'ext.flutterpilot.querySqflite',
+  'fp_supabase': 'ext.flutterpilot.getSupabaseAuth',
 };
 
 /// Packages whose apps make HTTP requests (macOS needs network.client).
@@ -124,10 +124,10 @@ class DoctorCommand extends Command<void> {
     final source = appSources(project);
 
     // SDK
-    if (!deps.contains('flutterpilot_sdk')) {
+    if (!deps.contains('fp_sdk')) {
       checks.add(
         const DoctorCheck.warn(
-          'flutterpilot_sdk is not a dependency: zero-code mode (inspect '
+          'fp_sdk is not a dependency: zero-code mode (inspect '
               'only; no taps, text entry or assertions)',
           'flutterpilot init',
         ),
@@ -135,7 +135,7 @@ class DoctorCommand extends Command<void> {
     } else if (!source.contains('FlutterPilot.initialize(')) {
       checks.add(
         const DoctorCheck.fail(
-          'flutterpilot_sdk is added but FlutterPilot.initialize() is never '
+          'fp_sdk is added but FlutterPilot.initialize() is never '
               'called: the app runs without it',
           'first in main(): FlutterPilot.initialize(); (or run '
               'flutterpilot init)',
@@ -205,7 +205,7 @@ class DoctorCommand extends Command<void> {
   }
 
   /// Says when a compiled server in a source checkout
-  /// (`…/flutterpilot_server/build/flutterpilot_server`) was built before its
+  /// (`…/fp_server/build/fp_server`) was built before its
   /// source last changed: agents then run old tools while the repo, the docs
   /// and the app's SDK have moved on. Null when it is current or not such a
   /// binary.
@@ -308,8 +308,8 @@ class DoctorCommand extends Command<void> {
         // Not returned yet: a config that cannot start at all comes first.
         warning ??= DoctorCheck.warn(
           'Claude Code (~/.claude.json): $stale',
-          'recompile it (dart compile exe bin/flutterpilot_server.dart -o '
-              'build/flutterpilot_server in that package), then restart '
+          'recompile it (dart compile exe bin/fp_server.dart -o '
+              'build/fp_server in that package), then restart '
               'Claude Code',
         );
         continue;
@@ -335,7 +335,7 @@ class DoctorCommand extends Command<void> {
           ? launch.args.firstWhere((a) => a.endsWith('.dart'), orElse: () => '')
           : launch.command;
       // A config kept free of machine paths names the server alone
-      // ("flutterpilot_server"): that only works where it is on the PATH.
+      // ("fp_server"): that only works where it is on the PATH.
       if (!p.isAbsolute(launch.command) &&
           !launch.command.contains(p.separator) &&
           !onPath(launch.command, path: path)) {
@@ -343,7 +343,7 @@ class DoctorCommand extends Command<void> {
           '${client.label}: ${client.configPath} starts '
               '"${launch.command}", which is not on the PATH',
           'put it there (e.g. ln -s <FlutterPilot>/packages/'
-              'flutterpilot_server/build/flutterpilot_server '
+              'fp_server/build/fp_server '
               '~/.local/bin/${launch.command}), or flutterpilot mcp install '
               'for a config with this machine\'s path',
         );
@@ -434,7 +434,7 @@ class DoctorCommand extends Command<void> {
     Set<String> extensions,
   ) {
     final deps = _dependencies(project);
-    if (!deps.contains('flutterpilot_sdk')) {
+    if (!deps.contains('fp_sdk')) {
       return [const DoctorCheck.ok('App running (zero-code: inspect only)')];
     }
     final checks = <DoctorCheck>[const DoctorCheck.ok('App running')];

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutterpilot_cli/flutterpilot_cli.dart';
-import 'package:flutterpilot_cli/src/dtd_discovery.dart';
+import 'package:fp_cli/fp_cli.dart';
+import 'package:fp_cli/src/dtd_discovery.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
@@ -33,7 +33,7 @@ void main() {
   });
 
   test('SDK added but never initialized', () {
-    pubspec(['flutter', 'flutterpilot_sdk']);
+    pubspec(['flutter', 'fp_sdk']);
     write('lib/main.dart', 'void main() {}');
     final checks = DoctorCommand.checkProject(app.path);
     expect(titles(checks, ok: false).single, contains('never called'));
@@ -43,7 +43,7 @@ void main() {
   // (flutter run -t tool/pilot_main.dart) so lib/ never imports it, and
   // doctor reported seven things as missing that the running app had.
   test('wiring in a tool/ entrypoint counts', () {
-    pubspec(['flutter', 'flutterpilot_sdk', 'dio', 'flutterpilot_dio']);
+    pubspec(['flutter', 'fp_sdk', 'dio', 'fp_dio']);
     write('lib/main.dart', 'void main() {}');
     write(
       'tool/pilot_main.dart',
@@ -54,31 +54,26 @@ void main() {
   });
 
   test('a plugin added but not wired, and one missing', () {
-    pubspec(['flutterpilot_sdk', 'dio', 'flutterpilot_dio', 'hive']);
+    pubspec(['fp_sdk', 'dio', 'fp_dio', 'hive']);
     write('lib/main.dart', 'void main() { FlutterPilot.initialize(); }');
     final checks = DoctorCommand.checkProject(app.path);
-    final dio = checks.firstWhere((c) => c.title.contains('flutterpilot_dio'));
+    final dio = checks.firstWhere((c) => c.title.contains('fp_dio'));
     expect(dio.ok, isFalse);
     expect(dio.fix, contains('DioPilotInterceptor'));
-    final hive = checks.firstWhere(
-      (c) => c.title.contains('flutterpilot_hive'),
-    );
+    final hive = checks.firstWhere((c) => c.title.contains('fp_hive'));
     expect(hive.warn, isTrue);
     expect(hive.fix, contains('flutterpilot init'));
   });
 
   test('a wired plugin passes', () {
-    pubspec(['flutterpilot_sdk', 'dio', 'flutterpilot_dio']);
+    pubspec(['fp_sdk', 'dio', 'fp_dio']);
     write(
       'lib/main.dart',
       'void main() { FlutterPilot.initialize(); DioPilotInterceptor.register(); }',
     );
     expect(
       titles(DoctorCommand.checkProject(app.path), ok: true),
-      containsAll([
-        'SDK added and initialized',
-        'flutterpilot_dio added and wired',
-      ]),
+      containsAll(['SDK added and initialized', 'fp_dio added and wired']),
     );
   });
 
@@ -104,13 +99,13 @@ void main() {
 
   // Field case: agents ran a server compiled days before its source moved.
   test('a compiled server older than its source is pointed out', () {
-    final package = Directory(p.join(app.path, 'flutterpilot_server'));
+    final package = Directory(p.join(app.path, 'fp_server'));
     File(p.join(package.path, 'pubspec.yaml'))
       ..createSync(recursive: true)
-      ..writeAsStringSync('name: flutterpilot_server');
+      ..writeAsStringSync('name: fp_server');
     final source = File(p.join(package.path, 'lib', 'server.dart'))
       ..createSync(recursive: true);
-    final binary = File(p.join(package.path, 'build', 'flutterpilot_server'))
+    final binary = File(p.join(package.path, 'build', 'fp_server'))
       ..createSync(recursive: true);
     final built = DateTime(2026, 10, 5);
     binary.setLastModifiedSync(built);
@@ -125,7 +120,7 @@ void main() {
     expect(DoctorCommand.staleServerBinary('/usr/local/bin/server'), isNull);
   });
 
-  // Field case: a config kept free of machine paths ("flutterpilot_server")
+  // Field case: a config kept free of machine paths ("fp_server")
   // on a machine where nothing by that name was installed; doctor said ✅.
   test('a server named without a path must be on the PATH', () {
     pubspec([]);
@@ -134,7 +129,7 @@ void main() {
       jsonEncode({
         'mcpServers': {
           'flutterpilot': {
-            'command': 'flutterpilot_server',
+            'command': 'fp_server',
             'args': ['-p', '.'],
           },
         },
@@ -147,8 +142,8 @@ void main() {
       path: bin.path,
     );
     expect(missing.ok, isFalse);
-    expect(missing.title, contains('"flutterpilot_server", which is not on'));
-    File(p.join(bin.path, 'flutterpilot_server')).createSync();
+    expect(missing.title, contains('"fp_server", which is not on'));
+    File(p.join(bin.path, 'fp_server')).createSync();
     expect(
       DoctorCommand.checkMcpConfig(app.path, home: app.path, path: bin.path).ok,
       isTrue,
@@ -158,13 +153,13 @@ void main() {
   test("Claude Code's own config outside the project is checked too", () {
     pubspec([]);
     final home = Directory(p.join(app.path, 'home'))..createSync();
-    final package = Directory(p.join(app.path, 'flutterpilot_server'));
+    final package = Directory(p.join(app.path, 'fp_server'));
     File(p.join(package.path, 'pubspec.yaml'))
       ..createSync(recursive: true)
-      ..writeAsStringSync('name: flutterpilot_server');
+      ..writeAsStringSync('name: fp_server');
     final source = File(p.join(package.path, 'lib', 'server.dart'))
       ..createSync(recursive: true);
-    final binary = File(p.join(package.path, 'build', 'flutterpilot_server'))
+    final binary = File(p.join(package.path, 'build', 'fp_server'))
       ..createSync(recursive: true);
     binary.setLastModifiedSync(DateTime(2026, 10, 5));
     source.setLastModifiedSync(DateTime(2026, 10, 11));
@@ -200,13 +195,13 @@ void main() {
       '.mcp.json',
       jsonEncode({
         'mcpServers': {
-          'flutterpilot': {'command': '/nope/flutterpilot_server', 'args': []},
+          'flutterpilot': {'command': '/nope/fp_server', 'args': []},
         },
       }),
     );
     final missing = DoctorCommand.checkMcpConfig(app.path, home: app.path);
     expect(missing.ok, isFalse);
-    expect(missing.title, contains('/nope/flutterpilot_server'));
+    expect(missing.title, contains('/nope/fp_server'));
     write(
       '.mcp.json',
       jsonEncode({
@@ -279,22 +274,15 @@ void main() {
       DoctorCommand.checkExtensions(app.path, {}).single.title,
       contains('zero-code'),
     );
-    pubspec([
-      'flutterpilot_sdk',
-      'dio',
-      'flutterpilot_dio',
-      'flutterpilot_hive',
-    ]);
+    pubspec(['fp_sdk', 'dio', 'fp_dio', 'fp_hive']);
     var checks = DoctorCommand.checkExtensions(app.path, {'ext.flutter.x'});
     expect(titles(checks, ok: false).single, contains('no FlutterPilot'));
     checks = DoctorCommand.checkExtensions(app.path, {
       'ext.flutterpilot.getAppSummary',
       'ext.flutterpilot.getNetworkLogs',
     });
-    expect(titles(checks, ok: true), contains('flutterpilot_dio registered'));
-    final hive = checks.firstWhere(
-      (c) => c.title.contains('flutterpilot_hive'),
-    );
+    expect(titles(checks, ok: true), contains('fp_dio registered'));
+    final hive = checks.firstWhere((c) => c.title.contains('fp_hive'));
     expect(hive.ok, isFalse);
     expect(hive.fix, contains('HivePilotInspector.registerBox'));
   });

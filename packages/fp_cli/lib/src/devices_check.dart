@@ -166,7 +166,7 @@ List<DoctorCheck> androidChecks(
         '$name: the screen dims after ${(timeoutMs / 1000).round()} s',
         'The FlutterPilot SDK keeps the screen on while an agent drives the '
             'app (and releases it 10 min after the last call); you do not '
-            'need to change the phone\'s timeout. Needs flutterpilot_sdk in '
+            'need to change the phone\'s timeout. Needs fp_sdk in '
             'the app.',
       ),
     );

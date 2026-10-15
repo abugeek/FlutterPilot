@@ -61,7 +61,7 @@ class SmokeCommand extends Command<void> {
       ..addOption(
         'server',
         help:
-            'The flutterpilot_server executable (default: the one beside '
+            'The fp_server executable (default: the one beside '
             'this CLI, else \$FLUTTERPILOT_SERVER).',
       )
       ..addOption(
@@ -287,22 +287,18 @@ class SmokeCommand extends Command<void> {
     if (dir == null) {
       usageException(
         'No FlutterPilot server found beside this CLI. Pass --server '
-        '<flutterpilot_server executable> or --local <checkout>.',
+        '<fp_server executable> or --local <checkout>.',
       );
     }
     final compiled = File(
-      p.join(
-        dir,
-        'build',
-        Platform.isWindows ? 'flutterpilot_server.exe' : 'flutterpilot_server',
-      ),
+      p.join(dir, 'build', Platform.isWindows ? 'fp_server.exe' : 'fp_server'),
     );
     if (compiled.existsSync() && _newerThanSource(compiled, dir)) {
       return (executable: compiled.path, args: args, workingDirectory: null);
     }
     return (
       executable: 'dart',
-      args: ['run', p.join(dir, 'bin', 'flutterpilot_server.dart'), ...args],
+      args: ['run', p.join(dir, 'bin', 'fp_server.dart'), ...args],
       workingDirectory: dir,
     );
   }

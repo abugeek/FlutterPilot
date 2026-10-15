@@ -64,7 +64,7 @@ void main() {
       // The CLI hint says it in the other order ("lists 29 for the app").
       final hint = flat(
         File(
-          '${repoRoot.path}/packages/flutterpilot_cli/lib/src/commands/'
+          '${repoRoot.path}/packages/fp_cli/lib/src/commands/'
           'mcp_command.dart',
         ),
       );
