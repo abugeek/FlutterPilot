@@ -33,6 +33,15 @@
   a `.bat`/`.cmd` launch command, and a relaunch stops the whole process tree
   (`taskkill /T`) so no build or app is left behind; file paths the server
   prints use `/`.
+- `launch_app(relaunch: true)` with no `device` keeps the device the running
+  app is on (`windows`, `macos`, `linux` name their own device) and says so in
+  the response, instead of stopping the app and then failing with "More than
+  one device connected" (field test #346). When the device cannot be told — a
+  fresh launch with several devices, or a browser or phone id the platform
+  does not give — the call refuses *before* stopping anything and names the
+  devices to pass. A call that only waits for a launch already going on (the
+  "Still building … call launch_app again" answer) is not affected: it plans
+  no device, runs no `flutter devices` and stops nothing.
 - The call log writes a `listed` line when the set of listed tools changes, so
   `flutterpilot stats` can tell a tool that was offered from one that was not.
 - Faster, measured on the example app against the field-session numbers in

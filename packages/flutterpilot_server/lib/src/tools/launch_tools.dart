@@ -83,17 +83,45 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     } on FormatException catch (e) {
       return _launchResult(e.message, isError: true);
     }
-    final LaunchCommand command;
+    // A launch a previous call started is only waited for, as before: the
+    // device is not chosen, `flutter devices` is not run and nothing is
+    // stopped. Settled before the device question (review of PR #128).
+    final inProgress = waitsForRunningLaunch(
+      relaunch: relaunch,
+      launchRunning: runningLaunchPid(root) != null,
+      connected: connected,
+    );
+    // Where this launch runs and what starts it, decided before the app it
+    // replaces is stopped: a relaunch must not take it down for something
+    // knowable up front (field test #346).
+    final LaunchPlan plan;
     try {
-      command = launchCommandFor(
-        root,
-        device: params['device'] as String?,
-        target: params['target'] as String?,
-        mode: params['mode'] as String?,
+      plan = await prepareLaunch(
+        relaunch: relaunch,
+        waitingForLaunch: inProgress,
+        // The project's own launch.json command starts the app itself, so
+        // this `device` is ignored and there is nothing to refuse.
+        chooseDevice: !hasLaunchConfig(root),
+        requested: params['device'] as String?,
+        runningPlatform: connected ? context?.operatingSystem : null,
+        runningIsWeb: connected && (context?.isWeb ?? false),
+        listDevices: flutterDeviceIds,
+        commandFor: (device) => launchCommandFor(
+          root,
+          device: device,
+          target: params['target'] as String?,
+          mode: params['mode'] as String?,
+        ),
+        stop: () => _stopRunningApp(root),
       );
     } on FormatException catch (e) {
       return _launchResult(e.message, isError: true);
     }
+    if (plan.refusal != null) {
+      return _launchResult(plan.refusal!, isError: true);
+    }
+    final command = plan.command!;
+    final device = plan.device;
     final ignored = command.fromConfig
         ? [
             for (final name in const ['device', 'target', 'mode'])
@@ -102,11 +130,6 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         : const <String>[];
 
     final log = File('${root.path}/$launchLogFile');
-    var inProgress = runningLaunchPid(root) != null && !connected;
-    if (relaunch) {
-      await _stopRunningApp(root);
-      inProgress = false;
-    }
     final waitFrom = DateTime.now();
     String? signingTeam;
     if (!inProgress) {
@@ -117,7 +140,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       try {
         final team = command.fromConfig
             ? null
-            : await signingTeamFor(root, device: params['device'] as String?);
+            : await signingTeamFor(root, device: device);
         signingTeam = team;
         await startSupervised(
           root,
@@ -155,7 +178,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       uri = null;
       final code = launchExitCodeIn(text);
       if (code != null) {
-        final phone = await phoneStateForDevice(params['device'] as String?);
+        final phone = await phoneStateForDevice(device);
         final hint = explainLaunchFailure(text);
         return _launchResult(
           '"$command" exited with code $code before the app was up '
@@ -192,6 +215,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     return _launchResult(
       '${inProgress ? 'The launch finished' : 'Launched'}: $info, connected '
       '($seconds s, "$command").'
+      '${plan.deviceWasRunning ? ' Relaunched on $device (the device it was running on).' : ''}'
       '${drawn ? '' : ' It has not drawn its first frame yet: wait_for or get_app_summary in a moment.'}'
       '${ignored.isEmpty ? '' : ' ${ignored.join(', ')} not applied: $launchConfigFile sets the command.'}'
       '${signingTeam == null ? '' : ' Signed with team $signingTeam (the only Apple Development certificate on this Mac; set FLUTTER_XCODE_DEVELOPMENT_TEAM or a Team in Xcode to choose another).'}'

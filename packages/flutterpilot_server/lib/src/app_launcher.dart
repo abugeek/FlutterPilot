@@ -46,6 +46,11 @@ class LaunchCommand {
   String toString() => command.join(' ');
 }
 
+/// Whether [root] starts its app its own way ([launchConfigFile]): `device`,
+/// `target` and `mode` are the project's then, not the caller's.
+bool hasLaunchConfig(Directory root) =>
+    File(p.join(root.path, launchConfigFile)).existsSync();
+
 /// [launchConfigFile]'s command when the project has one, else `flutter run`
 /// with [device], [target] and [mode]. Throws a [FormatException] naming
 /// what is wrong with the file.
@@ -82,6 +87,138 @@ LaunchCommand launchCommandFor(
     if (device != null && device.isNotEmpty) ...['-d', device],
     if (target != null && target.isNotEmpty) ...['-t', target],
   ], fromConfig: false);
+}
+
+/// The `-d` id of an app running on [operatingSystem], when the platform
+/// names the device itself: a desktop app runs on the device called
+/// `windows`, `macos` or `linux`. A web app's id is its browser and a phone's
+/// is its serial, neither of which the platform gives: those are null, so the
+/// caller lists the connected devices instead (field test #346).
+String? deviceForPlatform(String? operatingSystem, {bool isWeb = false}) {
+  if (isWeb) return null;
+  return switch (operatingSystem) {
+    'macos' || 'linux' || 'windows' => operatingSystem,
+    _ => null,
+  };
+}
+
+/// The ids `flutter devices --machine` lists, which is what `flutter run -d`
+/// takes. Empty when the command fails or says nothing: the caller then lets
+/// `flutter run` decide, as it did before.
+Future<List<String>> flutterDeviceIds() async {
+  try {
+    final result = await runProgram(['flutter', 'devices', '--machine']);
+    final decoded = jsonDecode('${result.stdout}');
+    if (decoded is! List) return const [];
+    return [
+      for (final device in decoded)
+        if (device is Map && device['id'] is String) '${device['id']}',
+    ];
+  } catch (_) {
+    return const [];
+  }
+}
+
+/// What `launch_app` will run and where, decided before the app it replaces
+/// is stopped.
+class LaunchPlan {
+  const LaunchPlan.on(
+    this.device,
+    this.command, {
+    this.deviceWasRunning = false,
+  }) : refusal = null;
+
+  /// Return [refusal] instead of launching: nothing was stopped or started.
+  const LaunchPlan.refused(this.refusal)
+    : device = null,
+      command = null,
+      deviceWasRunning = false;
+
+  /// The `-d` value, or null to let `flutter run` pick the only connected
+  /// device (as it did before).
+  final String? device;
+
+  /// The command that starts the app, already resolved.
+  final LaunchCommand? command;
+
+  /// The error to return in place of a launch.
+  final String? refusal;
+
+  /// Whether [device] came from the app being replaced, so the response can
+  /// say so (field test #346).
+  final bool deviceWasRunning;
+}
+
+/// Whether a `launch_app` call only waits for the launch a previous call
+/// started: its command is still running, nothing is connected yet, and this
+/// call is not a relaunch.
+///
+/// Such a call answers "Still building … call launch_app again to keep
+/// waiting", so it has to work with no `device` on a machine with several
+/// devices: nothing is chosen, `flutter devices` is not run and nothing is
+/// stopped (review of PR #128). This is settled *before* the device question.
+bool waitsForRunningLaunch({
+  required bool relaunch,
+  required bool launchRunning,
+  required bool connected,
+}) => !relaunch && launchRunning && !connected;
+
+/// Works out where a launch will run and what will start it, and only then
+/// stops the app a relaunch replaces.
+///
+/// The order is the point (field test #346): a relaunch with no `device` on a
+/// machine with several devices stopped the app first and *then* let
+/// `flutter run` refuse with "More than one device connected", leaving the
+/// agent with no app at all. Everything knowable up front is settled first:
+/// the device — the caller's, else the one the running app is on, else the
+/// machine's only one, left to `flutter run` as before — then the command
+/// ([commandFor]). When the device cannot be told, the plan is a [refusal]
+/// naming the devices to pass and [stop] is not called.
+///
+/// A call that only waits for a launch already going on
+/// ([waitsForRunningLaunch]) asks none of that: it plans nothing, lists
+/// nothing and stops nothing, and only needs a command for its messages.
+Future<LaunchPlan> prepareLaunch({
+  required bool relaunch,
+
+  /// The caller's own [waitsForRunningLaunch] answer: this call only waits.
+  bool waitingForLaunch = false,
+  required bool chooseDevice,
+  String? requested,
+  String? runningPlatform,
+  bool runningIsWeb = false,
+  required Future<List<String>> Function() listDevices,
+  required LaunchCommand Function(String? device) commandFor,
+  required Future<void> Function() stop,
+}) async {
+  final asked = requested?.trim();
+  if (waitingForLaunch) {
+    // The device the running launch used is not recorded, so the command for
+    // the messages is this call's own, as it was before the ordering change.
+    final device = !chooseDevice || asked == null || asked.isEmpty
+        ? null
+        : asked;
+    return LaunchPlan.on(device, commandFor(device));
+  }
+  var device = !chooseDevice || asked == null || asked.isEmpty ? null : asked;
+  var deviceWasRunning = false;
+  if (chooseDevice && device == null) {
+    device = deviceForPlatform(runningPlatform, isWeb: runningIsWeb);
+    deviceWasRunning = device != null;
+    if (device == null) {
+      final devices = await listDevices();
+      if (devices.length > 1) {
+        return LaunchPlan.refused(
+          'More than one device is connected (${devices.join(', ')}) and '
+          'FlutterPilot cannot tell which one to use; nothing was launched or '
+          'stopped. Pass device: launch_app(device: "${devices.first}").',
+        );
+      }
+    }
+  }
+  final command = commandFor(device);
+  if (relaunch) await stop();
+  return LaunchPlan.on(device, command, deviceWasRunning: deviceWasRunning);
 }
 
 /// Flutter apps under [roots] (a pubspec.yaml that depends on the Flutter
