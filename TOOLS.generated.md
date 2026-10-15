@@ -63,6 +63,8 @@ _Read-only._
 |---|---|---:|---|
 | `report` | boolean | no | Return the latest crash report instead of the list. |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", message: string, location?: string, beforeReload: bool}]}`
+
 ## `get_debug_logs`
 
 What the app printed: print(), debugPrint() and dart:developer log(), plus what the SDK buffered before connecting. clear:true empties the captured logs instead, for a clean baseline before a test.
@@ -168,6 +170,8 @@ Fills several fields in one call and optionally taps a submit button: text for t
 | `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
 | `submitWith` | string | no | Optional key/selector of the button to tap after filling (e.g. "ElevatedButton['Log In']"). |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string}`
+
 ## `wait_for`
 
 Waits for one condition, polling (never a blind sleep), and fails with the reason on timeout: a widget on screen (key), a route, settled animations, a Riverpod/Bloc value (state + expectedValue) or a number of frames.
@@ -203,6 +207,8 @@ Runs a known sequence of steps in one call, stopping at the first that fails: ta
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "enter_text", "arguments": {"key": "Title", "text": "Groceries"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, navigate_to, press_key, scroll_into_view, tap_widget, toggle_checkbox, wait_for. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string}`
 
 ## `native_screenshot`
 
@@ -356,6 +362,8 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `setup` | boolean | no | Also the server and app setup: connection, plugins the app registered, SDK capabilities, VM, buffer limits. For when a tool is missing or refused. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{connected: bool, device?: string, platform?: string, route?: string, errorCount: int, buildMode?: string}`
 
 ## `get_widget_properties`
 

@@ -1,11 +1,12 @@
 /// Machine-readable twins of the verdict tools' text results (MCP
 /// `structuredContent`): `assert_widget`, `wait_for`, `verify_feature` and
-/// `run_on_devices`.
+/// `run_on_devices`, plus the action/diagnostic tools (task 18): `get_errors`,
+/// `get_app_summary`, `execute_action_chain` and `fill_form`.
 ///
 /// A program (CI, `flutterpilot smoke`, `run_on_devices`' own comparison, a
 /// reviewer script) reads `{"passed": false, ...}` instead of parsing prose.
 /// The text content is unchanged — models read that — and no `outputSchema` is
-/// declared: the four schemas would add bytes to every session's `tools/list`
+/// declared: these schemas would add bytes to every session's `tools/list`
 /// for shapes that are small and documented in `TOOLS.generated.md`. Without a
 /// declared schema mcp_dart does not validate, so each shape below must stay
 /// in step with the tool that builds it, which the tests check.
@@ -33,6 +34,18 @@ const structuredShapes = <String, String>{
   'run_on_devices':
       '{devices: [{id: string, passedSteps: int, totalSteps: int, '
       'failedStep?: int, route?: string, errors: int}], same: bool}',
+  'get_errors':
+      '{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", '
+      'message: string, location?: string, beforeReload: bool}]}',
+  'get_app_summary':
+      '{connected: bool, device?: string, platform?: string, route?: string, '
+      'errorCount: int, buildMode?: string}',
+  'execute_action_chain':
+      '{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, '
+      'failureReason?: string}',
+  'fill_form':
+      '{submitted: bool, filledCount: int, totalFields: int, '
+      'failedField?: string}',
 };
 
 /// [result] rebuilt with new [content] (and optionally [isError]), keeping its
@@ -169,3 +182,104 @@ Map<String, dynamic> _deviceVerdict(DeviceRun r, int stepsRequested) {
     'errors': r.errors,
   };
 }
+
+/// The first `package:`/`file:` frame in a stack trace: the file location an
+/// agent needs to fix the error. Shared by the errors resource and
+/// [errorsVerdict].
+String? firstStackLocation(String? stack) {
+  if (stack == null || stack.isEmpty) return null;
+  return RegExp(r'(?:package:|file:)[^\s)]+').firstMatch(stack)?.group(0);
+}
+
+/// `get_errors`' structured result: whether the app has uncaught errors, how
+/// many, and each one's kind, message, source location and freshness.
+///
+/// [since] and [before] are the two lists the text already shows
+/// (error_freshness.dart). Entries from before the last reload carry
+/// `beforeReload: true`: the reload may already have fixed them, so a caller
+/// asking "is the app healthy now?" filters them out. `count` is the number of
+/// entries returned, `since` first; an empty list is a clean app.
+Map<String, dynamic> errorsVerdict({
+  required List<Map<String, dynamic>> since,
+  required List<Map<String, dynamic>> before,
+}) {
+  final errors = [
+    for (final e in since) _structuredError(e, beforeReload: false),
+    for (final e in before) _structuredError(e, beforeReload: true),
+  ];
+  return {
+    'hasErrors': errors.isNotEmpty,
+    'count': errors.length,
+    'errors': errors,
+  };
+}
+
+Map<String, dynamic> _structuredError(
+  Map<String, dynamic> error, {
+  required bool beforeReload,
+}) {
+  final message = error['exception']?.toString() ?? 'Unknown error';
+  return {
+    'kind': _errorKind(message),
+    'message': message,
+    'location': ?firstStackLocation(error['stackTrace']?.toString()),
+    'beforeReload': beforeReload,
+  };
+}
+
+/// A layout overflow reaches `get_errors` as an exception whose message says
+/// "overflowed"; everything else is an `exception`.
+String _errorKind(String message) =>
+    message.toLowerCase().contains('overflow') ? 'overflow' : 'exception';
+
+/// `get_app_summary`'s structured result: the key runtime facts about the
+/// connected app.
+///
+/// [connected] is false when nothing answered; the other fields are present
+/// only when the app reported them. [errorCount] counts the uncaught errors
+/// since the last reload — the same number the text headlines.
+Map<String, dynamic> appSummaryVerdict({
+  required bool connected,
+  String? device,
+  String? platform,
+  String? route,
+  int errorCount = 0,
+  String? buildMode,
+}) => {
+  'connected': connected,
+  'device': ?device,
+  'platform': ?platform,
+  'route': ?route,
+  'errorCount': errorCount,
+  'buildMode': ?buildMode,
+};
+
+/// `execute_action_chain`'s structured result: whether every step passed, how
+/// many ran, the total, and — when one failed — which step (1-based) and why.
+Map<String, dynamic> actionChainVerdict({
+  required bool passed,
+  required int completedSteps,
+  required int totalSteps,
+  int? failedStep,
+  String? failureReason,
+}) => {
+  'passed': passed,
+  'completedSteps': completedSteps,
+  'totalSteps': totalSteps,
+  'failedStep': ?failedStep,
+  'failureReason': ?failureReason,
+};
+
+/// `fill_form`'s structured result: how many fields were filled, the total,
+/// whether submit was tapped, and the first field that could not be filled.
+Map<String, dynamic> fillFormVerdict({
+  required bool submitted,
+  required int filledCount,
+  required int totalFields,
+  String? failedField,
+}) => {
+  'submitted': submitted,
+  'filledCount': filledCount,
+  'totalFields': totalFields,
+  'failedField': ?failedField,
+};

@@ -339,7 +339,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     Map<String, dynamic> error, {
     required String freshness,
   }) {
-    final location = _firstStackLocation(error['stackTrace']?.toString());
+    final location = firstStackLocation(error['stackTrace']?.toString());
     return {
       'exception': error['exception']?.toString() ?? 'Unknown error',
       if (error['widget'] != null) 'widget': error['widget'],
@@ -347,13 +347,6 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       if (error['timestamp'] != null) 'timestamp': error['timestamp'],
       'freshness': freshness,
     };
-  }
-
-  /// The first `package:`/`file:` frame in a stack trace: the file location an
-  /// agent needs to fix the error.
-  static String? _firstStackLocation(String? stack) {
-    if (stack == null || stack.isEmpty) return null;
-    return RegExp(r'(?:package:|file:)[^\s)]+').firstMatch(stack)?.group(0);
   }
 
   Map<String, dynamic> _devicesResource(_ResourceData data) => {
