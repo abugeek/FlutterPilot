@@ -235,6 +235,28 @@ Supabase and Firebase (Auth + Firestore, on the local emulators).
 `switch_device`: one server drives several running apps (e.g. iOS simulator,
 Android emulator, Chrome), one active device at a time.
 
+### MCP Resources (live context without a tool call)
+
+Alongside tools, the server exposes **standard MCP resources** so an agent or
+IDE client (Cursor, Claude Desktop, Antigravity, Zed) can attach live app
+context and re-read it on demand — without invoking a tool or paying for the
+round-trip. Resources add **nothing** to `tools/list`, so the token budget an
+agent pays before it calls anything is unchanged. The server advertises
+`resources: {listChanged: true, subscribe: true}` and notifies clients when an
+app connects, disconnects, or a device is registered.
+
+| Resource | MIME type | Contents |
+|---|---|---|
+| `flutterpilot://app/summary` | `application/json` | Connection state, active device, platform, build mode, current route, error count. |
+| `flutterpilot://app/errors` | `application/json` | Uncaught exceptions and layout overflows with file locations and a freshness marker. |
+| `flutterpilot://app/widget-tree` | `text/plain` | Compact widget hierarchy of the current screen. |
+| `flutterpilot://app/logs` | `text/plain` | Recent console output, merged with the SDK's pre-connection buffer. |
+| `flutterpilot://devices` | `application/json` | Registered devices with their VM-service address and active status. |
+
+With no app connected, each app-scoped resource returns a graceful
+`{"connected": false, "message": "No Flutter app currently connected"}` (or the
+text equivalent) instead of an error.
+
 ---
 
 ## 🏗️ Architecture
