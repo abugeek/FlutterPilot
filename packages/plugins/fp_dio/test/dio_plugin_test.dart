@@ -1,0 +1,347 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fp_dio/fp_dio.dart';
+import 'package:mocktail/mocktail.dart';
+
+class MockRequestInterceptorHandler extends Mock
+    implements RequestInterceptorHandler {}
+
+class MockResponseInterceptorHandler extends Mock
+    implements ResponseInterceptorHandler {}
+
+class MockErrorInterceptorHandler extends Mock
+    implements ErrorInterceptorHandler {}
+
+void main() {
+  late DioPilotInterceptor interceptor;
+
+  setUpAll(() {
+    registerFallbackValue(RequestOptions(path: '/fallback'));
+    registerFallbackValue(
+      Response<dynamic>(requestOptions: RequestOptions(path: '/fallback')),
+    );
+    registerFallbackValue(
+      DioException(requestOptions: RequestOptions(path: '/fallback')),
+    );
+  });
+
+  setUp(() {
+    interceptor = DioPilotInterceptor();
+  });
+
+  group('DioPilotInterceptor', () {
+    test('can be instantiated without crashing', () {
+      expect(interceptor, isA<DioPilotInterceptor>());
+      expect(interceptor, isA<Interceptor>());
+    });
+
+    test('multiple instances can be created without crashing', () {
+      final a = DioPilotInterceptor();
+      final b = DioPilotInterceptor();
+      final c = DioPilotInterceptor();
+      expect(a, isA<DioPilotInterceptor>());
+      expect(b, isA<DioPilotInterceptor>());
+      expect(c, isA<DioPilotInterceptor>());
+    });
+
+    group('onRequest', () {
+      test('forwards request to handler via next', () {
+        final handler = MockRequestInterceptorHandler();
+        final options = RequestOptions(path: '/users', method: 'GET');
+
+        interceptor.onRequest(options, handler);
+
+        verify(() => handler.next(options)).called(1);
+      });
+
+      test('handles POST request', () {
+        final handler = MockRequestInterceptorHandler();
+        final options = RequestOptions(
+          path: '/users',
+          method: 'POST',
+          data: {'name': 'test'},
+        );
+
+        interceptor.onRequest(options, handler);
+
+        verify(() => handler.next(options)).called(1);
+      });
+
+      test('handles request with base URL', () {
+        final handler = MockRequestInterceptorHandler();
+        final options = RequestOptions(
+          path: '/api/data',
+          method: 'GET',
+          baseUrl: 'https://example.com',
+        );
+
+        interceptor.onRequest(options, handler);
+
+        verify(() => handler.next(options)).called(1);
+      });
+    });
+
+    group('onResponse', () {
+      test('forwards response to handler via next', () {
+        final handler = MockResponseInterceptorHandler();
+        final requestOptions = RequestOptions(path: '/users', method: 'GET');
+        final response = Response<dynamic>(
+          requestOptions: requestOptions,
+          statusCode: 200,
+          data: {'users': []},
+        );
+
+        interceptor.onResponse(response, handler);
+
+        verify(() => handler.next(response)).called(1);
+      });
+
+      test('handles response with different status codes', () {
+        final handler = MockResponseInterceptorHandler();
+        final requestOptions = RequestOptions(path: '/created');
+        final response = Response<dynamic>(
+          requestOptions: requestOptions,
+          statusCode: 201,
+        );
+
+        interceptor.onResponse(response, handler);
+
+        verify(() => handler.next(response)).called(1);
+      });
+    });
+
+    group('onError', () {
+      test('forwards error to handler via next', () {
+        final handler = MockErrorInterceptorHandler();
+        final requestOptions = RequestOptions(path: '/fail');
+        final error = DioException(
+          requestOptions: requestOptions,
+          message: 'Connection timeout',
+          response: Response<dynamic>(
+            requestOptions: requestOptions,
+            statusCode: 500,
+          ),
+        );
+
+        interceptor.onError(error, handler);
+
+        verify(() => handler.next(error)).called(1);
+      });
+
+      test('handles error without response', () {
+        final handler = MockErrorInterceptorHandler();
+        final requestOptions = RequestOptions(path: '/no-response');
+        final error = DioException(
+          requestOptions: requestOptions,
+          message: 'No internet connection',
+        );
+
+        interceptor.onError(error, handler);
+
+        verify(() => handler.next(error)).called(1);
+      });
+
+      test('handles error with null message', () {
+        final handler = MockErrorInterceptorHandler();
+        final requestOptions = RequestOptions(path: '/null-msg');
+        final error = DioException(requestOptions: requestOptions);
+
+        interceptor.onError(error, handler);
+
+        verify(() => handler.next(error)).called(1);
+      });
+    });
+
+    group('log buffer limit', () {
+      test('processing more than 50 requests does not crash', () {
+        final handler = MockRequestInterceptorHandler();
+
+        for (var i = 0; i < 60; i++) {
+          final options = RequestOptions(path: '/item/$i', method: 'GET');
+          interceptor.onRequest(options, handler);
+        }
+
+        verify(() => handler.next(any())).called(60);
+      });
+
+      test(
+        'mixed request/response/error beyond buffer limit does not crash',
+        () {
+          final reqHandler = MockRequestInterceptorHandler();
+          final resHandler = MockResponseInterceptorHandler();
+          final errHandler = MockErrorInterceptorHandler();
+
+          for (var i = 0; i < 20; i++) {
+            final options = RequestOptions(path: '/mix/$i', method: 'GET');
+            interceptor.onRequest(options, reqHandler);
+
+            final response = Response<dynamic>(
+              requestOptions: options,
+              statusCode: 200,
+            );
+            interceptor.onResponse(response, resHandler);
+
+            final error = DioException(
+              requestOptions: options,
+              message: 'error $i',
+            );
+            interceptor.onError(error, errHandler);
+          }
+
+          // 20 requests + 20 responses + 20 errors = 60 total log entries
+          verify(() => reqHandler.next(any())).called(20);
+          verify(() => resHandler.next(any())).called(20);
+          verify(() => errHandler.next(any())).called(20);
+        },
+      );
+    });
+
+    group('Dio integration', () {
+      test('can be added to a Dio instance without crashing', () {
+        final dio = Dio();
+        dio.interceptors.add(interceptor);
+        expect(dio.interceptors, contains(interceptor));
+      });
+
+      test('multiple interceptor instances can be added to Dio', () {
+        final dio = Dio();
+        final a = DioPilotInterceptor();
+        final b = DioPilotInterceptor();
+        dio.interceptors.addAll([a, b]);
+        expect(dio.interceptors, containsAll([a, b]));
+      });
+    });
+  });
+
+  group('mocked responses reach the app like real ones', () {
+    // A real Dio: requests answered by the mock never leave the process.
+    Dio dio() =>
+        Dio(BaseOptions(baseUrl: 'https://api.example.com'))
+          ..interceptors.add(DioPilotInterceptor());
+
+    tearDown(DioPilotInterceptor.clearMocks);
+
+    test('a mocked 500 throws a bad-response DioException', () async {
+      DioPilotInterceptor.mock(
+        '/todos',
+        statusCode: 500,
+        body: '{"error":"server_down"}',
+      );
+      await expectLater(
+        dio().get<List<dynamic>>('/todos'),
+        throwsA(
+          isA<DioException>()
+              .having((e) => e.type, 'type', DioExceptionType.badResponse)
+              .having((e) => e.response?.statusCode, 'status', 500)
+              .having((e) => e.response?.data, 'data', {
+                'error': 'server_down',
+              }),
+        ),
+      );
+    });
+
+    test(
+      'a mocked timeout or connection error fails without a response',
+      () async {
+        DioPilotInterceptor.mock('/pay', error: 'timeout', delayMs: 50);
+        DioPilotInterceptor.mock('/sync', error: 'connection');
+        final started = DateTime.now();
+        await expectLater(
+          dio().post<void>('/pay'),
+          throwsA(
+            isA<DioException>()
+                .having((e) => e.type, 'type', DioExceptionType.receiveTimeout)
+                .having((e) => e.response, 'response', isNull),
+          ),
+        );
+        expect(
+          DateTime.now().difference(started).inMilliseconds,
+          greaterThanOrEqualTo(45),
+        );
+        await expectLater(
+          dio().get<void>('/sync'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.type,
+              'type',
+              DioExceptionType.connectionError,
+            ),
+          ),
+        );
+        // Other URLs are untouched by these mocks.
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+      },
+    );
+
+    test('a mocked 200 resolves with its body', () async {
+      DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1, 2]');
+      final response = await dio().get<List<dynamic>>('/todos');
+      expect(response.data, [1, 2]);
+    });
+  });
+
+  group('the network condition reaches a mocked request too', () {
+    Dio dio() =>
+        Dio(BaseOptions(baseUrl: 'https://api.example.com'))
+          ..interceptors.add(DioPilotInterceptor());
+
+    tearDown(() {
+      DioPilotInterceptor.clearMocks();
+      DioPilotInterceptor.simulate(NetworkCondition.normal);
+    });
+
+    test(
+      'offline fails a mocked URL the way it fails an unmocked one',
+      () async {
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        DioPilotInterceptor.simulate(NetworkCondition.offline);
+        await expectLater(
+          dio().get<List<dynamic>>('/todos'),
+          throwsA(
+            isA<DioException>()
+                .having((e) => e.type, 'type', DioExceptionType.connectionError)
+                .having((e) => e.message, 'message', contains('offline')),
+          ),
+        );
+        // The mock is kept, not cleared: `normal` brings its answer back.
+        DioPilotInterceptor.simulate(NetworkCondition.normal);
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+      },
+    );
+
+    test(
+      'offline beats a mocked error: the request never reaches the mock',
+      () async {
+        DioPilotInterceptor.mock('/pay', error: 'timeout', delayMs: 50);
+        DioPilotInterceptor.simulate(NetworkCondition.offline);
+        await expectLater(
+          dio().post<void>('/pay'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.type,
+              'type',
+              DioExceptionType.connectionError,
+            ),
+          ),
+        );
+      },
+    );
+
+    for (final (condition, atLeastMs) in [
+      (NetworkCondition.fast4g, 90),
+      (NetworkCondition.slow3g, 1400),
+    ]) {
+      test('${condition.name} delays a mocked answer', () async {
+        DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+        DioPilotInterceptor.simulate(condition);
+        final started = DateTime.now();
+        expect((await dio().get<List<dynamic>>('/todos')).data, [1]);
+        expect(
+          DateTime.now().difference(started).inMilliseconds,
+          greaterThanOrEqualTo(atLeastMs),
+        );
+      });
+    }
+  });
+}

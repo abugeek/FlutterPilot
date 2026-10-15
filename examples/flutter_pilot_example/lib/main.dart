@@ -1,11 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutterpilot_dio/flutterpilot_dio.dart';
-import 'package:flutterpilot_gorouter/flutterpilot_gorouter.dart';
-import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
-import 'package:flutterpilot_shared_preferences/flutterpilot_shared_preferences.dart';
+import 'package:fp_dio/fp_dio.dart';
+import 'package:fp_gorouter/fp_gorouter.dart';
+import 'package:fp_riverpod/fp_riverpod.dart';
+import 'package:fp_sdk/fp_sdk.dart';
+import 'package:fp_shared_preferences/fp_shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

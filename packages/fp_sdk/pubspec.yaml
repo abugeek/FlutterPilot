@@ -1,0 +1,28 @@
+name: fp_sdk
+description: "Core FlutterPilot SDK for AI-native runtime introspection of Flutter applications."
+version: 0.1.0
+homepage: https://github.com/abugeek/FlutterPilot
+repository: https://github.com/abugeek/FlutterPilot
+issue_tracker: https://github.com/abugeek/FlutterPilot/issues
+topics:
+  - flutter
+  - mcp
+  - ai
+  - debugging
+  - devtools
+
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.17.0
+  # Keeps a real phone's screen on while an agent drives the app.
+  wakelock_plus: ">=1.2.8 <2.0.0"
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  # Route naming for MaterialApp.router apps (navigation_fallback_test).
+  go_router: ">=13.0.0 <19.0.0"

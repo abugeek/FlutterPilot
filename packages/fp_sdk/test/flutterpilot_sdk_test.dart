@@ -1,0 +1,98 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fp_sdk/fp_sdk.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  group('FlutterPilot SDK', () {
+    test('initializes correctly and registers state setters', () {
+      FlutterPilot.initialize();
+
+      // ignore: unused_local_variable
+      bool setterCalled = false;
+      FlutterPilot.registerStateSetter('test_type', (name, value) async {
+        setterCalled = true;
+        return {'status': 'ok'};
+      });
+
+      // We can't easily trigger the service extension in a unit test
+      // without mocking the developer service registry, but we can
+      // verify the public API for registration works.
+
+      // Since _stateSetters is private, we verify via a custom setter registration.
+      expect(
+        () => FlutterPilot.registerStateSetter('another', (n, v) async {}),
+        returnsNormally,
+      );
+    });
+
+    test('logStateChange records actions when recording is active', () {
+      FlutterPilot.initialize();
+
+      // Start recording
+      // Note: startRecording is a service extension, but we can't call it easily.
+      // However, we can use the private _isRecording if we were testing internally.
+      // For now, we test that the API exists and doesn't crash.
+      expect(
+        () => FlutterPilot.logStateChange('source', 'name', 'value'),
+        returnsNormally,
+      );
+    });
+
+    test('registers machine-readable plugin capabilities', () {
+      FlutterPilot.registerCapability(
+        'test_plugin',
+        version: '1',
+        extensions: ['ext.flutterpilot.testPlugin'],
+        mutating: true,
+      );
+
+      expect(
+        FlutterPilot.capabilities,
+        contains(
+          predicate<Map<String, dynamic>>(
+            (capability) =>
+                capability['id'] == 'test_plugin' &&
+                capability['version'] == '1' &&
+                capability['mutating'] == true,
+          ),
+        ),
+      );
+    });
+
+    test('redacts bearer credentials and bounds captured console messages', () {
+      FlutterPilot.initialize();
+      final secret = 'Bearer test-secret-token-123';
+      debugPrint(secret);
+      final message = FlutterPilot.consoleBuffer.last['message'] as String;
+      expect(message, isNot(contains('test-secret-token-123')));
+      expect(message, contains('<redacted>'));
+    });
+
+    test('getAppSnapshot returns complete unified telemetry bundle', () {
+      FlutterPilot.initialize();
+      final snapshot = FlutterPilot.getAppSnapshot();
+
+      expect(snapshot, isA<Map<String, dynamic>>());
+      expect(snapshot.containsKey('timestamp'), isTrue);
+      expect(snapshot.containsKey('route'), isTrue);
+      expect(snapshot.containsKey('viewport'), isTrue);
+      expect(snapshot.containsKey('interactiveElements'), isTrue);
+      expect(snapshot.containsKey('performance'), isTrue);
+      expect(snapshot.containsKey('recentErrors'), isTrue);
+      expect(snapshot.containsKey('recentLogs'), isTrue);
+    });
+
+    test('getPostActionState returns concise post-action summary', () async {
+      FlutterPilot.initialize();
+      final state = await FlutterPilot.getPostActionState(
+        previousRoute: '/login',
+      );
+
+      expect(state, isA<Map<String, dynamic>>());
+      expect(state.containsKey('route'), isTrue);
+      expect(state.containsKey('interactiveElementsCount'), isTrue);
+      expect(state.containsKey('visibleInteractiveElements'), isTrue);
+    });
+  });
+}
