@@ -753,7 +753,9 @@ CE settings, geolocator, its own scanner EventChannel); findings #301–310.
 - **Windows**: `scenario`, `generate_test` and `verify_feature` took the
   app's folder as `/D:/app`; `generate_test` could not start `flutter.bat`;
   `e2e_test.dart -d windows` runs now, and the SDK suite passes there
-  (#310). Open: the Windows e2e is not in CI.
+  (#310). The server's full unit suite runs on Windows in the `Unit`
+  workflow's `windows-process-code` job (task 20) — it used to run only the
+  launcher and call-log files. Open: the Windows device e2e is not in CI.
 
 ## 12. Styles in numbers, keyboard inset, one URL failing — done (2026-10-05)
 
@@ -826,8 +828,9 @@ the server itself: `flutterpilot stats`).
 - Dead ends: `WHY:` on a call the app did not answer, `• Starting:` before
   runApp, `• Versions:` when SDK and server differ (protocol number, raise
   both together), doctor for a stale server binary and `tool/` entrypoints.
-- A `Unit` workflow (Linux + Windows) on every PR; the device `CI` workflow
-  is still disabled.
+- A `Unit` workflow (Linux + Windows) on every PR — Windows runs the server's
+  whole unit suite and the CLI (task 20); the device `CI` workflow is still
+  disabled.
 
 **Proven since (2026-10-12), each on a real app:**
 

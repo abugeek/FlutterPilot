@@ -1,7 +1,7 @@
 name: Unit
 
 # The quick gate: formatting, analysis and every package's unit tests on
-# Linux, plus the server's process and file code on Windows. Minutes, no
+# Linux, plus the server's whole suite and the CLI on Windows. Minutes, no
 # simulators. The device runs (macOS, iOS, Android, web end-to-end) are the
 # CI workflow.
 on:
@@ -43,9 +43,10 @@ jobs:
       - name: Plugin ranges accept the latest host packages
         run: dart run tool/check_plugin_ranges.dart
 
-  # launch_app's supervisor and liveness check, the call log and the CLI's
-  # doctor take a different path on Windows (tasklist, backslashes): nothing
-  # else runs them there.
+  # The full server suite and the CLI on Windows. Several tests take a
+  # different path there — launch_app's supervisor and liveness check
+  # (tasklist), the call log, path and command-line normalisation, and the
+  # CLI's doctor — so they only ever run here (task 20).
   windows-process-code:
     runs-on: windows-latest
     timeout-minutes: 20
@@ -56,11 +57,11 @@ jobs:
         with:
           channel: stable
 
-      - name: Server launcher and call log
+      - name: Server tests on Windows
         working-directory: packages/flutterpilot_server
         run: |
           dart pub get
-          dart test test/app_launcher_test.dart test/call_log_test.dart
+          dart test
 
       - name: CLI
         working-directory: packages/flutterpilot_cli
