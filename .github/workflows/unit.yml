@@ -58,7 +58,7 @@ jobs:
           channel: stable
 
       - name: Server tests on Windows
-        working-directory: packages/flutterpilot_server
+        working-directory: packages/fp_server
         run: |
           dart pub get
           dart test

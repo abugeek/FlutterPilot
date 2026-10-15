@@ -40,7 +40,7 @@ jobs:
         run: dart run tool/check_plugin_ranges.dart
 
   # The real gate: fresh app -> `flutterpilot init --local` -> flutter run ->
-  # MCP server over stdio. See packages/flutterpilot_server/tool/e2e_test.dart.
+  # MCP server over stdio. See packages/fp_server/tool/e2e_test.dart.
   e2e-apple-web:
     runs-on: macos-latest
     timeout-minutes: 60
@@ -79,22 +79,22 @@ jobs:
       # timed out or lost the app (docs/field-test-findings.md #272).
       - name: Wait for the simulator's first-boot work
         if: matrix.target == 'ios'
-        run: sh packages/flutterpilot_server/tool/ci_wait_simulator_idle.sh "$DEVICE" "$BOOTED_AT"
+        run: sh packages/fp_server/tool/ci_wait_simulator_idle.sh "$DEVICE" "$BOOTED_AT"
 
       # Hosted iOS simulators are slow enough to occasionally drop the VM
       # service connection; retry once and leave a visible warning.
       - name: End-to-end test
-        working-directory: packages/flutterpilot_server
+        working-directory: packages/fp_server
         run: |
           dart run tool/e2e_test.dart -d "$DEVICE" && exit 0
           [ "${{ matrix.target }}" = ios ] || exit 1
           echo "::warning::iOS e2e failed once on this runner; retrying"
           dart run tool/e2e_test.dart -d "$DEVICE"
 
-      # Same path for an app without flutterpilot_sdk (zero-code mode).
+      # Same path for an app without fp_sdk (zero-code mode).
       - name: End-to-end test (zero-code)
         if: matrix.target != 'ios'
-        working-directory: packages/flutterpilot_server
+        working-directory: packages/fp_server
         run: dart run tool/e2e_test.dart --zero-code -d "$DEVICE"
 
   e2e-android:
@@ -137,4 +137,4 @@ jobs:
           target: aosp_atd
           disable-animations: false
           # Retries once while the emulator lives; on failure prints why.
-          script: cd packages/flutterpilot_server && sh tool/ci_android_e2e.sh
+          script: cd packages/fp_server && sh tool/ci_android_e2e.sh
