@@ -721,10 +721,21 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'fields': json.encode(p['fields']),
           if (submit != null) 'submitWith': submit.toString(),
         });
-        if (res.isError) return res.toCallToolResult();
-        final filled = res.data?['fieldsFilled'] ?? 0;
-        final total = res.data?['totalFields'] ?? 0;
+        if (res.isError) {
+          return withVerdict(
+            res.toCallToolResult(),
+            fillFormVerdict(
+              submitted: false,
+              filledCount: 0,
+              totalFields: (p['fields'] as Map?)?.length ?? 0,
+            ),
+          );
+        }
+        final filled = (res.data?['fieldsFilled'] as num?)?.toInt() ?? 0;
+        final total = (res.data?['totalFields'] as num?)?.toInt() ?? 0;
         final submitted = res.data?['submitted'] == true;
+        final failedField = (res.data?['failedFields'] as List?)?.firstOrNull
+            ?.toString();
         final delta = res.data?['delta'] as Map<String, dynamic>?;
         final navigated = delta?['navigated'] == true;
         final routeNote = navigated
@@ -735,14 +746,22 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final diffNote = _widgetDiffSummary(
           delta?['widgetDiff'] as Map<String, dynamic>?,
         );
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
-                  '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
-            ),
-          ],
+        return withVerdict(
+          CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
+                    '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
+              ),
+            ],
+          ),
+          fillFormVerdict(
+            submitted: submitted,
+            filledCount: filled,
+            totalFields: total,
+            failedField: failedField,
+          ),
         );
       },
     );
@@ -1129,8 +1148,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         required: ['steps'],
       ),
       callback: (p, e) async {
-        CallToolResult error(String text) =>
-            CallToolResult(isError: true, content: [TextContent(text: text)]);
+        final requested = (p['steps'] as List?)?.length ?? 0;
+        CallToolResult error(String text, {int? failedStep}) => withVerdict(
+          CallToolResult(isError: true, content: [TextContent(text: text)]),
+          actionChainVerdict(
+            passed: false,
+            completedSteps: 0,
+            totalSteps: requested,
+            failedStep: failedStep,
+            failureReason: text,
+          ),
+        );
         final steps = <({String tool, Map<String, dynamic> arguments})>[];
         for (final s in (p['steps'] as List?) ?? const []) {
           final raw = chainStep(s);
@@ -1144,11 +1172,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               'Step ${steps.length + 1}: '
               '${step == null ? 'not a {"tool": ..., "arguments": {...}} step' : '"${step.tool}" can\'t run in a chain'}. '
               'Tools: ${(_chainStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
+              failedStep: steps.length + 1,
             );
           }
           final refusal = stepProfileRefusal(step.tool);
           if (refusal != null) {
-            return error('Step ${steps.length + 1}: $refusal');
+            return error(
+              'Step ${steps.length + 1}: $refusal',
+              failedStep: steps.length + 1,
+            );
           }
           steps.add(step);
         }
@@ -1161,9 +1193,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             'ext.flutterpilot.executeActionChain',
             {'actions': json.encode(inApp)},
           );
-          if (res.isError) return res.toCallToolResult();
-          final executed = res.data?['executedCount'] ?? 0;
-          final total = res.data?['totalActions'] ?? 0;
+          if (res.isError) {
+            return withVerdict(
+              res.toCallToolResult(),
+              actionChainVerdict(
+                passed: false,
+                completedSteps: 0,
+                totalSteps: steps.length,
+              ),
+            );
+          }
+          final executed = (res.data?['executedCount'] as num?)?.toInt() ?? 0;
+          final total = (res.data?['totalActions'] as num?)?.toInt() ?? 0;
           final failure = res.data?['failure'] as String?;
           final buffer = StringBuffer(
             failure == null
@@ -1177,16 +1218,27 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             }
           }
           buffer.write(_formatActionFeedback('Chain finished', const {}, res));
-          return CallToolResult(
-            isError: failure != null,
-            content: [TextContent(text: buffer.toString())],
+          return withVerdict(
+            CallToolResult(
+              isError: failure != null,
+              content: [TextContent(text: buffer.toString())],
+            ),
+            actionChainVerdict(
+              passed: failure == null,
+              completedSteps: executed,
+              totalSteps: total,
+              failedStep: failure == null ? null : executed + 1,
+              failureReason: failure,
+            ),
           );
         }
 
         // Anything else: one tool after the other, each as if called alone.
         final outcomes = <String>[];
         var failed = false;
-        for (final step in steps) {
+        int? failedStep;
+        var completed = 0;
+        for (final (index, step) in steps.indexed) {
           final res = await _toolCallbacks[step.tool]!(
             Map.of(step.arguments),
             e,
@@ -1207,19 +1259,32 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             );
           }
           outcomes.add(text);
-          if (failed) break;
+          if (failed) {
+            failedStep = index + 1;
+            break;
+          }
+          completed++;
         }
-        return CallToolResult(
-          isError: failed,
-          content: [
-            TextContent(
-              text: describeChain(
-                [for (final step in steps) step.tool],
-                outcomes,
-                failed: failed,
+        return withVerdict(
+          CallToolResult(
+            isError: failed,
+            content: [
+              TextContent(
+                text: describeChain(
+                  [for (final step in steps) step.tool],
+                  outcomes,
+                  failed: failed,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          actionChainVerdict(
+            passed: !failed,
+            completedSteps: completed,
+            totalSteps: steps.length,
+            failedStep: failedStep,
+            failureReason: failed ? outcomes.last : null,
+          ),
         );
       },
     );

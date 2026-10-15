@@ -428,4 +428,208 @@ void main() {
     ).readAsStringSync();
     expect(source, contains("timedOut: res.data?['status'] == 'timeout'"));
   });
+
+  group('get_errors', () {
+    test('a clean app is an empty list', () {
+      expect(errorsVerdict(since: const [], before: const []), {
+        'hasErrors': false,
+        'count': 0,
+        'errors': <Map<String, dynamic>>[],
+      });
+    });
+
+    test('an overflow and an exception are told apart, with locations', () {
+      final verdict = errorsVerdict(
+        since: [
+          {
+            'exception': 'A RenderFlex overflowed by 12 pixels on the right.',
+            'stackTrace':
+                '#0 Foo (package:my_app/foo.dart:42:7)\n'
+                '#1 Bar (package:flutter/src/widgets/framework.dart:1:1)',
+          },
+          {'exception': 'Bad state: no element'},
+        ],
+        before: const [],
+      );
+      expect(verdict['hasErrors'], isTrue);
+      expect(verdict['count'], 2);
+      expect(verdict['errors'], [
+        {
+          'kind': 'overflow',
+          'message': 'A RenderFlex overflowed by 12 pixels on the right.',
+          'location': 'package:my_app/foo.dart:42:7',
+          'beforeReload': false,
+        },
+        {
+          'kind': 'exception',
+          'message': 'Bad state: no element',
+          'beforeReload': false,
+        },
+      ]);
+    });
+
+    test('an error from before the last reload is marked', () {
+      final verdict = errorsVerdict(
+        since: const [],
+        before: [
+          {'exception': 'old', 'timestamp': '2026-01-01T00:00:00.000'},
+        ],
+      );
+      expect(verdict['hasErrors'], isTrue);
+      expect(verdict['count'], 1);
+      expect(verdict['errors'], [
+        {'kind': 'exception', 'message': 'old', 'beforeReload': true},
+      ]);
+    });
+  });
+
+  group('get_app_summary', () {
+    test('a connected app reports its facts', () {
+      expect(
+        appSummaryVerdict(
+          connected: true,
+          device: 'iphone',
+          platform: 'ios',
+          route: '/home',
+          errorCount: 2,
+          buildMode: 'debug',
+        ),
+        {
+          'connected': true,
+          'device': 'iphone',
+          'platform': 'ios',
+          'route': '/home',
+          'errorCount': 2,
+          'buildMode': 'debug',
+        },
+      );
+    });
+
+    test('nothing connected is connected:false, nothing else', () {
+      expect(appSummaryVerdict(connected: false), {
+        'connected': false,
+        'errorCount': 0,
+      });
+    });
+  });
+
+  group('execute_action_chain', () {
+    test('a chain that ran every step says so', () {
+      expect(
+        actionChainVerdict(passed: true, completedSteps: 3, totalSteps: 3),
+        {'passed': true, 'completedSteps': 3, 'totalSteps': 3},
+      );
+    });
+
+    test('a chain that stopped at step 2 says where', () {
+      expect(
+        actionChainVerdict(
+          passed: false,
+          completedSteps: 1,
+          totalSteps: 3,
+          failedStep: 2,
+          failureReason: 'Widget "Save" not found',
+        ),
+        {
+          'passed': false,
+          'completedSteps': 1,
+          'totalSteps': 3,
+          'failedStep': 2,
+          'failureReason': 'Widget "Save" not found',
+        },
+      );
+    });
+
+    test('a rejected step fails before anything runs', () {
+      expect(
+        actionChainVerdict(
+          passed: false,
+          completedSteps: 0,
+          totalSteps: 1,
+          failedStep: 1,
+          failureReason: 'Step 1: "no_such_tool" can\'t run in a chain.',
+        ),
+        {
+          'passed': false,
+          'completedSteps': 0,
+          'totalSteps': 1,
+          'failedStep': 1,
+          'failureReason': 'Step 1: "no_such_tool" can\'t run in a chain.',
+        },
+      );
+    });
+  });
+
+  group('fill_form', () {
+    test('a form that filled every field', () {
+      expect(fillFormVerdict(submitted: true, filledCount: 2, totalFields: 2), {
+        'submitted': true,
+        'filledCount': 2,
+        'totalFields': 2,
+      });
+    });
+
+    test('a partial fill names the first field that did not take', () {
+      expect(
+        fillFormVerdict(
+          submitted: false,
+          filledCount: 1,
+          totalFields: 3,
+          failedField: 'TextField["Email"]',
+        ),
+        {
+          'submitted': false,
+          'filledCount': 1,
+          'totalFields': 3,
+          'failedField': 'TextField["Email"]',
+        },
+      );
+    });
+
+    test('a form nobody filled has no failure point', () {
+      expect(
+        fillFormVerdict(submitted: false, filledCount: 0, totalFields: 0),
+        {'submitted': false, 'filledCount': 0, 'totalFields': 0},
+      );
+    });
+  });
+
+  test('the four action/diagnostic tools build their structured result', () {
+    // A drift guard: the shapes above are only reachable if each tool's
+    // callback actually builds one.
+    const builders = {
+      'app_inspection_tools.dart': ['errorsVerdict('],
+      'screenshot_tools.dart': ['appSummaryVerdict(', 'keepingStructured('],
+      'ui_automation_tools.dart': ['actionChainVerdict(', 'fillFormVerdict('],
+    };
+    for (final entry in builders.entries) {
+      final source = File(
+        p.join('lib', 'src', 'tools', entry.key),
+      ).readAsStringSync();
+      for (final snippet in entry.value) {
+        expect(source, contains(snippet), reason: '${entry.key}: $snippet');
+      }
+    }
+  });
+
+  test('fill_form reads the fields the app could not fill', () {
+    // The extension reports the selectors it did not fill; the tool turns the
+    // first into `failedField`, so that field is not always null.
+    final server = File(
+      p.join('lib', 'src', 'tools', 'ui_automation_tools.dart'),
+    ).readAsStringSync();
+    expect(server, contains("res.data?['failedFields']"));
+    final sdk = File(
+      p.join(
+        Directory.current.parent.parent.path,
+        'packages',
+        'flutterpilot_sdk',
+        'lib',
+        'src',
+        'extensions',
+        'widget_extensions.dart',
+      ),
+    ).readAsStringSync();
+    expect(sdk, contains("'failedFields': failedFields"));
+  });
 }

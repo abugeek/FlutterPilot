@@ -1769,9 +1769,13 @@ extension _WidgetExtensions on FlutterPilot {
         final routeBefore = NavigationTracker.currentRoute;
         final treeBefore = PilotWidgetInspector.captureWidgetTree();
         int filledCount = 0;
+        // Fields that did not resolve or could not take their value. The server
+        // turns the first into fill_form's structured `failedField`.
+        final failedFields = <String>[];
         for (final entry in fields.entries) {
           final target = entry.key;
           final val = entry.value;
+          var filled = false;
           final element = PilotWidgetInspector.findElement(target);
           if (element != null) {
             if (element.renderObject is! RenderBox ||
@@ -1792,6 +1796,7 @@ extension _WidgetExtensions on FlutterPilot {
                 final pos = ro.localToGlobal(ro.size.center(Offset.zero));
                 await InteractionManager.tapAt(pos, label: target);
                 filledCount++;
+                filled = true;
               }
             } else {
               final text = val.toString();
@@ -1832,9 +1837,13 @@ extension _WidgetExtensions on FlutterPilot {
               }
 
               findText(element);
-              if (entered) filledCount++;
+              if (entered) {
+                filledCount++;
+                filled = true;
+              }
             }
           }
+          if (!filled) failedFields.add(target);
         }
 
         bool submitted = false;
@@ -1877,6 +1886,7 @@ extension _WidgetExtensions on FlutterPilot {
             'fieldsFilled': filledCount,
             'totalFields': fields.length,
             'submitted': submitted,
+            'failedFields': failedFields,
             ...after,
           }),
         );

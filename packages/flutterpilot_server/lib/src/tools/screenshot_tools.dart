@@ -81,22 +81,41 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       // No SDK in the app (zero-code mode): summary from the inspector.
       final basic = await _callExtensionRaw('ext.flutterpilot.getSummary', {});
       if (basic.isError || basic.data?['sdkMode'] != 'zero-code') {
-        return res.toCallToolResult();
+        return withVerdict(
+          res.toCallToolResult(),
+          appSummaryVerdict(connected: false),
+        );
       }
       final profile = _activeContext?.buildMode == BuildMode.profile;
       final stale = await _staleCodeNote();
       final deviceState = await _phoneState();
       final device = deviceState?.problem;
-      return CallToolResult(
-        content: [
-          TextContent(
-            text:
-                '${stale == null ? '' : '• Code: $stale\n'}'
-                '${device == null ? '' : '• Device: $device. ${deviceState!.fix}\n'}'
-                '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload)}'
-                '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
-          ),
-        ],
+      // Zero-code keeps its own error records; split them the same way.
+      final zeroCodeErrors = errorsByReload(
+        ((basic.data?['errors'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList(),
+        _activeContext?.lastReload,
+      );
+      return withVerdict(
+        CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${stale == null ? '' : '• Code: $stale\n'}'
+                  '${device == null ? '' : '• Device: $device. ${deviceState!.fix}\n'}'
+                  '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload)}'
+                  '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
+            ),
+          ],
+        ),
+        appSummaryVerdict(
+          connected: true,
+          device: _fleetManager.activeDeviceId,
+          platform: _activeContext?.operatingSystem,
+          errorCount: zeroCodeErrors.since.length,
+          buildMode: _activeContext?.buildMode?.name,
+        ),
       );
     }
     final data = res.data ?? {};
@@ -242,8 +261,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       if (logNote != null) summary.writeln('  $logNote');
     }
 
-    return CallToolResult(
-      content: [TextContent(text: summary.toString().trim())],
+    return withVerdict(
+      CallToolResult(content: [TextContent(text: summary.toString().trim())]),
+      appSummaryVerdict(
+        connected: true,
+        device: _fleetManager.activeDeviceId,
+        platform: _activeContext?.operatingSystem,
+        route: route.toString(),
+        errorCount: errorSplit.since.length,
+        buildMode: _activeContext?.buildMode?.name,
+      ),
     );
   }
 
@@ -578,7 +605,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final summary = await _appSummary();
         if (p['setup'] != true) return summary;
         // Also when there is no summary: the setup says why.
-        return CallToolResult(
+        return keepingStructured(
+          summary,
           isError: summary.isError,
           content: [
             ...summary.content,

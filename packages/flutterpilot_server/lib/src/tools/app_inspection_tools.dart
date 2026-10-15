@@ -567,18 +567,21 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             ? sinceText
             : '$sinceText\n\n${beforeReloadNote(split.before.length)}:\n'
                   '${formatErrors({'errors': split.before, 'sdkMode': data['sdkMode']})}';
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: FlutterPilotServer._boundToolText(
-                _selfHealManager.isUnstable
-                    ? 'An uncaught exception happened since the last hot '
-                          'reload (get_errors(report: true): its stack and the '
-                          'app state).\n\n$text'
-                    : text,
+        return withVerdict(
+          CallToolResult(
+            content: [
+              TextContent(
+                text: FlutterPilotServer._boundToolText(
+                  _selfHealManager.isUnstable
+                      ? 'An uncaught exception happened since the last hot '
+                            'reload (get_errors(report: true): its stack and the '
+                            'app state).\n\n$text'
+                      : text,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          errorsVerdict(since: split.since, before: split.before),
         );
       },
     );
