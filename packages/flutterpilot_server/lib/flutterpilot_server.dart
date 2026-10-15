@@ -581,6 +581,38 @@ abstract class _FlutterPilotServerBase {
   /// Recomputes which tools are listed (after the fleet changes).
   Future<void> _refreshToolVisibility();
 
+  /// Emits `notifications/resources/updated` for [uri] when the client has
+  /// subscribed to it, and does nothing otherwise (task 27).
+  Future<void> notifyResourceUpdated(String uri);
+
+  /// The app attached or detached: the summary and the device fleet changed.
+  void _notifyAppConnectionChanged() {
+    unawaited(notifyResourceUpdated('flutterpilot://app/summary'));
+    unawaited(notifyResourceUpdated('flutterpilot://devices'));
+  }
+
+  /// The app navigated: the summary, the widget tree and the current route
+  /// changed.
+  void _notifyRouteChanged() {
+    unawaited(notifyResourceUpdated('flutterpilot://app/summary'));
+    unawaited(notifyResourceUpdated('flutterpilot://app/widget-tree'));
+    unawaited(notifyResourceUpdated('flutterpilot://app/routes/current'));
+  }
+
+  /// A new uncaught error or overflow: the error list and the summary changed.
+  void _notifyErrorsChanged() {
+    unawaited(notifyResourceUpdated('flutterpilot://app/errors'));
+    unawaited(notifyResourceUpdated('flutterpilot://app/summary'));
+  }
+
+  /// A hot reload or restart: the app rebuilt its state, so the summary, the
+  /// errors and the widget tree changed.
+  void _notifyAppReloaded() {
+    unawaited(notifyResourceUpdated('flutterpilot://app/summary'));
+    unawaited(notifyResourceUpdated('flutterpilot://app/errors'));
+    unawaited(notifyResourceUpdated('flutterpilot://app/widget-tree'));
+  }
+
   bool _isAllowedConnectionUri(String rawUri);
 
   /// A device was registered under a new name: its runtime state follows.
@@ -1143,6 +1175,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     // A resource attached before this connection may now answer: tell clients
     // to re-read (task 16).
     server.sendResourceListChanged();
+    // A subscriber is pushed the new state instead of polling (task 27).
+    _notifyAppConnectionChanged();
   }
 
   @override
@@ -1193,6 +1227,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     // The app-scoped resources fall back to their "not connected" message now
     // (task 16).
     server.sendResourceListChanged();
+    // Subscribers are pushed that fallback (task 27).
+    _notifyAppConnectionChanged();
     _attemptReconnect();
   }
 
@@ -1284,6 +1320,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         if (event.kind == EventKind.kIsolateReload) {
           context.lastReload = DateTime.now();
         }
+        // Either way the app's state was rebuilt: push it to subscribers
+        // (task 27).
+        if (event.kind == EventKind.kIsolateStart ||
+            event.kind == EventKind.kIsolateReload) {
+          _notifyAppReloaded();
+        }
         // Plugins register when the app sets them up (after Firebase init,
         // a first Dio, ...): list their tools then.
         if (event.kind == EventKind.kServiceExtensionAdded &&
@@ -1336,6 +1378,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                 'timestamp': timestamp,
                 'data': data,
               }, deviceId: context.deviceId);
+              // Subscribers get the new error list and summary pushed (task 27).
+              _notifyErrorsChanged();
 
               await _selfHealManager.handleCrash(
                 exception: exception,
@@ -1360,6 +1404,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
                   'data': error,
                 }, deviceId: context.deviceId);
               }
+              // A zero-code error is an app update too (task 27).
+              _notifyErrorsChanged();
             } else if (event.extensionKind == 'ext.flutterpilot.lifecycle') {
               context.lifecycle = event.extensionData?.data['state']
                   ?.toString();

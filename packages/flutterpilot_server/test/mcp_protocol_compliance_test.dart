@@ -5,7 +5,10 @@
 /// the `initialize` / `notifications/initialized` handshake itself, and then
 /// drives one matrix of the protocol. Nothing here needs a running Flutter
 /// app: discovery finds none, and every assertion is about framing, declared
-/// schemas and refusals rather than app state.
+/// schemas and refusals rather than app state. Matrix 5 is the one exception to
+/// "no app state": it raises a resource update through the server's
+/// `FLUTTERPILOT_TEST_RESOURCES` trigger, since a real reload, navigation or
+/// crash needs an app this suite deliberately does not start.
 ///
 /// The client negotiates `2025-11-25`, the newest classic-`initialize` version
 /// mcp_dart supports (the `2026-07-28` profile is stateless and skips
@@ -344,6 +347,81 @@ void main() {
       },
     );
   });
+
+  group('Matrix 5 · resource subscriptions & live notifications', () {
+    const summary = 'flutterpilot://app/summary';
+
+    bool isUpdated(Map<String, dynamic> message, String uri) =>
+        message['method'] == 'notifications/resources/updated' &&
+        (message['params'] as Map?)?['uri'] == uri;
+
+    test('subscribing and unsubscribing to a resource succeeds', () async {
+      final sub = await inspector.request('resources/subscribe', {
+        'uri': summary,
+      });
+      expect(sub['error'], isNull, reason: '$sub');
+
+      final unsub = await inspector.request('resources/unsubscribe', {
+        'uri': summary,
+      });
+      expect(unsub['error'], isNull, reason: '$unsub');
+    });
+
+    test('an update is pushed to a subscriber as '
+        'notifications/resources/updated', () async {
+      final sub = await inspector.request('resources/subscribe', {
+        'uri': summary,
+      });
+      expect(sub['error'], isNull, reason: '$sub');
+
+      await inspector.triggerResourceUpdate(summary);
+
+      final message = await inspector.waitForMessage(
+        (response) => isUpdated(response, summary),
+      );
+      expect((message['params'] as Map)['uri'], summary);
+
+      final unsub = await inspector.request('resources/unsubscribe', {
+        'uri': summary,
+      });
+      expect(unsub['error'], isNull, reason: '$unsub');
+    });
+
+    test('an update for an unsubscribed resource is never pushed', () async {
+      final before = inspector.countMessages((m) => isUpdated(m, summary));
+
+      await inspector.triggerResourceUpdate(summary);
+
+      expect(
+        await inspector.receivesMessage(
+          (m) => isUpdated(m, summary),
+          from: before,
+        ),
+        isFalse,
+        reason: 'nothing is subscribed, so nothing may be pushed',
+      );
+    });
+
+    test('a client stops receiving updates after it unsubscribes', () async {
+      await inspector.request('resources/subscribe', {'uri': summary});
+      await inspector.triggerResourceUpdate(summary);
+      // The push channel is live: prove it before trusting the silence below.
+      await inspector.waitForMessage((m) => isUpdated(m, summary));
+
+      await inspector.request('resources/unsubscribe', {'uri': summary});
+      final before = inspector.countMessages((m) => isUpdated(m, summary));
+
+      await inspector.triggerResourceUpdate(summary);
+
+      expect(
+        await inspector.receivesMessage(
+          (m) => isUpdated(m, summary),
+          from: before,
+        ),
+        isFalse,
+      );
+    });
+  });
 }
 
 /// The names `prompts/list` advertises for [prompt], in order.
@@ -418,6 +496,8 @@ class _Inspector {
   /// `FLUTTERPILOT_LIST_ALL_TOOLS` makes `tools/list` return every registered
   /// tool, so Matrix 2 audits the whole surface (including the native tools a
   /// dynamic list would hide until a device is attached).
+  /// `FLUTTERPILOT_TEST_RESOURCES` registers the trigger Matrix 5 uses to raise
+  /// a resource update on demand (no app can reload, navigate or crash here).
   static Future<_Inspector> start() async {
     final entrypoint = File('bin/flutterpilot_server.dart');
     if (!entrypoint.existsSync()) {
@@ -436,7 +516,10 @@ class _Inspector {
         '--no-call-log',
       ],
       workingDirectory: Directory.current.path,
-      environment: const {'FLUTTERPILOT_LIST_ALL_TOOLS': '1'},
+      environment: const {
+        'FLUTTERPILOT_LIST_ALL_TOOLS': '1',
+        'FLUTTERPILOT_TEST_RESOURCES': '1',
+      },
     );
     return _Inspector._(process);
   }
@@ -525,6 +608,41 @@ class _Inspector {
       'Timed out after $timeout waiting for a message. Received:\n'
       '${_received.map(jsonEncode).join('\n')}',
     );
+  }
+
+  /// Whether an unsolicited message matching [matches] has arrived within
+  /// [within]: the negative counterpart of [waitForMessage], for proving a
+  /// notification was *not* pushed.
+  Future<bool> receivesMessage(
+    bool Function(Map<String, dynamic> response) matches, {
+    Duration within = const Duration(seconds: 1),
+    int from = 0,
+  }) async {
+    final deadline = DateTime.now().add(within);
+    while (DateTime.now().isBefore(deadline)) {
+      if (_count(matches) > from) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+    return _count(matches) > from;
+  }
+
+  /// How many messages matching [matches] have arrived so far. Take it before a
+  /// trigger and pass it as [receivesMessage]'s `from`, so a later silence is
+  /// distinguished from a message that arrived earlier.
+  int countMessages(bool Function(Map<String, dynamic> response) matches) =>
+      _count(matches);
+
+  int _count(bool Function(Map<String, dynamic> response) matches) =>
+      _received.where(matches).length;
+
+  /// Raises a `notifications/resources/updated` for [uri] through the server's
+  /// task-27 test trigger (`FLUTTERPILOT_TEST_RESOURCES`), the way a real app
+  /// event would.
+  Future<void> triggerResourceUpdate(String uri) async {
+    final response = await request('flutterpilot/_test/notifyResourceUpdated', {
+      'uri': uri,
+    });
+    expect(response['error'], isNull, reason: '$response');
   }
 
   /// Closes the transport and the subprocess.

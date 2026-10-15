@@ -159,6 +159,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       ), (uri, _) => _readResource(uri));
     }
     _registerResourceTemplates();
+    _registerSubscriptionHandlers();
   }
 
   /// The list `resources/list` returns, for tests.
@@ -658,5 +659,105 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       if (route['matchedLocation']?.toString() == location) return route;
     }
     return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Live subscriptions (task 27): `resources/subscribe` / `resources/unsubscribe`
+  // and `notifications/resources/updated`, so a client that attaches a resource
+  // is pushed a fresh read on a hot reload, navigation, a crash or a device
+  // change instead of polling.
+  // ---------------------------------------------------------------------------
+
+  /// The URIs the connected client subscribed to.
+  ///
+  /// A stdio server has one client, so a plain set is enough; a subscription
+  /// lasts until the client unsubscribes (or the process ends).
+  final Set<String> _subscribedResourceUris = {};
+
+  /// Registers `resources/subscribe` / `resources/unsubscribe`.
+  ///
+  /// The constructor declares `resources: (subscribe: true)`, so mcp_dart
+  /// accepts handlers for these methods; without one a client would get
+  /// `-32601 Method not found`.
+  void _registerSubscriptionHandlers() {
+    server.server.setRequestHandler<JsonRpcSubscribeRequest>(
+      Method.resourcesSubscribe,
+      (request, extra) async {
+        _subscribedResourceUris.add(request.subParams.uri);
+        return const EmptyResult();
+      },
+      (id, params, meta) => JsonRpcSubscribeRequest.fromJson({
+        'jsonrpc': jsonRpcVersion,
+        'id': id,
+        'method': Method.resourcesSubscribe,
+        'params': params,
+        '_meta': ?meta,
+      }),
+    );
+
+    server.server.setRequestHandler<JsonRpcUnsubscribeRequest>(
+      Method.resourcesUnsubscribe,
+      (request, extra) async {
+        _subscribedResourceUris.remove(request.unsubParams.uri);
+        return const EmptyResult();
+      },
+      (id, params, meta) => JsonRpcUnsubscribeRequest.fromJson({
+        'jsonrpc': jsonRpcVersion,
+        'id': id,
+        'method': Method.resourcesUnsubscribe,
+        'params': params,
+        '_meta': ?meta,
+      }),
+    );
+
+    _registerSubscriptionTestTrigger();
+  }
+
+  /// Emits `notifications/resources/updated` for [uri] when a client has
+  /// subscribed to it, and does nothing otherwise.
+  ///
+  /// Called on the app events that change what a resource would read. Reading
+  /// is the client's job: the notification only says "read me again".
+  @override
+  Future<void> notifyResourceUpdated(String uri) async {
+    if (!_subscribedResourceUris.contains(uri)) return;
+    await server.server.sendResourceUpdated(
+      ResourceUpdatedNotification(uri: uri),
+    );
+  }
+
+  /// [notifyResourceUpdated], for tests: raises the same push an app event
+  /// would, so a protocol test can drive the cycle deterministically. The
+  /// `FLUTTERPILOT_TEST_RESOURCES` trigger below calls it, so Matrix 5 in
+  /// mcp_protocol_compliance_test.dart exercises this seam over real stdio.
+  Future<void> notifyResourceUpdatedForTest(String uri) =>
+      notifyResourceUpdated(uri);
+
+  /// The RPC method the headless compliance suite drives to raise a resource
+  /// update on demand.
+  ///
+  /// With no Flutter app attached a real event (a reload, a navigation, a
+  /// crash) cannot happen, and the suite must still prove the push path end to
+  /// end. Only registered when the harness sets `FLUTTERPILOT_TEST_RESOURCES`,
+  /// so it is absent from a normal server.
+  static const _testTriggerMethod = 'flutterpilot/_test/notifyResourceUpdated';
+
+  void _registerSubscriptionTestTrigger() {
+    if (Platform.environment['FLUTTERPILOT_TEST_RESOURCES'] != '1') return;
+    server.server.setRequestHandler<JsonRpcRequest>(
+      _testTriggerMethod,
+      (request, extra) async {
+        await notifyResourceUpdatedForTest(
+          request.params?['uri']?.toString() ?? '',
+        );
+        return const EmptyResult();
+      },
+      (id, params, meta) => JsonRpcRequest(
+        id: id,
+        method: _testTriggerMethod,
+        params: params,
+        meta: meta,
+      ),
+    );
   }
 }

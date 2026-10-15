@@ -158,6 +158,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     final route = postState?['route'] ?? delta?['toRoute'];
     final changed =
         postState?['routeChanged'] == true || delta?['navigated'] == true;
+    // Tapping through to another screen is a route change: push it to
+    // subscribers of the summary, the tree and the route (task 27).
+    if (changed) _notifyRouteChanged();
     if (route != null) {
       buffer.write(
         changed
