@@ -145,6 +145,47 @@ void main() {
       expect(element!.widget, isA<Container>());
     });
 
+    testWidgets("a Type['key'] selector finds a widget by its key", (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const TextField(
+                  key: Key('my_key'),
+                  decoration: InputDecoration(hintText: 'Something else'),
+                ),
+                CheckboxListTile(
+                  key: const Key('accept_terms'),
+                  value: false,
+                  onChanged: (_) {},
+                  title: const Text('Accept the terms'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // The key wins even though the field's hint is worded differently.
+      final field = PilotWidgetInspector.findElement("TextField['my_key']");
+      expect(field, isNotNull);
+      expect(field!.widget, isA<TextField>());
+      expect((field.widget as TextField).key, const Key('my_key'));
+
+      // The list tile carries the key; the value names the tile, not the
+      // control it builds.
+      final tile = PilotWidgetInspector.findElement("Checkbox['accept_terms']");
+      expect(tile, isNotNull);
+      expect(tile!.widget, isA<CheckboxListTile>());
+      expect((tile.widget as CheckboxListTile).key, const Key('accept_terms'));
+
+      // A key that is not in the tree still resolves to nothing.
+      expect(PilotWidgetInspector.findElement("TextField['missing']"), isNull);
+    });
+
     testWidgets('countElements counts correctly', (tester) async {
       await tester.pumpWidget(
         const Directionality(

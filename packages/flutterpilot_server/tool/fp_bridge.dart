@@ -153,7 +153,7 @@ Future<void> main(List<String> args) async {
     }
     final isError = res['error'] != null || result?['isError'] == true;
     calls.writeAsStringSync(
-      '${jsonEncode({'tool': body['name'], 'ms': sw.elapsedMilliseconds, 'isError': isError, 'chars': out.length})}\n',
+      '${jsonEncode({'tool': body['method'] ?? body['name'] ?? body['uri'] ?? 'unknown', 'ms': sw.elapsedMilliseconds, 'isError': isError, 'chars': out.length})}\n',
       mode: FileMode.append,
     );
     req.response

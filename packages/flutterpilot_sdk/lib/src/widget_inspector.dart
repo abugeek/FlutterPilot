@@ -357,7 +357,16 @@ class PilotWidgetInspector {
             final text = label.text.toLowerCase();
             final value = valueTarget.toLowerCase();
             final ownLabel = tooltipMessage(widget)?.toLowerCase();
-            if (ownLabel == value || (text == value && !label.glyphOnly)) {
+            // A selector's value can name a widget by the key the app wrote
+            // (TextField['checkout_name']), not only by its visible label.
+            final keyMatches =
+                (cleanKey != null && cleanKey.toLowerCase() == value) ||
+                (id != null && id.toLowerCase() == value);
+
+            if (keyMatches) {
+              consider(97); // Higher than label match (96) so exact key wins
+            } else if (ownLabel == value ||
+                (text == value && !label.glyphOnly)) {
               consider(96);
             } else if (text == value) {
               // Only an icon's name: IconButton['settings'] on a button
@@ -704,6 +713,14 @@ class PilotWidgetInspector {
             elementTypeName == 'TextFormField' ||
             elementTypeName == 'EditableText' ||
             elementTypeName == 'CupertinoTextField')) {
+      return true;
+    }
+    // A list tile carries the key the app wrote while the control it builds
+    // does not (CheckboxListTile holds Key('accept_terms'), its inner Checkbox
+    // has none), so Checkbox['accept_terms'] must reach the tile.
+    if ((targetType == 'Checkbox' && elementTypeName == 'CheckboxListTile') ||
+        (targetType == 'Switch' && elementTypeName == 'SwitchListTile') ||
+        (targetType == 'Radio' && elementTypeName == 'RadioListTile')) {
       return true;
     }
     return elementTypeName.endsWith(targetType);
