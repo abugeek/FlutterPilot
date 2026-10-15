@@ -257,6 +257,17 @@ With no app connected, each app-scoped resource returns a graceful
 `{"connected": false, "message": "No Flutter app currently connected"}` (or the
 text equivalent) instead of an error.
 
+Beyond the fixed resources, the server registers two **dynamic resource
+templates** (RFC 6570). A client discovers them through
+`resources/templates/list` and reads one by expanding the URI; they add nothing
+to `tools/list` either, and answer a finer question than a whole-tree or
+whole-stack read:
+
+| Template | MIME type | Contents |
+|---|---|---|
+| `flutterpilot://app/widgets/{key}` | `application/json` | One widget's properties, its compact subtree and every key beneath it. `{"found": false, "key": …}` when the key is not on screen. |
+| `flutterpilot://app/routes/{path}` | `application/json` | The route stack and current route, plus, with go_router, the matched route and its path/query parameters. `current` means the route on screen. |
+
 ---
 
 ## 🏗️ Architecture
