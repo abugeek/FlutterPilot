@@ -289,6 +289,32 @@
 - `hot_reload` on a sandboxed macOS app explains the permission the Flutter
   tool is missing instead of a bare failure.
 
+- **Standard MCP Resources (`resources/list`, `resources/read`)**:
+  `flutterpilot://app/summary`, `flutterpilot://app/errors`,
+  `flutterpilot://app/widget-tree`, `flutterpilot://app/logs`, and
+  `flutterpilot://devices` allow AI clients to read live app context with 0
+  token overhead on tool lists and without executing tool calls.
+- **Dynamic MCP Resource Templates (RFC 6570)**:
+  `flutterpilot://app/widgets/{key}` (`widget_by_key`) fetches single-widget
+  properties and subtrees; `flutterpilot://app/routes/{path}` (`route_by_path`)
+  queries navigation state and router parameters.
+- **Live MCP Resource Subscriptions**: `resources/subscribe`,
+  `resources/unsubscribe`, and asynchronous `notifications/resources/updated`
+  push notifications when routes change, unhandled exceptions/overflows occur,
+  apps connect/disconnect, or hot reloads run.
+- **Curated Workflow Prompts (`prompts/list`, `prompts/get`)**:
+  `debug_layout_overflow`, `diagnose_exception`, `create_integration_test`, and
+  `audit_screen_health` guide agent execution loops deterministically.
+- **Machine-Readable Diagnostics (`structuredContent`)**: Added typed JSON twin
+  payloads to `get_app_summary`, `get_errors`, `execute_action_chain`, and
+  `fill_form` (with `failedFields` tracking).
+- **Headless MCP Protocol Inspector Test Suite**: 5-matrix stdio compliance
+  suite verifying handshake, schema discovery, JSON-RPC errors, argument
+  validation, and resource subscriptions.
+- **Windows Platform Parity**: `tool/publish_check.dart` executes via shell on
+  Windows; GitHub Actions runs the full 748-test server suite on
+  `windows-latest`.
+
 ## 0.1.0
 
 - Initial release

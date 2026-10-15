@@ -77,6 +77,15 @@
   `getDebugLogs`, `auditMemoryHealth`; and the `StreamInspector` and
   `MemoryAuditor` classes behind them.
 
+- **`Type['key']` Selector Matching**: `_findSingleElementUnder` resolves
+  `Type['key']` selectors (e.g. `TextField['checkout_name']`,
+  `Checkbox['accept_terms']`) against the widget's key or semantics ID in
+  addition to visible label text; `_isMatchingType` maps controls to their
+  `*ListTile` wrappers (`CheckboxListTile`, `SwitchListTile`,
+  `RadioListTile`).
+- **Form Inspection**: `ext.flutterpilot.fillForm` tracks and reports
+  unresolved field selectors in structured `failedFields`.
+
 ## 0.1.0
 
 - Initial release
