@@ -39,7 +39,9 @@
   one device connected" (field test #346). When the device cannot be told — a
   fresh launch with several devices, or a browser or phone id the platform
   does not give — the call refuses *before* stopping anything and names the
-  devices to pass.
+  devices to pass. A call that only waits for a launch already going on (the
+  "Still building … call launch_app again" answer) is not affected: it plans
+  no device, runs no `flutter devices` and stops nothing.
 - The call log writes a `listed` line when the set of listed tools changes, so
   `flutterpilot stats` can tell a tool that was offered from one that was not.
 - Faster, measured on the example app against the field-session numbers in

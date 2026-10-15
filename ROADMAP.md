@@ -78,7 +78,9 @@ tools that always work beat many tools that sometimes work.
   ids from `flutter devices --machine` and the call to make; a fresh launch
   with one device and a project's own `launch.json` command are unchanged. One
   function decides that order (`prepareLaunch`, `src/app_launcher.dart`), and
-  the unit tests inject the stop and device-list functions.
+  the unit tests inject the stop and device-list functions. A call that only
+  waits for a launch already going on skips the device question entirely
+  (`waitsForRunningLaunch`), so waiting still needs no `device`.
 
 ### How to work (the method that found every real bug so far)
 

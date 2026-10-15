@@ -83,6 +83,14 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     } on FormatException catch (e) {
       return _launchResult(e.message, isError: true);
     }
+    // A launch a previous call started is only waited for, as before: the
+    // device is not chosen, `flutter devices` is not run and nothing is
+    // stopped. Settled before the device question (review of PR #128).
+    final inProgress = waitsForRunningLaunch(
+      relaunch: relaunch,
+      launchRunning: runningLaunchPid(root) != null,
+      connected: connected,
+    );
     // Where this launch runs and what starts it, decided before the app it
     // replaces is stopped: a relaunch must not take it down for something
     // knowable up front (field test #346).
@@ -90,6 +98,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     try {
       plan = await prepareLaunch(
         relaunch: relaunch,
+        waitingForLaunch: inProgress,
         // The project's own launch.json command starts the app itself, so
         // this `device` is ignored and there is nothing to refuse.
         chooseDevice: !hasLaunchConfig(root),
@@ -121,9 +130,6 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         : const <String>[];
 
     final log = File('${root.path}/$launchLogFile');
-    // A relaunch is a fresh launch: the app before it is stopped already.
-    final inProgress =
-        !relaunch && runningLaunchPid(root) != null && !connected;
     final waitFrom = DateTime.now();
     String? signingTeam;
     if (!inProgress) {

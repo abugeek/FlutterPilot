@@ -149,6 +149,20 @@ class LaunchPlan {
   final bool deviceWasRunning;
 }
 
+/// Whether a `launch_app` call only waits for the launch a previous call
+/// started: its command is still running, nothing is connected yet, and this
+/// call is not a relaunch.
+///
+/// Such a call answers "Still building … call launch_app again to keep
+/// waiting", so it has to work with no `device` on a machine with several
+/// devices: nothing is chosen, `flutter devices` is not run and nothing is
+/// stopped (review of PR #128). This is settled *before* the device question.
+bool waitsForRunningLaunch({
+  required bool relaunch,
+  required bool launchRunning,
+  required bool connected,
+}) => !relaunch && launchRunning && !connected;
+
 /// Works out where a launch will run and what will start it, and only then
 /// stops the app a relaunch replaces.
 ///
@@ -160,8 +174,15 @@ class LaunchPlan {
 /// machine's only one, left to `flutter run` as before — then the command
 /// ([commandFor]). When the device cannot be told, the plan is a [refusal]
 /// naming the devices to pass and [stop] is not called.
+///
+/// A call that only waits for a launch already going on
+/// ([waitsForRunningLaunch]) asks none of that: it plans nothing, lists
+/// nothing and stops nothing, and only needs a command for its messages.
 Future<LaunchPlan> prepareLaunch({
   required bool relaunch,
+
+  /// The caller's own [waitsForRunningLaunch] answer: this call only waits.
+  bool waitingForLaunch = false,
   required bool chooseDevice,
   String? requested,
   String? runningPlatform,
@@ -171,6 +192,14 @@ Future<LaunchPlan> prepareLaunch({
   required Future<void> Function() stop,
 }) async {
   final asked = requested?.trim();
+  if (waitingForLaunch) {
+    // The device the running launch used is not recorded, so the command for
+    // the messages is this call's own, as it was before the ordering change.
+    final device = !chooseDevice || asked == null || asked.isEmpty
+        ? null
+        : asked;
+    return LaunchPlan.on(device, commandFor(device));
+  }
   var device = !chooseDevice || asked == null || asked.isEmpty ? null : asked;
   var deviceWasRunning = false;
   if (chooseDevice && device == null) {

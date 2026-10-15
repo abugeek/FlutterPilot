@@ -166,6 +166,37 @@ void main() {
       expect(stopped, isFalse);
     });
 
+    test('waiting for a launch in progress refuses nothing', () async {
+      // What the "Still building … call launch_app again to keep waiting"
+      // answer asks for: a pid file from the launch that is going on, nothing
+      // connected yet, no `device`, several devices on the machine. Nothing
+      // is chosen, listed or stopped (review of PR #128).
+      final inProgress = waitsForRunningLaunch(
+        relaunch: false,
+        launchRunning: true,
+        connected: false,
+      );
+      var listed = false;
+      var stopped = false;
+      final plan = await prepareLaunch(
+        relaunch: false,
+        waitingForLaunch: inProgress,
+        chooseDevice: true,
+        listDevices: () async {
+          listed = true;
+          return ['windows', 'chrome', 'edge'];
+        },
+        commandFor: flutterRun,
+        stop: () async => stopped = true,
+      );
+      expect(inProgress, isTrue);
+      expect(plan.refusal, isNull, reason: 'the build going on is waited for');
+      expect(plan.device, isNull);
+      expect(plan.deviceWasRunning, isFalse);
+      expect(listed, isFalse, reason: 'no flutter devices call');
+      expect(stopped, isFalse);
+    });
+
     test(
       "the project's own command decides, so no device is refused",
       () async {
@@ -188,6 +219,48 @@ void main() {
         expect(stopped, isTrue);
       },
     );
+  });
+
+  group('waitsForRunningLaunch', () {
+    test('only a launch going on that is not connected is waited for', () {
+      // The "Still building" answer has to keep working with no `device` on a
+      // machine with several devices (review of PR #128).
+      expect(
+        waitsForRunningLaunch(
+          relaunch: false,
+          launchRunning: true,
+          connected: false,
+        ),
+        isTrue,
+      );
+      // A relaunch stops and builds again.
+      expect(
+        waitsForRunningLaunch(
+          relaunch: true,
+          launchRunning: true,
+          connected: false,
+        ),
+        isFalse,
+      );
+      // Connected: nothing to wait for.
+      expect(
+        waitsForRunningLaunch(
+          relaunch: false,
+          launchRunning: true,
+          connected: true,
+        ),
+        isFalse,
+      );
+      // Nothing running: this call starts the launch.
+      expect(
+        waitsForRunningLaunch(
+          relaunch: false,
+          launchRunning: false,
+          connected: false,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('deviceForPlatform', () {
