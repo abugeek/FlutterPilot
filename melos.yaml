@@ -22,7 +22,7 @@ scripts:
     description: Run tests for all packages.
 
   server:run:
-    run: dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
+    run: dart run packages/fp_server/bin/fp_server.dart
     description: Run the FlutterPilot MCP Server.
 
   example:run:

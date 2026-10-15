@@ -1,0 +1,182 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:fp_server/src/structured_results.dart';
+
+/// Generates a schema-derived MCP tool reference.
+///
+/// Run from the repository root:
+///   dart run packages/fp_server/tool/generate_tools_doc.dart
+///
+/// The generated file is written to `TOOLS.generated.md` in the repository
+/// root. It intentionally comes from the registered runtime tools, not a
+/// duplicated hand-maintained count.
+Future<void> main() async {
+  final process = await Process.start(
+    'dart',
+    ['run', 'packages/fp_server/bin/fp_server.dart'],
+    // Include tools that are only listed where they can work (native_*).
+    environment: {'FLUTTERPILOT_LIST_ALL_TOOLS': '1'},
+  );
+  final responses = <int, Completer<Map<String, dynamic>>>{};
+  var nextId = 0;
+  process.stderr.transform(utf8.decoder).listen(stderr.write);
+  final reader = process.stdout
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .listen((line) {
+        try {
+          final message = jsonDecode(line);
+          if (message is! Map<String, dynamic>) return;
+          final id = message['id'];
+          if (id is int) responses.remove(id)?.complete(message);
+        } catch (_) {}
+      });
+
+  Future<Map<String, dynamic>> request(
+    String method,
+    Map<String, dynamic> params,
+  ) {
+    final id = ++nextId;
+    final completer = Completer<Map<String, dynamic>>();
+    responses[id] = completer;
+    process.stdin.writeln(
+      jsonEncode({
+        'jsonrpc': '2.0',
+        'id': id,
+        'method': method,
+        'params': params,
+      }),
+    );
+    return completer.future.timeout(const Duration(seconds: 15));
+  }
+
+  try {
+    await request('initialize', {
+      'protocolVersion': '2024-11-05',
+      'capabilities': <String, dynamic>{},
+      'clientInfo': {'name': 'flutterpilot-doc-generator', 'version': '1.0.0'},
+    });
+    process.stdin.writeln(
+      jsonEncode({
+        'jsonrpc': '2.0',
+        'method': 'notifications/initialized',
+        'params': <String, dynamic>{},
+      }),
+    );
+    final response = await request('tools/list', const {});
+    final tools = (response['result'] as Map?)?['tools'];
+    if (tools is! List) throw StateError('MCP tools/list returned no tools');
+
+    File('TOOLS.generated.md').writeAsStringSync(renderToolsDoc(tools));
+    stdout.writeln(
+      'Generated TOOLS.generated.md from ${tools.length} runtime tools.',
+    );
+  } finally {
+    await reader.cancel();
+    process.kill();
+    await process.exitCode;
+  }
+}
+
+/// The `TOOLS.generated.md` text for a `tools/list` result ([tools]: the maps
+/// an MCP client receives, each with `name`, `description`, `inputSchema` and
+/// maybe `annotations`).
+///
+/// A function of the list rather than of a running server, so the freshness
+/// test renders the same text from `FlutterPilotServer.toolListJson()` and
+/// compares it with the committed file.
+String renderToolsDoc(List<dynamic> tools) {
+  final output = StringBuffer()
+    ..writeln('# FlutterPilot MCP Tools')
+    ..writeln()
+    ..writeln(
+      'Generated from the running server registration. Do not edit manually.',
+    )
+    ..writeln()
+    ..writeln('Tool count: ${tools.length}')
+    ..writeln()
+    ..writeln(
+      'Size of the whole list as an agent receives it (names, '
+      'descriptions, schemas): ${_listBytes(tools)} bytes. An app is shown '
+      'only the tools that work for it.',
+    )
+    ..writeln()
+    ..writeln(
+      '`native_*` tools are listed to agents only when the connected app '
+      'runs on an iOS simulator and `idb` (or `xcrun`, for '
+      '`native_screenshot`) is installed, or on Android and `adb` is found '
+      '(PATH, ANDROID_HOME or the SDK folder).',
+    )
+    ..writeln();
+  for (final rawTool in tools) {
+    if (rawTool is! Map) continue;
+    final name = rawTool['name']?.toString() ?? 'unknown';
+    output.writeln('## `$name`');
+    output.writeln();
+    output.writeln(rawTool['description']?.toString() ?? '');
+    final effect = _effect(rawTool['annotations']);
+    if (effect != null) {
+      output.writeln();
+      output.writeln(effect);
+    }
+    final schema = rawTool['inputSchema'];
+    if (schema is Map && schema['properties'] is Map) {
+      output.writeln();
+      output.writeln('| Parameter | Type | Required | Description |');
+      output.writeln('|---|---|---:|---|');
+      final required =
+          (schema['required'] as List?)?.map((e) => e.toString()).toSet() ??
+          <String>{};
+      for (final entry in (schema['properties'] as Map).entries) {
+        final property = entry.value is Map ? entry.value as Map : const {};
+        output.writeln(
+          '| `${entry.key}` | ${_type(property)} | '
+          '${required.contains(entry.key) ? 'yes' : 'no'} | '
+          '${(property['description'] ?? '').toString().replaceAll('|', '\\|')} |',
+        );
+      }
+    }
+    final shape = structuredShapes[name];
+    if (shape != null) {
+      output.writeln();
+      output.writeln(
+        '**Structured result** (`structuredContent`, a machine-readable twin '
+        'of the text; no `outputSchema` is declared): `$shape`',
+      );
+    }
+    output.writeln();
+  }
+  return output.toString();
+}
+
+/// The bytes of `tools/list` an agent's model is given: the rest
+/// (annotations, execution) goes to the client.
+int _listBytes(List<dynamic> tools) => tools
+    .whereType<Map>()
+    .map(
+      (tool) => jsonEncode({
+        for (final key in const ['name', 'description', 'inputSchema'])
+          key: tool[key],
+      }).length,
+    )
+    .fold(0, (a, b) => a + b);
+
+/// A parameter's type, with the values an enum takes.
+String _type(Map<dynamic, dynamic> property) {
+  final type = property['type'] ?? 'any';
+  final values = property['enum'];
+  return values is List ? '$type: ${values.join(r' \| ')}' : '$type';
+}
+
+/// The tool's annotations in words.
+String? _effect(Object? annotations) {
+  if (annotations is! Map) return null;
+  if (annotations['readOnlyHint'] == true) return '_Read-only._';
+  if (annotations['destructiveHint'] == true) {
+    return '_Destructive: replaces stored data (needs `--allow-destructive`) '
+        'or runs app code._';
+  }
+  return null;
+}

@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40614 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40604 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -18,7 +18,7 @@ Connects to a running Flutter app: the VM service URI flutter run prints, or wit
 
 ## `list_connected_devices`
 
-Lists the Flutter apps FlutterPilot knows (one per device: iOS, Android, web, desktop): platform, app, whether it runs flutterpilot_sdk, and which one is active. Every tool targets the active device.
+Lists the Flutter apps FlutterPilot knows (one per device: iOS, Android, web, desktop): platform, app, whether it runs fp_sdk, and which one is active. Every tool targets the active device.
 
 _Read-only._
 
