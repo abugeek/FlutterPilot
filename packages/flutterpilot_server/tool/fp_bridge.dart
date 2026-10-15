@@ -1,8 +1,13 @@
-// Drive FlutterPilot tools from a shell, the way an MCP client would.
+// Drive FlutterPilot from a shell, the way an MCP client would.
 //
 // Holds one MCP stdio session to the server and exposes it on localhost:8765:
 //   dart run tool/fp_bridge.dart -p /path/to/app [--allow-destructive]
 //   curl -s localhost:8765 -d '{"name":"get_app_summary","arguments":{}}'
+//   curl -s localhost:8765 -d '{"method":"resources/list"}'
+//   curl -s localhost:8765 -d '{"method":"resources/read","params":{"uri":"flutterpilot://devices"}}'
+//   curl -s localhost:8765 -d '{"method":"prompts/get","params":{"name":"debug_layout_overflow"}}'
+// A body with "method" is forwarded as an arbitrary JSON-RPC request; a body
+// with "name" calls a tool (with __list/__resources/__prompts shortcuts).
 // Images are saved to tool/.fp/shots/; every call is appended to
 // tool/.fp/calls.jsonl (tool, ms, isError, chars) to measure latency/size.
 // A result's structuredContent, when it has one, is printed after the text.
@@ -83,18 +88,54 @@ Future<void> main(List<String> args) async {
       continue;
     }
     final sw = Stopwatch()..start();
-    final res = body['name'] == '__list'
-        ? await rpc('tools/list', {})
-        : await rpc('tools/call', {
-            'name': body['name'],
-            'arguments': body['arguments'] ?? {},
-          });
+    final Map res;
+    if (body.containsKey('method')) {
+      res = await rpc(body['method'] as String, (body['params'] as Map?) ?? {});
+    } else if (body['name'] == '__list' || body['name'] == 'tools/list') {
+      res = await rpc('tools/list', {});
+    } else if (body['name'] == '__resources' ||
+        body['name'] == 'resources/list') {
+      res = await rpc('resources/list', {});
+    } else if (body['name'] == '__prompts' || body['name'] == 'prompts/list') {
+      res = await rpc('prompts/list', {});
+    } else if (body.containsKey('uri')) {
+      res = await rpc('resources/read', {'uri': body['uri']});
+    } else if (body.containsKey('prompt')) {
+      res = await rpc('prompts/get', {
+        'name': body['prompt'],
+        'arguments': body['arguments'] ?? {},
+      });
+    } else {
+      res = await rpc('tools/call', {
+        'name': body['name'],
+        'arguments': body['arguments'] ?? {},
+      });
+    }
     sw.stop();
     final out = StringBuffer();
     final result = res['result'] as Map?;
     if (res['error'] != null) out.writeln('RPC ERROR: ${res['error']}');
-    if (body['name'] == '__list') {
-      out.write(jsonEncode(result));
+
+    final isSpecialQuery =
+        body.containsKey('method') ||
+        body['name'] == '__list' ||
+        body['name'] == 'tools/list' ||
+        body['name'] == '__resources' ||
+        body['name'] == 'resources/list' ||
+        body['name'] == '__prompts' ||
+        body['name'] == 'prompts/list' ||
+        body.containsKey('prompt');
+
+    if (isSpecialQuery) {
+      out.write(const JsonEncoder.withIndent('  ').convert(result ?? res));
+    } else if (result?['contents'] != null) {
+      for (final c in (result!['contents'] as List)) {
+        if (c['text'] != null) {
+          out.writeln(c['text']);
+        } else if (c['blob'] != null) {
+          out.writeln('[blob resource: ${c['uri']} (${c['mimeType']})]');
+        }
+      }
     } else {
       for (final c in (result?['content'] as List? ?? [])) {
         if (c['type'] == 'image') {
@@ -105,9 +146,6 @@ Future<void> main(List<String> args) async {
           out.writeln(c['text']);
         }
       }
-      // A tool whose answer is a verdict (assert_widget, wait_for, ...) also
-      // returns it as machine-readable content; show it, so a field check can
-      // see what a program would read.
       final structured = result?['structuredContent'];
       if (structured != null) {
         out.writeln('[structuredContent] ${jsonEncode(structured)}');
