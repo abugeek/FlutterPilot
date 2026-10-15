@@ -16,7 +16,7 @@ Comprehensive troubleshooting for common FlutterPilot issues.
 
 ## Installation Issues
 
-### "Could not find package flutterpilot_sdk"
+### "Could not find package fp_sdk"
 
 **Problem**: `flutter pub get` fails with package not found.
 
@@ -34,9 +34,9 @@ Comprehensive troubleshooting for common FlutterPilot issues.
 
 2. **Use local path** (during development):
    ```yaml
-   dev_dependencies:
-     flutterpilot_sdk:
-       path: ../path/to/flutterpilot_sdk
+   dependencies:
+     fp_sdk:
+       path: ../path/to/fp_sdk
    ```
 
 3. **Check pubspec.yaml syntax**:
@@ -52,7 +52,7 @@ Comprehensive troubleshooting for common FlutterPilot issues.
 
 ---
 
-### "Failed to compile flutterpilot_sdk"
+### "Failed to compile fp_sdk"
 
 **Problem**: `pub get` succeeds but `flutter build` fails.
 
@@ -88,7 +88,7 @@ flutter run
 
 **Example**:
 ```
-flutterpilot_bloc ^0.1.0 requires flutter_bloc ^8.0.0
+fp_bloc ^0.1.0 requires flutter_bloc ^8.0.0
 but flutter_bloc ^7.0.0 is already used
 ```
 
@@ -99,9 +99,9 @@ but flutter_bloc ^7.0.0 is already used
    flutter pub add flutter_bloc:^8.0.0
    ```
 
-2. **Or downgrade FlutterPilot plugin**:
+2. **Or downgrade plugin**:
    ```bash
-   flutter pub add flutterpilot_bloc:^0.0.5
+   flutter pub add fp_bloc:^0.0.5
    ```
 
 3. **Check current versions**:
@@ -162,7 +162,7 @@ flutter run  # Kill previous session first (Ctrl+C)
 
 # Copy new URI from output
 # Start server with new URI
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+dart run packages/fp_server/bin/fp_server.dart \
   --uri "<NEW-URI>"
 ```
 
@@ -279,9 +279,9 @@ flutter run  # Kill + restart
 3. **Check plugin requirements**:
    ```bash
    # Some tools need plugins:
-   # get_state → requires flutterpilot_bloc
-   # get_state → requires flutterpilot_riverpod
-   # get_network_logs → requires flutterpilot_dio
+   # get_state → requires fp_bloc
+   # get_state → requires fp_riverpod
+   # get_network_logs → requires fp_dio
    ```
 
 ---
@@ -636,7 +636,7 @@ void main() {
 **Setup**:
 
 ```dart
-import 'package:flutterpilot_dio/flutterpilot_dio.dart';
+import 'package:fp_dio/fp_dio.dart';
 
 // At app root:
 final dio = Dio();
@@ -828,7 +828,7 @@ curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
 
 ```bash
 # Start server with verbose logging (if available):
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+dart run packages/fp_server/bin/fp_server.dart \
   --uri "<URI>" \
   --verbose
 ```

@@ -34,13 +34,13 @@ flutter doctor
 
 ```bash
 cd your_flutter_project
-flutter pub add --dev flutterpilot_sdk
+flutter pub add fp_sdk
 ```
 
 This adds to `pubspec.yaml`:
 ```yaml
-dev_dependencies:
-  flutterpilot_sdk: ^0.1.0
+dependencies:
+  fp_sdk: ^0.1.0
 ```
 
 ### Step 2: Initialize in Your App
@@ -49,7 +49,7 @@ In `lib/main.dart`, add **before** `runApp()`:
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
   // IMPORTANT: Initialize before runApp()
@@ -101,7 +101,7 @@ iOS requires special handling for the VM service URI.
 
 3. **Start FlutterPilot Server**:
    ```bash
-   dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+   dart run packages/fp_server/bin/fp_server.dart \
      --uri "http://127.0.0.1:54321/xxxxx="
    ```
 
@@ -153,7 +153,7 @@ If running on a physical device:
 
 4. **Start server**:
    ```bash
-   dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+   dart run packages/fp_server/bin/fp_server.dart \
      --uri "<VM-SERVICE-URI>"
    ```
 
@@ -264,13 +264,13 @@ Enhance FlutterPilot with state manager plugins:
 ### Bloc Plugin
 
 ```bash
-flutter pub add --dev flutterpilot_bloc flutter_bloc
+flutter pub add fp_bloc flutter_bloc
 ```
 
 In `main.dart`:
 ```dart
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutterpilot_bloc/flutterpilot_bloc.dart';
+import 'package:fp_bloc/fp_bloc.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -282,13 +282,13 @@ void main() {
 ### Riverpod Plugin
 
 ```bash
-flutter pub add --dev flutterpilot_riverpod riverpod flutter_riverpod
+flutter pub add fp_riverpod riverpod flutter_riverpod
 ```
 
 In `main.dart`:
 ```dart
 import 'package:riverpod/riverpod.dart';
-import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
+import 'package:fp_riverpod/fp_riverpod.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -304,13 +304,13 @@ void main() {
 ### Dio Plugin (HTTP Mocking)
 
 ```bash
-flutter pub add --dev flutterpilot_dio dio
+flutter pub add fp_dio dio
 ```
 
 In `main.dart`:
 ```dart
 import 'package:dio/dio.dart';
-import 'package:flutterpilot_dio/flutterpilot_dio.dart';
+import 'package:fp_dio/fp_dio.dart';
 
 final dio = Dio();
 
@@ -323,11 +323,17 @@ void main() {
 
 ### Other Plugins
 
-- **flutterpilot_shared_preferences** — SharedPreferences spy
-- **flutterpilot_drift** — Database SQL queries
-- **flutterpilot_hive** — Hive box inspection
+- **fp_shared_preferences** — SharedPreferences spy
+- **fp_drift** — Database SQL queries
+- **fp_sqflite** — SQLite query inspection
+- **fp_hive** — Hive box inspection
+- **fp_gorouter** — Navigation inspector
+- **fp_supabase** — Supabase client inspector
+- **fp_connectivity** — Network connectivity inspector
+- **fp_firebase** — Firebase Auth & Firestore inspector
+- **fp_secure_storage** — Encrypted storage inspector
 
-Setup follows same pattern: `pub add`, then register in `main()`.
+Setup follows same pattern: `flutter pub add`, then register in `main()`.
 
 ---
 

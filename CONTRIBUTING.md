@@ -43,14 +43,22 @@ melos run test      # Run all tests
 ```
 FlutterPilot/
 ├── packages/
-│   ├── flutterpilot_sdk/         # Core SDK (in-app, zero deps)
-│   ├── flutterpilot_server/      # MCP server bridge
+│   ├── fp_sdk/                   # Core SDK (in-app, zero deps)
+│   ├── fp_server/                # MCP server bridge
+│   ├── fp_cli/                   # Developer CLI (fp, flutterpilot)
 │   └── plugins/
-│       ├── flutterpilot_bloc/    # Bloc state inspector
-│       ├── flutterpilot_dio/     # Dio network inspector
-│       ├── flutterpilot_drift/   # Drift database inspector
-│       ├── flutterpilot_hive/    # Hive storage inspector
-│       └── flutterpilot_riverpod/# Riverpod state inspector
+│       ├── fp_bloc/              # Bloc state inspector
+│       ├── fp_connectivity/      # Connectivity inspector
+│       ├── fp_dio/               # Dio network inspector
+│       ├── fp_drift/             # Drift database inspector
+│       ├── fp_firebase/          # Firebase Auth & Firestore inspector
+│       ├── fp_gorouter/          # GoRouter route inspector
+│       ├── fp_hive/              # Hive storage inspector
+│       ├── fp_riverpod/          # Riverpod state inspector
+│       ├── fp_secure_storage/    # Secure storage inspector
+│       ├── fp_shared_preferences/# SharedPreferences inspector
+│       ├── fp_sqflite/           # SQLite database inspector
+│       └── fp_supabase/          # Supabase inspector
 ├── examples/
 │   └── flutter_pilot_example/    # Demo app
 └── melos.yaml                    # Monorepo config
@@ -68,7 +76,7 @@ flutter run
 ### Running the MCP Server
 
 ```bash
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+dart run packages/fp_server/bin/fp_server.dart \
   --uri <vm-service-uri-from-flutter-run>
 ```
 
@@ -79,8 +87,9 @@ dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
 melos run test
 
 # Specific package
-cd packages/flutterpilot_sdk && flutter test
-cd packages/flutterpilot_server && dart test
+cd packages/fp_sdk && flutter test
+cd packages/fp_server && dart test
+cd packages/fp_cli && dart test
 ```
 
 ### Code Style
@@ -110,8 +119,8 @@ cd packages/flutterpilot_server && dart test
 
 ### Adding a New Plugin
 
-1. Create a new package under `packages/plugins/`
-2. Follow the existing plugin pattern (see `flutterpilot_bloc` as a reference)
+1. Create a new package under `packages/plugins/fp_<name>`
+2. Follow the existing plugin pattern (see `fp_bloc` as a reference)
 3. Register state setters via `FlutterPilot.registerStateSetter()`
 4. Add the package to `melos.yaml`
 5. Add tests and a README
@@ -124,15 +133,15 @@ cd packages/flutterpilot_server && dart test
 └──────────────────────┬──────────────────────────────┘
                        │ MCP Protocol (JSON-RPC over stdio)
 ┌──────────────────────▼──────────────────────────────┐
-│              flutterpilot_server                     │
-│  - 83 MCP tools across 8 categories                 │
+│              fp_server                              │
+│  - 63 MCP tools across 8 categories                 │
 │  - Modular tool registration via part files          │
 │  - Self-Heal crash detection                        │
 │  - VM Service bridge with auto-reconnect            │
 └──────────────────────┬──────────────────────────────┘
                        │ VM Service Extensions
 ┌──────────────────────▼──────────────────────────────┐
-│              flutterpilot_sdk (in-app)               │
+│              fp_sdk (in-app)                        │
 │  - Service extension registration                   │
 │  - Widget tree introspection                        │
 │  - Screenshot capture                               │

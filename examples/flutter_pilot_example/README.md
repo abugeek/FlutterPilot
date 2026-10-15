@@ -24,11 +24,11 @@ error screen shows instead.
 flutter run -d macos --vmservice-out-file=.dart_tool/flutterpilot_vm_uri
 ```
 
-Any device works. Then connect an agent: `flutterpilot mcp install` in this
+Any device works. Then connect an agent: `fp mcp install` in this
 folder writes the MCP config, or drive the tools from a shell with the bridge:
 
 ```bash
-cd ../../packages/flutterpilot_server
+cd ../../packages/fp_server
 dart run tool/fp_bridge.dart -p ../../examples/flutter_pilot_example
 ```
 

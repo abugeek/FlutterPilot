@@ -15,30 +15,29 @@
 
 ### Option A: The 1-Command CLI Workflow (Recommended)
 ```bash
-# 1. Install CLI (from a checkout; `dart pub global activate flutterpilot_cli`
-#    once it is on pub.dev)
-dart pub global activate --source path ./packages/flutterpilot_cli
+# 1. Install CLI (from checkout; `dart pub global activate fp_cli` once on pub.dev)
+dart pub global activate --source path ./packages/fp_cli
 
-# 2. In your Flutter project root, add the SDK + matching plugins (git deps)
+# 2. In your Flutter project root, add the SDK + matching plugins (fp_* deps)
 #    and FlutterPilot.initialize() to main.dart. It prints the one wiring line
 #    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
-flutterpilot init            # or: flutterpilot init --local /path/to/FlutterPilot
+fp init            # or: fp init --local /path/to/FlutterPilot
 
 # 3. Add the FlutterPilot server to your agent's MCP config (Claude Code,
 #    Cursor, VS Code, Codex, Gemini CLI, Antigravity, Zed, opencode, Junie,
 #    Kiro, Roo Code — the ones the project uses; --client to choose, see
 #    "MCP Setup"). Compiles the server; other servers are kept.
 #    Also adds the official Dart MCP server for the code side (--no-dart to skip).
-flutterpilot mcp install
+fp mcp install
 
 # 4. Run the app; the server finds it (flutter run, your IDE, or):
-flutterpilot dev
+fp dev
 
 # Something missing? Checks the setup and the running app, prints fixes:
-flutterpilot doctor
+fp doctor
 ```
 
-> Packages are not on pub.dev yet — `init` uses git (or `--local` path) dependencies.
+> Note: Both `fp` and `flutterpilot` commands are available globally once `fp_cli` is activated.
 
 ### Option B: Zero-Code Mode (No App Changes Required)
 Connect FlutterPilot MCP Server to **any existing Flutter app** to inspect it:
@@ -52,21 +51,23 @@ flutter run
 
 # Start the MCP server (finds the app in the current folder, the MCP client's
 # workspace folders, or -p <app folder>):
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart
+dart run packages/fp_server/bin/fp_server.dart
 ```
 
 ### Option C: Manual SDK Integration
 ```yaml
 # pubspec.yaml
 dependencies:
-  flutterpilot_sdk:
-    git:
-      url: https://github.com/abugeek/FlutterPilot.git
-      path: packages/flutterpilot_sdk
+  fp_sdk: ^0.1.0
+  # or from git:
+  # fp_sdk:
+  #   git:
+  #     url: https://github.com/abugeek/FlutterPilot.git
+  #     path: packages/fp_sdk
 ```
 In `main.dart`:
 ```dart
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -83,7 +84,7 @@ FlutterPilot is a local (stdio) MCP server: any client that can start one can
 use it. It has no HTTP transport, so agents that only take a remote MCP URL
 can't.
 
-`flutterpilot mcp install` (in the app folder) writes the project's config
+`fp mcp install` (in the app folder) writes the project's config
 for the clients below — the ones the project already uses, or `--client
 <name>` (repeatable; `--client all`). Run it again after pulling FlutterPilot
 changes — it recompiles the server.
@@ -109,15 +110,15 @@ left alone, with the entry to add.
 
 If your client doesn't fetch the tool list again when the server says it
 changed (FlutterPilot lists a plugin's tools once the app registers the
-plugin), add `--static-tools` (`flutterpilot mcp install --static-tools`):
+plugin), add `--static-tools` (`fp mcp install --static-tools`):
 every tool is listed from the start, and one that can't work on the
 connected app says why when called.
 
 A client that counts tools across every server it runs can ask for the short
 set instead (checked 2026-10-14: Cursor's docs state no tool limit; VS Code's
 Copilot allows 128 tools per request; Claude Code no fixed cap):
-`flutterpilot mcp install --tools core` writes `--tools core`, and
-`flutterpilot doctor` shows which profile each config uses. `all` is the
+`fp mcp install --tools core` writes `--tools core`, and
+`fp doctor` shows which profile each config uses. `all` is the
 default; `--tools core` is a subset that still has to work for the app (a
 zero-code app sees fewer), and it refuses a step that names a tool it does
 not list.
@@ -125,7 +126,7 @@ not list.
 By hand:
 Build the server once (fast startup, no `dart` on the IDE's PATH needed):
 ```bash
-cd packages/flutterpilot_server && dart compile exe bin/flutterpilot_server.dart -o build/flutterpilot_server
+cd packages/fp_server && dart compile exe bin/fp_server.dart -o build/fp_server
 ```
 
 Then add it to your IDE's MCP config (Trae, Cursor, Windsurf, Claude Desktop use this `mcpServers` shape).
@@ -134,14 +135,14 @@ Use absolute paths; `-p` is your Flutter app's root:
 {
   "mcpServers": {
     "flutterpilot": {
-      "command": "/ABSOLUTE/PATH/FlutterPilot/packages/flutterpilot_server/build/flutterpilot_server",
+      "command": "/ABSOLUTE/PATH/FlutterPilot/packages/fp_server/build/fp_server",
       "args": ["-p", "/ABSOLUTE/PATH/your_flutter_app"]
     }
   }
 }
 ```
 - Add `"--allow-destructive"` to `args` to allow state/storage writes.
-- Without compiling: `"command": "/path/to/flutter/bin/dart", "args": ["run", "/ABSOLUTE/PATH/.../bin/flutterpilot_server.dart", "-p", "..."]` (slower start).
+- Without compiling: `"command": "/path/to/flutter/bin/dart", "args": ["run", "/ABSOLUTE/PATH/.../packages/fp_server/bin/fp_server.dart", "-p", "..."]` (slower start).
 - VS Code (Copilot agent mode) reads `.vscode/mcp.json` in the app's folder,
   with `"servers"` and `"type": "stdio"`:
   ```json
@@ -149,14 +150,14 @@ Use absolute paths; `-p` is your Flutter app's root:
     "servers": {
       "flutterpilot": {
         "type": "stdio",
-        "command": "/ABSOLUTE/PATH/FlutterPilot/packages/flutterpilot_server/build/flutterpilot_server",
+        "command": "/ABSOLUTE/PATH/FlutterPilot/packages/fp_server/build/fp_server",
         "args": ["-p", "${workspaceFolder}"]
       }
     }
   }
   ```
-- Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../build/flutterpilot_server -p /ABSOLUTE/PATH/your_flutter_app`
-- Run the app with `flutter run`, from your IDE, or with `flutterpilot dev`: the server finds it through the Dart Tooling Daemon they register it with, or the URI file `flutterpilot dev` writes (`--vmservice-out-file=.dart_tool/flutterpilot_vm_uri`). Otherwise pass the URI `flutter run` prints to `connect_app`.
+- Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../packages/fp_server/build/fp_server -p /ABSOLUTE/PATH/your_flutter_app`
+- Run the app with `flutter run`, from your IDE, or with `fp dev`: the server finds it through the Dart Tooling Daemon they register it with, or the URI file `fp dev` writes (`--vmservice-out-file=.dart_tool/flutterpilot_vm_uri`). Otherwise pass the URI `flutter run` prints to `connect_app`.
 - `-p` is optional when the client shares its workspace folders (MCP roots) and the app is in one of them, up to 3 levels deep (monorepos); with several apps running, the most recently launched wins.
 - **With the official Dart MCP server** (`dart mcp-server`): `mcp install` adds it as `dart` with `--disable flutter,dart_tooling_daemon`, so the agent gets one of each — Dart's analyzer, symbols (`lsp`) and pub, FlutterPilot's running-app tools (its hot reload, runtime errors, widget inspector and Flutter Driver overlap FlutterPilot's). A Dart MCP server you already have is kept, with that advice.
 - Rebuild the executable after pulling server changes.
@@ -285,7 +286,7 @@ without polling. `resources/unsubscribe` stops the pushes.
 └──────────────────────┬──────────────────────────────┘
                        │ MCP Protocol (JSON-RPC/stdio)
 ┌──────────────────────▼──────────────────────────────┐
-│          flutterpilot_server (modular)               │
+│          fp_server (modular)                        │
 │  • MCP tools grouped by area (lib/src/tools/)        │
 │  • Each app is shown only the tools that work        │
 │  • Auto crash detection → AI notification            │
@@ -293,7 +294,7 @@ without polling. `resources/unsubscribe` stops the pushes.
 └──────────────────────┬──────────────────────────────┘
                        │ VM Service Extensions
 ┌──────────────────────▼──────────────────────────────┐
-│          flutterpilot_sdk (in-app, modular)           │
+│          fp_sdk (in-app, modular)                    │
 │  • 43+ service extensions across 5 modules           │
 │  • Widget tree inspection via Element walking        │
 │  • Screenshot capture (RenderRepaintBoundary)        │
@@ -313,21 +314,23 @@ without polling. `resources/unsubscribe` stops the pushes.
 ## 📦 Core & Plugin Packages
 
 ### Core (Required)
-- **`flutterpilot_sdk`** (v0.1.0) — Zero external dependencies. Just Flutter + `meta`.
-- **`flutterpilot_server`** (v0.1.0) — MCP bridge to your app.
+- **`fp_sdk`** (v0.1.0) — Zero external dependencies. Just Flutter + `meta`.
+- **`fp_server`** (v0.1.0) — MCP bridge to your app.
+- **`fp_cli`** (v0.1.0) — 1-command init, dev runner (`fp dev`), and diagnostics (`fp doctor`).
 
 ### Plugins (Optional — Add Only What You Need)
-- **`flutterpilot_riverpod`** — Inspect/inject Riverpod providers
-- **`flutterpilot_bloc`** — Inspect/inject Bloc/Cubit state
-- **`flutterpilot_dio`** — View all HTTP requests/responses, mock endpoints
-- **`flutterpilot_drift`** — Query SQLite databases via SQL
-- **`flutterpilot_hive`** — Inspect Hive key-value storage
-- **`flutterpilot_shared_preferences`** — Inspect/edit SharedPreferences
-- **`flutterpilot_supabase`** — Auth state, session, realtime channels
-- **`flutterpilot_gorouter`** — Route state, config, history, programmatic navigation
-- **`flutterpilot_connectivity`** — Network status, history, simulated offline
-- **`flutterpilot_firebase`** — Firebase Auth user and Firestore reads (as the app sees them)
-- **`flutterpilot_secure_storage`** — Encrypted key-value inspection (auto-redacted)
+- **`fp_riverpod`** — Inspect/inject Riverpod providers
+- **`fp_bloc`** — Inspect/inject Bloc/Cubit state
+- **`fp_dio`** — View all HTTP requests/responses, mock endpoints
+- **`fp_drift`** — Query SQLite databases via SQL
+- **`fp_sqflite`** — Raw SQLite query execution and inspection
+- **`fp_hive`** — Inspect Hive key-value storage
+- **`fp_shared_preferences`** — Inspect/edit SharedPreferences
+- **`fp_supabase`** — Auth state, session, realtime channels
+- **`fp_gorouter`** — Route state, config, history, programmatic navigation
+- **`fp_connectivity`** — Network status, history, simulated offline
+- **`fp_firebase`** — Firebase Auth user and Firestore reads (as the app sees them)
+- **`fp_secure_storage`** — Encrypted key-value inspection (auto-redacted)
 
 ---
 
@@ -338,20 +341,20 @@ without polling. `resources/unsubscribe` stops the pushes.
 #### Step 1: Add Dependencies
 ```bash
 cd your-flutter-project
-flutterpilot init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds matching plugins
+fp init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds matching plugins
 flutter pub get
 ```
 Plugins do nothing until wired up — `init` prints the exact line for each one.
 If the app has a macOS runner, `init` also adds the `network.client`
 entitlement (sandboxed macOS apps can't make HTTP requests without it).
-`flutterpilot doctor` checks the wiring (SDK initialized, each plugin used,
+`fp doctor` checks the wiring (SDK initialized, each plugin used,
 macOS network entitlement, MCP config) and, while the app runs, that the SDK
 and every plugin registered — with the exact fix for anything missing.
 
 #### Step 2: Initialize SDK
 ```dart
 // main.dart
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
   FlutterPilot.initialize();  // Before runApp!
@@ -423,11 +426,11 @@ SecureStoragePilotInspector.register(storage);
 
 #### Step 4: Run App & Server
 ```bash
-# Terminal 1: Run the app
+# Terminal 1: Run the app (or use: fp dev)
 flutter run
 
 # Terminal 2: Copy the VM Service URI from Terminal 1 output, then run server
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+dart run packages/fp_server/bin/fp_server.dart \
   --uri http://127.0.0.1:12345/abcdefg=/
 ```
 
@@ -442,7 +445,7 @@ Use FlutterPilot in Claude Desktop, Cursor, or any MCP-compatible IDE:
       "command": "dart",
       "args": [
         "run",
-        "/path/to/FlutterPilot/packages/flutterpilot_server/bin/flutterpilot_server.dart",
+        "/path/to/FlutterPilot/packages/fp_server/bin/fp_server.dart",
         "--uri",
         "http://127.0.0.1:12345/abcdefg=/"
       ]
@@ -512,8 +515,8 @@ await mcp.call('get_semantics_tree');
 
 ## 📖 Full Documentation
 
-- **[SDK API Reference](packages/flutterpilot_sdk/README.md)** — Service extensions, custom tools, state injection
-- **[Server & Tools Guide](packages/flutterpilot_server/README.md)** — Tool descriptions, MCP config, prerequisites
+- **[SDK API Reference](packages/fp_sdk/README.md)** — Service extensions, custom tools, state injection
+- **[Server & Tools Guide](packages/fp_server/README.md)** — Tool descriptions, MCP config, prerequisites
 - **[Contributing Guide](CONTRIBUTING.md)** — Development setup, code style, architecture details
 - **[Example App](examples/flutter_pilot_example)** — a small todo app (Dio, Riverpod, go_router, shared_preferences) and a walkthrough of the bug → mock → fix → verify loop
 - **[Tool Reference](TOOLS.generated.md)** — every tool and parameter, generated from the server

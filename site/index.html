@@ -178,19 +178,21 @@ Widget tapped "Retry"; then appeared "todo_1". Route unchanged (/).
   <h2>Set up</h2>
   <p>In your Flutter project:</p>
   <pre># the CLI (from a checkout until the packages are on pub.dev)
-dart pub global activate --source path ./packages/flutterpilot_cli
+dart pub global activate --source path ./packages/fp_cli
+# or once published on pub.dev:
+# dart pub global activate fp_cli
 
 # adds the SDK and the plugins your app uses (Riverpod, Bloc, Dio, Drift, …)
-flutterpilot init
+fp init
 
 # writes the MCP config for Claude Code, Cursor, VS Code, Codex, Gemini CLI and more
-flutterpilot mcp install
+fp mcp install
 
-# run the app however you like; the server finds it
-flutter run
+# run the app however you like; the server finds it (or use: fp dev)
+fp dev
 
 # something not working? it checks everything and prints the fix
-flutterpilot doctor</pre>
+fp doctor</pre>
   <p>No changes to the app at all? The server still connects to any debug
   build and gives you the widget tree, screenshots, errors with source lines,
   logs, hot reload and memory/HTTP profiles. Taps, text entry and assertions
