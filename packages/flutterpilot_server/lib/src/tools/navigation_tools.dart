@@ -49,6 +49,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           });
         }
         if (res.isError) return res.toCallToolResult();
+        // The route changed: subscribers are pushed the new state (task 27).
+        _notifyRouteChanged();
         // The page slides in: until it has, its controls are off screen
         // and the next call would list the page underneath. navigateTo and
         // deep links settle in the app before they answer (route

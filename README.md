@@ -268,6 +268,13 @@ whole-stack read:
 | `flutterpilot://app/widgets/{key}` | `application/json` | One widget's properties, its compact subtree and every key beneath it. `{"found": false, "key": …}` when the key is not on screen. |
 | `flutterpilot://app/routes/{path}` | `application/json` | The route stack and current route, plus, with go_router, the matched route and its path/query parameters. `current` means the route on screen. |
 
+Because the server declares `subscribe`, a client can also **subscribe** to one:
+`resources/subscribe` claims a URI, and the server then pushes
+`notifications/resources/updated` for it when the app hot-reloads or restarts,
+navigates, raises an uncaught error or overflow, connects or disconnects, or a
+device is registered — so an attached summary or error list stays current
+without polling. `resources/unsubscribe` stops the pushes.
+
 ---
 
 ## 🏗️ Architecture
