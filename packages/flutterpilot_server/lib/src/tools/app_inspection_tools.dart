@@ -276,6 +276,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         if (previous != null) await _renameDeviceContext(previous, id);
         // Lists run_on_devices before the agent can call it.
         await _refreshToolVisibility();
+        // flutterpilot://devices changed (task 16): tell clients to re-read.
+        server.sendResourceListChanged();
         final active = _fleetManager.activeDeviceId;
         // Connect when this is now the active device (the first one, or the
         // active one re-registered after a restart).

@@ -65,6 +65,7 @@ export 'src/cli.dart' show runFlutterPilotServer;
 export 'src/generated/guidance.g.dart' show serverInstructions, guidePrompt;
 
 part 'src/constants.dart';
+part 'src/resources.dart';
 part 'src/tools/app_inspection_tools.dart';
 part 'src/tools/devtools_tools.dart';
 part 'src/tools/launch_tools.dart';
@@ -679,7 +680,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _TestGenerationToolsMixin,
         _ScenarioToolsMixin,
         _VerificationToolsMixin,
-        _PluginIntegrationToolsMixin {
+        _PluginIntegrationToolsMixin,
+        _ResourcesMixin {
   @override
   final McpServer server;
   String? _vmServiceUri;
@@ -779,6 +781,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
          options: McpServerOptions(
            capabilities: ServerCapabilities(
              tools: ServerCapabilitiesTools(listChanged: true),
+             // Standard MCP resources (task 16): list_changed tells clients to
+             // re-read after a connect/disconnect; subscribe is declared so a
+             // client may subscribe to a resource it attaches.
+             resources: ServerCapabilitiesResources(
+               listChanged: true,
+               subscribe: true,
+             ),
            ),
            instructions: serverInstructions,
          ),
@@ -786,6 +795,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     _selfHealManager = SelfHealManager(server: server);
     _registerTools();
     _registerPrompts();
+    _registerResources();
     server.server.oninitialized = () => unawaited(_refreshClientRoots());
     server.server.setNotificationHandler<JsonRpcRootsListChangedNotification>(
       Method.notificationsRootsListChanged,
@@ -1128,6 +1138,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         });
 
     await _setupEventStreaming(activeContext);
+    // A resource attached before this connection may now answer: tell clients
+    // to re-read (task 16).
+    server.sendResourceListChanged();
   }
 
   @override
@@ -1175,6 +1188,9 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       activeContext.service = null;
       activeContext.connectionGeneration++;
     }
+    // The app-scoped resources fall back to their "not connected" message now
+    // (task 16).
+    server.sendResourceListChanged();
     _attemptReconnect();
   }
 
@@ -1539,6 +1555,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           ).toJson(),
     ];
   }
+
+  /// The capabilities the server advertises in `initialize`, for tests: task
+  /// 16 declares `resources: {listChanged: true, subscribe: true}` here.
+  Map<String, dynamic> serverCapabilitiesJson() =>
+      server.server.getCapabilities().toJson();
 
   /// The argument gate alone, for tests (task 02 §D): null when [args] are
   /// acceptable to [name]'s schema, else the refusal an agent would see.
