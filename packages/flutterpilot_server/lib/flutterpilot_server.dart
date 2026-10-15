@@ -65,6 +65,7 @@ export 'src/cli.dart' show runFlutterPilotServer;
 export 'src/generated/guidance.g.dart' show serverInstructions, guidePrompt;
 
 part 'src/constants.dart';
+part 'src/prompts.dart';
 part 'src/resources.dart';
 part 'src/tools/app_inspection_tools.dart';
 part 'src/tools/devtools_tools.dart';
@@ -681,7 +682,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _ScenarioToolsMixin,
         _VerificationToolsMixin,
         _PluginIntegrationToolsMixin,
-        _ResourcesMixin {
+        _ResourcesMixin,
+        _PromptsMixin {
   @override
   final McpServer server;
   String? _vmServiceUri;
@@ -1703,28 +1705,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   // ---------------------------------------------------------------------------
   // Prompts
   // ---------------------------------------------------------------------------
-
-  void _registerPrompts() {
-    server.registerPrompt(
-      'flutterpilot_guide',
-      title: 'FlutterPilot Usage Guide',
-      description:
-          'Complete guide on how to use FlutterPilot tools effectively. '
-          'Call this prompt at the start of a session to understand all available tools, '
-          'when to use each one, and recommended workflows.',
-      callback: (args, extra) async {
-        return GetPromptResult(
-          description: 'FlutterPilot complete usage guide',
-          messages: [
-            PromptMessage(
-              role: PromptMessageRole.user,
-              content: TextContent(text: guidePrompt),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // Registered by _PromptsMixin (src/prompts.dart): flutterpilot_guide plus
+  // the four curated workflow prompts (task 17).
 
   // ---------------------------------------------------------------------------
   // Core helpers

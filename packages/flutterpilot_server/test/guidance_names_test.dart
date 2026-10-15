@@ -198,4 +198,9 @@ const _notTools = {
   'dev_dependencies', // pubspec.yaml section.
   'context_servers', // Zed's key for MCP servers.
   'call_tool', // How a skill example calls a tool; not a tool itself.
+  // Curated MCP prompt names (task 17): fetched with `prompts/get`.
+  'debug_layout_overflow',
+  'diagnose_exception',
+  'create_integration_test',
+  'audit_screen_health',
 };
