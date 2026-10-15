@@ -146,6 +146,40 @@ void main() {
       }
     });
 
+    test(
+      'resources/templates/list offers widget and route templates',
+      () async {
+        final response = await inspector.request('resources/templates/list');
+        expect(response['error'], isNull, reason: '$response');
+        final templates =
+            (response['result'] as Map)['resourceTemplates'] as List;
+        expect(templates, hasLength(greaterThanOrEqualTo(2)));
+        final byUri = <String, Map>{
+          for (final template in templates)
+            (template as Map)['uriTemplate'].toString(): template,
+        };
+        expect(byUri.keys, contains('flutterpilot://app/widgets/{key}'));
+        expect(byUri.keys, contains('flutterpilot://app/routes/{path}'));
+        for (final template in templates) {
+          expect(template['name']?.toString(), isNotEmpty, reason: '$template');
+          expect(
+            template['description']?.toString(),
+            isNotEmpty,
+            reason: '$template',
+          );
+          expect(template['mimeType'], 'application/json', reason: '$template');
+        }
+        expect(
+          byUri['flutterpilot://app/widgets/{key}']!['name'],
+          'widget_by_key',
+        );
+        expect(
+          byUri['flutterpilot://app/routes/{path}']!['name'],
+          'route_by_path',
+        );
+      },
+    );
+
     test('prompts/list offers the guide plus four workflow prompts', () async {
       final response = await inspector.request('prompts/list');
       expect(response['error'], isNull, reason: '$response');
@@ -282,6 +316,31 @@ void main() {
         final message = _refusalMessage(response);
         expect(message, contains('steps'), reason: message);
         _expectNoRetryHint(message);
+      },
+    );
+
+    test(
+      'resources/read with a templated URI dispatches to its handler',
+      () async {
+        // Neither template needs a running app: with none connected they answer
+        // with the same "no app" body the fixed resources use.
+        for (final uri in [
+          'flutterpilot://app/widgets/test_key',
+          'flutterpilot://app/routes/current',
+        ]) {
+          final response = await inspector.request('resources/read', {
+            'uri': uri,
+          });
+          expect(response['error'], isNull, reason: '$response');
+          final contents = (response['result'] as Map)['contents'] as List;
+          expect(contents, isNotEmpty, reason: uri);
+          final text = (contents.first as Map)['text'] as String;
+          expect(
+            text,
+            contains('No Flutter app currently connected'),
+            reason: uri,
+          );
+        }
       },
     );
   });

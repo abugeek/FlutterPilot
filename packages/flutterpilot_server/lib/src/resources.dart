@@ -97,6 +97,33 @@ class ResourceAppData {
   final List<Map<String, dynamic>> serverLogs;
 }
 
+/// Live app data a templated resource read formats (task 26).
+///
+/// The server fills it from the connected app; a test can pass one to
+/// [FlutterPilotServer.readWidgetResourceForTest] or
+/// [FlutterPilotServer.readRouteResourceForTest] to exercise the connected
+/// branch without a running app.
+class ResourceTemplateData {
+  const ResourceTemplateData({
+    this.widgetProperties,
+    this.widgetTree,
+    this.navigationStack,
+    this.routerState,
+  });
+
+  /// `ext.flutterpilot.getWidgetProperties` data for the requested key.
+  final Map<String, dynamic>? widgetProperties;
+
+  /// `ext.flutterpilot.getWidgetTree` data (`{'tree': ...}`) scoped to the key.
+  final Map<String, dynamic>? widgetTree;
+
+  /// `ext.flutterpilot.getNavigationStack` data (`{'stack': [...]}`).
+  final Map<String, dynamic>? navigationStack;
+
+  /// `ext.flutterpilot.getGoRouterState` data (go_router apps only).
+  final Map<String, dynamic>? routerState;
+}
+
 /// The same data as [ResourceAppData], plus whether an app is connected.
 class _ResourceData {
   const _ResourceData({
@@ -131,6 +158,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
         mimeType: spec.mimeType,
       ), (uri, _) => _readResource(uri));
     }
+    _registerResourceTemplates();
   }
 
   /// The list `resources/list` returns, for tests.
@@ -426,5 +454,209 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
         ? ''
         : ', ${pre.length} from before FlutterPilot connected';
     return '${entries.length} console entries$source:\n${lines.join('\n')}';
+  }
+
+  /// Registers the dynamic (RFC 6570) resource templates (task 26).
+  ///
+  /// A template with a null `listCallback` contributes nothing to
+  /// `resources/list`, so the five standard resources stay the only listed
+  /// ones and `tools/list` does not grow a byte. A client discovers the
+  /// templates through `resources/templates/list` and reads them by expanding
+  /// the URI.
+  void _registerResourceTemplates() {
+    server.registerResourceTemplate(
+      'widget_by_key',
+      ResourceTemplateRegistration(
+        'flutterpilot://app/widgets/{key}',
+        listCallback: null,
+      ),
+      (
+        description:
+            'Compact widget hierarchy and properties for a specific widget '
+            'Key.',
+        mimeType: 'application/json',
+      ),
+      (uri, variables, _) =>
+          _readWidgetResource(uri, variables['key']?.toString() ?? ''),
+      title: 'Widget Subtree by Key',
+    );
+    server.registerResourceTemplate(
+      'route_by_path',
+      ResourceTemplateRegistration(
+        'flutterpilot://app/routes/{path}',
+        listCallback: null,
+      ),
+      (
+        description:
+            'Navigation state, matched route, and parameters for a specific '
+            'route path or "current".',
+        mimeType: 'application/json',
+      ),
+      (uri, variables, _) =>
+          _readRouteResource(uri, variables['path']?.toString() ?? 'current'),
+      title: 'Route Inspection',
+    );
+  }
+
+  /// Reads `flutterpilot://app/widgets/{key}`, for tests too.
+  Future<ReadResourceResult> readWidgetResourceForTest(
+    String key, {
+    ResourceTemplateData? app,
+  }) => _readWidgetResource(
+    Uri.parse('flutterpilot://app/widgets/$key'),
+    key,
+    app: app,
+  );
+
+  /// Reads `flutterpilot://app/routes/{path}`, for tests too.
+  Future<ReadResourceResult> readRouteResourceForTest(
+    String path, {
+    ResourceTemplateData? app,
+  }) => _readRouteResource(
+    Uri.parse('flutterpilot://app/routes/$path'),
+    path,
+    app: app,
+  );
+
+  Future<ReadResourceResult> _readWidgetResource(
+    Uri uri,
+    String key, {
+    ResourceTemplateData? app,
+  }) async => _jsonResource(uri, await _widgetResourceText(key, app));
+
+  Future<ReadResourceResult> _readRouteResource(
+    Uri uri,
+    String path, {
+    ResourceTemplateData? app,
+  }) async => _jsonResource(uri, await _routeResourceText(path, app));
+
+  static ReadResourceResult _jsonResource(Uri uri, String text) =>
+      ReadResourceResult(
+        contents: [
+          TextResourceContents(
+            uri: uri.toString(),
+            mimeType: 'application/json',
+            text: text,
+          ),
+        ],
+      );
+
+  /// The widget named by [key]: its own properties plus the keys of every
+  /// descendant, so an agent can walk one subtree without pulling the whole
+  /// tree.
+  Future<String> _widgetResourceText(
+    String key,
+    ResourceTemplateData? app,
+  ) async {
+    if (app == null && _activeContext?.service == null) return _noAppJson();
+    final properties = app != null
+        ? app.widgetProperties
+        : await _extensionData('ext.flutterpilot.getWidgetProperties', {
+            'key': key,
+          });
+    if (properties == null) {
+      return jsonEncode({'connected': true, 'found': false, 'key': key});
+    }
+    final tree = app != null
+        ? app.widgetTree
+        : await _extensionData('ext.flutterpilot.getWidgetTree', {
+            'rootKey': key,
+            'maxDepth': '12',
+            'compact': 'true',
+          });
+    final node = tree?['tree'];
+    final childKeys = <String>[];
+    // The outermost node is the widget itself; its key is already `key`.
+    _collectChildKeys(node, childKeys);
+    return jsonEncode({
+      'connected': true,
+      'found': true,
+      'key': key,
+      'widget': properties,
+      if (node is Map) 'tree': node,
+      'childKeys': childKeys,
+    });
+  }
+
+  /// Every key written under [node], depth-first.
+  static void _collectChildKeys(Object? node, List<String> keys) {
+    if (node is! Map) return;
+    for (final child in (node['children'] as List?) ?? const []) {
+      if (child is! Map) continue;
+      final key = child['key']?.toString();
+      if (key != null && key.isNotEmpty) keys.add(key);
+      _collectChildKeys(child, keys);
+    }
+  }
+
+  /// The navigation state for [path]: the route stack, and, when go_router is
+  /// present, the matched route, path/query parameters and `canPop`.
+  /// `current` (the default) reports the route on screen.
+  Future<String> _routeResourceText(
+    String path,
+    ResourceTemplateData? app,
+  ) async {
+    if (app == null && _activeContext?.service == null) return _noAppJson();
+    final stackData = app != null
+        ? app.navigationStack
+        : await _extensionData('ext.flutterpilot.getNavigationStack', const {});
+    final router = app != null
+        ? app.routerState
+        : await _extensionData('ext.flutterpilot.getGoRouterState', const {});
+    final stack = ((stackData?['stack'] as List?) ?? const [])
+        .map((entry) => entry.toString())
+        .toList();
+    final currentRoute =
+        router?['currentLocation']?.toString() ??
+        (stack.isEmpty ? null : stack.last);
+    final matchedRoutes = ((router?['matchedRoutes'] as List?) ?? const [])
+        .whereType<Map>()
+        .map(Map<String, dynamic>.from)
+        .toList();
+    final requested = path.trim().isEmpty ? 'current' : path.trim();
+    final isCurrent = requested == 'current';
+    final found =
+        isCurrent ||
+        requested == currentRoute ||
+        stack.contains(requested) ||
+        matchedRoutes.any(
+          (route) => route['matchedLocation']?.toString() == requested,
+        );
+    final target = isCurrent ? currentRoute : (found ? requested : null);
+    var matched = _matchedRoute(matchedRoutes, target);
+    if (matched == null && isCurrent && matchedRoutes.isNotEmpty) {
+      // No exact match for the location: the last entry is the deepest.
+      matched = matchedRoutes.last;
+    }
+    final routerMap = router ?? const <String, dynamic>{};
+    final hasRouter = router != null;
+    return jsonEncode({
+      'connected': true,
+      'requested': requested,
+      'found': found,
+      'currentRoute': currentRoute,
+      'stack': stack,
+      'stackDepth': stack.length,
+      'goRouter': hasRouter,
+      if (hasRouter) 'canPop': routerMap['canPop'],
+      'route': ?matched,
+      'pathParameters':
+          routerMap['pathParameters'] ?? const <String, dynamic>{},
+      'queryParameters':
+          routerMap['queryParameters'] ?? const <String, dynamic>{},
+      if (hasRouter && routerMap['matchedRoutes'] != null)
+        'matchedRoutes': routerMap['matchedRoutes'],
+    });
+  }
+
+  static Map<String, dynamic>? _matchedRoute(
+    List<Map<String, dynamic>> routes,
+    String? location,
+  ) {
+    if (location == null) return null;
+    for (final route in routes) {
+      if (route['matchedLocation']?.toString() == location) return route;
+    }
+    return null;
   }
 }

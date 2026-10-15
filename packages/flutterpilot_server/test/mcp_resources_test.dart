@@ -190,4 +190,129 @@ void main() {
       ),
     );
   });
+
+  /// Task 26: the dynamic resource templates. With no app connected both say
+  /// so; with app data injected, a read returns the subtree/child keys and the
+  /// navigation state. The real URI matching and dispatch over stdio is in
+  /// mcp_protocol_compliance_test.dart.
+  group('resource templates', () {
+    Map<String, dynamic> body(ReadResourceResult result) =>
+        jsonDecode(textOf(result)) as Map<String, dynamic>;
+
+    test('with no app connected both templates say so', () async {
+      for (final result in [
+        await server.readWidgetResourceForTest('any_key'),
+        await server.readRouteResourceForTest('current'),
+      ]) {
+        final json = body(result);
+        expect(json['connected'], isFalse);
+        expect(json['message'], contains('No Flutter app'));
+      }
+    });
+
+    test('a widget read returns properties, subtree and child keys', () async {
+      final json = body(
+        await server.readWidgetResourceForTest(
+          'checkout_form',
+          app: const ResourceTemplateData(
+            widgetProperties: {'type': 'Column', 'target': 'checkout_form'},
+            widgetTree: {
+              'tree': {
+                'type': 'Column',
+                'key': 'checkout_form',
+                'children': [
+                  {'type': 'Text', 'key': 'checkout_name', 'text': 'Name'},
+                  {
+                    'type': 'Row',
+                    'key': 'checkout_email',
+                    'children': [
+                      {'type': 'Text', 'text': 'label without a key'},
+                    ],
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+      );
+      expect(json['connected'], isTrue);
+      expect(json['found'], isTrue);
+      expect(json['key'], 'checkout_form');
+      expect((json['widget'] as Map)['type'], 'Column');
+      expect(json['childKeys'], ['checkout_name', 'checkout_email']);
+      expect((json['tree'] as Map)['type'], 'Column');
+    });
+
+    test('an unknown widget key is not found, not an error', () async {
+      final json = body(
+        await server.readWidgetResourceForTest(
+          'nope',
+          app: const ResourceTemplateData(),
+        ),
+      );
+      expect(json['connected'], isTrue);
+      expect(json['found'], isFalse);
+      expect(json['key'], 'nope');
+    });
+
+    test(
+      'a route read reports the stack, current route and parameters',
+      () async {
+        final json = body(
+          await server.readRouteResourceForTest(
+            'current',
+            app: const ResourceTemplateData(
+              navigationStack: {
+                'stack': ['/', '/checkout'],
+              },
+              routerState: {
+                'currentLocation': '/checkout',
+                'canPop': true,
+                'pathParameters': {'id': '42'},
+                'queryParameters': {'tab': 'pay'},
+                'matchedRoutes': [
+                  {'matchedLocation': '/', 'route': 'home'},
+                  {'matchedLocation': '/checkout', 'route': 'checkout'},
+                ],
+              },
+            ),
+          ),
+        );
+        expect(json['connected'], isTrue);
+        expect(json['found'], isTrue);
+        expect(json['requested'], 'current');
+        expect(json['currentRoute'], '/checkout');
+        expect(json['stack'], ['/', '/checkout']);
+        expect(json['stackDepth'], 2);
+        expect(json['goRouter'], isTrue);
+        expect(json['canPop'], isTrue);
+        expect(json['pathParameters'], {'id': '42'});
+        expect(json['queryParameters'], {'tab': 'pay'});
+        expect((json['route'] as Map)['route'], 'checkout');
+      },
+    );
+
+    test(
+      'a route not on the stack is not found, but the state is still read',
+      () async {
+        final json = body(
+          await server.readRouteResourceForTest(
+            '/missing',
+            app: const ResourceTemplateData(
+              navigationStack: {
+                'stack': ['/', '/checkout'],
+              },
+            ),
+          ),
+        );
+        expect(json['connected'], isTrue);
+        expect(json['found'], isFalse);
+        expect(json['requested'], '/missing');
+        expect(json['currentRoute'], '/checkout');
+        expect(json['goRouter'], isFalse);
+        expect(json['route'], isNull);
+        expect(json['pathParameters'], isEmpty);
+      },
+    );
+  });
 }
