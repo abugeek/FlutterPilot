@@ -28,7 +28,8 @@ Future<void> main() async {
 
   final problems = <String>[];
   for (final dir in packages) {
-    final name = dir.split('/').last;
+    final normalized = dir.replaceAll(r'\', '/');
+    final name = normalized.split('/').last;
     final pubspec = File('$dir/pubspec.yaml').readAsStringSync();
     final overrides = File('$dir/pubspec_overrides.yaml');
     final temporary =
@@ -38,7 +39,7 @@ Future<void> main() async {
       overrides.writeAsStringSync(
         'dependency_overrides:\n'
         '  flutterpilot_sdk:\n'
-        '    path: ${'../' * dir.split('/').length}'
+        '    path: ${'../' * normalized.split('/').length}'
         'packages/flutterpilot_sdk\n',
       );
     }
