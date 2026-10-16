@@ -60,8 +60,8 @@ A plugin is a Dart package that:
 
 ```bash
 cd packages/plugins
-mkdir flutterpilot_mylib
-cd flutterpilot_mylib
+mkdir fp_mylib
+cd fp_mylib
 
 # Create package
 dart create --template=package .
@@ -69,11 +69,11 @@ dart create --template=package .
 
 Your structure:
 ```
-flutterpilot_mylib/
+fp_mylib/
 ├── lib/
-│   └── flutterpilot_mylib.dart       # Main plugin file
+│   └── fp_mylib.dart       # Main plugin file
 ├── test/
-│   └── flutterpilot_mylib_test.dart  # Plugin tests
+│   └── fp_mylib_test.dart  # Plugin tests
 ├── pubspec.yaml                      # Package metadata
 ├── analysis_options.yaml              # Lint config
 └── README.md                          # Plugin docs
@@ -82,7 +82,7 @@ flutterpilot_mylib/
 ### Step 2: Define pubspec.yaml
 
 ```yaml
-name: flutterpilot_mylib
+name: fp_mylib
 description: FlutterPilot integration for MyLib state manager.
 version: 0.1.0
 
@@ -94,7 +94,7 @@ dependencies:
   flutter:
     sdk: flutter
   mylib: ^1.0.0                    # The library you're integrating
-  flutterpilot_sdk: ^0.1.0         # Always depend on core SDK
+  fp_sdk: ^0.1.0         # Always depend on core SDK
 
 dev_dependencies:
   flutter_test:
@@ -105,14 +105,14 @@ dev_dependencies:
 
 ### Step 3: Implement Plugin Observer
 
-**lib/flutterpilot_mylib.dart**:
+**lib/fp_mylib.dart**:
 
 ```dart
 import 'dart:developer';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:mylib/mylib.dart';  // The library to integrate
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 /// Observer for MyLib state manager.
 ///
@@ -227,11 +227,11 @@ class MyLibPilotObserver extends MyLibObserver {
 
 ### Step 4: Add Tests
 
-**test/flutterpilot_mylib_test.dart**:
+**test/fp_mylib_test.dart**:
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterpilot_mylib/flutterpilot_mylib.dart';
+import 'package:fp_mylib/fp_mylib.dart';
 
 void main() {
   group('MyLibPilotObserver', () {
@@ -262,7 +262,7 @@ Add your plugin to the root `melos.yaml`:
 
 ```yaml
 packages:
-  - 'packages/plugins/flutterpilot_mylib'
+  - 'packages/plugins/fp_mylib'
 ```
 
 Then bootstrap:
@@ -272,7 +272,7 @@ melos bootstrap
 
 ### Step 6: Add to Server Tools
 
-In **packages/flutterpilot_server/lib/src/tools/state_management_tools.dart**:
+In **packages/fp_server/lib/src/tools/state_management_tools.dart**:
 
 ```dart
 // After existing state tools, add:
@@ -296,14 +296,14 @@ _registerAppTool(
 
 ## Built-in Plugins
 
-### flutterpilot_bloc
+### fp_bloc
 
 **Purpose**: Track Bloc/Cubit state
 
 **Setup**:
 ```dart
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutterpilot_bloc/flutterpilot_bloc.dart';
+import 'package:fp_bloc/fp_bloc.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -316,14 +316,14 @@ void main() {
 
 **Capabilities**: Full state read/write
 
-### flutterpilot_riverpod
+### fp_riverpod
 
 **Purpose**: Track Riverpod provider values
 
 **Setup**:
 ```dart
 import 'package:riverpod/riverpod.dart';
-import 'package:flutterpilot_riverpod/flutterpilot_riverpod.dart';
+import 'package:fp_riverpod/fp_riverpod.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -340,14 +340,14 @@ void main() {
 
 **Capabilities**: Full state read/write, container tracking
 
-### flutterpilot_dio
+### fp_dio
 
 **Purpose**: Log HTTP requests, mock endpoints, simulate network conditions
 
 **Setup**:
 ```dart
 import 'package:dio/dio.dart';
-import 'package:flutterpilot_dio/flutterpilot_dio.dart';
+import 'package:fp_dio/fp_dio.dart';
 
 final dio = Dio();
 
@@ -366,14 +366,14 @@ void main() {
 
 **Capabilities**: Log inspection, condition simulation, response mocking
 
-### flutterpilot_drift
+### fp_drift
 
 **Purpose**: Inspect database via SQL queries (read-only)
 
 **Setup**:
 ```dart
 import 'package:drift/drift.dart';
-import 'package:flutterpilot_drift/flutterpilot_drift.dart';
+import 'package:fp_drift/fp_drift.dart';
 
 void main() {
   FlutterPilot.initialize();
@@ -388,14 +388,14 @@ void main() {
 
 **Capabilities**: Read-only SQL with injection prevention
 
-### flutterpilot_sqflite
+### fp_sqflite
 
 **Purpose**: Inspect sqflite databases via read-only SQL queries
 
 **Setup**:
 ```dart
 import 'package:sqflite/sqflite.dart';
-import 'package:flutterpilot_sqflite/flutterpilot_sqflite.dart';
+import 'package:fp_sqflite/fp_sqflite.dart';
 
 void main() async {
   final db = await openDatabase('my_app.db', version: 1, onCreate: (db, v) async {
@@ -414,14 +414,14 @@ void main() async {
 
 **Capabilities**: Read-only SQL with the same injection prevention as Drift. Supports multiple databases registered by name.
 
-### flutterpilot_hive
+### fp_hive
 
 **Purpose**: Inspect Hive / Hive CE boxes (read-only)
 
 **Setup**:
 ```dart
 import 'package:hive/hive.dart';
-import 'package:flutterpilot_hive/flutterpilot_hive.dart';
+import 'package:fp_hive/fp_hive.dart';
 
 void main() async {
   await Hive.initFlutter();
@@ -438,14 +438,14 @@ void main() async {
 
 **Capabilities**: Read-only box inspection
 
-### flutterpilot_shared_preferences
+### fp_shared_preferences
 
 **Purpose**: Inspect and modify SharedPreferences
 
 **Setup**:
 ```dart
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutterpilot_shared_preferences/flutterpilot_shared_preferences.dart';
+import 'package:fp_shared_preferences/fp_shared_preferences.dart';
 
 void main() async {
   final prefs = await SharedPreferences.getInstance();
@@ -493,13 +493,13 @@ test('plugin initializes with FlutterPilot', () {
 
 ```bash
 # Build your plugin
-cd packages/plugins/flutterpilot_mylib
+cd packages/plugins/fp_mylib
 dart pub get
 dart pub run test
 
 # Add to example app
 cd ../../examples/flutter_pilot_example
-flutter pub add --dev ../plugins/flutterpilot_mylib
+flutter pub add --dev ../plugins/fp_mylib
 
 # Run with plugin
 flutter run
@@ -513,7 +513,7 @@ flutter run
 
 ```dart
 import 'package:get/get.dart';
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 class GetXPilotObserver {
   static final Map<String, dynamic> _controllers = {};
@@ -546,14 +546,14 @@ class GetXPilotObserver {
 ### Example 2: sqflite Plugin (Custom Extension)
 
 This shows how to write your own plugin wrapping a third-party package. The
-official `flutterpilot_sqflite` package already does this — use it directly
+official `fp_sqflite` package already does this — use it directly
 rather than re-implementing. Shown here as a reference pattern.
 
 ```dart
 import 'dart:developer';
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 class MySqflitePilotObserver {
   static Database? _db;
@@ -597,7 +597,7 @@ class MySqflitePilotObserver {
 
 ## Submitting Your Plugin
 
-1. Create GitHub repo: `flutterpilot_mylib`
+1. Create GitHub repo: `fp_mylib`
 2. Publish to pub.dev
 3. Open PR to add to FlutterPilot plugins list
 4. Update docs with plugin reference

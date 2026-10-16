@@ -80,7 +80,7 @@ Create `~/.claude/mcp_config.json`:
       "command": "dart",
       "args": [
         "run",
-        "packages/flutterpilot_server/bin/flutterpilot_server.dart",
+        "packages/fp_server/bin/fp_server.dart",
         "--uri",
         "http://127.0.0.1:54321/XXXXX="
       ],
@@ -155,7 +155,7 @@ In Cursor → Settings → Features → MCP:
       "command": "dart",
       "args": [
         "run",
-        "packages/flutterpilot_server/bin/flutterpilot_server.dart",
+        "packages/fp_server/bin/fp_server.dart",
         "--uri",
         "http://127.0.0.1:54321/XXXXX="
       ]
@@ -505,7 +505,7 @@ validation. Make sure to validate email format before submitting."
 
 1. **Verify server is running**:
    ```bash
-   dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+   dart run packages/fp_server/bin/fp_server.dart \
      --uri "http://127.0.0.1:54321/XXXXX="
    ```
 

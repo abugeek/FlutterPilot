@@ -120,7 +120,7 @@ extension _StateExtensions on FlutterPilot {
           parameters['expected'] ??
           parameters['expect'];
       // 5000 is the default the server's `wait_for` copies (its `timeoutOf`
-      // fallback in packages/flutterpilot_server/lib/src/tools/
+      // fallback in packages/fp_server/lib/src/tools/
       // ui_automation_tools.dart, which points back here): change one, change
       // the other.
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;

@@ -221,4 +221,6 @@ const _notTools = {
   'fp_connectivity',
   'fp_firebase',
   'fp_secure_storage',
+  // The fictitious plugin PLUGINS.md teaches you to write.
+  'fp_mylib',
 };

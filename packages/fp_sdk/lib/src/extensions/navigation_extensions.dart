@@ -137,7 +137,7 @@ extension _NavigationExtensions on FlutterPilot {
     ) async {
       final route = parameters['route'];
       // 5000 is the default the server's `wait_for` copies (its `timeoutOf`
-      // fallback in packages/flutterpilot_server/lib/src/tools/
+      // fallback in packages/fp_server/lib/src/tools/
       // ui_automation_tools.dart, which points back here): change one, change
       // the other.
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
@@ -171,7 +171,7 @@ extension _NavigationExtensions on FlutterPilot {
     ) async {
       final key = parameters['key'];
       // 5000 is the default the server copies for `tap_widget`'s `waitFor:`
-      // (packages/flutterpilot_server/lib/src/tools/ui_automation_tools.dart,
+      // (packages/fp_server/lib/src/tools/ui_automation_tools.dart,
       // which points back here): change one, change the other.
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '5000') ?? 5000;
       if (key == null) {
@@ -229,7 +229,7 @@ extension _NavigationExtensions on FlutterPilot {
     ) async {
       // 3000 is the default the server's `wait_for` copies for the timeoutMs it
       // sends (its `timeoutOf` fallback in
-      // packages/flutterpilot_server/lib/src/tools/ui_automation_tools.dart,
+      // packages/fp_server/lib/src/tools/ui_automation_tools.dart,
       // which points back here); the server reads the `status` below for its
       // `timedOut` rather than that number.
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;

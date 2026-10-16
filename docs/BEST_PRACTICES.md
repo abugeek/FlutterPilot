@@ -458,8 +458,8 @@ FlutterPilot is **dev-only**. It:
 
 ```yaml
 dev_dependencies:
-  flutterpilot_sdk: ^0.1.0  # ← dev_dependencies
-  flutterpilot_bloc: ^0.1.0  # ← dev_dependencies
+  fp_sdk: ^0.1.0  # ← dev_dependencies
+  fp_bloc: ^0.1.0  # ← dev_dependencies
 ```
 
 Never put in `dependencies` (which go to production).

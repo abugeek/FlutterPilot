@@ -10,13 +10,21 @@ A clear description of the bug.
 
 ## Package
 Which package is affected?
-- [ ] flutterpilot_sdk
-- [ ] flutterpilot_server
-- [ ] flutterpilot_bloc
-- [ ] flutterpilot_riverpod
-- [ ] flutterpilot_dio
-- [ ] flutterpilot_drift
-- [ ] flutterpilot_hive
+- [ ] fp_sdk
+- [ ] fp_server
+- [ ] fp_cli
+- [ ] fp_bloc
+- [ ] fp_riverpod
+- [ ] fp_dio
+- [ ] fp_drift
+- [ ] fp_hive
+- [ ] fp_sqflite
+- [ ] fp_gorouter
+- [ ] fp_connectivity
+- [ ] fp_shared_preferences
+- [ ] fp_secure_storage
+- [ ] fp_supabase
+- [ ] fp_firebase
 
 ## Steps to Reproduce
 1. 

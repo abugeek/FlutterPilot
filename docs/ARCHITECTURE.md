@@ -44,9 +44,9 @@ FlutterPilot is a distributed system with three main layers:
 
 ## Core Components
 
-### 1. FlutterPilot SDK (`flutterpilot_sdk`)
+### 1. FlutterPilot SDK (`fp_sdk`)
 
-**Location**: `packages/flutterpilot_sdk/`
+**Location**: `packages/fp_sdk/`
 
 **Responsibility**: Instrumentation hooks inside the running Flutter app.
 
@@ -73,9 +73,9 @@ ext.flutterpilot.getBlocStates        → Bloc values
 
 **Zero External Dependencies**: SDK uses only Flutter/Dart built-ins. This ensures it adds no bloat to your app.
 
-### 2. FlutterPilot Server (`flutterpilot_server`)
+### 2. FlutterPilot Server (`fp_server`)
 
-**Location**: `packages/flutterpilot_server/`
+**Location**: `packages/fp_server/`
 
 **Responsibility**: MCP server that bridges AI agents to the Flutter app.
 
@@ -107,35 +107,47 @@ ext.flutterpilot.getBlocStates        → Bloc values
 
 **Purpose**: Track and inject state in third-party packages.
 
-**6 Plugins**:
-1. **flutterpilot_bloc** — Bloc/Cubit observer
+**13 Plugins**:
+1. **fp_bloc** — Bloc/Cubit observer
    - Tracks state changes
    - Allows state injection
    - Reset on hot-restart
 
-2. **flutterpilot_riverpod** — Riverpod observer
+2. **fp_riverpod** — Riverpod observer
    - Monitors provider changes
    - Container tracking
    - Reset on hot-restart
 
-3. **flutterpilot_dio** — HTTP interceptor
+3. **fp_dio** — HTTP interceptor
    - Request/response logging
    - Network condition simulation (offline, slow 3G, etc.)
    - HTTP mocking
 
-4. **flutterpilot_drift** — Database inspector
+4. **fp_drift** — Database inspector
    - Read-only SQL queries
    - Table enumeration
    - SQL injection prevention
 
-5. **flutterpilot_hive** — Local storage inspector
+5. **fp_hive** — Local storage inspector
    - Box contents enumeration
    - No write support (read-only)
 
-6. **flutterpilot_shared_preferences** — Preference viewer
+6. **fp_shared_preferences** — Preference viewer
    - Read preferences
    - Write preferences
    - Clear keys
+
+7. **fp_sqflite** — SQLite query inspection
+
+8. **fp_gorouter** — Navigation/route inspector
+
+9. **fp_connectivity** — Network connectivity inspector
+
+10. **fp_secure_storage** — Encrypted storage inspector
+
+11. **fp_supabase** — Supabase client inspector
+
+12. **fp_firebase** — Firebase Auth & Firestore inspector
 
 **Plugin Pattern**:
 ```dart
@@ -322,7 +334,7 @@ void _attemptReconnect() {
 All buffers are bounded and use `Queue` (O(1) operations):
 
 ```dart
-// From flutterpilot_server.dart
+// From fp_server.dart
 final Queue<Map<String, dynamic>> _eventBuffer = Queue();
 final Queue<Map<String, dynamic>> _debugLogBuffer = Queue();
 
@@ -412,8 +424,8 @@ Future<_ExtensionResult> _callExtensionRaw(
 
 | Component | Role | Key Files |
 |-----------|------|-----------|
-| **SDK** | In-app instrumentation, service extensions | `packages/flutterpilot_sdk/` |
-| **Server** | MCP server, tool orchestration, event streaming | `packages/flutterpilot_server/` |
+| **SDK** | In-app instrumentation, service extensions | `packages/fp_sdk/` |
+| **Server** | MCP server, tool orchestration, event streaming | `packages/fp_server/` |
 | **Plugins** | State tracking integration (Bloc, Riverpod, etc.) | `packages/plugins/` |
 | **Error System** | Structured categorization for AI retry logic | `ErrorCategory` enum |
 | **Safety** | Bounded buffers, depth limiting, plugin cleanup | Constants, reset() methods |

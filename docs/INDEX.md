@@ -238,7 +238,7 @@ For HTTP mocking and inspection
 ### Quick Setup (5 minutes)
 
 - [ ] Read [README.md](../README.md) overview
-- [ ] Run `flutter pub add --dev flutterpilot_sdk`
+- [ ] Run `flutter pub add --dev fp_sdk`
 - [ ] Add `FlutterPilot.initialize()` to `main.dart`
 - [ ] Run `flutter run`
 - [ ] Copy VM Service URI
@@ -346,7 +346,7 @@ Below is a condensed getting-started that combines key points from other docs.
 cd your_flutter_app
 
 # Add SDK
-flutter pub add --dev flutterpilot_sdk
+flutter pub add --dev fp_sdk
 ```
 
 ### Step 2: Initialize (2 min)
@@ -354,7 +354,7 @@ flutter pub add --dev flutterpilot_sdk
 Edit `lib/main.dart`:
 
 ```dart
-import 'package:flutterpilot_sdk/flutterpilot_sdk.dart';
+import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
   FlutterPilot.initialize();  // Add this line
@@ -373,7 +373,7 @@ Copy the VM Service URI from console output (looks like `http://127.0.0.1:54321/
 ### Step 4: Start Server (1 min)
 
 ```bash
-dart run packages/flutterpilot_server/bin/flutterpilot_server.dart \
+dart run packages/fp_server/bin/fp_server.dart \
   --uri "http://127.0.0.1:54321/xxxxx="
 ```
 
