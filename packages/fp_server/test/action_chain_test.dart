@@ -84,4 +84,239 @@ void main() {
       'Not run: press_key.',
     );
   });
+
+  group('all-step preflight (task 02)', () {
+    const allowed = {'tap_widget', 'enter_text', 'press_key', 'gesture_widget'};
+    bool available(String tool) => allowed.contains(tool);
+
+    /// A stand-in for `_toolArgGates`: refuses the two required arguments the
+    /// tests exercise, otherwise passes the arguments through unchanged.
+    ({Map<String, dynamic> args, String? problem}) gate(
+      String tool,
+      Map<String, dynamic> args,
+    ) {
+      if (tool == 'press_key' && args['key'] == null) {
+        return (
+          args: args,
+          problem: 'press_key needs key (a string); nothing was done.',
+        );
+      }
+      if (tool == 'enter_text' && args['text'] == null) {
+        return (
+          args: args,
+          problem: 'enter_text needs text (a string); nothing was done.',
+        );
+      }
+      return (args: args, problem: null);
+    }
+
+    ChainPreflight preflight(
+      Object? steps, {
+      String what = 'run in a chain',
+      String field = 'steps',
+      String emptyProblem = 'steps is empty.',
+      String? Function(String tool)? profileRefusal,
+    }) => preflightChain(
+      steps,
+      allowedTools: allowed,
+      isAvailable: available,
+      profileRefusal: profileRefusal ?? (tool) => null,
+      gate: gate,
+      what: what,
+      field: field,
+      emptyProblem: emptyProblem,
+    );
+
+    /// What a composite would run: preflight only, then that many steps.
+    int wouldRun(ChainPreflight p) => p.ok ? p.steps.length : 0;
+
+    test('an invalid step after valid ones refuses and returns no steps', () {
+      final result = preflight([
+        {
+          'tool': 'tap_widget',
+          'arguments': {'key': 'Save'},
+        },
+        'not a step',
+      ]);
+      expect(result.ok, isFalse);
+      expect(result.steps, isEmpty);
+      expect(result.problemStep, 2);
+      expect(result.problem, startsWith('steps[1]: not a {"tool"'));
+    });
+
+    test('a bad argument on the last step is caught, not a sample', () {
+      // The gate records every step it is asked about: the last step's own
+      // arguments are validated like the first's.
+      final validated = <String>[];
+      final result = preflightChain(
+        [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'A'},
+          },
+          {
+            'tool': 'enter_text',
+            'arguments': {'text': 'B'},
+          },
+          {'tool': 'press_key', 'arguments': <String, dynamic>{}},
+        ],
+        allowedTools: allowed,
+        isAvailable: available,
+        profileRefusal: (_) => null,
+        gate: (tool, args) {
+          validated.add(tool);
+          return gate(tool, args);
+        },
+      );
+      expect(result.ok, isFalse);
+      expect(result.problemStep, 3);
+      // Path names the argument of the offending step.
+      expect(result.problem, startsWith('steps[2].arguments: press_key needs'));
+      expect(validated, ['tap_widget', 'enter_text', 'press_key']);
+      // The invalid plan executes zero steps.
+      expect(wouldRun(result), 0);
+
+      // The same three steps with valid arguments validate and would run.
+      final ok = preflight([
+        {
+          'tool': 'tap_widget',
+          'arguments': {'key': 'A'},
+        },
+        {
+          'tool': 'enter_text',
+          'arguments': {'text': 'B'},
+        },
+        {
+          'tool': 'press_key',
+          'arguments': {'key': 'enter'},
+        },
+      ]);
+      expect(ok.ok, isTrue);
+      expect(wouldRun(ok), 3);
+    });
+
+    test('a retired tool is translated before it is checked', () {
+      final result = preflight([
+        {
+          'tool': 'swipe_widget',
+          'arguments': {'key': 'Row 0'},
+        },
+      ]);
+      expect(result.ok, isTrue);
+      expect(result.steps.single.tool, 'gesture_widget');
+      expect(result.steps.single.arguments, {
+        'gesture': 'swipe',
+        'key': 'Row 0',
+      });
+    });
+
+    test('a tool outside the family is refused at its path', () {
+      final result = preflight([
+        {
+          'tool': 'tap_widget',
+          'arguments': {'key': 'A'},
+        },
+        {'tool': 'run_on_devices', 'arguments': <String, dynamic>{}},
+      ]);
+      expect(result.problemStep, 2);
+      expect(result.problem, contains('steps[1]: "run_on_devices" can\'t'));
+      expect(result.problem, contains('Tools: '));
+    });
+
+    test('a scalar array item is not a step', () {
+      final result = preflight(['tap']);
+      expect(result.problemStep, 1);
+      expect(result.problem, startsWith('steps[0]: not a {"tool"'));
+    });
+
+    test('the profile refusal is named at its path', () {
+      final result = preflight(
+        [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'A'},
+          },
+          {
+            'tool': 'enter_text',
+            'arguments': {'text': 'B'},
+          },
+        ],
+        profileRefusal: (tool) => tool == 'enter_text'
+            ? '"$tool" is not listed in the core profile.'
+            : null,
+      );
+      expect(result.problemStep, 2);
+      expect(
+        result.problem,
+        'steps[1]: "enter_text" is not listed in the core profile.',
+      );
+    });
+
+    test('an alias survives preflight for the tool to resolve', () {
+      // `target` is an accepted alias of `key`; preflight does not drop it, the
+      // tool's own gate (withFormerNames) resolves it at execution.
+      final result = preflight([
+        {
+          'tool': 'tap_widget',
+          'arguments': {'target': 'Save'},
+        },
+      ]);
+      expect(result.ok, isTrue);
+      expect(result.steps.single.arguments, {'target': 'Save'});
+    });
+
+    test('an empty or non-list plan is refused with its own message', () {
+      expect(preflight(const []).problem, 'steps is empty.');
+      expect(preflight(null).problem, 'steps is empty.');
+      expect(preflight('oops').problem, 'steps is empty.');
+      expect(
+        preflight(
+          const [],
+          field: 'cycle',
+          emptyProblem: 'cycle is empty: give the steps.',
+        ).problem,
+        'cycle is empty: give the steps.',
+      );
+      // The field names the array in a per-step refusal.
+      final cycle = preflight([
+        {'tool': 'nope', 'arguments': <String, dynamic>{}},
+      ], field: 'cycle');
+      expect(cycle.problem, startsWith('cycle[0]:'));
+    });
+
+    test('a single nested call (profile_action) shares the checks', () {
+      ({ChainStep? step, String? problem}) single(
+        String tool,
+        Map<String, dynamic> args, {
+        String what = 'run in a chain',
+      }) => preflightStep(
+        tool,
+        args,
+        allowedTools: allowed,
+        isAvailable: available,
+        profileRefusal: (_) => null,
+        gate: gate,
+        path: 'tool',
+        what: what,
+      );
+
+      final outside = single('run_on_devices', const {}, what: 'be profiled');
+      expect(outside.step, isNull);
+      expect(
+        outside.problem,
+        contains('tool: "run_on_devices" can\'t be profiled.'),
+      );
+
+      final missing = single('press_key', const {});
+      expect(
+        missing.problem,
+        'tool.arguments: press_key needs key (a string); nothing was done.',
+      );
+
+      final retired = single('swipe_widget', const {'key': 'Row'});
+      expect(retired.problem, isNull);
+      expect(retired.step?.tool, 'gesture_widget');
+      expect(retired.step?.arguments, {'gesture': 'swipe', 'key': 'Row'});
+    });
+  });
 }

@@ -26,6 +26,24 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   ) async {
     CallToolResult fail(String text) =>
         CallToolResult(isError: true, content: [TextContent(text: text)]);
+    // Every step is validated before anything else runs (task 02): a malformed
+    // step N means nothing was tapped, typed or scrolled, and no app is even
+    // contacted. Done before the web check so an invalid plan is refused on its
+    // own terms, not as "not on web".
+    final preflight = preflightChain(
+      params['cycle'],
+      allowedTools: _profilableTools,
+      isAvailable: _toolCallbacks.containsKey,
+      profileRefusal: stepProfileRefusal,
+      gate: (tool, args) => _toolArgGates[tool]!(args),
+      what: 'run in a leak-check cycle',
+      field: 'cycle',
+      emptyProblem:
+          'cycle is empty: give the steps that open something and return, '
+          'e.g. a tap then press_key back.',
+    );
+    if (!preflight.ok) return fail(preflight.problem!);
+    final steps = preflight.steps;
     final context = await _deviceContextForParameters(params);
     if (context?.isWeb == true) {
       return fail(
@@ -33,36 +51,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'get_memory_details(cycle: ...)',
           'browsers have no allocation profile',
         ),
-      );
-    }
-    final steps = <({String tool, Map<String, dynamic> arguments})>[];
-    for (final step in (params['cycle'] as List? ?? const [])) {
-      final tool = step is Map ? step['tool'] : null;
-      final args = step is Map ? step['arguments'] : null;
-      final translated = tool is! String
-          ? null
-          : translateRetiredStep(
-              tool,
-              args is Map ? Map<String, dynamic>.from(args) : {},
-            );
-      if (translated == null ||
-          !_profilableTools.contains(translated.tool) ||
-          !_toolCallbacks.containsKey(translated.tool)) {
-        return fail(
-          'Each cycle step is {"tool": <action tool>, "arguments": {...}}; '
-          'action tools: '
-          '${(_profilableTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}. '
-          'Got ${jsonEncode(step)}.',
-        );
-      }
-      final refusal = stepProfileRefusal(translated.tool);
-      if (refusal != null) return fail(refusal);
-      steps.add(translated);
-    }
-    if (steps.isEmpty) {
-      return fail(
-        'cycle is empty: give the steps that open something and return, '
-        'e.g. a tap then press_key back.',
       );
     }
     final times = ((params['times'] as num?)?.toInt() ?? 5).clamp(2, 20);
@@ -496,12 +484,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       'get_memory_details',
       description:
           'Heap used/capacity and external (native) memory per isolate. '
-          'classes:true lists the top Dart classes by heap bytes and instance '
-          'count instead (the DevTools Memory tab). Leak check: cycle (action '
-          'tool calls that end where they started, e.g. open a screen then '
-          'press back) runs times rounds; returns the classes that gained '
-          'instances every round, where they are defined and what keeps one '
-          'alive.',
+          'classes:true lists top classes by heap bytes and count. Leak '
+          'check: cycle (tool calls that return to where they started, e.g. '
+          'open a screen then press back) runs times rounds; reports classes '
+          'that gained instances every round, where defined and what keeps '
+          'one alive.',
       inputSchema: ToolInputSchema(
         properties: {
           'classes': JsonSchema.boolean(
@@ -511,11 +498,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
             description: 'Number of classes (default 30).',
           ),
           'cycle': JsonSchema.array(
-            items: JsonSchema.object(),
+            items: compositeStepSchema(),
             description:
-                'Leak check: steps [{"tool": "tap_widget", "arguments": '
-                '{"key": "Open"}}, {"tool": "press_key", "arguments": '
-                '{"key": "back"}}] that return to the starting screen.',
+                'Steps that return to where they started, e.g. [{"tool": '
+                '"tap_widget", "arguments": {"key": "Open"}}, {"tool": '
+                '"press_key", "arguments": {"key": "back"}}].',
           ),
           'times': JsonSchema.integer(
             description: 'Leak check rounds after one warm-up (default 5).',
@@ -608,26 +595,26 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         var arguments = params['arguments'] is Map
             ? Map<String, dynamic>.from(params['arguments'] as Map)
             : <String, dynamic>{};
-        final translated = rawTool == null
-            ? null
-            : translateRetiredStep(rawTool, arguments);
-        final tool = translated?.tool;
-        if (translated != null) arguments = translated.arguments;
-        if (tool != null && !_profilableTools.contains(tool)) {
-          return fail(
-            'profile_action runs an action tool: '
-            '${(_profilableTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}. '
-            'Got "$rawTool".',
+        // A single nested call is validated the way a chain step is (task 02):
+        // retired-name translation, allowed family, availability, profile, and
+        // the tool's own argument gate — before any profiling starts.
+        String? tool;
+        if (rawTool != null) {
+          final result = preflightStep(
+            rawTool,
+            arguments,
+            allowedTools: _profilableTools,
+            isAvailable: _toolCallbacks.containsKey,
+            profileRefusal: stepProfileRefusal,
+            gate: (tool, args) => _toolArgGates[tool]!(args),
+            path: 'tool',
+            what: 'be profiled',
           );
+          if (result.problem != null) return fail(result.problem!);
+          tool = result.step!.tool;
+          arguments = result.step!.arguments;
         }
         final action = tool == null ? null : _toolCallbacks[tool];
-        if (tool != null && action == null) {
-          return fail('Tool "$tool" is not available.');
-        }
-        if (tool != null) {
-          final refusal = stepProfileRefusal(tool);
-          if (refusal != null) return fail(refusal);
-        }
         final context = await _deviceContextForParameters(params);
         if (context?.isWeb == true) {
           return fail(

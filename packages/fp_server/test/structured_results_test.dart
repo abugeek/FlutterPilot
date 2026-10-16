@@ -241,6 +241,7 @@ void main() {
               'totalSteps': 2,
               'route': '/home',
               'errors': 0,
+              'reached': true,
             },
             {
               'id': 'iphone',
@@ -249,6 +250,7 @@ void main() {
               'failedStep': 2,
               'route': '/login',
               'errors': 2,
+              'reached': true,
             },
           ],
           'same': false,
@@ -258,12 +260,27 @@ void main() {
 
     test('a device that was never reached reads as 0 of N, no failed step', () {
       final unreachable = DeviceRun('android')..unreachable = 'no device';
-      expect(fleetVerdict([unreachable], stepsRequested: 2, same: false), {
-        'devices': [
-          {'id': 'android', 'passedSteps': 0, 'totalSteps': 2, 'errors': 0},
-        ],
-        'same': false,
-      });
+      expect(
+        fleetVerdict(
+          [unreachable],
+          stepsRequested: 2,
+          same: false,
+          status: 'partial',
+        ),
+        {
+          'devices': [
+            {
+              'id': 'android',
+              'passedSteps': 0,
+              'totalSteps': 2,
+              'errors': 0,
+              'reached': false,
+            },
+          ],
+          'same': false,
+          'status': 'partial',
+        },
+      );
     });
 
     test('devices that agree say so', () {
@@ -632,4 +649,657 @@ void main() {
     ).readAsStringSync();
     expect(sdk, contains("'failedFields': failedFields"));
   });
+
+  // -------------------------------------------------------------------------
+  // Task 07: executable contracts, every variant, and the pilot families.
+  // -------------------------------------------------------------------------
+
+  group('executable contracts', () {
+    test('every documented shape has a contract and vice versa', () {
+      expect(structuredShapes.keys.toSet(), structuredContracts.keys.toSet());
+      for (final entry in structuredContracts.entries) {
+        expect(
+          structuredShapes[entry.key],
+          contains(entry.value.describe()),
+          reason: '${entry.key}: the doc is rendered from its contract',
+        );
+      }
+    });
+
+    test('a representative payload for every family has no problems', () {
+      for (final entry in validStructuredFixtures.entries) {
+        expect(
+          structuredProblems(entry.key, entry.value),
+          isEmpty,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('missing, mistyped, unknown and out-of-enum fields are caught', () {
+      expect(structuredProblems('assert_widget', {'check': 'text'}), [
+        r'assert_widget.passed: missing',
+      ]);
+      expect(
+        structuredProblems('get_errors', {
+          'hasErrors': false,
+          'count': '0',
+          'errors': <Object?>[],
+        }),
+        contains(r'get_errors.count: expected an int, got String'),
+      );
+      expect(
+        structuredProblems('wait_for', {
+          'met': true,
+          'waitedMs': 1,
+          'timedOut': false,
+          'condition': 'nope',
+        }),
+        contains(
+          r'wait_for.condition: "nope" is not one of '
+          'key, route, state, frames, animations, none',
+        ),
+      );
+      expect(
+        structuredProblems('assert_widget', {
+          'passed': true,
+          'check': 'key',
+          'extra': 1,
+        }),
+        contains('assert_widget.extra: unexpected field'),
+      );
+      expect(
+        structuredProblems('navigate_to', {
+          'requested': '/a',
+          'waitRequired': false,
+          'completed': true,
+          'uncertain': 'no',
+        }),
+        contains(r'navigate_to.uncertain: expected a bool, got String'),
+      );
+    });
+
+    test('a nested element is checked at its path', () {
+      expect(
+        structuredProblems('get_errors', {
+          'hasErrors': true,
+          'count': 1,
+          'errors': [
+            {'kind': 'boom', 'message': 'x', 'beforeReload': false},
+          ],
+        }),
+        contains(
+          r'get_errors.errors[0].kind: "boom" is not one of '
+          'exception, overflow',
+        ),
+      );
+      expect(
+        structuredProblems('run_on_devices', {
+          'devices': [
+            {'id': 'a', 'passedSteps': 0, 'totalSteps': 1},
+          ],
+          'same': false,
+        }),
+        contains('run_on_devices.devices[0].errors: missing'),
+      );
+    });
+
+    test('an unknown family is named, not silently accepted', () {
+      expect(structuredProblems('nope', const {}), ['nope: no contract']);
+    });
+
+    test('every builder\'s own output matches its contract', () {
+      final outputs = <String, Map<String, dynamic>>{
+        'assert_widget': assertWidgetVerdict(
+          check: 'text',
+          expected: 'Welcome',
+          passed: false,
+          reason: 'not found',
+        ),
+        'wait_for': waitForVerdict(
+          condition: 'key',
+          met: false,
+          waitedMs: 3010,
+          timeoutMs: 3000,
+        ),
+        'verify_feature': verifyFeatureResult(
+          Verification('Login', ['A']),
+          '/r.md',
+        ).structured,
+        'run_on_devices': fleetRefusalVerdict('no'),
+        'get_errors': errorsVerdict(since: const [], before: const []),
+        'get_app_summary': appSummaryVerdict(connected: false),
+        'execute_action_chain': actionChainVerdict(
+          passed: true,
+          completedSteps: 1,
+          totalSteps: 1,
+        ),
+        'fill_form': fillFormVerdict(
+          submitted: true,
+          filledCount: 1,
+          totalFields: 1,
+        ),
+        'audit_screen_health': auditVerdict(
+          requested: 0,
+          visited: 0,
+          audited: 1,
+          failed: 0,
+          skipped: 0,
+          findings: const {},
+          restored: true,
+          incomplete: false,
+          loading: false,
+        ),
+        'navigate_to': navigationVerdict(
+          requested: '/home',
+          current: '/home',
+          waitRequired: true,
+          waitStatus: 'found',
+          completed: true,
+        ),
+      };
+      for (final entry in outputs.entries) {
+        expect(
+          structuredProblems(entry.key, entry.value),
+          isEmpty,
+          reason: entry.key,
+        );
+      }
+    });
+  });
+
+  group('variants: a false predicate is not a could-not-evaluate', () {
+    test('wait_for: a timeout is evaluated, an unanswered wait is not', () {
+      final timedOut = waitForVerdict(
+        condition: 'route',
+        met: false,
+        waitedMs: 5003,
+        timeoutMs: 5000,
+      );
+      expect(timedOut['timedOut'], isTrue);
+      expect(timedOut['status'], isNull);
+      expect(structuredProblems('wait_for', timedOut), isEmpty);
+
+      final unavailable = waitForVerdict(
+        condition: 'route',
+        met: false,
+        waitedMs: 4,
+        timeoutMs: 5000,
+        status: 'unavailable',
+      );
+      expect(unavailable['status'], 'unavailable');
+      expect(structuredProblems('wait_for', unavailable), isEmpty);
+
+      final refused = waitForVerdict(
+        condition: 'none',
+        met: false,
+        waitedMs: 0,
+        timeoutMs: 0,
+        status: 'refused',
+      );
+      expect(refused['status'], 'refused');
+      expect(structuredProblems('wait_for', refused), isEmpty);
+    });
+
+    test('get_errors: a clean app is ok; an unreadable one is unavailable', () {
+      expect(
+        errorsVerdict(since: const [], before: const [])['status'],
+        isNull,
+      );
+      final unavailable = errorsVerdict(
+        since: const [],
+        before: const [],
+        status: 'unavailable',
+        reason: 'no app',
+      );
+      expect(unavailable['status'], 'unavailable');
+      expect(unavailable['hasErrors'], isFalse);
+      expect(unavailable['reason'], 'no app');
+      expect(structuredProblems('get_errors', unavailable), isEmpty);
+    });
+
+    test('run_on_devices: a refusal is distinct from a partial sweep', () {
+      final refused = fleetRefusalVerdict('steps[0].arguments: bad');
+      expect(refused['status'], 'refused');
+      expect(refused['devices'], isEmpty);
+      expect(structuredProblems('run_on_devices', refused), isEmpty);
+
+      final unreachable = DeviceRun('android')..unreachable = 'no device';
+      final partial = fleetVerdict(
+        [unreachable],
+        stepsRequested: 1,
+        same: false,
+        status: 'partial',
+      );
+      expect(partial['status'], 'partial');
+      expect(
+        (partial['devices']! as List).first,
+        containsPair('reached', false),
+      );
+      expect(structuredProblems('run_on_devices', partial), isEmpty);
+    });
+
+    test('execute_action_chain: refused and unavailable are named', () {
+      for (final status in ['refused', 'unavailable']) {
+        final verdict = actionChainVerdict(
+          passed: false,
+          completedSteps: 0,
+          totalSteps: 2,
+          status: status,
+        );
+        expect(verdict['status'], status);
+        expect(structuredProblems('execute_action_chain', verdict), isEmpty);
+      }
+    });
+
+    test('verify_feature: a refusal has an empty criteria list', () {
+      final refusal = <String, dynamic>{
+        'criteria': <Map<String, dynamic>>[],
+        'status': 'refused',
+        'reason': 'No verification running: start with feature and criteria.',
+      };
+      expect(structuredProblems('verify_feature', refusal), isEmpty);
+    });
+
+    test('audit_screen_health: one screen, partial sweep, unavailable', () {
+      final single = auditVerdict(
+        requested: 0,
+        visited: 0,
+        audited: 1,
+        failed: 0,
+        skipped: 0,
+        findings: const {'overflows': 2},
+        restored: true,
+        incomplete: false,
+        loading: false,
+      );
+      expect(single['findings'], {
+        'overflows': 2,
+        'tapTargets': 0,
+        'unlabeled': 0,
+        'lowContrast': 0,
+        'readingOrderJumps': 0,
+      });
+      expect(structuredProblems('audit_screen_health', single), isEmpty);
+
+      final partial = auditVerdict(
+        requested: 41,
+        visited: 38,
+        audited: 37,
+        failed: 3,
+        skipped: 1,
+        findings: const {},
+        restored: false,
+        incomplete: true,
+        loading: true,
+        status: 'partial',
+      );
+      expect(partial['status'], 'partial');
+      expect(structuredProblems('audit_screen_health', partial), isEmpty);
+
+      final unavailable = auditVerdict(
+        requested: 0,
+        visited: 0,
+        audited: 0,
+        failed: 1,
+        skipped: 0,
+        findings: const {},
+        restored: true,
+        incomplete: true,
+        loading: false,
+        status: 'unavailable',
+        reason: 'no app',
+      );
+      expect(structuredProblems('audit_screen_health', unavailable), isEmpty);
+    });
+
+    test('navigate_to: confirmed, unconfirmed and unavailable', () {
+      final confirmed = navigationVerdict(
+        requested: '/home',
+        current: '/home',
+        waitRequired: false,
+        completed: true,
+      );
+      expect(confirmed['uncertain'], isFalse);
+      expect(structuredProblems('navigate_to', confirmed), isEmpty);
+
+      final unconfirmed = navigationVerdict(
+        requested: '/home',
+        waitRequired: true,
+        waitStatus: 'missing',
+        completed: false,
+        uncertain: true,
+      );
+      expect(unconfirmed['current'], isNull);
+      expect(structuredProblems('navigate_to', unconfirmed), isEmpty);
+
+      final unavailable = navigationVerdict(
+        requested: '/home',
+        waitRequired: false,
+        completed: false,
+        uncertain: true,
+        status: 'unavailable',
+      );
+      expect(structuredProblems('navigate_to', unavailable), isEmpty);
+    });
+  });
+
+  group('redaction', () {
+    test(
+      'routes, reasons and expected values are masked in structured data',
+      () {
+        expect(
+          navigationVerdict(
+            requested: '/login?token=abc123',
+            waitRequired: false,
+            completed: true,
+          )['requested'],
+          '/login?token=<redacted>',
+        );
+        expect(
+          navigationVerdict(
+            requested: '/x',
+            current: '/x?api_key=abc123',
+            waitRequired: false,
+            completed: true,
+          )['current'],
+          '/x?api_key=<redacted>',
+        );
+        final run = DeviceRun('iphone')..route = '/home?token=abc123';
+        expect(
+          (fleetVerdict([run], stepsRequested: 0, same: true)['devices']!
+                  as List)
+              .first,
+          containsPair('route', '/home?token=<redacted>'),
+        );
+        expect(
+          fleetRefusalVerdict('bad token=abc123')['reason'],
+          'bad token=<redacted>',
+        );
+        expect(
+          errorsVerdict(
+            since: const [],
+            before: const [],
+            status: 'unavailable',
+            reason: 'token=abc123',
+          )['reason'],
+          'token=<redacted>',
+        );
+        expect(
+          auditVerdict(
+            requested: 0,
+            visited: 0,
+            audited: 0,
+            failed: 1,
+            skipped: 0,
+            findings: const {},
+            restored: true,
+            incomplete: true,
+            loading: false,
+            reason: 'token=abc123',
+          )['reason'],
+          'token=<redacted>',
+        );
+      },
+    );
+  });
+
+  group('verdict paths through the real callbacks (no app)', () {
+    FlutterPilotServer server() =>
+        FlutterPilotServer(vmServiceUri: 'ws://localhost:8888');
+
+    /// Every documented verdict path that returns without a running app carries
+    /// structured content whose contract holds: an empty answer must not read
+    /// as a clean pass.
+    test('run_on_devices refusal carries status refused', () async {
+      final result = await server().callToolForTest('run_on_devices', {
+        'steps': [
+          {'tool': 'enter_text', 'arguments': <String, dynamic>{}},
+        ],
+      });
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'refused');
+      expect(result.structuredContent?['devices'], isEmpty);
+      expect(
+        structuredProblems('run_on_devices', result.structuredContent!),
+        isEmpty,
+      );
+    });
+
+    test('run_on_devices with too few devices is a refusal too', () async {
+      final result = await server().callToolForTest('run_on_devices', {
+        'steps': [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'A'},
+          },
+        ],
+      });
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'refused');
+    });
+
+    test('get_errors with no app says unavailable, not a clean app', () async {
+      final result = await server().callToolForTest('get_errors', const {});
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'unavailable');
+      expect(
+        structuredProblems('get_errors', result.structuredContent!),
+        isEmpty,
+      );
+    });
+
+    test('wait_for with no app is unavailable, not a timeout', () async {
+      final result = await server().callToolForTest('wait_for', {'key': 'X'});
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'unavailable');
+      expect(result.structuredContent?['timedOut'], isFalse);
+      expect(
+        structuredProblems('wait_for', result.structuredContent!),
+        isEmpty,
+      );
+    });
+
+    test('wait_for with nothing to wait for is a refusal', () async {
+      final result = await server().callToolForTest('wait_for', const {});
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'refused');
+    });
+
+    test('execute_action_chain refusal names status refused', () async {
+      final result = await server().callToolForTest('execute_action_chain', {
+        'steps': [
+          {'tool': 'enter_text', 'arguments': <String, dynamic>{}},
+        ],
+      });
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'refused');
+      expect(
+        structuredProblems('execute_action_chain', result.structuredContent!),
+        isEmpty,
+      );
+    });
+
+    test(
+      'fill_form with no app is unavailable, not a fill of nothing',
+      () async {
+        final result = await server().callToolForTest('fill_form', {
+          'fields': {'TextField["Email"]': 'a@b.dev'},
+        });
+        expect(result.isError, isTrue);
+        expect(result.structuredContent?['status'], 'unavailable');
+        expect(
+          structuredProblems('fill_form', result.structuredContent!),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'audit_screen_health with no app is unavailable and incomplete',
+      () async {
+        final result = await server().callToolForTest(
+          'audit_screen_health',
+          const {},
+        );
+        expect(result.isError, isTrue);
+        expect(result.structuredContent?['status'], 'unavailable');
+        expect(result.structuredContent?['incomplete'], isTrue);
+        expect(
+          structuredProblems('audit_screen_health', result.structuredContent!),
+          isEmpty,
+        );
+      },
+    );
+
+    test('navigate_to with no app is unavailable and uncertain', () async {
+      final result = await server().callToolForTest('navigate_to', {
+        'route': '/home',
+      });
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'unavailable');
+      expect(result.structuredContent?['uncertain'], isTrue);
+      expect(
+        structuredProblems('navigate_to', result.structuredContent!),
+        isEmpty,
+      );
+    });
+
+    test('verify_feature with nothing running is a refusal verdict', () async {
+      final result = await server().callToolForTest('verify_feature', const {});
+      expect(result.isError, isTrue);
+      expect(result.structuredContent?['status'], 'refused');
+      expect(result.structuredContent?['criteria'], isEmpty);
+      expect(
+        structuredProblems('verify_feature', result.structuredContent!),
+        isEmpty,
+      );
+    });
+  });
+
+  group('wrappers preserve verdicts and metadata', () {
+    test('keepingStructured keeps a marker through a rebuilt result', () {
+      final original = CallToolResult(
+        content: [TextContent(text: 'body')],
+        isError: true,
+        structuredContent: assertWidgetVerdict(
+          check: 'key',
+          expected: 'Log in',
+          passed: false,
+          reason: 'not found',
+        ),
+      );
+      final rebuilt = keepingStructured(
+        original,
+        isError: true,
+        content: [
+          ...original.content,
+          TextContent(text: 'DEVICE: locked.'),
+        ],
+      );
+      expect(rebuilt.content.length, 2);
+      expect(
+        structuredProblems('assert_widget', rebuilt.structuredContent!),
+        isEmpty,
+      );
+      expect(rebuilt.structuredContent, original.structuredContent);
+    });
+  });
 }
+
+/// One well-formed payload per structured family, in the shape the builders
+/// produce: the contract's positive fixtures (task 07).
+final validStructuredFixtures = <String, Map<String, dynamic>>{
+  'assert_widget': {
+    'passed': true,
+    'check': 'text',
+    'expected': 'Welcome',
+    'found': 1,
+  },
+  'wait_for': {
+    'met': true,
+    'waitedMs': 120,
+    'timedOut': false,
+    'condition': 'key',
+    'route': '/home',
+  },
+  'verify_feature': {
+    'feature': 'Login',
+    'criteria': [
+      {'index': 1, 'text': 'A', 'verdict': 'passed', 'warnings': 0},
+      {'index': 2, 'text': 'B', 'verdict': 'not_verified', 'warnings': 1},
+    ],
+    'report': '/tmp/fp/report.md',
+  },
+  'run_on_devices': {
+    'devices': [
+      {
+        'id': 'macos',
+        'passedSteps': 1,
+        'totalSteps': 1,
+        'errors': 0,
+        'reached': true,
+      },
+    ],
+    'same': true,
+  },
+  'get_errors': {
+    'hasErrors': true,
+    'count': 1,
+    'errors': [
+      {
+        'kind': 'overflow',
+        'message': 'A RenderFlex overflowed by 3 pixels.',
+        'location': 'package:app/foo.dart:1:1',
+        'beforeReload': false,
+      },
+    ],
+  },
+  'get_app_summary': {
+    'connected': true,
+    'device': 'iphone',
+    'platform': 'ios',
+    'route': '/home',
+    'errorCount': 0,
+    'buildMode': 'debug',
+  },
+  'execute_action_chain': {
+    'passed': false,
+    'completedSteps': 1,
+    'totalSteps': 3,
+    'failedStep': 2,
+    'failureReason': 'Widget "Save" not found',
+  },
+  'fill_form': {
+    'submitted': false,
+    'filledCount': 1,
+    'totalFields': 3,
+    'failedField': 'TextField["Email"]',
+  },
+  'audit_screen_health': {
+    'requested': 2,
+    'visited': 2,
+    'audited': 2,
+    'failed': 0,
+    'skipped': 0,
+    'findings': {
+      'overflows': 1,
+      'tapTargets': 0,
+      'unlabeled': 2,
+      'lowContrast': 0,
+      'readingOrderJumps': 0,
+    },
+    'restored': true,
+    'incomplete': false,
+    'loading': false,
+    'status': 'ok',
+  },
+  'navigate_to': {
+    'requested': '/home',
+    'current': '/home',
+    'waitRequired': true,
+    'waitStatus': 'found',
+    'completed': true,
+    'uncertain': false,
+  },
+};

@@ -13,7 +13,7 @@ FlutterPilot documentation is organized into focused guides:
 
 ### **Using FlutterPilot**
 - **[AI_AGENTS.md](./AI_AGENTS.md)** — How to use with Claude, ChatGPT, Cursor
-- **[TOOLS.md](../TOOLS.md)** — Complete reference for the current MCP tool set
+- **[TOOLS.generated.md](../TOOLS.generated.md)** — Complete reference for the current MCP tool set
 - **[BEST_PRACTICES.md](./BEST_PRACTICES.md)** — Production patterns and recommendations
 
 ### **Development**
@@ -45,7 +45,7 @@ FlutterPilot documentation is organized into focused guides:
 - Claude vs ChatGPT vs Cursor
 
 #### Know what tools are available
-→ Go to [../TOOLS.md](../TOOLS.md)
+→ Go to [../TOOLS.generated.md](../TOOLS.generated.md)
 - MCP tools reference with examples
 - Categorized by function
 - Parameter documentation
@@ -100,7 +100,7 @@ That's enough to start!
 
 ### For Daily Users
 
-- **[TOOLS.md](../TOOLS.md)** — Reference when you need a specific tool
+- **[TOOLS.generated.md](../TOOLS.generated.md)** — Reference when you need a specific tool
 - **[BEST_PRACTICES.md](./BEST_PRACTICES.md)** — Patterns for common tasks
 - **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** — When something breaks
 
@@ -125,7 +125,7 @@ That's enough to start!
 **Path:**
 1. [README.md](../README.md) — Understand it
 2. [SETUP.md](./SETUP.md) — Follow setup
-3. [TOOLS.md](../TOOLS.md) — Learn what tools you have
+3. [TOOLS.generated.md](../TOOLS.generated.md) — Learn what tools you have
 4. [BEST_PRACTICES.md](./BEST_PRACTICES.md) — Use correctly
 
 **Time:** ~20 minutes to setup, then read tools reference
@@ -138,7 +138,7 @@ That's enough to start!
 1. [README.md](../README.md) — Understand it
 2. [SETUP.md](./SETUP.md) — Get it running
 3. [AI_AGENTS.md](./AI_AGENTS.md) — Configure Claude
-4. [TOOLS.md](../TOOLS.md) — Reference tools (Claude will use them)
+4. [TOOLS.generated.md](../TOOLS.generated.md) — Reference tools (Claude will use them)
 
 **Time:** ~30 minutes to setup, then you're ready
 
@@ -181,53 +181,39 @@ That's enough to start!
 
 ## 🔍 Tool Categories Reference
 
-Quick links to tool categories in [TOOLS.md](../TOOLS.md):
+The tool set is **generated** from the running server registration into
+[TOOLS.generated.md](../TOOLS.generated.md); that file — not this page — is the
+authoritative list of names, parameters and per-tool effects. A connected app is
+listed only the tools that can work for it (plugin-gated and `native_*` tools
+appear once their plugin/platform is present), so the exact count is app- and
+mode-dependent: call `get_app_summary(setup: true)` for the runtime set.
 
-### **Screenshots & Layout** (5 tools)
-For capturing visuals and understanding UI structure
-- `capture_screenshot` — Get PNG
-- `get_widget_tree` — Widget hierarchy
-- `get_widget_properties` — Read widget state
-- `compare_screenshot` — Visual regression
-- `compare_screenshot(save: true)` — Save for regression
+The main families an agent works with:
 
-### **UI Automation** (15 tools)
-For programmatically interacting with the UI
-- `tap_widget` — Tap by key
-- `enter_text` — Type text
-- `scroll` — Scroll widgets
-- `gesture_widget` — Swipe, drag, pinch, focus, slide
-- (+ 11 more interaction tools)
+### **Inspecting the app**
+`get_app_summary`, `get_widget_tree`, `get_widget_properties`,
+`get_interactive_elements`, `get_semantics_tree`, `inspect_widget`,
+`capture_screenshot`, `get_navigation_stack`
 
-### **Navigation & Routing** (8 tools)
-For controlling navigation flow
-- `navigate_to` — Go to route
-- `get_navigation_stack` — View route history
-- `press_key(back)` — Go back
-- (+ 5 more navigation tools)
+### **Acting on the UI**
+`tap_widget`, `enter_text`, `press_key`, `fill_form`,
+`execute_action_chain`, `scroll_into_view`, `gesture_widget`,
+`toggle_checkbox`, `navigate_to`
 
-### **State Inspection** (19 tools)
-For inspecting state managers
-- `get_state` — Bloc inspection
-- `get_state` — Riverpod inspection
-- `get_app_summary` — Current route + errors
-- (+ 16 more state tools)
+### **Waiting, checking and regression**
+`assert_widget`, `wait_for`, `compare_screenshot`, `audit_screen_health`,
+`generate_test`, `verify_feature`
 
-### **Recording & Testing** (6 tools)
-For test automation and recording
-- Various recording and replay tools
+### **State, storage and network** (plugin-gated)
+`get_state`, `set_state`, `scenario`, `exec_sql_query`, `get_hive_contents`,
+`get_shared_preferences`, `set_shared_preference`, `get_secure_storage`,
+`get_network_logs`, `mock_http_response`, `simulate_network`,
+`mock_platform_channel`, `get_supabase_auth`, `query_supabase_table`,
+`get_firebase_auth`, `query_firestore`, `get_connectivity`
 
-### **DevTools Integration** (12 tools)
-For deep inspection like DevTools
-- Performance profiling
-- Memory analysis
-- DevTools command execution
-
-### **Network** (via Dio plugin)
-For HTTP mocking and inspection
-- `mock_http_response` — Mock endpoint
-- `get_network_logs` — Request log
-- `simulate_network` — Network conditions
+### **Performance and diagnostics**
+`profile_frame_budget`, `profile_action`, `get_memory_details`,
+`get_http_profile`, `get_errors`, `get_debug_logs`, `hot_reload`
 
 **See [TOOLS.generated.md](../TOOLS.generated.md) for the complete reference.**
 
@@ -249,7 +235,7 @@ For HTTP mocking and inspection
 
 - [ ] Complete Quick Setup
 - [ ] Read [SETUP.md](./SETUP.md) fully
-- [ ] Review [TOOLS.md](../TOOLS.md) categories
+- [ ] Review [TOOLS.generated.md](../TOOLS.generated.md) categories
 - [ ] Read [BEST_PRACTICES.md](./BEST_PRACTICES.md)
 - [ ] Try a tool manually (e.g., `capture_screenshot`)
 
@@ -268,7 +254,7 @@ For HTTP mocking and inspection
 ### Where to Look
 
 1. **Can't get it working?** → [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
-2. **Need to know how to use a tool?** → [TOOLS.md](../TOOLS.md)
+2. **Need to know how to use a tool?** → [TOOLS.generated.md](../TOOLS.generated.md)
 3. **Want to do something specific?** → Search this INDEX page
 4. **Found a bug?** → [GitHub Issues](https://github.com/abugeek/FlutterPilot/issues)
 5. **Have a feature request?** → [GitHub Issues](https://github.com/abugeek/FlutterPilot/issues)
@@ -284,32 +270,34 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#faq) for:
 
 ---
 
-## 📚 Documentation Statistics
+## 📚 Documentation Map
 
-**Total Documentation:** ~80 KB across 7 documents
+The docs are split by audience, and the tool set is not duplicated by hand:
 
-| Document | Size | Audience |
-|----------|------|----------|
-| README.md | 8 KB | Everyone |
-| SETUP.md | 9 KB | New users |
-| TOOLS.md | 35 KB | All users |
-| TROUBLESHOOTING.md | 19 KB | Users with issues |
-| AI_AGENTS.md | 14 KB | AI integration users |
-| PLUGINS.md | 14 KB | Plugin developers |
-| ARCHITECTURE.md | 13 KB | Contributors |
-| BEST_PRACTICES.md | 13 KB | Power users |
+| Document | Audience |
+|----------|----------|
+| README.md | Everyone |
+| SETUP.md | New users |
+| TROUBLESHOOTING.md | Users with issues |
+| AI_AGENTS.md | AI integration users |
+| PLUGINS.md | Plugin developers |
+| ARCHITECTURE.md | Contributors |
+| BEST_PRACTICES.md | Power users |
+| [TOOLS.generated.md](../TOOLS.generated.md) | Generated tool reference — do not edit by hand |
 
 ---
 
 ## 🔄 Documentation Updates
 
 Documentation is kept up-to-date with each release:
-- [TOOLS.md](../TOOLS.md) — Updated when tools change
+- [TOOLS.generated.md](../TOOLS.generated.md) — Regenerated from the running
+  server whenever a tool changes (`dart run
+  packages/fp_server/tool/generate_tools_doc.dart`); never hand-edited
 - [SETUP.md](./SETUP.md) — Updated for new platforms
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — Updated for new issues
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — Updated for major refactors
 
-See [CHANGELOG.md](../CHANGELOG.md) for release notes.
+See [RELEASING.md](../RELEASING.md) for the release process.
 
 ---
 
@@ -321,7 +309,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for release notes.
 grep -r "mock" docs/
 
 # Find tool names
-grep -r "^### `" TOOLS.md
+grep -r "^## `" TOOLS.generated.md
 
 # Find setup instructions for a platform
 grep -i "android\|ios\|web" SETUP.md
@@ -395,7 +383,7 @@ If using manually:
 **You're now ready to use FlutterPilot!**
 
 Next steps:
-- Read [TOOLS.md](../TOOLS.md) to see what tools you have
+- Read [TOOLS.generated.md](../TOOLS.generated.md) to see what tools you have
 - Read [BEST_PRACTICES.md](./BEST_PRACTICES.md) for patterns
 - For AI integration, read [AI_AGENTS.md](./AI_AGENTS.md)
 
@@ -405,4 +393,4 @@ Next steps:
 
 All documentation is MIT licensed, same as the code.
 
-Last updated: 2024-01-09
+Last updated: 2026-10-16

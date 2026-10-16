@@ -92,8 +92,20 @@ mixin _VerificationToolsMixin
     );
   }
 
-  CallToolResult _verifyError(String s) =>
-      CallToolResult(isError: true, content: [TextContent(text: s)]);
+  /// A refusal before a verdict exists (no running verification, bad
+  /// criterion, no app). It still carries the verdict's shape with an empty
+  /// `criteria` list and `status: "refused"`, so a program does not read a
+  /// bare error as a feature with no criteria (task 07).
+  CallToolResult _verifyError(String s) => CallToolResult(
+    isError: true,
+    content: [TextContent(text: s)],
+    structuredContent: {
+      if (_verification != null) 'feature': _verification!.feature,
+      'criteria': <Map<String, dynamic>>[],
+      'status': 'refused',
+      'reason': Redaction.text(s),
+    },
+  );
 
   Future<CallToolResult> _startVerification(
     String feature,

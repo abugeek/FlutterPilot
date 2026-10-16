@@ -21,6 +21,7 @@ import 'src/call_log.dart';
 import 'src/code_freshness.dart';
 import 'src/cpu_profile.dart';
 import 'src/debug_log_merge.dart';
+import 'src/effect_policy.dart';
 import 'src/fleet_compare.dart';
 import 'src/fleet_manager.dart';
 import 'src/frame_timeline.dart';
@@ -42,7 +43,6 @@ import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
-import 'src/retired_tools.dart';
 import 'src/scenario.dart';
 import 'src/signing_team.dart';
 import 'src/screen_memory.dart';
@@ -1925,7 +1925,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     DeviceRuntimeContext context,
   ) async {
     final operationId = 'op-${++_nextOperationId}';
-    final mutating = !_isReadOnlyExtension(extension);
+    final policy = extensionPolicyOf(extension, parameters);
+    final mutating = policy.mutating;
     final generation = context.connectionGeneration;
     final scheduler = context.scheduler;
 
@@ -2000,24 +2001,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
 
   static const _operationDeadline = Duration(seconds: 30);
 
-  static bool _isReadOnlyExtension(String extension) {
-    return extension.startsWith('ext.flutterpilot.get') ||
-        extension.startsWith('ext.flutterpilot.list') ||
-        extension.startsWith('ext.flutterpilot.wait') ||
-        extension.startsWith('ext.flutterpilot.assert') ||
-        extension.startsWith('ext.flutterpilot.capture') ||
-        extension.startsWith('ext.flutterpilot.compare') ||
-        extension.startsWith('ext.flutterpilot.diagnose') ||
-        extension.startsWith('ext.flutterpilot.audit') ||
-        extension.startsWith('ext.flutterpilot.profile') ||
-        extension.startsWith('ext.flutterpilot.query') ||
-        extension.startsWith('ext.flutterpilot.export') ||
-        extension.startsWith('ext.flutterpilot.generate') ||
-        extension.startsWith('ext.flutterpilot.ping') ||
-        extension.startsWith('ext.dart.io.get') ||
-        extension == 'ext.flutter.inspector.getRootWidgetTree';
-  }
-
   void _markContextConnectionLost(DeviceRuntimeContext? context) {
     if (context == null) {
       _scheduleReconnect();
@@ -2066,41 +2049,47 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   /// Runs [extension] once; if the VM service connection drops mid-call
-  /// (slow simulators do this), reconnects. Reads are retried; actions are
-  /// not — they may already have run — and say so instead.
+  /// (slow simulators do this), reconnects. A pure read may be sent again
+  /// (its policy says [ExtensionPolicy.replaySafe]); an action, a diagnostic
+  /// clear, or an unknown extension is not — it may already have run — and
+  /// the caller reports the uncertainty instead. The decision is
+  /// argument-aware (`effect_policy.dart`), so `get_state(history: true)` is
+  /// replayed but `get_state(clear: true)` is not.
   Future<_ExtensionResult> _callExtensionImmediate(
     String extension,
     Map<String, dynamic> parameters, {
     DeviceRuntimeContext? context,
   }) async {
-    final result = await _callExtensionImmediateOnce(
-      extension,
-      parameters,
-      context: context,
+    final policy = extensionPolicyOf(extension, parameters);
+    final outcome = await runWithReplay<_ExtensionResult>(
+      policy: policy,
+      callOnce: () =>
+          _callExtensionImmediateOnce(extension, parameters, context: context),
+      lostResponse: _connectionDropped,
+      reconnect: () async {
+        _markContextConnectionLost(context);
+        try {
+          await _connectToVmService();
+        } catch (_) {}
+      },
+      canReplay: () => _vmService != null,
     );
-    final message = result.errorMessage ?? '';
-    final dropped =
-        message.contains('Service connection disposed') ||
-        message.contains('Service has disappeared');
-    if (!dropped) return result;
-
-    _markContextConnectionLost(context);
-    try {
-      await _connectToVmService();
-    } catch (_) {}
-    if (_isReadOnlyExtension(extension) && _vmService != null) {
-      return _callExtensionImmediateOnce(
-        extension,
-        parameters,
-        context: context,
-      );
-    }
+    if (!outcome.uncertain) return outcome.result;
     return _ExtensionResult.error(
       'The connection to the app dropped during this call (reconnected: '
-      '${_vmService != null}). The action may or may not have run — check '
-      'with get_app_summary before retrying.',
+      '${_vmService != null}). ${policy.known ? 'The action' : 'The operation'} '
+      'may or may not have run — check with get_app_summary before retrying.',
       ErrorCategory.connectionLost,
     );
+  }
+
+  /// A response that never arrived because the socket was disposed underneath
+  /// the call. These two VM Service messages are what `vm_service` raises when
+  /// the connection is torn down mid-request.
+  static bool _connectionDropped(_ExtensionResult result) {
+    final message = result.errorMessage ?? '';
+    return message.contains('Service connection disposed') ||
+        message.contains('Service has disappeared');
   }
 
   Future<_ExtensionResult> _callExtensionImmediateOnce(
@@ -2145,10 +2134,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         : {for (final e in parameters.entries) e.key: e.value.toString()};
     // An action is sent once: when the app is slow to answer (a first text
     // entry on a CI simulator took 18 s), sending it again would tap or type
-    // twice. It gets the whole operation deadline instead. A read is asked
-    // again after the shorter timeout.
-    final readOnly = _isReadOnlyExtension(extension);
-    final callTimeout = readOnly
+    // twice. It gets the whole operation deadline instead. A replay-safe
+    // observation is asked again after the shorter timeout.
+    final replaySafe = extensionPolicyOf(extension, parameters).replaySafe;
+    final callTimeout = replaySafe
         ? _Constants.extensionCallTimeout
         : _operationDeadline;
     final actionTimedOut = _ExtensionResult.error(
@@ -2199,7 +2188,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
           );
         }
       } on TimeoutException {
-        if (!readOnly) return actionTimedOut;
+        if (!replaySafe) return actionTimedOut;
         // Fall back to full isolate refresh
       } catch (e) {
         _log.fine(
@@ -2252,7 +2241,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             ErrorCategory.extensionError,
           );
         } on TimeoutException {
-          if (!readOnly) return actionTimedOut;
+          if (!replaySafe) return actionTimedOut;
           return _ExtensionResult.error(
             'Extension call timed out. The app may be unresponsive.',
             ErrorCategory.timeout,

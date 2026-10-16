@@ -1,4 +1,10 @@
 # FlutterPilot Development Tasks
+## Proposed work: MCP quality next
+Read [MCP quality next](mcp-quality-next/README.md) for research findings,
+priorities, dependencies, and eleven step-by-step implementation plans.
+These are proposals only; implementation has not started.
+
+## Completed work
 
 The sprint task files that used to live here are done, merged and removed.
 

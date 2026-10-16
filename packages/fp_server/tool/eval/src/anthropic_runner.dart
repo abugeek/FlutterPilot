@@ -14,8 +14,12 @@ class AnthropicRunner implements AgentRunner {
     required this.apiKey,
     required this.model,
     this.maxTurns = 40,
+    this.maxCalls = 0,
     this.maxTokens = 4096,
     this.baseUrl = 'https://api.anthropic.com',
+    this.requestTimeout = const Duration(minutes: 2),
+    this.maxRunSeconds = 0,
+    this.maxToolResultChars = 100000,
     HttpClient? client,
   }) : _client = client ?? HttpClient();
 
@@ -26,8 +30,20 @@ class AnthropicRunner implements AgentRunner {
   final int maxTurns;
   final int maxTokens;
 
+  /// A hard cap on tool calls per run; 0 leaves only the turn cap.
+  final int maxCalls;
+
   /// Overridable so tests can point at a local fake (README).
   final String baseUrl;
+
+  /// One Messages API request must answer within this window (task 04 §9).
+  final Duration requestTimeout;
+
+  /// A whole run stops after this many seconds; 0 disables the run deadline.
+  final int maxRunSeconds;
+
+  /// The largest tool result forwarded to the model, in characters.
+  final int maxToolResultChars;
   final HttpClient _client;
 
   /// The one instruction added to the server's own; we are measuring
@@ -46,6 +62,7 @@ class AnthropicRunner implements AgentRunner {
     var cacheReadTokens = 0;
     var finalText = '';
     var hitTurnLimit = false;
+    var hitCallLimit = false;
     final stopwatch = Stopwatch()..start();
 
     final system = <Map<String, dynamic>>[
@@ -66,6 +83,13 @@ class AnthropicRunner implements AgentRunner {
     String? error;
     try {
       while (true) {
+        final elapsed = stopwatch.elapsed.inSeconds;
+        if (maxRunSeconds > 0 && elapsed >= maxRunSeconds) {
+          error =
+              'run deadline exceeded after ${elapsed}s '
+              '(--max-run-seconds $maxRunSeconds)';
+          break;
+        }
         turns++;
         final response = await _send({
           'model': model,
@@ -119,6 +143,10 @@ class AnthropicRunner implements AgentRunner {
           });
         }
         messages.add({'role': 'user', 'content': results});
+        if (maxCalls > 0 && calls.length >= maxCalls) {
+          hitCallLimit = true;
+          break;
+        }
       }
     } catch (e) {
       error = '$e';
@@ -134,6 +162,7 @@ class AnthropicRunner implements AgentRunner {
       seconds: stopwatch.elapsedMilliseconds / 1000,
       finalText: finalText,
       hitTurnLimit: hitTurnLimit,
+      hitCallLimit: hitCallLimit,
       error: error,
     );
   }
@@ -150,22 +179,41 @@ class AnthropicRunner implements AgentRunner {
 
   /// MCP content as Messages API blocks: text stays text, images become image
   /// blocks (screenshots matter to these tasks), and an empty result still
-  /// carries one text block because the API rejects empty content.
+  /// carries one text block because the API rejects empty content. The total
+  /// text is bounded by [maxToolResultChars] (task 04 §9).
   List<Map<String, dynamic>> _toolResultContent(McpCallResult result) {
-    final blocks = <Map<String, dynamic>>[
-      for (final block in result.content)
-        if (block['type'] == 'image')
-          {
-            'type': 'image',
-            'source': {
-              'type': 'base64',
-              'media_type': '${block['mimeType'] ?? 'image/png'}',
-              'data': '${block['data']}',
-            },
-          }
-        else
-          {'type': 'text', 'text': '${block['text'] ?? ''}'},
-    ];
+    var remaining = maxToolResultChars;
+    final blocks = <Map<String, dynamic>>[];
+    for (final block in result.content) {
+      if (block['type'] == 'image') {
+        blocks.add({
+          'type': 'image',
+          'source': {
+            'type': 'base64',
+            'media_type': '${block['mimeType'] ?? 'image/png'}',
+            'data': '${block['data']}',
+          },
+        });
+        continue;
+      }
+      final text = '${block['text'] ?? ''}';
+      if (remaining <= 0) {
+        blocks.add({'type': 'text', 'text': '…[result truncated]'});
+        break;
+      }
+      if (text.length <= remaining) {
+        blocks.add({'type': 'text', 'text': text});
+        remaining -= text.length;
+      } else {
+        blocks.add({
+          'type': 'text',
+          'text':
+              '${text.substring(0, remaining)}\n…[truncated '
+              '${text.length - remaining} chars]',
+        });
+        remaining = 0;
+      }
+    }
     return blocks.isEmpty
         ? [
             {'type': 'text', 'text': '(no output)'},
@@ -184,7 +232,7 @@ class AnthropicRunner implements AgentRunner {
         // The key lives only here, in the request header.
         ..set('x-api-key', apiKey);
       request.add(utf8.encode(jsonEncode(body)));
-      final response = await request.close();
+      final response = await request.close().timeout(requestTimeout);
       final text = await response.transform(utf8.decoder).join();
       if (response.statusCode == 200) {
         return jsonDecode(text) as Map<String, dynamic>;

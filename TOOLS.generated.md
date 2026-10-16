@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40604 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40737 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -40,10 +40,10 @@ Runs the same steps on several registered devices at once (e.g. iPhone, Android 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}, {"tool": "assert_widget", "arguments": {"text": "Welcome"}}]. Tools: assert_widget, enter_text, execute_action_chain, fill_form, gesture_widget, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, simulate_network, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order on each device, e.g. [{"tool": "tap_widget", "arguments": {"key": "Log in"}}]. Tools: assert_widget, enter_text, execute_action_chain, fill_form, gesture_widget, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, simulate_network, tap_widget, toggle_checkbox, wait_for. |
 | `devices` | array | no | Registered device names (list_connected_devices); default: all of them. |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{devices: [{id: string, passedSteps: int, totalSteps: int, failedStep?: int, route?: string, errors: int}], same: bool}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{devices: [{id: string, passedSteps: int, totalSteps: int, failedStep?: int, route?: string, errors: int, reached: bool}], same: bool, status?: "ok"|"partial"|"refused", reason?: string}`
 
 ## `switch_device`
 
@@ -63,13 +63,11 @@ _Read-only._
 |---|---|---:|---|
 | `report` | boolean | no | Return the latest crash report instead of the list. |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", message: string, location?: string, beforeReload: bool}]}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", message: string, location?: string, beforeReload: bool}], status?: "ok"|"unavailable", reason?: string}`
 
 ## `get_debug_logs`
 
 What the app printed: print(), debugPrint() and dart:developer log(), plus what the SDK buffered before connecting. clear:true empties the captured logs instead, for a clean baseline before a test.
-
-_Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -170,7 +168,7 @@ Fills several fields in one call and optionally taps a submit button: text for t
 | `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
 | `submitWith` | string | no | Optional key/selector of the button to tap after filling (e.g. "ElevatedButton['Log In']"). |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, status?: "ok"|"unavailable"}`
 
 ## `wait_for`
 
@@ -188,17 +186,17 @@ _Read-only._
 | `frames` | integer | no | Pump this many frames (1–120). |
 | `timeoutMs` | integer | no | Default 5000 (3000 for key). |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{met: bool, waitedMs: int, timedOut: bool, condition: "key"|"route"|"state"|"frames"|"animations"|"none", route?: string}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{met: bool, waitedMs: int, timedOut: bool, condition: "key"|"route"|"state"|"frames"|"animations"|"none", route?: string, status?: "ok"|"unavailable"|"refused"}`
 
 ## `audit_screen_health`
 
-Layout and accessibility check of the current screen: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. Use after set_app_settings(textScale/locale/theme) or a UI change.
-
-_Read-only._
+Layout and accessibility check: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. With routes it navigates to each and audits it (a sweep, not a reading), then best-effort returns to where it started. Use after set_app_settings(textScale/locale/theme) or a UI change.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `routes` | array | no | Go to each route and check it. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: int, visited: int, audited: int, failed: int, skipped: int, findings: {overflows: int, tapTargets: int, unlabeled: int, lowContrast: int, readingOrderJumps: int}, restored: bool, incomplete: bool, loading: bool, status?: "ok"|"partial"|"unavailable", reason?: string}`
 
 ## `execute_action_chain`
 
@@ -206,9 +204,9 @@ Runs a known sequence of steps in one call, stopping at the first that fails: ta
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "enter_text", "arguments": {"key": "Title", "text": "Groceries"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, navigate_to, press_key, scroll_into_view, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, navigate_to, press_key, scroll_into_view, tap_widget, toggle_checkbox, wait_for. |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string, status?: "ok"|"refused"|"unavailable"}`
 
 ## `native_screenshot`
 
@@ -280,6 +278,8 @@ Goes to a route directly, e.g. "/profile/123" (go_router: router.go; otherwise N
 | `action` | string: go \| push \| replace | no | Default "go". push/replace need the go_router plugin. |
 | `deepLink` | boolean | no | Open route as an OS deep link (myapp://product/1). |
 | `waitFor` | string | no | Key or text to wait for on the new page. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: string, current?: string, waitRequired: bool, waitStatus?: "found"|"missing", completed: bool, uncertain: bool, status?: "ok"|"refused"|"unavailable"}`
 
 ## `get_navigation_stack`
 
@@ -424,8 +424,6 @@ Builds and starts the app (flutter run, or the command in flutterpilot/launch.js
 
 Current values of the app's Riverpod providers and Blocs/Cubits (name: value (type)). history:true lists the recent changes instead, oldest first with times: each value with the one it replaced, providers created and disposed, and the route changes between them — how the state got to where it is.
 
-_Read-only._
-
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `type` | string: riverpod \| bloc | no | Only this kind. |
@@ -562,13 +560,13 @@ _Read-only._
 
 ## `get_memory_details`
 
-Heap used/capacity and external (native) memory per isolate. classes:true lists the top Dart classes by heap bytes and instance count instead (the DevTools Memory tab). Leak check: cycle (action tool calls that end where they started, e.g. open a screen then press back) runs times rounds; returns the classes that gained instances every round, where they are defined and what keeps one alive.
+Heap used/capacity and external (native) memory per isolate. classes:true lists top classes by heap bytes and count. Leak check: cycle (tool calls that return to where they started, e.g. open a screen then press back) runs times rounds; reports classes that gained instances every round, where defined and what keeps one alive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `classes` | boolean | no | List the top classes by heap usage. |
 | `limit` | integer | no | Number of classes (default 30). |
-| `cycle` | array | no | Leak check: steps [{"tool": "tap_widget", "arguments": {"key": "Open"}}, {"tool": "press_key", "arguments": {"key": "back"}}] that return to the starting screen. |
+| `cycle` | array | no | Steps that return to where they started, e.g. [{"tool": "tap_widget", "arguments": {"key": "Open"}}, {"tool": "press_key", "arguments": {"key": "back"}}]. |
 | `times` | integer | no | Leak check rounds after one warm-up (default 5). |
 
 ## `profile_action`
@@ -584,8 +582,6 @@ Why an interaction is slow: runs tool with arguments while profiling the app, th
 ## `get_http_profile`
 
 HTTP requests the app made through any dart:io client (HttpClient, package:http, Dio; the DevTools Network tab), most recent first: #number, method, URL, status, duration, sizes. id returns one request in full: headers, bodies (secrets masked), timing, redirects, error.
-
-_Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -629,7 +625,7 @@ Checks a feature against acceptance criteria and writes a pass/fail report with 
 | `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
 | `finish` | boolean | no | Close the last criterion and write the report. |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{feature: string, criteria: [{index: int, text: string, verdict: "passed"|"failed"|"not_verified", warnings: int}], report: string} (finish: true only)`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{feature?: string, criteria: [{index: int, text: string, verdict: "passed"|"failed"|"not_verified", warnings: int}], report?: string, status?: "ok"|"refused"|"unavailable", reason?: string} (finish, or a refusal)`
 
 ## `get_supabase_auth`
 

@@ -48,7 +48,20 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             'route': route,
           });
         }
-        if (res.isError) return res.toCallToolResult();
+        if (res.isError) {
+          // The navigation never reached the app: the compact result says so
+          // instead of leaving it to the error text alone (task 07).
+          return withVerdict(
+            res.toCallToolResult(),
+            navigationVerdict(
+              requested: route,
+              waitRequired: (p['waitFor']?.toString() ?? '').isNotEmpty,
+              completed: false,
+              uncertain: true,
+              status: 'unavailable',
+            ),
+          );
+        }
         // The route changed: subscribers are pushed the new state (task 27).
         _notifyRouteChanged();
         // The page slides in: until it has, its controls are off screen
@@ -73,12 +86,19 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             ? _screenAfter(route: false)
             : null;
         final stack = await stackFuture;
-        final now = (stack.data?['stack'] as List?)?.join(' -> ');
+        final stackList = (stack.data?['stack'] as List?)
+            ?.map((e) => '$e')
+            .toList();
+        final now = stackList?.join(' -> ');
+        final current = (stackList != null && stackList.isNotEmpty)
+            ? stackList.last
+            : null;
         // The page's data may load after the transition: one call instead
         // of navigate_to then wait_for (52 such pairs in field sessions).
         var waited = '';
         var missing = false;
-        if (waitFor != null && waitFor.isNotEmpty) {
+        final waitRequired = waitFor != null && waitFor.isNotEmpty;
+        if (waitRequired) {
           final found = await _callExtensionRaw(
             'ext.flutterpilot.waitForCondition',
             {'selector': waitFor, 'timeoutMs': '5000'},
@@ -97,6 +117,17 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                   '$waited${screenFuture == null ? await _screenAfter(route: false) : await screenFuture}',
             ),
           ],
+          // The compact twin: what was asked for, where the app now says it
+          // is, whether the wait succeeded, and whether the route is
+          // confirmed (an unreadable stack leaves it uncertain).
+          structuredContent: navigationVerdict(
+            requested: route,
+            current: current,
+            waitRequired: waitRequired,
+            waitStatus: waitRequired ? (missing ? 'missing' : 'found') : null,
+            completed: !missing,
+            uncertain: current == null,
+          ),
         );
       },
     );

@@ -67,6 +67,45 @@ const _resourceSpecs = <_ResourceSpec>[
 /// What every app-scoped resource says when nothing is connected.
 const _noAppMessage = 'No Flutter app currently connected';
 
+/// What a resource says when the app/device changed mid-read (task 06 §7).
+///
+/// A read pins the connection it started against and re-checks it after every
+/// await: rather than blend two apps into one response, it says the context
+/// moved and asks to be read again.
+const _contextChangedMessage =
+    'The connected app or active device changed while this resource was being '
+    'read; read it again for a coherent view.';
+
+/// The app extensions the resources read (task 06).
+const _extAppSnapshot = 'ext.flutterpilot.getAppSnapshot';
+const _extErrors = 'ext.flutterpilot.getErrors';
+const _extWidgetTree = 'ext.flutterpilot.getWidgetTree';
+const _extWidgetProperties = 'ext.flutterpilot.getWidgetProperties';
+const _extNavigationStack = 'ext.flutterpilot.getNavigationStack';
+const _extGoRouterState = 'ext.flutterpilot.getGoRouterState';
+
+/// Which app extensions each fixed resource reads, in order (task 06).
+///
+/// A read names exactly what it needs, so it never inherits another resource's
+/// work. `flutterpilot://devices` asks the app for nothing — the fleet is the
+/// server's own state — so a fleet read makes **zero** app VM calls. The
+/// summary reads the snapshot and the error list but never builds a widget
+/// tree. The errors, tree and logs each read one thing independently: a slow or
+/// failing tree call cannot delay, fail or grow the others' responses.
+const _resourceExtensions = <String, List<String>>{
+  'flutterpilot://app/summary': [_extAppSnapshot, _extErrors],
+  'flutterpilot://app/errors': [_extErrors],
+  'flutterpilot://app/widget-tree': [_extWidgetTree],
+  'flutterpilot://app/logs': [_extAppSnapshot],
+  'flutterpilot://devices': <String>[],
+};
+
+/// The arguments one resource passes to [extension].
+Map<String, dynamic> _resourceParameters(String extension) =>
+    extension == _extWidgetTree
+    ? const {'maxDepth': '20', 'compact': 'true'}
+    : const {};
+
 /// Live app data one resource read formats (task 16).
 ///
 /// The server fills it from the connected app; a test can pass one to
@@ -130,22 +169,139 @@ class _ResourceData {
     this.connected = false,
     this.snapshot,
     this.errors,
+    this.errorsUnavailable = false,
     this.widgetTree,
     this.sdkLogs = const [],
     this.serverLogs = const [],
-  });
+  }) : contextChanged = false;
+
+  /// A read whose app/device changed after it started: render the change, not
+  /// a mixture of the two connections.
+  const _ResourceData.changed()
+    : connected = false,
+      contextChanged = true,
+      snapshot = null,
+      errors = null,
+      errorsUnavailable = false,
+      widgetTree = null,
+      sdkLogs = const [],
+      serverLogs = const [];
 
   final bool connected;
+
+  /// Whether the connection changed between this read's first and last await.
+  final bool contextChanged;
+
   final Map<String, dynamic>? snapshot;
   final Map<String, dynamic>? errors;
+
+  /// True when the error list was asked for but did not come back (missing
+  /// extension, a failure or a lost connection), as opposed to a healthy empty
+  /// list — so the resource never shows "could not ask" as "no errors".
+  final bool errorsUnavailable;
+
   final Map<String, dynamic>? widgetTree;
   final List<Map<String, dynamic>> sdkLogs;
   final List<Map<String, dynamic>> serverLogs;
 }
 
+/// One app-extension read a resource performed (task 06).
+///
+/// [available] is false when the app has no such extension or the call failed,
+/// which a resource reports distinctly from a healthy empty result.
+class ResourceExtensionRead {
+  const ResourceExtensionRead.available(this.data) : available = true;
+  const ResourceExtensionRead.unavailable() : data = null, available = false;
+
+  final Map<String, dynamic>? data;
+  final bool available;
+}
+
+/// The app connection a live resource read talks to (task 06).
+///
+/// [generation] changes whenever the app reconnects or another device becomes
+/// active; a read pins it at its start and re-checks after every await, so a
+/// response never belongs to two connections at once.
+abstract class ResourceAppConnection {
+  const ResourceAppConnection();
+
+  /// Whether an app is connected right now.
+  bool get connected;
+
+  /// The active device id.
+  String get deviceId;
+
+  /// The connection generation of the active device.
+  int get generation;
+
+  /// Reads one extension from the app.
+  Future<ResourceExtensionRead> read(
+    String extension,
+    Map<String, dynamic> parameters,
+  );
+}
+
+/// The server's real app connection, as a resource read sees it (task 06).
+class _LiveResourceConnection implements ResourceAppConnection {
+  const _LiveResourceConnection(this._server);
+
+  final _FlutterPilotServerBase _server;
+
+  @override
+  bool get connected => _server._activeContext?.service != null;
+
+  @override
+  String get deviceId => _server._fleetManager.activeDeviceId ?? 'default';
+
+  @override
+  int get generation => _server._activeContext?.connectionGeneration ?? 0;
+
+  @override
+  Future<ResourceExtensionRead> read(
+    String extension,
+    Map<String, dynamic> parameters,
+  ) async {
+    final res = await _server._callExtensionRaw(extension, parameters);
+    return res.isError
+        ? const ResourceExtensionRead.unavailable()
+        : ResourceExtensionRead.available(res.data);
+  }
+}
+
+/// The app/device a resource read started against (task 06 §7).
+class _ResourcePin {
+  _ResourcePin(this._connection)
+    : _connected = _connection.connected,
+      _deviceId = _connection.deviceId,
+      _generation = _connection.generation;
+
+  final ResourceAppConnection _connection;
+  final bool _connected;
+  final String _deviceId;
+  final int _generation;
+
+  /// Whether the app is still the one this read began against.
+  bool get isCurrent =>
+      _connection.connected == _connected &&
+      _connection.deviceId == _deviceId &&
+      _connection.generation == _generation;
+}
+
 /// Standard MCP resources (task 16): `resources/list` and `resources/read`,
 /// so an agent can attach live app context without invoking a tool.
 mixin _ResourcesMixin on _FlutterPilotServerBase {
+  /// Test seam (task 06): the app a live resource read talks to.
+  ///
+  /// **Null in production**, where the server's own connection is used. A test
+  /// installs a fake to count the extensions each URI reads and to inject a
+  /// missing extension, a failure, a device switch or a reconnect without a
+  /// running app.
+  ResourceAppConnection? resourceAppConnectionForTest;
+
+  /// The app connection a live read talks to: the test fake, or the real one.
+  ResourceAppConnection get _resourceConnection =>
+      resourceAppConnectionForTest ?? _LiveResourceConnection(this);
+
   /// Registers the five standard resources. Called once, at construction.
   ///
   /// [McpServer.registerResource] adds the resources capability and a
@@ -185,7 +341,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     final spec = _resourceFor(uri);
     if (spec == null) throw _unknownResource(uri);
     final data = app == null
-        ? await _liveResourceData()
+        ? await _liveResourceData(uri)
         : _ResourceData(
             connected: true,
             snapshot: app.snapshot,
@@ -223,7 +379,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
   Future<ReadResourceResult> _readResource(Uri uri) async {
     final spec = _resourceFor(uri.toString());
     if (spec == null) throw _unknownResource(uri.toString());
-    final data = await _liveResourceData();
+    final data = await _liveResourceData(uri.toString());
     return ReadResourceResult(
       contents: [
         TextResourceContents(
@@ -235,20 +391,42 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     );
   }
 
-  /// Gathers the live app data a resource read needs. Without a connected app
-  /// this makes no VM call: the resources return their fallback.
-  Future<_ResourceData> _liveResourceData() async {
-    if (_activeContext?.service == null) return const _ResourceData();
-    final snapshot = await _extensionData('ext.flutterpilot.getAppSnapshot');
-    final errors = await _extensionData('ext.flutterpilot.getErrors');
-    final tree = await _extensionData('ext.flutterpilot.getWidgetTree', const {
-      'maxDepth': '20',
-      'compact': 'true',
-    });
+  /// Runs the read plan for [uri] against the live (or injected) app.
+  ///
+  /// Only the extensions that resource needs are read, and the connection is
+  /// pinned so a device switch or a reconnect mid-read is reported rather than
+  /// blended. Without a connected app this makes no app call: the resources
+  /// return their fallback. `flutterpilot://devices` needs nothing, so a fleet
+  /// read makes **zero** app VM calls even while connected.
+  Future<_ResourceData> _liveResourceData(String uri) async {
+    final connection = _resourceConnection;
+    final pin = _ResourcePin(connection);
+    if (!pin.isCurrent || !connection.connected) return const _ResourceData();
+    Map<String, dynamic>? snapshot;
+    Map<String, dynamic>? errors;
+    var errorsUnavailable = false;
+    Map<String, dynamic>? tree;
+    for (final extension in _resourceExtensions[uri] ?? const <String>[]) {
+      final read = await connection.read(
+        extension,
+        _resourceParameters(extension),
+      );
+      if (!pin.isCurrent) return const _ResourceData.changed();
+      switch (extension) {
+        case _extAppSnapshot:
+          snapshot = read.data;
+        case _extErrors:
+          errors = read.data;
+          errorsUnavailable = !read.available;
+        case _extWidgetTree:
+          tree = read.data;
+      }
+    }
     return _ResourceData(
       connected: true,
       snapshot: snapshot,
       errors: errors,
+      errorsUnavailable: errorsUnavailable,
       widgetTree: tree,
       sdkLogs: _sdkLogsFrom(snapshot),
       serverLogs: _activeServerLogs,
@@ -262,15 +440,19 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       .whereType<Map<String, dynamic>>()
       .toList();
 
-  /// [extension]'s data, or null when the app has no such extension (e.g. no
-  /// SDK in zero-code mode): a resource still answers with what it has.
-  Future<Map<String, dynamic>?> _extensionData(
-    String extension, [
-    Map<String, dynamic> parameters = const {},
-  ]) async {
-    final res = await _callExtensionRaw(extension, parameters);
-    return res.isError ? null : res.data;
-  }
+  /// [value] with every string run through [Redaction.text], structurally, so
+  /// an encoded resource stays valid JSON (task 06 §10): a credential inside an
+  /// exception message, a route's query string or a widget's text is masked
+  /// without the quotes a naive text pass would strip.
+  static Object? _redactStrings(Object? value) => switch (value) {
+    final String text => Redaction.text(text),
+    final Map map => {
+      for (final MapEntry(:key, :value) in map.entries)
+        '$key': _redactStrings(value),
+    },
+    final List list => [for (final item in list) _redactStrings(item)],
+    _ => value,
+  };
 
   List<Map<String, dynamic>> get _activeServerLogs {
     final id = _fleetManager.activeDeviceId ?? 'default';
@@ -280,15 +462,20 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
   }
 
   String _renderResource(_ResourceSpec spec, _ResourceData data) {
+    if (data.contextChanged) {
+      return spec.mimeType == 'text/plain'
+          ? _contextChangedMessage
+          : _contextChangedJson();
+    }
     switch (spec.uri) {
       case 'flutterpilot://devices':
-        return jsonEncode(_devicesResource(data));
+        return jsonEncode(_redactStrings(_devicesResource(data)));
       case 'flutterpilot://app/summary':
         if (!data.connected) return _noAppJson();
-        return jsonEncode(_summaryResource(data));
+        return jsonEncode(_redactStrings(_summaryResource(data)));
       case 'flutterpilot://app/errors':
         if (!data.connected) return _noAppJson();
-        return jsonEncode(_errorsResource(data));
+        return jsonEncode(_redactStrings(_errorsResource(data)));
       case 'flutterpilot://app/widget-tree':
         return data.connected ? _widgetTreeResource(data) : _noAppMessage;
       case 'flutterpilot://app/logs':
@@ -299,6 +486,12 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
 
   static String _noAppJson() =>
       jsonEncode(const {'connected': false, 'message': _noAppMessage});
+
+  static String _contextChangedJson() => jsonEncode(const {
+    'connected': true,
+    'contextChanged': true,
+    'message': _contextChangedMessage,
+  });
 
   Map<String, dynamic> _summaryResource(_ResourceData data) {
     final context = _activeContext;
@@ -315,26 +508,50 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       'route': snapshot?['route']?['current'],
       'routeDepth': snapshot?['route']?['stackDepth'],
       'errorCount': _freshErrorSplit(data).since.length,
+      // The error list was asked for but did not come back: never read
+      // errorCount 0 as "clean" (task 06 §8).
+      if (data.errorsUnavailable) 'errorsUnavailable': true,
       'reconnecting': _isReconnecting,
     };
   }
 
   Map<String, dynamic> _errorsResource(_ResourceData data) {
     final split = _freshErrorSplit(data);
+    final since = split.since;
+    final before = split.before;
+    final shownSince = since.take(_Constants.maxResourceErrorItems).toList();
+    final shownBefore = before.take(_Constants.maxResourceErrorItems).toList();
+    final sinceNote = truncationNote(
+      shown: shownSince.length,
+      total: since.length,
+      what: 'errors (newest kept)',
+      how: 'the app buffer is the source; fix and reload to clear it',
+    );
+    final beforeNote = truncationNote(
+      shown: shownBefore.length,
+      total: before.length,
+      what: 'errors from before the last reload',
+      how: 'the app buffer is the source; a reload splits it',
+    );
     return {
       'connected': true,
       'sdkMode': _sdkMode(data),
-      'count': split.since.length,
-      'beforeReloadCount': split.before.length,
+      'count': since.length,
+      'beforeReloadCount': before.length,
+      // Asked for and not delivered is not "no errors" (task 06 §8).
+      if (data.errorsUnavailable) 'errorsUnavailable': true,
       'errors': [
-        for (final error in split.since)
+        for (final error in shownSince)
           _errorEntry(error, freshness: 'since-last-reload'),
       ],
-      if (split.before.isNotEmpty)
+      if (shownBefore.isNotEmpty)
         'beforeReload': [
-          for (final error in split.before)
+          for (final error in shownBefore)
             _errorEntry(error, freshness: 'before-last-reload'),
         ],
+      if (sinceNote != null) 'truncated': true,
+      'note': ?sinceNote,
+      'beforeReloadNote': ?beforeNote,
     };
   }
 
@@ -370,12 +587,24 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
   }) {
     final location = firstStackLocation(error['stackTrace']?.toString());
     return {
-      'exception': error['exception']?.toString() ?? 'Unknown error',
-      if (error['widget'] != null) 'widget': error['widget'],
-      'location': ?location,
+      'exception': _clipResourceField(
+        error['exception']?.toString() ?? 'Unknown error',
+      ),
+      if (error['widget'] != null)
+        'widget': _clipResourceField(error['widget'].toString()),
+      'location': ?_clipResourceField(location),
       if (error['timestamp'] != null) 'timestamp': error['timestamp'],
       'freshness': freshness,
     };
+  }
+
+  /// [text] cut to [_Constants.maxResourceErrorFieldChars], so a few huge
+  /// entries keep the JSON bounded without cutting the serialized payload.
+  static String? _clipResourceField(String? text) {
+    if (text == null || text.length <= _Constants.maxResourceErrorFieldChars) {
+      return text;
+    }
+    return '${text.substring(0, _Constants.maxResourceErrorFieldChars)}…';
   }
 
   Map<String, dynamic> _devicesResource(_ResourceData data) => {
@@ -390,7 +619,11 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
       return 'No widget tree available'
           '${_activeContext?.hasSdk == false ? ' (zero-code mode)' : ''}.';
     }
-    final text = _widgetTreeText(Map<String, dynamic>.from(tree)).trimRight();
+    // App text can carry a credential; the compact tree is bounded to a byte
+    // budget so one deep tree cannot blow the response up (task 06 §10).
+    final text = FlutterPilotServer._boundToolText(
+      Redaction.text(_widgetTreeText(Map<String, dynamic>.from(tree))),
+    ).trimRight();
     return 'Widget tree (compact):\n$text';
   }
 
@@ -416,13 +649,21 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
 
   /// Pre-connection (SDK-buffered) lines merged with the server's own capture,
   /// oldest first, repeats compacted — the same view `get_debug_logs` gives.
+  ///
+  /// Read on its own: a slow or failing widget-tree call never delays, fails or
+  /// grows this response (task 06 §6). SDK-buffered lines are redacted here (the
+  /// server's own capture is redacted when appended) and only the newest
+  /// [_Constants.maxResourceLogEntries] are rendered.
   String _logsResource(_ResourceData data) {
     final pre = preConnectionLogs(
       sdkLogs: data.sdkLogs,
       serverLogs: data.serverLogs,
     );
-    final entries = [...pre, ...data.serverLogs];
-    if (entries.isEmpty) return 'No console logs since FlutterPilot connected.';
+    final all = [...pre, ...data.serverLogs];
+    if (all.isEmpty) return 'No console logs since FlutterPilot connected.';
+    final entries = all.length <= _Constants.maxResourceLogEntries
+        ? all
+        : all.sublist(all.length - _Constants.maxResourceLogEntries);
     final lines = <String>[];
     String? prevMessage, prevLevel, prevLogger, prevTime;
     var repeat = 0;
@@ -434,7 +675,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     }
 
     for (final entry in entries) {
-      final message = entry['message']?.toString() ?? '';
+      final message = Redaction.text(entry['message']?.toString() ?? '');
       final level = entry['level']?.toString() ?? '';
       final logger = entry['logger']?.toString() ?? '';
       if (message == prevMessage &&
@@ -454,7 +695,16 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     final source = pre.isEmpty
         ? ''
         : ', ${pre.length} from before FlutterPilot connected';
-    return '${entries.length} console entries$source:\n${lines.join('\n')}';
+    final note = truncationNote(
+      shown: entries.length,
+      total: all.length,
+      what: 'console entries (newest kept)',
+      how: 'Call get_debug_logs to narrow by level, query or logger.',
+    );
+    final lead = '${all.length} console entries$source:';
+    return note == null
+        ? '$lead\n${lines.join('\n')}'
+        : '$lead\n$note\n${lines.join('\n')}';
   }
 
   /// Registers the dynamic (RFC 6570) resource templates (task 26).
@@ -499,25 +749,24 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     );
   }
 
+  /// A templated resource URI built from [segments], so a key or route with a
+  /// space, slash, quote or non-ASCII character is percent-encoded the way an
+  /// RFC 6570 client would send it — the raw value is still what the app is
+  /// asked for (task 06 §9).
+  static Uri _templateUri(List<String> segments) =>
+      Uri(scheme: 'flutterpilot', host: 'app', pathSegments: segments);
+
   /// Reads `flutterpilot://app/widgets/{key}`, for tests too.
   Future<ReadResourceResult> readWidgetResourceForTest(
     String key, {
     ResourceTemplateData? app,
-  }) => _readWidgetResource(
-    Uri.parse('flutterpilot://app/widgets/$key'),
-    key,
-    app: app,
-  );
+  }) => _readWidgetResource(_templateUri(['widgets', key]), key, app: app);
 
   /// Reads `flutterpilot://app/routes/{path}`, for tests too.
   Future<ReadResourceResult> readRouteResourceForTest(
     String path, {
     ResourceTemplateData? app,
-  }) => _readRouteResource(
-    Uri.parse('flutterpilot://app/routes/$path'),
-    path,
-    app: app,
-  );
+  }) => _readRouteResource(_templateUri(['routes', path]), path, app: app);
 
   Future<ReadResourceResult> _readWidgetResource(
     Uri uri,
@@ -549,34 +798,55 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     String key,
     ResourceTemplateData? app,
   ) async {
-    if (app == null && _activeContext?.service == null) return _noAppJson();
-    final properties = app != null
-        ? app.widgetProperties
-        : await _extensionData('ext.flutterpilot.getWidgetProperties', {
-            'key': key,
-          });
-    if (properties == null) {
-      return jsonEncode({'connected': true, 'found': false, 'key': key});
+    final connection = app == null ? _resourceConnection : null;
+    if (connection != null && !connection.connected) return _noAppJson();
+    final pin = connection == null ? null : _ResourcePin(connection);
+
+    final Map<String, dynamic>? properties;
+    if (app != null) {
+      properties = app.widgetProperties;
+    } else {
+      final read = await connection!.read(_extWidgetProperties, {'key': key});
+      if (!pin!.isCurrent) return _contextChangedJson();
+      properties = read.data;
     }
-    final tree = app != null
-        ? app.widgetTree
-        : await _extensionData('ext.flutterpilot.getWidgetTree', {
-            'rootKey': key,
-            'maxDepth': '12',
-            'compact': 'true',
-          });
+    if (properties == null) {
+      return jsonEncode(
+        _redactStrings({'connected': true, 'found': false, 'key': key}),
+      );
+    }
+    final Map<String, dynamic>? tree;
+    if (app != null) {
+      tree = app.widgetTree;
+    } else {
+      final read = await connection!.read(_extWidgetTree, {
+        'rootKey': key,
+        'maxDepth': '12',
+        'compact': 'true',
+      });
+      if (!pin!.isCurrent) return _contextChangedJson();
+      tree = read.data;
+    }
     final node = tree?['tree'];
     final childKeys = <String>[];
     // The outermost node is the widget itself; its key is already `key`.
     _collectChildKeys(node, childKeys);
-    return jsonEncode({
-      'connected': true,
-      'found': true,
-      'key': key,
-      'widget': properties,
-      if (node is Map) 'tree': node,
-      'childKeys': childKeys,
-    });
+    final total = childKeys.length;
+    final listed = total <= _Constants.maxResourceChildKeys
+        ? childKeys
+        : childKeys.sublist(0, _Constants.maxResourceChildKeys);
+    return jsonEncode(
+      _redactStrings({
+        'connected': true,
+        'found': true,
+        'key': key,
+        'widget': properties,
+        if (node is Map) 'tree': node,
+        'childKeys': listed,
+        if (total > listed.length) 'childKeysTotal': total,
+        if (total > listed.length) 'childKeysTruncated': true,
+      }),
+    );
   }
 
   /// Every key written under [node], depth-first.
@@ -597,16 +867,34 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     String path,
     ResourceTemplateData? app,
   ) async {
-    if (app == null && _activeContext?.service == null) return _noAppJson();
-    final stackData = app != null
-        ? app.navigationStack
-        : await _extensionData('ext.flutterpilot.getNavigationStack', const {});
-    final router = app != null
-        ? app.routerState
-        : await _extensionData('ext.flutterpilot.getGoRouterState', const {});
-    final stack = ((stackData?['stack'] as List?) ?? const [])
+    final connection = app == null ? _resourceConnection : null;
+    if (connection != null && !connection.connected) return _noAppJson();
+    final pin = connection == null ? null : _ResourcePin(connection);
+
+    final Map<String, dynamic>? stackData;
+    if (app != null) {
+      stackData = app.navigationStack;
+    } else {
+      final read = await connection!.read(_extNavigationStack, const {});
+      if (!pin!.isCurrent) return _contextChangedJson();
+      stackData = read.data;
+    }
+    final Map<String, dynamic>? router;
+    if (app != null) {
+      router = app.routerState;
+    } else {
+      final read = await connection!.read(_extGoRouterState, const {});
+      if (!pin!.isCurrent) return _contextChangedJson();
+      router = read.data;
+    }
+    final fullStack = ((stackData?['stack'] as List?) ?? const [])
         .map((entry) => entry.toString())
         .toList();
+    final stack = fullStack.length <= _Constants.maxResourceRouteItems
+        ? fullStack
+        : fullStack.sublist(
+            fullStack.length - _Constants.maxResourceRouteItems,
+          );
     final currentRoute =
         router?['currentLocation']?.toString() ??
         (stack.isEmpty ? null : stack.last);
@@ -619,7 +907,7 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     final found =
         isCurrent ||
         requested == currentRoute ||
-        stack.contains(requested) ||
+        fullStack.contains(requested) ||
         matchedRoutes.any(
           (route) => route['matchedLocation']?.toString() == requested,
         );
@@ -631,23 +919,32 @@ mixin _ResourcesMixin on _FlutterPilotServerBase {
     }
     final routerMap = router ?? const <String, dynamic>{};
     final hasRouter = router != null;
-    return jsonEncode({
-      'connected': true,
-      'requested': requested,
-      'found': found,
-      'currentRoute': currentRoute,
-      'stack': stack,
-      'stackDepth': stack.length,
-      'goRouter': hasRouter,
-      if (hasRouter) 'canPop': routerMap['canPop'],
-      'route': ?matched,
-      'pathParameters':
-          routerMap['pathParameters'] ?? const <String, dynamic>{},
-      'queryParameters':
-          routerMap['queryParameters'] ?? const <String, dynamic>{},
-      if (hasRouter && routerMap['matchedRoutes'] != null)
-        'matchedRoutes': routerMap['matchedRoutes'],
-    });
+    final allMatched = (routerMap['matchedRoutes'] as List?) ?? const [];
+    final matchedListed = allMatched.length <= _Constants.maxResourceRouteItems
+        ? allMatched
+        : allMatched.sublist(0, _Constants.maxResourceRouteItems);
+    return jsonEncode(
+      _redactStrings({
+        'connected': true,
+        'requested': requested,
+        'found': found,
+        'currentRoute': currentRoute,
+        'stack': stack,
+        'stackDepth': fullStack.length,
+        if (fullStack.length > stack.length) 'stackTruncated': true,
+        'goRouter': hasRouter,
+        if (hasRouter) 'canPop': routerMap['canPop'],
+        'route': ?matched,
+        'pathParameters':
+            routerMap['pathParameters'] ?? const <String, dynamic>{},
+        'queryParameters':
+            routerMap['queryParameters'] ?? const <String, dynamic>{},
+        if (hasRouter && routerMap['matchedRoutes'] != null)
+          'matchedRoutes': matchedListed,
+        if (hasRouter && allMatched.length > matchedListed.length)
+          'matchedRoutesTotal': allMatched.length,
+      }),
+    );
   }
 
   static Map<String, dynamic>? _matchedRoute(

@@ -543,4 +543,4 @@ validation. Make sure to validate email format before submitting."
 3. **Move to automation**: Ask Claude to tap a button
 4. **Advanced workflows**: Use templates for complex testing
 
-For more tool details, see [TOOLS.md](../TOOLS.md).
+For more tool details, see [TOOLS.generated.md](../TOOLS.generated.md).

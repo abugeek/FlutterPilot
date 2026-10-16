@@ -207,6 +207,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     final offset = before.logOffset;
     if (offset != null) {
       final log = File('${before.root}/$launchLogFile');
+      final clock = Stopwatch()..start();
       // The supervisor copies flutter run's output a moment after it prints.
       for (var i = 0; i < 6; i++) {
         try {
@@ -217,27 +218,27 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
               allowMalformed: true,
             ),
           );
-          if (errors.isNotEmpty) return errors;
+          if (errors.isNotEmpty) {
+            reportCompileFallback(
+              CompileFallbackEvent(
+                outcome: 'log-errors',
+                durationMs: clock.elapsedMilliseconds,
+                files: 0,
+                fromLog: true,
+              ),
+            );
+            return errors;
+          }
         } catch (_) {}
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
     }
-    final files = dartFilesChangedSince(before.root, before.since);
-    if (files.isEmpty) return '';
-    try {
-      final result = await runProgram([
-        'dart',
-        'analyze',
-        '--format=machine',
-        ...files,
-      ], workingDirectory: before.root).timeout(const Duration(seconds: 30));
-      return analyzerErrorsIn(
-        '${result.stdout}\n${result.stderr}',
-        before.root,
-      );
-    } catch (_) {
-      return '';
-    }
+    // Only when the supervised log had nothing: analyze the edited files once.
+    return analyzerFallbackErrors(
+      root: before.root,
+      since: before.since,
+      runner: runProgram,
+    );
   }
 
   /// Whether the Flutter UI isolate answers a service extension within 5 s.

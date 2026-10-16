@@ -81,6 +81,180 @@ tools that always work beat many tools that sometimes work.
   the unit tests inject the stop and device-list functions. A call that only
   waits for a launch already going on skips the device question entirely
   (`waitsForRunningLaunch`), so waiting still needs no `device`.
+- Reproducible evidence gates (2026-10-16, `mcp-quality-next` task 00):
+  `melos run test` now calls `tool/package_test_runner.dart`, a fail-closed
+  portable runner (selects Dart vs Flutter per package, hard-errors on a missing
+  toolchain or an un-bootstrapped package, never downgrades a failed Flutter run
+  to Dart; 16 regression tests). Size reporting is split into characters (the
+  legacy budget unit, unchanged), UTF-8 bytes, wire bytes and estimated tokens
+  (`lib/src/tool_list_bytes.dart`, `tool/tool_list_report.dart`). The eval
+  fixtures gained `tool/eval/fixtures/manifest.json` plus a read-only preflight
+  (`tool/eval/src/fixtures.dart`, `tool/eval/check_fixtures.dart`) wired into
+  `run_evals.dart` via `--fixtures`.
+- Truthful effects and retry safety (2026-10-16, task 01): one reviewed policy
+  module (`lib/src/effect_policy.dart`) decides, per service-extension call,
+  whether it is mutating and whether it is replay-safe after a lost response. An
+  unlisted extension defaults to mutating and never replayed; the old
+  `_isReadOnlyExtension` prefix heuristic is gone. `audit_screen_health`,
+  `get_state`, `get_debug_logs` and `get_http_profile` now advertise `acts` (they
+  can clear FlutterPilot's own capture) while still observing as reads for
+  scheduling/replay. The `openWorldTools` trust boundary is widened to the app's
+  reach.
+- Nested contracts and all-step preflight (2026-10-16, task 02): every composite
+  (`execute_action_chain`, `run_on_devices`, `get_memory_details(cycle:)`,
+  `profile_action`) validates all steps through one shared preflight
+  (`preflightStep`/`preflightChain`, `lib/src/action_chain.dart`) before any step
+  runs — shape, retired-name translation, allowed family, availability, profile,
+  and the tool's own argument gate (the same `_toolArgGates` a direct call uses).
+  A compact shared step envelope (`{"tool", "arguments"}`) is used by all three
+  list composites, and refusals name the path (`steps[2].arguments.key`). No
+  budget number changed (`all` 40,737 / `sdk_no_plugins` 28,981 / `zero_code`
+  9,698, all within their existing ceilings).
+- Task-00 correction (2026-10-16, found in task 01): the shared
+  `toolModelProjection` stripped only `annotations`, but the running server's
+  `tools/list` also sends an `execution` key, so the doc generator over-counted
+  (43,221) against the freshness test (40,701) for the same 63 tools. The
+  projection now returns exactly `{name, description, inputSchema}`.
+- Official Inspector interoperability (2026-10-16, task 03): `tool/inspector/`
+  pins `@modelcontextprotocol/inspector` **2.11.0** (Node engine ≥ 22.19.0) with
+  a committed lockfile and a portable wrapper (`inspector_cli.dart`) that runs
+  the pinned CLI against the server over stdio — one process per probe, a
+  read-only temp `--config`, an isolated secret store, `protocolEra: legacy`,
+  a bounded per-probe deadline with a process-tree kill, an output cap, and
+  single-envelope stdout parsing. Ten read-only probes plus a negative refusal
+  and a recovery probe; a real run on Windows negotiated `2025-11-25`, passed
+  `tools/list --strict` with `0 errors, 3 warnings across 2 tools` (the bare
+  `ArgAny` schemas), and refused a missing-`steps` call with exit 5 `isError`
+  naming `steps`. The raw suite now fails closed on stdout hygiene
+  (`test/support/stdout_hygiene.dart` + a redacted `BoundedStderr`), and a new
+  `official-mcp-inspector` CI job runs the wrapper on Linux and Windows. Node is
+  needed only for this check; the Dart server never needs it.
+- Startup / MCP-readiness benchmark (2026-10-16, task 09):
+  `tool/benchmarks/startup_benchmark.dart` measures what a user waits for on one
+  monotonic clock (spawn → `initialize` → `tools/list` → first read → connected
+  read) across `no-app`, `unavailable` and `connected` states and across `dart
+  run` vs the exact AOT executable, interleaving builds over 20 warm trials with
+  the first trial reported separately. Results are versioned, metadata-only JSON
+  under a git-ignored `benchmark-results/`. Measured on Windows (revision
+  `3c9e322`, Dart 3.13.4, Flutter 3.47.5): no-app MCP-ready **780 ms** on AOT vs
+  **2929 ms** on source (AOT removes ~2.15 s / ~73%), but an unreachable VM
+  endpoint adds **~2.1 s in both builds** (+71%), because `start()` still awaits
+  `_connectToVmService()` before the stdio transport. The honest reading:
+  AOT is the big win and already ships; the blocking connection is the remaining
+  bottleneck, so a startup-order change is **recommended for separate approval,
+  not made here**. The connected case and the Linux CI job are not run on this
+  workstation.
+
+- Analyzer-fallback investigation (2026-10-16, task 10): the reload-error
+  fallback (log-first, then a bounded one-shot `dart analyze
+  --format=machine` on the files edited since the last good reload) was
+  isolated into a testable `analyzerFallbackErrors(...)` with an injectable
+  runner, and given **opt-in** metadata counters (`CompileFallbackEvent` /
+  `compileFallbackObserver`, null by default — counts and outcomes only, no
+  paths or messages). Measured on a disposable package (Dart 3.13.4, 15
+  trials): the scan and log extraction are ~0 ms; one-shot `dart analyze` is
+  ~1.8–1.9 s and does **not** warm (only ~4% / 72 ms cold→warm). The installed
+  companion **`dart mcp-server`** v1.2.0 already exposes **`analyze_files`**
+  ("analyzes specific paths, or the entire project, for errors"),
+  **`lsp`** and **`get_runtime_errors`** (verified via `tools/list`, not
+  assumed). Decision: **no daemon** — retain the log-first one-shot fallback and
+  improve guidance; the reuse gate is not claimed and incidence was not
+  measurable without a running app. `tool/benchmarks/analyzer_fallback.dart` and
+  `companion_capabilities.dart` record the evidence.
+- Trustworthy, bounded, comparable evals (2026-10-16, task 04): the agent-eval
+  runner is now `schemaVersion: 2` with a `RunIdentity` (model, device, platform,
+  build mode, SDK versions, task-suite hash + ids, per-fixture revision/content/
+  scenario hashes, runner policy, pricing version). Outcomes are kept apart
+  (passed, failed answer, infrastructure error, budget stop, skip) and the pass
+  rate is over *executed* cases only; a run with no executed case or any
+  infrastructure error is `benchmark_valid: false`. Pricing is an explicit,
+  versioned `pricing.json` (a model it does not name reports an unknown cost —
+  no substring match, no fallback) and `--max-spend` refuses to start without a
+  price. The model talks to a `PolicyClient` that refuses the server's
+  destructive tools (including a nested chain step), while resets keep
+  `--allow-destructive`; the reset route is read from `get_app_summary`'s
+  structured content, not prose. The MCP adapter keeps the negotiated protocol,
+  server identity and `structuredContent`, fails on non-protocol stdout, rejects
+  pending requests on exit and bounds response bodies. Comparisons refuse a
+  different measurement and call a missing task, infrastructure error, budget
+  stop or skip *incomplete* (exit 3). Tests: `test/eval_runner_test.dart` 20 → 33
+  (fake API/MCP plus real-subprocess adapter cases), no key or paid call. The
+  paid canary and a live reset check remain gated on separate approval.
+- Ten read-only inspection evaluations (2026-10-16, task 05): a separate suite
+  (`tool/eval/inspection_tasks.yaml`, `src/inspection.dart`) of ten questions the
+  model settles by *observing* the fixture, selected with
+  `run_evals.dart --suite inspection`. Its schema carries the category, scenario,
+  initial state, matcher, `verified` flag and the manual `evidence`; a verified
+  question without an answer/evidence (or an answer without verification) is
+  refused, and the acceptance rule is exactly ten verified cases covering
+  discovery, UI, diagnostics, state/storage and zero-code. The model phase runs
+  behind `ReadOnlyPolicyClient`, an argument-aware allow-list derived from the
+  server's reviewed effects (`toolEffects == reads` plus the observing mode of
+  the four clear/sweep-capable tools), so navigation, settings, mocks, clears,
+  scenario, profiler, custom code and a composite's mutating nested step are all
+  refused and scored. XML is an optional export of the canonical YAML. All ten
+  answers were reproduced twice through `fp_bridge` from a fresh scenario load
+  and are committed; `--suite inspection` refuses any unverified selected
+  question (exit 2). Tests: `test/inspection_suite_test.dart` (24), no key.
+- Focused, coherent, bounded resource reads (2026-10-16, task 06): each fixed
+  resource now names the app extensions it reads (`_resourceExtensions` in
+  `lib/src/resources.dart`) instead of the old gather-everything
+  `_liveResourceData()`, which always read the snapshot, the errors **and** the
+  widget tree for every URI. `flutterpilot://devices` makes **zero** app calls;
+  the summary reads the snapshot and errors but never builds a widget tree; and
+  the errors, tree and logs read one thing each, so a slow or failing tree can
+  no longer delay, fail or grow them. A `ResourceAppConnection` seam (with a
+  test-only `resourceAppConnectionForTest`) records per-URI call counts and
+  injects a missing extension, a failure, a device switch or a reconnect. Each
+  read pins the active device + connection generation and re-checks after every
+  await, reporting `contextChanged` rather than blending two apps; an error list
+  that was asked for and did not arrive is reported `errorsUnavailable: true`,
+  never as a clean zero. Output is redacted structurally (so JSON stays valid)
+  and bounded by items (`truncationNote` metadata) with a 512 KiB byte cap on
+  the text resources; template URIs percent-encode keys/routes (spaces, slashes,
+  quotes, Unicode) while the app is asked for the raw value. Measured against a
+  large fixture (120 errors, 1,500-node tree): summary 210 B / 2 calls, errors
+  9,473 B / 1, tree 112,313 B / 1, logs 558 B / 1, devices 77 B / 0 — **five
+  calls for a full five-resource sweep, tree once, versus fifteen before**.
+  Tests: `test/mcp_resources_test.dart` 16 → 37; full suite 932.
+- Machine-checked structured-result contracts (2026-10-16, task 07):
+  `lib/src/structured_results.dart` now carries an executable, developer-side
+  contract for **ten** families — the eight originals plus the `audit_screen_health`
+  and `navigate_to` pilots — (`StructuredSpec`/`StructuredField`,
+  `structuredContracts`, `structuredProblems()`). It is deliberately **not** an
+  MCP `outputSchema`, so `tools/list` is unchanged; `structuredShapes` (and thus
+  `TOOLS.generated.md`) is rendered from the contracts, so a shape cannot drift
+  from what the tests validate. "Predicate false" is now separated from "could
+  not evaluate" everywhere it mattered: an explicit `status`
+  (`refused`/`unavailable`/`partial`) plus `reason` on `run_on_devices`
+  (with per-device `reached` and a distinct refusal verdict), `get_errors`,
+  `wait_for`, `execute_action_chain`, `fill_form`, `verify_feature`, and the two
+  pilots — so an unanswered app never reads as a clean screen or a passing check
+  (a real `wait_for` timeout stays an evaluated verdict with `timedOut: true`).
+  The audit pilot reports requested/visited/audited/failed/skipped, findings by
+  category, `restored`/`incomplete`/`loading`; a failed or still-loading route is
+  not clean. The navigation pilot reports requested/current route, wait status,
+  completion and uncertainty. No new tool, no budget moved; structured payloads
+  are 65–233 B. Tests: `test/structured_results_test.dart` 37 → 62; full suite
+  957.
+- Evidence-led curation and one contributor recipe (2026-10-16, task 08): the
+  new `docs/MCP_DEVELOPMENT.md` is the single Dart-specific recipe (hypothesis
+  first, tool/resource/prompt choice, the argument/effect/result contracts, test
+  commands, the official Inspector, eval authoring, budgets, security,
+  compatibility, required evidence). `.github/pull_request_template.md` records
+  the effect/argument/result/guidance/fixture/migration decisions and the
+  lower-never-raise budget rule. `test/docs_freshness_test.dart` (17 tests) fails
+  when a published doc links a file that does not exist or repeats a stale tool
+  count, and checks `ARCHITECTURE.md` names only real mixins — the deleted
+  `TOOLS.md` was still referenced from four docs. Stale references corrected
+  (`CLAUDE.md`/`README.md`/`packages/fp_server/README.md` 67 → 63;
+  `docs/INDEX.md` categories/counts/size table replaced with a pointer to the
+  generated inventory; `docs/ARCHITECTURE.md` 8 → the real 14 mixins, 13 → 12
+  plugins, and the tap example no longer advises a redundant re-query). No
+  production Dart changed. Static per-profile `tools/list` cost recorded (all 63
+  tools 40 737 chars / 47 374 wire bytes; `zero_code` 15 / 9 698). Paid
+  before/after curation is **inconclusive** — no approved comparable run, no
+  money spent. Tests: `test/docs_freshness_test.dart` 17; full suite 974.
 
 ### How to work (the method that found every real bug so far)
 

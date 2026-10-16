@@ -50,28 +50,30 @@ void main() {
 
     // What an agent pays for before it calls anything: the name,
     // description and schema of each listed tool (annotations go to the
-    // client, not the model). Raise a budget only for a tool that earns it.
-    int listBytes(bool Function(String name) listed) =>
-        toolListTotal(server.toolListJson(names.where(listed)));
+    // client, not the model). `toolListTotalChars` is the legacy character
+    // measure (task 00 kept the number, not the name: it is UTF-16 code units,
+    // which for today's ASCII descriptions equals the UTF-8 byte count).
+    int listChars(bool Function(String name) listed) =>
+        toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
       // Measured 2026-10-14, after task 04 merged the five gesture tools into
       // `gesture_widget`; each limit is that profile's measurement plus 300
       // (task 09 C, from `tool/tool_list_report.dart`).
-      // Every tool (--static-tools): 63 tools, 40 597 bytes.
-      expect(listBytes((_) => true), lessThanOrEqualTo(40897));
+      // Every tool (--static-tools): 63 tools, 40 597 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(40897));
       // An app with the SDK and no plugin, not on an iOS simulator:
-      // 28 841 bytes.
+      // 28 841 chars.
       expect(
-        listBytes(
+        listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
         lessThanOrEqualTo(29141),
       );
-      // An app without the SDK: 9 674 bytes.
-      expect(listBytes(zeroCodeTools.contains), lessThanOrEqualTo(9974));
+      // An app without the SDK: 9 674 chars.
+      expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));
     });
 
     test('the core profile fits a client with a tool limit', () {
@@ -120,6 +122,18 @@ void main() {
           'call_custom_tool',
         },
       );
+      // No navigational route sweep is advertised as purely read-only, and a
+      // tool that can clear FlutterPilot's own diagnostics advertises the
+      // clearing mode too (task 01). effect_policy.dart keeps the non-clearing
+      // call a read for scheduling and replay.
+      for (final name in [
+        'audit_screen_health',
+        'get_state',
+        'get_debug_logs',
+        'get_http_profile',
+      ]) {
+        expect(toolEffects[name], ToolEffect.acts, reason: name);
+      }
     });
 
     test('parameters have one name each, in camelCase', () {

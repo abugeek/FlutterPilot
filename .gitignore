@@ -32,6 +32,12 @@ coverage/
 .env
 .env.*
 
+# Local MCP Inspector smoke report (task 03); CI uploads it as an artifact.
+inspector-report*.json
+
+# Local startup benchmark results and disposable AOT builds (task 09).
+benchmark-results/
+
 .trae/
 graphify-out/
 

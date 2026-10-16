@@ -80,16 +80,26 @@ ext.flutterpilot.getBlocStates        → Bloc values
 **Responsibility**: MCP server that bridges AI agents to the Flutter app.
 
 **Architecture**:
-- Main class: `FlutterPilotServer` (~640 lines)
-- 8 tool mixin files in `src/tools/`:
+- Main class: `FlutterPilotServer` — registration, the VM-service connection,
+  event/log/screenshot buffers, and resource/prompt wiring.
+- Tool registration is split across mixins in `src/tools/`. The exact tool
+  count and every parameter is **generated from the running registration** into
+  [`TOOLS.generated.md`](../TOOLS.generated.md); treat that generated file as
+  the reference instead of any count repeated here.
   - `app_inspection_tools.dart` — Summary, errors, logs, build config
-  - `ui_automation_tools.dart` — Tap, scroll, text input, gestures
+  - `launch_tools.dart` — Build and launch the app
+  - `ui_automation_tools.dart` — Tap, scroll, text input, gestures, health audit
   - `screenshot_tools.dart` — Capture, compare, baseline management
   - `navigation_tools.dart` — Routes, deep links, navigation
   - `state_management_tools.dart` — Bloc, Riverpod, Hive, Drift, SharedPrefs
+  - `plugin_integration_tools.dart` — Plugin-gated inspection tools
   - `testing_tools.dart` — Assertions, wait conditions, recordings
+  - `test_generation_tools.dart` — Record a flow into an integration test
+  - `verification_tools.dart` — `verify_feature` acceptance criteria
+  - `scenario_tools.dart` — Save/load a named app start state
   - `devtools_tools.dart` — DevTools integration, profiling
   - `self_heal_tools.dart` — Crash analysis and recovery
+  - `native_automation_tools.dart` — Android/iOS `native_*` tools
 
 **Key Features**:
 - Auto-reconnect with exponential backoff
@@ -107,7 +117,7 @@ ext.flutterpilot.getBlocStates        → Bloc values
 
 **Purpose**: Track and inject state in third-party packages.
 
-**13 Plugins**:
+**12 Plugins**:
 1. **fp_bloc** — Bloc/Cubit observer
    - Tracks state changes
    - Allows state injection
@@ -198,9 +208,12 @@ await _callExtensionRaw('ext.flutterpilot.getBlocStates', {})
    ↓
 10. Server catches errors via _eventBuffer stream listener
    ↓
-11. Server returns to AI Agent: {
+11. Server returns to AI Agent a single response that already carries the
+    postcondition — whether the route changed, what appeared/disappeared (a
+    capped widget-tree diff), what is tappable now, and any new errors:
+    {
       "type": "text",
-      "text": "Tap successful. Use get_navigation_stack or get_errors to verify."
+      "text": "Tapped 'submitButton'. Route: /home. Appeared: 'Welcome'. Errors: none."
     }
 ```
 

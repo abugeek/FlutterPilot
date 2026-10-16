@@ -1,6 +1,6 @@
 # FlutterPilot AI Assistant Guidelines
 
-FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 67 MCP tools (see TOOLS.generated.md; an app is shown only the ones that work for it) over the Model Context Protocol.
+FlutterPilot is an AI-native runtime introspection, active control, and autonomous testing toolkit for Flutter applications, exposing 63 MCP tools (see the generated `TOOLS.generated.md`; an app is shown only the ones that work for it) over the Model Context Protocol.
 
 **Next work:** see `ROADMAP.md` (priorities, field-test method, known gotchas). Drive tools from a shell with `packages/fp_server/tool/fp_bridge.dart`.
 

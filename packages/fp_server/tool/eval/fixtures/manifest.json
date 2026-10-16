@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "comment": "Reproducible fixture identities for the agent evals (task 00). Each fixture is a sibling checkout of this repository; `revision` is the full commit the suite was written against, and `scenarioChecksums` is sha256 of every flutterpilot/scenarios/*.json in that revision. Resolve checkouts with --fixtures <dir> (the directory that holds one subdirectory per id); preflight reports every missing or mismatched input before anything launches. Regenerate a fixture's hashes with scenarioChecksumsOf() in src/fixtures.dart.",
+  "fixtures": [
+    {
+      "id": "fp_lab_shop",
+      "sourceLocation": "../fp_lab_shop",
+      "revision": "acb5f26d9dce290bd35f6453bd1c643479eb24a3",
+      "license": "undeclared (no LICENSE file in the checkout; redistribution not assumed)",
+      "plugins": [
+        "riverpod",
+        "gorouter",
+        "dio",
+        "sqflite",
+        "shared_preferences"
+      ],
+      "buildMode": "debug",
+      "devices": ["windows", "macos"],
+      "seedVersion": "lab-v1",
+      "scenarioChecksums": {
+        "cart_with_items.json": "71f3fdcd571fe0d5011faf00d8a6ffe966483b3f911a5506978221cd5936c3b6",
+        "eval_base.json": "282793e5d17224a0eb8aca4e5e5e9070a33bef0817c4987993c5add761a2451b",
+        "server_down.json": "a496565ef2c5dbed7e24b74288b719eeb69f300ab8e9cfd176ee07fa3b97731a"
+      },
+      "expectedCapabilities": [
+        "get_app_summary",
+        "get_widget_tree",
+        "inspect_widget",
+        "audit_screen_health",
+        "get_network_logs",
+        "mock_http_response",
+        "simulate_network",
+        "exec_sql_query",
+        "get_state",
+        "get_shared_preferences",
+        "toggle_checkbox",
+        "fill_form",
+        "profile_action",
+        "get_memory_details"
+      ]
+    },
+    {
+      "id": "fp_lab_notes",
+      "sourceLocation": "../fp_lab_notes",
+      "revision": "0f5ead4669aebc15040ed9f4620ebd3f612baeec",
+      "license": "undeclared (no LICENSE file in the checkout; redistribution not assumed)",
+      "plugins": ["bloc", "drift", "hive", "secure_storage", "connectivity"],
+      "buildMode": "debug",
+      "devices": ["windows", "macos"],
+      "seedVersion": "lab-v1",
+      "scenarioChecksums": {
+        "notes_base.json": "d10289d1e41f70cd0cba963a9d11080c546dd9a1c30f5d7a14cd8166f0cf61c8"
+      },
+      "expectedCapabilities": [
+        "get_app_summary",
+        "exec_sql_query",
+        "get_state",
+        "get_secure_storage",
+        "get_hive_contents",
+        "get_connectivity",
+        "get_debug_logs"
+      ]
+    },
+    {
+      "id": "fp_lab_plain",
+      "sourceLocation": "../fp_lab_plain",
+      "revision": "f6ef0e2c2d2452d9508c07fb57e93996bb0dab5d",
+      "license": "undeclared (no LICENSE file in the checkout; redistribution not assumed)",
+      "plugins": [],
+      "buildMode": "debug",
+      "devices": ["windows", "chrome", "macos"],
+      "seedVersion": "lab-v1",
+      "scenarioChecksums": {},
+      "expectedCapabilities": [
+        "get_app_summary",
+        "get_widget_tree",
+        "get_errors",
+        "get_debug_logs",
+        "capture_screenshot"
+      ]
+    }
+  ]
+}

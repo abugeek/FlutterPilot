@@ -141,11 +141,16 @@ Map<String, ArgType> argTypesFromSchema(Map<String, dynamic>? schema) {
 /// reported as missing for a required one. Keys the schema does not name (an
 /// alias like `target`, which [normalizeToolParams] resolves later) are left
 /// alone.
+///
+/// [path] prefixes an argument's name in a refusal, so a nested call names the
+/// offending path (`steps[0].arguments.key`) and not just its leaf (task 02
+/// §10). A direct call passes nothing and keeps the bare name.
 ({Map<String, dynamic> args, String? problem}) coerceArguments(
   String tool,
   Map<String, dynamic> args,
   Map<String, ArgType> schema, {
   List<String> required = const [],
+  String path = '',
 }) {
   final coerced = <String, dynamic>{};
   for (final entry in args.entries) {
@@ -153,7 +158,7 @@ Map<String, ArgType> argTypesFromSchema(Map<String, dynamic>? schema) {
     final value = entry.value;
     if (value == null) {
       if (required.contains(entry.key)) {
-        return (args: args, problem: _missing(tool, entry.key, type));
+        return (args: args, problem: _missing(tool, '$path${entry.key}', type));
       }
       continue;
     }
@@ -161,13 +166,13 @@ Map<String, ArgType> argTypesFromSchema(Map<String, dynamic>? schema) {
       coerced[entry.key] = value;
       continue;
     }
-    final (result, problem) = _coerce(tool, entry.key, type, value);
+    final (result, problem) = _coerce(tool, '$path${entry.key}', type, value);
     if (problem != null) return (args: args, problem: problem);
     coerced[entry.key] = result;
   }
   for (final name in required) {
     if (!coerced.containsKey(name)) {
-      return (args: args, problem: _missing(tool, name, schema[name]));
+      return (args: args, problem: _missing(tool, '$path$name', schema[name]));
     }
   }
   return (args: coerced, problem: null);
@@ -243,6 +248,7 @@ Map<String, ArgType> argTypesFromSchema(Map<String, dynamic>? schema) {
             Map<String, dynamic>.from(element),
             items.properties,
             required: items.required,
+            path: '$name[$i].',
           );
           if (problem != null) return (null, problem);
           elements.add(map);
@@ -269,6 +275,7 @@ Map<String, ArgType> argTypesFromSchema(Map<String, dynamic>? schema) {
         normalized,
         type.properties,
         required: type.required,
+        path: '$name.',
       );
       if (problem != null) return (null, problem);
       return (coerced, null);

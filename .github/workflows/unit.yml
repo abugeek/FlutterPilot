@@ -68,3 +68,86 @@ jobs:
         run: |
           dart pub get
           dart test
+
+  # Official MCP Inspector interoperability (task 03). An independently
+  # maintained client must still discover and call the server; the raw suite
+  # that ships in the same package keeps the framing and same-session checks.
+  # Node is needed only here — never to build or run the Dart server.
+  official-mcp-inspector:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: packages/fp_server/tool/inspector/package-lock.json
+
+      - name: Install the pinned Inspector
+        working-directory: packages/fp_server/tool/inspector
+        run: npm ci --no-audit --no-fund
+
+      - name: Resolve server dependencies
+        working-directory: packages/fp_server
+        run: dart pub get
+
+      - name: Run the pinned Inspector against the server
+        working-directory: packages/fp_server
+        run: dart run tool/inspector/inspector_cli.dart --json --report inspector-report.json
+
+      - name: Upload the Inspector report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspector-report-${{ matrix.os }}
+          path: packages/fp_server/inspector-report.json
+          if-no-files-found: ignore
+
+  # Startup/readiness benchmark harness (task 09). This is a measurement tool,
+  # not a gate: its honest deliverable is a decision, and a red run only means a
+  # trial misbehaved, never that startup got slower. CI proves the harness runs
+  # on a supported OS; the authoritative 20-trial run is reproduced locally on
+  # Windows. Fewer trials here keep the gate quick, so the CI numbers are
+  # directional and machine-specific — never compared across operating systems.
+  startup-benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Resolve server dependencies
+        working-directory: packages/fp_server
+        run: dart pub get
+
+      - name: Run the startup benchmark (source + AOT, no-app + unavailable)
+        working-directory: packages/fp_server
+        run: >
+          dart run tool/benchmarks/startup_benchmark.dart
+          --mode both --case all --trials 5 --json
+
+      - name: Upload the benchmark report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-benchmark-${{ matrix.os }}
+          path: packages/fp_server/benchmark-results/
+          if-no-files-found: ignore
+

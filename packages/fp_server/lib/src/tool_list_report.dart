@@ -149,10 +149,23 @@ List<String> profileToolNames(AppProfile profile, Iterable<String> all) {
   };
 }
 
-/// What [profile] costs: the tools it lists, the bytes they add to
-/// `tools/list`, and a token estimate (bytes / 4, an estimate and labelled as
-/// one). [listJson] is the server's `toolListJson`.
-({int tools, int bytes, int tokens, List<({String name, int bytes})> perTool})
+/// What [profile] costs: the tools it lists, the characters and UTF-8 bytes
+/// its model-facing projection adds to `tools/list`, the full wire bytes of the
+/// tools (annotations included), and an estimated token count (UTF-8 bytes
+/// divided by four — an estimate and labelled as one). [listJson] is the
+/// server's `toolListJson`.
+///
+/// `chars` is the **legacy** measure the list-size budgets use (Dart string
+/// units, not bytes); `utf8Bytes` corrects it for non-ASCII text; `wireBytes`
+/// is the whole tool object. See `tool_list_bytes.dart`.
+({
+  int tools,
+  int chars,
+  int utf8Bytes,
+  int wireBytes,
+  int tokens,
+  List<({String name, int chars, int utf8Bytes, int wireBytes})> perTool,
+})
 profileCost(
   AppProfile profile,
   Iterable<String> all,
@@ -161,13 +174,22 @@ profileCost(
   final entries = listJson(profileToolNames(profile, all));
   final perTool = [
     for (final entry in entries)
-      (name: entry['name'] as String, bytes: toolListBytes(entry)),
-  ]..sort((a, b) => b.bytes.compareTo(a.bytes));
-  final bytes = perTool.fold(0, (sum, tool) => sum + tool.bytes);
+      (
+        name: entry['name'] as String,
+        chars: toolListChars(entry),
+        utf8Bytes: toolListUtf8Bytes(entry),
+        wireBytes: toolListWireBytes(entry),
+      ),
+  ]..sort((a, b) => b.chars.compareTo(a.chars));
+  final chars = perTool.fold(0, (sum, tool) => sum + tool.chars);
+  final utf8Bytes = perTool.fold(0, (sum, tool) => sum + tool.utf8Bytes);
+  final wireBytes = perTool.fold(0, (sum, tool) => sum + tool.wireBytes);
   return (
     tools: perTool.length,
-    bytes: bytes,
-    tokens: bytes ~/ 4,
+    chars: chars,
+    utf8Bytes: utf8Bytes,
+    wireBytes: wireBytes,
+    tokens: toolListTokens(utf8Bytes),
     perTool: perTool,
   );
 }

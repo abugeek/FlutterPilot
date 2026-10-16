@@ -175,6 +175,44 @@ void main() {
       expect(problem, isNotNull);
       expect(problem, contains('tool'));
     });
+
+    test('names a nested property by its whole path', () {
+      const steps = {
+        'steps': ArgArray(
+          items: ArgObject(
+            properties: {
+              'tool': ArgString(),
+              'arguments': ArgObject(properties: {'durationMs': ArgInteger()}),
+            },
+            required: ['tool'],
+          ),
+        ),
+      };
+      // `arguments` itself is not an object.
+      final notObject = coerce(steps, {
+        'steps': [
+          {'tool': 'tap_widget', 'arguments': 5},
+        ],
+      }).problem;
+      expect(notObject, contains('steps[0].arguments'));
+      // A property inside `arguments` names the whole path too.
+      final badProperty = coerce(steps, {
+        'steps': [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'durationMs': 'abc'},
+          },
+        ],
+      }).problem;
+      expect(badProperty, contains('steps[0].arguments.durationMs'));
+      // A missing required nested field is named the same way.
+      final missing = coerce(steps, {
+        'steps': [
+          {'arguments': <String, dynamic>{}},
+        ],
+      }).problem;
+      expect(missing, contains('steps[0].tool'));
+    });
   });
 
   group('object', () {

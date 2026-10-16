@@ -660,5 +660,5 @@ Mock /api/users with:
 ## Need More Help?
 
 - See [TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md) for common issues
-- See [TOOLS.md](../TOOLS.md) for complete tool reference
+- See [TOOLS.generated.md](../TOOLS.generated.md) for the complete tool reference
 - See [AI_AGENTS.md](../docs/AI_AGENTS.md) for AI integration patterns

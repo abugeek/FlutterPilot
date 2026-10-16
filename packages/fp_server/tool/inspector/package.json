@@ -1,0 +1,10 @@
+{
+  "name": "flutterpilot-inspector-dev",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pinned official MCP Inspector CLI, used only to smoke-test the FlutterPilot server from CI. Not a dependency of the published package; the production server never needs Node.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@modelcontextprotocol/inspector": "2.11.0"
+  }
+}

@@ -6,6 +6,16 @@ import 'package:yaml/yaml.dart';
 
 enum MatchMode { exact, regex, number }
 
+/// Maps the YAML spelling of a match mode to its value, or throws naming the
+/// offender. Shared by the workflow and inspection suites so both accept the
+/// same modes.
+MatchMode matchModeOf(String name) => switch (name) {
+  'exact' => MatchMode.exact,
+  'regex' => MatchMode.regex,
+  'number' => MatchMode.number,
+  final other => throw FormatException('Unknown match mode "$other"'),
+};
+
 class EvalTask {
   EvalTask({
     required this.id,
@@ -38,18 +48,12 @@ class EvalTask {
   final bool knownHard;
 
   static EvalTask fromYaml(Map<Object?, Object?> yaml) {
-    final match = switch ('${yaml['match'] ?? 'exact'}') {
-      'exact' => MatchMode.exact,
-      'regex' => MatchMode.regex,
-      'number' => MatchMode.number,
-      final other => throw FormatException('Unknown match mode "$other"'),
-    };
     return EvalTask(
       id: '${yaml['id']}',
       app: '${yaml['app']}',
       prompt: '${yaml['prompt']}'.trim(),
       answer: '${yaml['answer']}',
-      match: match,
+      match: matchModeOf('${yaml['match'] ?? 'exact'}'),
       scenario: yaml['scenario'] == null ? null : '${yaml['scenario']}',
       tags: _strings(yaml['tags']),
       expectedTools: _strings(yaml['expected_tools']),

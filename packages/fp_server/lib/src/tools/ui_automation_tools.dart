@@ -731,6 +731,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               submitted: false,
               filledCount: 0,
               totalFields: (p['fields'] as Map?)?.length ?? 0,
+              status: 'unavailable',
             ),
           );
         }
@@ -834,7 +835,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         }
 
         // A wait that errored never met its condition; its structured result
-        // says so instead of leaving that to the error alone.
+        // says so instead of leaving that to the error alone. `status` is
+        // "unavailable": the app did not answer, so `met`/`timedOut` are
+        // defaults, not a verdict.
         CallToolResult unmet(
           String condition,
           int timeoutMs,
@@ -846,6 +849,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             met: false,
             waitedMs: watch.elapsedMilliseconds,
             timeoutMs: timeoutMs,
+            status: 'unavailable',
           ),
         );
         final timeout = p['timeoutMs']?.toString();
@@ -956,6 +960,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             met: false,
             waitedMs: 0,
             timeoutMs: 0,
+            status: 'refused',
           ),
         );
       },
@@ -964,13 +969,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Layout and accessibility check of the current screen: layout '
-          'overflows, tap targets under the platform minimum (48dp phones, '
-          '24px desktop/web), controls a screen reader can\'t name (no '
-          'label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from '
-          'the rendered pixels), and where the screen reader order jumps back '
-          'up. Each with position and source file:line. Use after '
-          'set_app_settings(textScale/locale/theme) or a UI change.',
+          'Layout and accessibility check: layout overflows, tap targets '
+          'under the platform minimum (48dp phones, 24px desktop/web), controls '
+          'a screen reader can\'t name (no label/tooltip), text below WCAG '
+          'contrast (4.5:1, large 3:1, from the rendered pixels), and where the '
+          'screen reader order jumps back up. Each with position and source '
+          'file:line. With routes it navigates to each and audits it (a sweep, '
+          'not a reading), then best-effort returns to where it started. Use '
+          'after set_app_settings(textScale/locale/theme) or a UI change.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.array(
@@ -1039,6 +1045,25 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           return buffer.toString().trim();
         }
 
+        // The counts the structured result carries: one screen's findings by
+        // category, and the same read across a sweep.
+        Map<String, int> screenFindings(Map<String, dynamic> data) {
+          int n(String key) => ((data[key] as List?) ?? const []).length;
+          return {
+            'overflows': n('overflows'),
+            'tapTargets': n('accessibilityIssues'),
+            'unlabeled': n('unlabeled'),
+            'lowContrast': n('lowContrast'),
+            'readingOrderJumps': n('readingOrderJumps'),
+          };
+        }
+
+        void addFindings(Map<String, int> into, Map<String, int> from) {
+          for (final e in from.entries) {
+            into[e.key] = (into[e.key] ?? 0) + e.value;
+          }
+        }
+
         final routes = [
           for (final r in (p['routes'] as List?) ?? const []) '$r',
         ];
@@ -1047,17 +1072,59 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             'ext.flutterpilot.auditScreenHealth',
             {},
           );
-          if (res.isError) return res.toCallToolResult();
+          if (res.isError) {
+            // The current screen could not be read: one audit failed, nothing
+            // visited, so the caller does not read an empty findings map as a
+            // clean screen (task 07).
+            return withVerdict(
+              res.toCallToolResult(),
+              auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 0,
+                failed: 1,
+                skipped: 0,
+                findings: const {},
+                restored: true,
+                incomplete: true,
+                loading: false,
+                status: 'unavailable',
+                reason: res.errorMessage,
+              ),
+            );
+          }
+          final data = res.data ?? const <String, dynamic>{};
           return CallToolResult(
-            content: [
-              TextContent(text: report(res.data ?? const {}, sweep: false)),
-            ],
+            content: [TextContent(text: report(data, sweep: false))],
+            structuredContent: auditVerdict(
+              requested: 0,
+              visited: 0,
+              audited: 1,
+              failed: 0,
+              skipped: 0,
+              findings: screenFindings(data),
+              restored: true,
+              incomplete: false,
+              loading: false,
+            ),
           );
         }
         // navigate_to, get_errors and audit_screen_health per screen were
         // three calls a screen in field sessions (75 such rounds in one).
         final out = StringBuffer();
         var clean = 0;
+        // What the sweep asked for and actually did, for the structured
+        // result: a route that could not be reached or audited is not covered,
+        // and neither is one whose screen was still loading.
+        final requested = routes.length;
+        final checked = routes.take(40).toList();
+        final skipped = requested - checked.length;
+        var visited = 0;
+        var audited = 0;
+        var failed = 0;
+        var arrivalErrors = 0;
+        var loading = false;
+        final totals = <String, int>{};
         // The sweep ends where it started: found on a phone, left three
         // screens away from the list the next tap was meant for.
         final before = await _callExtensionRaw(
@@ -1065,15 +1132,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           {},
         );
         final start = (before.data?['postActionState'] as Map?)?['route'];
-        for (final route in routes.take(40)) {
+        for (final route in checked) {
           out.writeln('== $route ==');
           final went = await _callExtensionRaw('ext.flutterpilot.navigateTo', {
             'route': route,
           });
           if (went.isError) {
             out.writeln('Could not go there: ${went.errorMessage}');
+            failed++;
             continue;
           }
+          visited++;
           await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
             'timeoutMs': '1500',
           });
@@ -1086,8 +1155,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           );
           if (res.isError) {
             out.writeln('Audit failed: ${res.errorMessage}');
+            failed++;
             continue;
           }
+          audited++;
+          addFindings(totals, screenFindings(res.data ?? const {}));
+          if (errors > 0) arrivalErrors += errors;
+          if (post?['loading'] == true) loading = true;
           final text = report(res.data ?? const {}, sweep: true);
           final fine = text.startsWith('No layout overflows') && errors == 0;
           if (fine) clean++;
@@ -1099,9 +1173,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           }
           out.writeln(fine ? 'Clean.' : text);
         }
-        final skipped = routes.length > 40
-            ? ' ${routes.length - 40} more routes not checked (40 a call).'
+        final skippedNote = skipped > 0
+            ? ' $skipped more routes not checked (40 a call).'
             : '';
+        // Where it started: restored is true only when the sweep ended back on
+        // it (or never left it). An unknown start cannot be claimed.
+        var restored = start is String && start == routes.last;
         var back = '';
         if (start is String && start != 'Unknown' && start != routes.last) {
           final returned = await _callExtensionRaw(
@@ -1113,17 +1190,34 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               'timeoutMs': '1500',
             });
             back = '\nBack on $start.';
+            restored = true;
           }
         }
+        // A failed route is not clean, and neither is a screen still loading:
+        // the sweep is incomplete even when every audit it reached was fine.
+        final incomplete =
+            skipped > 0 || failed > 0 || arrivalErrors > 0 || loading;
         return CallToolResult(
           content: [
             TextContent(
               text: FlutterPilotServer._boundToolText(
-                '${routes.take(40).length} routes checked, $clean clean.'
-                '$skipped\n${out.toString().trim()}$back',
+                '${checked.length} routes checked, $clean clean.'
+                '$skippedNote\n${out.toString().trim()}$back',
               ),
             ),
           ],
+          structuredContent: auditVerdict(
+            requested: requested,
+            visited: visited,
+            audited: audited,
+            failed: failed,
+            skipped: skipped,
+            findings: totals,
+            restored: restored,
+            incomplete: incomplete,
+            loading: loading,
+            status: incomplete ? 'partial' : 'ok',
+          ),
         );
       },
     );
@@ -1139,12 +1233,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(
-            items: JsonSchema.object(),
+            items: compositeStepSchema(),
             description:
                 'Tool calls run in order, e.g. [{"tool": "tap_widget", '
-                '"arguments": {"key": "New note"}}, {"tool": "enter_text", '
-                '"arguments": {"key": "Title", "text": "Groceries"}}, '
-                '{"tool": "assert_widget", "arguments": {"text": "Saved"}}]. '
+                '"arguments": {"key": "New note"}}, {"tool": "assert_widget", '
+                '"arguments": {"text": "Saved"}}]. '
                 'Tools: ${(_chainStepTools.toList()..sort()).join(', ')}.',
           ),
         },
@@ -1160,34 +1253,22 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             totalSteps: requested,
             failedStep: failedStep,
             failureReason: text,
+            status: 'refused',
           ),
         );
-        final steps = <({String tool, Map<String, dynamic> arguments})>[];
-        for (final s in (p['steps'] as List?) ?? const []) {
-          final raw = chainStep(s);
-          final step = raw == null
-              ? null
-              : translateRetiredStep(raw.tool, raw.arguments);
-          if (step == null ||
-              !_chainStepTools.contains(step.tool) ||
-              !_toolCallbacks.containsKey(step.tool)) {
-            return error(
-              'Step ${steps.length + 1}: '
-              '${step == null ? 'not a {"tool": ..., "arguments": {...}} step' : '"${step.tool}" can\'t run in a chain'}. '
-              'Tools: ${(_chainStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
-              failedStep: steps.length + 1,
-            );
-          }
-          final refusal = stepProfileRefusal(step.tool);
-          if (refusal != null) {
-            return error(
-              'Step ${steps.length + 1}: $refusal',
-              failedStep: steps.length + 1,
-            );
-          }
-          steps.add(step);
+        // Every step is validated before any runs (task 02): a malformed step
+        // N means nothing was tapped or typed, on every path.
+        final preflight = preflightChain(
+          p['steps'],
+          allowedTools: _chainStepTools,
+          isAvailable: _toolCallbacks.containsKey,
+          profileRefusal: stepProfileRefusal,
+          gate: (tool, args) => _toolArgGates[tool]!(args),
+        );
+        if (!preflight.ok) {
+          return error(preflight.problem!, failedStep: preflight.problemStep);
         }
-        if (steps.isEmpty) return error('steps is empty.');
+        final steps = preflight.steps;
 
         // Taps and text entries alone run inside the app, in one round trip.
         final inApp = [for (final step in steps) ?inAppChainAction(step)];
@@ -1203,6 +1284,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 passed: false,
                 completedSteps: 0,
                 totalSteps: steps.length,
+                status: 'unavailable',
               ),
             );
           }

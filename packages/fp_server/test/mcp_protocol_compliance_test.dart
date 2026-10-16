@@ -24,6 +24,8 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
+import 'support/stdout_hygiene.dart';
+
 void main() {
   late _Inspector inspector;
 
@@ -66,6 +68,22 @@ void main() {
       // notification; one more round trip pins it down.
       final tools = await inspector.tools();
       expect(tools, isNotEmpty);
+    });
+
+    test('writes only JSON-RPC 2.0 objects to stdout', () async {
+      // Several round trips, then prove no banner, log line or malformed
+      // message reached stdout: a client that treats stdout as a protocol
+      // stream must never have to skip a line.
+      await inspector.tools();
+      await inspector.request('resources/list');
+      await inspector.request('resources/templates/list');
+      await inspector.request('prompts/list');
+      expect(
+        inspector.hygiene.clean,
+        isTrue,
+        reason: inspector.hygiene.problem,
+      );
+      expect(inspector.hygiene.lines, greaterThan(4));
     });
   });
 
@@ -488,7 +506,8 @@ class _Inspector {
         .listen(_onLine);
     _stderrSubscription = _process.stderr
         .transform(utf8.decoder)
-        .listen((_) {});
+        .transform(const LineSplitter())
+        .listen(stderr.add);
   }
 
   /// Starts the server from the package root and wires up the transport.
@@ -521,6 +540,13 @@ class _Inspector {
   final Process _process;
   late final StreamSubscription<String> _stdoutSubscription;
   late final StreamSubscription<String> _stderrSubscription;
+
+  /// Records every stdout line that is not a well-formed JSON-RPC 2.0 message,
+  /// so "the server never writes non-JSON to stdout" is asserted, not assumed.
+  final StdoutHygiene hygiene = StdoutHygiene();
+
+  /// A bounded, redacted copy of the server's stderr, for diagnosis only.
+  final BoundedStderr stderr = BoundedStderr();
 
   final _pending = <int, Completer<Map<String, dynamic>>>{};
   final _received = <Map<String, dynamic>>[];
@@ -648,13 +674,10 @@ class _Inspector {
   }
 
   void _onLine(String line) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(line);
-    } on FormatException {
-      return; // The server never writes non-JSON to stdout.
-    }
-    if (decoded is! Map<String, dynamic>) return;
+    // Fail-closed framing: a line that is not a well-formed JSON-RPC 2.0
+    // message is recorded as a violation; a test asserts [hygiene] stays clean.
+    final decoded = hygiene.add(line);
+    if (decoded == null) return;
     final id = decoded['id'];
     if (id is int) {
       final completer = _pending.remove(id);

@@ -18,8 +18,8 @@ scripts:
     description: Run dart format for all packages.
 
   test:
-    run: dart run melos exec -c 1 --fail-fast -- "test -d test && (flutter test || dart test) || echo 'No tests'"
-    description: Run tests for all packages.
+    run: dart tool/package_test_runner.dart
+    description: Run every package's tests through the fail-closed aggregate runner.
 
   server:run:
     run: dart run packages/fp_server/bin/fp_server.dart

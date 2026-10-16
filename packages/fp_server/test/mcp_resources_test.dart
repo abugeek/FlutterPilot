@@ -315,4 +315,538 @@ void main() {
       },
     );
   });
+
+  /// Task 06: a resource reads only what it needs. A fake connection stands in
+  /// for the app so the read plans are proven — with call counts and fault
+  /// injection — without a running VM service.
+  group('read plans (task 06)', () {
+    late FakeResourceConnection connection;
+    setUp(() {
+      connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getAppSnapshot': {
+            'route': {'current': '/home', 'stackDepth': 1},
+            'lifecycle': 'resumed',
+            'recentLogs': [
+              {'level': 'info', 'message': 'hello', 'logger': 'debugPrint'},
+            ],
+          },
+          'ext.flutterpilot.getErrors': {'sdkMode': 'sdk', 'errors': []},
+          'ext.flutterpilot.getWidgetTree': {
+            'tree': {'type': 'Scaffold', 'children': []},
+          },
+        },
+      );
+      server.resourceAppConnectionForTest = connection;
+    });
+    tearDown(() => server.resourceAppConnectionForTest = null);
+
+    test(
+      'the widget tree is fetched only by the widget-tree resource',
+      () async {
+        await server.readResourceForTest('flutterpilot://app/widget-tree');
+        expect(connection.calls, ['ext.flutterpilot.getWidgetTree']);
+      },
+    );
+
+    test('the summary reads the snapshot and errors, never the tree', () async {
+      await server.readResourceForTest('flutterpilot://app/summary');
+      expect(connection.calls, [
+        'ext.flutterpilot.getAppSnapshot',
+        'ext.flutterpilot.getErrors',
+      ]);
+    });
+
+    test('errors, logs and the fleet read one thing each', () async {
+      await server.readResourceForTest('flutterpilot://app/errors');
+      expect(connection.calls, ['ext.flutterpilot.getErrors']);
+      connection.calls.clear();
+      await server.readResourceForTest('flutterpilot://app/logs');
+      expect(connection.calls, ['ext.flutterpilot.getAppSnapshot']);
+      connection.calls.clear();
+      await server.readResourceForTest('flutterpilot://devices');
+      expect(
+        connection.calls,
+        isEmpty,
+        reason: 'fleet reads make zero app calls',
+      );
+    });
+
+    test('the fleet is described as connected with zero app calls', () async {
+      server.fleet.registerDevice('iphone', 'ws://127.0.0.1:8181/a=/ws');
+      final body =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest('flutterpilot://devices'),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(body['connected'], isTrue);
+      expect(body['total'], 1);
+      expect(connection.calls, isEmpty);
+    });
+
+    test('no connection means no app call at all', () async {
+      connection.connected = false;
+      final body =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest(
+                    'flutterpilot://app/summary',
+                  ),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(body['connected'], isFalse);
+      expect(connection.calls, isEmpty);
+    });
+
+    test('a full sweep of all five resources makes five app calls', () async {
+      for (final uri in const [
+        'flutterpilot://app/summary',
+        'flutterpilot://app/errors',
+        'flutterpilot://app/widget-tree',
+        'flutterpilot://app/logs',
+        'flutterpilot://devices',
+      ]) {
+        await server.readResourceForTest(uri);
+      }
+      // Before task 06 every read gathered the snapshot, the errors and the
+      // tree: five resources x three = fifteen calls, tree included everywhere.
+      expect(connection.calls, hasLength(5));
+      expect(
+        connection.calls.where((e) => e == 'ext.flutterpilot.getWidgetTree'),
+        hasLength(1),
+      );
+    });
+
+    test('a zero-code error list reports its mode', () async {
+      connection.responses['ext.flutterpilot.getErrors'] = {
+        'sdkMode': 'zero-code',
+        'errors': const [],
+      };
+      final body =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest('flutterpilot://app/errors'),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(body['sdkMode'], 'zero-code');
+      expect(body['count'], 0);
+      expect(body.containsKey('errorsUnavailable'), isFalse);
+    });
+  });
+
+  group('fault independence (task 06)', () {
+    test('a failed tree read leaves the others intact', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getAppSnapshot': {
+            'route': {'current': '/home'},
+            'recentLogs': [
+              {'level': 'info', 'message': 'hello', 'logger': 'debugPrint'},
+            ],
+          },
+          'ext.flutterpilot.getErrors': {'sdkMode': 'sdk', 'errors': []},
+        },
+        unavailable: {'ext.flutterpilot.getWidgetTree'},
+      );
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+
+      expect(
+        textOf(
+          await server.readResourceForTest('flutterpilot://app/widget-tree'),
+        ),
+        contains('No widget tree available'),
+      );
+      final summary =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest(
+                    'flutterpilot://app/summary',
+                  ),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(summary['route'], '/home');
+      final errors =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest('flutterpilot://app/errors'),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(errors['count'], 0);
+      expect(
+        textOf(await server.readResourceForTest('flutterpilot://app/logs')),
+        contains('hello'),
+      );
+    });
+
+    test('an unavailable error list is not shown as clean', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getAppSnapshot': {
+            'route': {'current': '/home'},
+          },
+        },
+        unavailable: {'ext.flutterpilot.getErrors'},
+      );
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+
+      final errors =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest('flutterpilot://app/errors'),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(errors['count'], 0);
+      expect(errors['errorsUnavailable'], isTrue);
+      final summary =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest(
+                    'flutterpilot://app/summary',
+                  ),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(summary['errorsUnavailable'], isTrue);
+    });
+
+    test('a healthy empty error list carries no unavailable flag', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getErrors': {'sdkMode': 'sdk', 'errors': []},
+        },
+      );
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+      final errors =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest('flutterpilot://app/errors'),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(errors['count'], 0);
+      expect(errors.containsKey('errorsUnavailable'), isFalse);
+    });
+  });
+
+  group('context pinning (task 06)', () {
+    test('a device switch mid-read is reported, not blended', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getAppSnapshot': {
+            'route': {'current': '/home'},
+          },
+          'ext.flutterpilot.getErrors': {'sdkMode': 'sdk', 'errors': []},
+        },
+      );
+      connection.onRead = (extension) {
+        if (extension == 'ext.flutterpilot.getErrors') {
+          connection.deviceId = 'other';
+        }
+      };
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+
+      final body =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest(
+                    'flutterpilot://app/summary',
+                  ),
+                ),
+              )
+              as Map<String, dynamic>;
+      expect(body['contextChanged'], isTrue);
+      expect(body['connected'], isTrue);
+      expect(body['route'], isNull);
+    });
+
+    test('a reconnect mid-read is reported', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getNavigationStack': {
+            'stack': ['/'],
+          },
+          'ext.flutterpilot.getGoRouterState': {'currentLocation': '/'},
+        },
+      );
+      connection.onRead = (extension) {
+        if (extension == 'ext.flutterpilot.getGoRouterState') {
+          connection.generation++;
+        }
+      };
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+
+      final body =
+          jsonDecode(textOf(await server.readRouteResourceForTest('current')))
+              as Map<String, dynamic>;
+      expect(body['contextChanged'], isTrue);
+    });
+
+    test('a text resource reports a changed context in words', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getWidgetTree': {
+            'tree': {'type': 'Scaffold'},
+          },
+        },
+      );
+      connection.onRead = (_) => connection.generation++;
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+
+      expect(
+        textOf(
+          await server.readResourceForTest('flutterpilot://app/widget-tree'),
+        ),
+        contains('changed while this resource was being read'),
+      );
+    });
+  });
+
+  group('bounded and redacted rendering (task 06)', () {
+    test(
+      'the error list is capped with an accurate count and a note',
+      () async {
+        final many = [
+          for (var i = 0; i < 60; i++) {'exception': 'Exception: boom $i'},
+        ];
+        final body =
+            jsonDecode(
+                  textOf(
+                    await server.readResourceForTest(
+                      'flutterpilot://app/errors',
+                      app: ResourceAppData(
+                        errors: {'sdkMode': 'sdk', 'errors': many},
+                      ),
+                    ),
+                  ),
+                )
+                as Map<String, dynamic>;
+        expect(body['count'], 60);
+        expect(body['errors'], hasLength(50));
+        expect(body['truncated'], isTrue);
+        expect(body['note'], contains('Showing 50 of 60'));
+      },
+    );
+
+    test('secrets in errors are masked and the JSON still parses', () async {
+      final body =
+          jsonDecode(
+                textOf(
+                  await server.readResourceForTest(
+                    'flutterpilot://app/errors',
+                    app: const ResourceAppData(
+                      errors: {
+                        'sdkMode': 'sdk',
+                        'errors': [
+                          {
+                            'exception':
+                                'Exception: request failed '
+                                '(token=SUPERSECRET123)',
+                          },
+                        ],
+                      },
+                    ),
+                  ),
+                ),
+              )
+              as Map<String, dynamic>;
+      final error = (body['errors'] as List).single as Map<String, dynamic>;
+      expect(error['exception'], contains('<redacted>'));
+      expect(error['exception'], isNot(contains('SUPERSECRET123')));
+    });
+
+    test('secrets in logs are masked', () async {
+      final text = textOf(
+        await server.readResourceForTest(
+          'flutterpilot://app/logs',
+          app: const ResourceAppData(
+            serverLogs: [
+              {
+                'level': 'info',
+                'message': 'Authorization: Bearer abcdef123456',
+                'logger': 'stdout',
+                'timestamp': '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          ),
+        ),
+      );
+      expect(text, contains('<redacted>'));
+      expect(text, isNot(contains('abcdef123456')));
+    });
+
+    test(
+      'logs keep the newest entries and say how many were dropped',
+      () async {
+        final text = textOf(
+          await server.readResourceForTest(
+            'flutterpilot://app/logs',
+            app: ResourceAppData(
+              serverLogs: [
+                for (var i = 0; i < 600; i++)
+                  {
+                    'level': 'info',
+                    'message': 'line $i',
+                    'logger': 'stdout',
+                    'timestamp': '2026-01-01T00:00:00.000Z',
+                  },
+              ],
+            ),
+          ),
+        );
+        expect(text, contains('600 console entries'));
+        expect(text, contains('Showing 500 of 600'));
+        expect(text, isNot(contains('line 0')));
+        expect(text, contains('line 599'));
+      },
+    );
+
+    test('secrets in the widget tree text are masked', () async {
+      final text = textOf(
+        await server.readResourceForTest(
+          'flutterpilot://app/widget-tree',
+          app: const ResourceAppData(
+            widgetTree: {
+              'tree': {'type': 'Text', 'text': 'token=SUPERSECRET123'},
+            },
+          ),
+        ),
+      );
+      expect(text, contains('<redacted>'));
+      expect(text, isNot(contains('SUPERSECRET123')));
+    });
+  });
+
+  group('templated reads (task 06)', () {
+    test(
+      'a key with spaces, slashes, quotes and Unicode is used verbatim',
+      () async {
+        final connection = FakeResourceConnection(
+          responses: {
+            'ext.flutterpilot.getWidgetProperties': {
+              'type': 'Column',
+              'target': 'a b/c"dé',
+            },
+          },
+        );
+        server.resourceAppConnectionForTest = connection;
+        addTearDown(() => server.resourceAppConnectionForTest = null);
+        const key = 'a b/c"dé';
+        final result = await server.readWidgetResourceForTest(key);
+        final body = jsonDecode(textOf(result)) as Map<String, dynamic>;
+        expect(body['found'], isTrue);
+        expect(body['key'], key);
+        // The app is asked with the raw key, not the percent-encoded URI form.
+        expect(connection.calls.first, 'ext.flutterpilot.getWidgetProperties');
+        expect(connection.callArgs.first, {'key': key});
+        // The echoed URI is a well-formed, percent-encoded URI.
+        final uri = (result.contents.single as TextResourceContents).uri;
+        expect(Uri.parse(uri).pathSegments.last, key);
+      },
+    );
+
+    test('child keys are capped with a total', () async {
+      final children = [
+        for (var i = 0; i < 210; i++) {'type': 'Text', 'key': 'k$i'},
+      ];
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getWidgetProperties': {'type': 'Column'},
+          'ext.flutterpilot.getWidgetTree': {
+            'tree': {'type': 'Column', 'children': children},
+          },
+        },
+      );
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+      final body =
+          jsonDecode(textOf(await server.readWidgetResourceForTest('root')))
+              as Map<String, dynamic>;
+      expect(body['childKeys'], hasLength(200));
+      expect(body['childKeysTotal'], 210);
+      expect(body['childKeysTruncated'], isTrue);
+    });
+
+    test('a route path with a query is echoed verbatim', () async {
+      final connection = FakeResourceConnection(
+        responses: {
+          'ext.flutterpilot.getNavigationStack': {
+            'stack': ['/'],
+          },
+        },
+      );
+      server.resourceAppConnectionForTest = connection;
+      addTearDown(() => server.resourceAppConnectionForTest = null);
+      const path = '/search?q=a b&lang=fr';
+      final body =
+          jsonDecode(textOf(await server.readRouteResourceForTest(path)))
+              as Map<String, dynamic>;
+      expect(body['requested'], path);
+      expect(body['found'], isFalse);
+    });
+  });
+}
+
+/// A fake app connection (task 06): records every extension a resource read
+/// makes and lets a test inject a missing extension, a failure, a device switch
+/// or a reconnect — no VM service needed.
+class FakeResourceConnection implements ResourceAppConnection {
+  FakeResourceConnection({
+    this.connected = true,
+    this.deviceId = 'default',
+    this.generation = 0,
+    this.responses = const {},
+    this.unavailable = const {},
+  });
+
+  @override
+  bool connected;
+
+  @override
+  String deviceId;
+
+  @override
+  int generation;
+
+  /// The data each extension returns when it is available.
+  final Map<String, Map<String, dynamic>?> responses;
+
+  /// Extensions that report as missing or failed.
+  final Set<String> unavailable;
+
+  /// Every extension read, in order.
+  final List<String> calls = [];
+
+  /// The arguments each [calls] entry was read with.
+  final List<Map<String, dynamic>> callArgs = [];
+
+  /// Runs just before a read returns; a test uses it to move the device or bump
+  /// the generation while the resource is mid-read.
+  void Function(String extension)? onRead;
+
+  @override
+  Future<ResourceExtensionRead> read(
+    String extension,
+    Map<String, dynamic> parameters,
+  ) async {
+    calls.add(extension);
+    callArgs.add(parameters);
+    onRead?.call(extension);
+    if (unavailable.contains(extension)) {
+      return const ResourceExtensionRead.unavailable();
+    }
+    return ResourceExtensionRead.available(responses[extension]);
+  }
 }

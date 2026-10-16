@@ -1,4 +1,113 @@
+import 'dart:async';
 import 'dart:io';
+
+/// Counts and outcomes of the reload-error fallback (task 10), for an explicit
+/// diagnostic run. It carries **no** file contents, compiler messages, paths,
+/// tokens or arguments, so it is safe to aggregate and share.
+class CompileFallbackEvent {
+  const CompileFallbackEvent({
+    required this.outcome,
+    required this.durationMs,
+    required this.files,
+    this.fromLog = false,
+    this.timedOut = false,
+  });
+
+  /// `log-errors` (launch_app's own log had them), `no-changed-files`,
+  /// `analyzer-errors`, `analyzer-clean`, or `analyzer-failed` (timeout or a
+  /// process error).
+  final String outcome;
+
+  /// Wall time spent on the fallback from the moment it starts work.
+  final int durationMs;
+
+  /// How many changed files were handed to the analyzer (a count, not names).
+  final int files;
+
+  /// Whether the errors came from the supervised `flutter run` log.
+  final bool fromLog;
+
+  /// Whether the analyzer did not finish inside its deadline.
+  final bool timedOut;
+
+  Map<String, Object?> toMetadata() => {
+    'outcome': outcome,
+    'durationMs': durationMs,
+    'files': files,
+    'fromLog': fromLog,
+    'timedOut': timedOut,
+  };
+}
+
+/// Opt-in sink for [CompileFallbackEvent]s. **Null by default**, so a normal
+/// server records nothing; a diagnostic run or a test sets it explicitly.
+void Function(CompileFallbackEvent event)? compileFallbackObserver;
+
+/// Delivers [event] to [compileFallbackObserver] when one is installed.
+void reportCompileFallback(CompileFallbackEvent event) {
+  final observer = compileFallbackObserver;
+  if (observer != null) observer(event);
+}
+
+/// The analyzer half of the reload-error fallback: the Dart files changed under
+/// [root] since [since], analyzed once with `dart analyze --format=machine`,
+/// reduced to actionable errors. Returns `''` when nothing changed, when the
+/// analyzer found nothing actionable, or when it failed or timed out.
+///
+/// [runner] is injected so a test can prove every branch — including the
+/// timeout and process-failure cleanup — without a live app or a real analyzer.
+/// On failure the caller keeps its existing behavior (an empty `compileErrors`).
+Future<String> analyzerFallbackErrors({
+  required String root,
+  required DateTime since,
+  required Future<ProcessResult> Function(
+    List<String> command, {
+    String? workingDirectory,
+  })
+  runner,
+  int maxFiles = 20,
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  final files = dartFilesChangedSince(root, since, max: maxFiles);
+  if (files.isEmpty) {
+    reportCompileFallback(
+      const CompileFallbackEvent(
+        outcome: 'no-changed-files',
+        durationMs: 0,
+        files: 0,
+      ),
+    );
+    return '';
+  }
+  final clock = Stopwatch()..start();
+  try {
+    final result = await runner([
+      'dart',
+      'analyze',
+      '--format=machine',
+      ...files,
+    ], workingDirectory: root).timeout(timeout);
+    final text = analyzerErrorsIn('${result.stdout}\n${result.stderr}', root);
+    reportCompileFallback(
+      CompileFallbackEvent(
+        outcome: text.isEmpty ? 'analyzer-clean' : 'analyzer-errors',
+        durationMs: clock.elapsedMilliseconds,
+        files: files.length,
+      ),
+    );
+    return text;
+  } catch (err) {
+    reportCompileFallback(
+      CompileFallbackEvent(
+        outcome: 'analyzer-failed',
+        durationMs: clock.elapsedMilliseconds,
+        files: files.length,
+        timedOut: err is TimeoutException,
+      ),
+    );
+    return '';
+  }
+}
 
 /// What hot_reload / hot restart tells the agent when flutter_tools fails:
 /// the error without flutter_tools' own stack frames, and a hint for the

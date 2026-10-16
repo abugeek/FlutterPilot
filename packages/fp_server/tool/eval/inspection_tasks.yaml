@@ -1,0 +1,213 @@
+# Read-only inspection suite (task 05). A separate suite from the workflow
+# tasks.yaml: these questions only *observe* the app, and the runner allows the
+# model only read-only calls (src/policy.dart).
+#
+# An entry is committed with `verified: false` and no `answer` until the answer
+# has been reproduced through MCP from a reset state with the calls and response
+# lines recorded under `evidence` (task 05 §7). The runner refuses a selected
+# question that is not `verified: true`, so a proposed answer can never be
+# scored against a model.
+#
+# `initial_state` is a short, reproducible description of the state the setup
+# phase leaves the app in (the scenario plus the neutral reset), so no case
+# depends on another's residue (task 05 §9). Questions never assume the model
+# navigates, sets settings, mocks or clears anything: those happen in setup, and
+# the read-only policy refuses them in the model phase.
+#
+# Every answer below was reproduced twice through tool/fp_bridge.dart from a
+# fresh `scenario(load:)` (see `evidence`); the fixture was the lab rewired to
+# the renamed `fp_*` packages, because the committed fixtures still point at the
+# pre-rename package names (documented in PROGRESS.md, task 05).
+version: 1
+name: inspection
+
+questions:
+  - id: inspect_shop_list_products
+    app: fp_lab_shop
+    category: discovery
+    scenario: eval_base
+    initial_state: eval_base loaded; neutral settings; route /
+    question: >
+      On the running shop app's home route, a single HTTP request loads the
+      product list. How many products does that response contain? Answer with
+      the number only.
+    answer: "8"
+    match: number
+    max_calls: 8
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: get_network_logs()
+        result: >
+          RESPONSE .../products?q=&page=1 200 [MOCKED] body=[{... Aurora Kettle,
+          id: 1} ... {Waxed cotton apron, id: 8}] — eight items, ids 1..8.
+
+  - id: inspect_shop_unnamed_controls
+    app: fp_lab_shop
+    category: ui
+    scenario: eval_base
+    initial_state: eval_base loaded; neutral settings; route /
+    question: >
+      On the running shop app's home route, how many controls currently on
+      screen can a screen reader not name — that is, controls with no
+      accessible label? Answer with the number only.
+    answer: "1"
+    match: number
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: audit_screen_health()
+        result: >
+          Controls without a label (1): - Button x7 at (1196, 183), ... 40x40 has
+          no label: a screen reader only says "button". Code: IconButton
+          lib/widgets/product_card.dart:25:19.
+
+  - id: inspect_shop_banner_contrast
+    app: fp_lab_shop
+    category: ui
+    scenario: eval_base
+    initial_state: eval_base loaded; neutral settings; route /
+    question: >
+      On the running shop app's home route there is a promotional banner. What
+      is its text's contrast ratio against its background? Answer exactly as
+      `N.NN:1` with two decimals, e.g. `4.50:1`.
+    answer: "1.61:1"
+    match: exact
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: audit_screen_health()
+        result: >
+          Low contrast text (1): - "Summer sale: up to 50% off selected item."
+          contrast 1.61:1 (#cccccc on #ffffff), needs 4.5:1 for body text
+          (16 px).
+
+  - id: inspect_shop_dark_mode
+    app: fp_lab_shop
+    category: state
+    scenario: eval_base
+    initial_state: eval_base loaded; theme reset to light; route /
+    question: >
+      In the running shop app, the app's dark-mode state is held by a Riverpod
+      notifier. What boolean does it currently hold? Answer `true` or `false`.
+    answer: "false"
+    match: exact
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: get_state()
+        result: >
+          riverpod: ... NotifierProvider<DarkModeNotifier, bool>: false (bool)
+
+  - id: inspect_shop_list_status
+    app: fp_lab_shop
+    category: diagnostics
+    scenario: eval_base
+    initial_state: eval_base loaded; neutral settings; route /
+    question: >
+      In the running shop app, the home route's product list was loaded by an
+      HTTP request. What HTTP status code did the most recent request to the
+      products endpoint answer with? Answer with the number only.
+    answer: "200"
+    match: number
+    max_calls: 8
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: get_network_logs()
+        result: >
+          RESPONSE .../products?q=&page=1 200 [MOCKED] — status 200.
+
+  - id: inspect_notes_note_rows
+    app: fp_lab_notes
+    category: storage
+    scenario: notes_base
+    initial_state: notes_base loaded; the seeded database restored; route /
+    question: >
+      In the running notes app, how many rows does the `notes` table of its
+      main database hold right now? Answer with the number only.
+    answer: "250"
+    match: number
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: 'exec_sql_query(sql: "SELECT count(*) AS n FROM notes")'
+        result: '1 row(s) {"n":250}'
+
+  - id: inspect_notes_events_rows
+    app: fp_lab_notes
+    category: storage
+    scenario: notes_base
+    initial_state: notes_base loaded; `events` left as it is; route /
+    question: >
+      In the running notes app, how many rows does the `events` table of its
+      main database hold right now? Answer with the number only.
+    answer: "1200"
+    match: number
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: 'exec_sql_query(sql: "SELECT count(*) AS n FROM events")'
+        result: '1 row(s) {"n":1200}'
+
+  - id: inspect_notes_tag_two
+    app: fp_lab_notes
+    category: storage
+    scenario: notes_base
+    initial_state: notes_base loaded; the Hive `tags` box restored; route /
+    question: >
+      In the running notes app, the Hive box `tags` maps integer keys to tag
+      names. What tag name is stored under the key `2`? Answer with the tag
+      name only.
+    answer: "ideas"
+    match: exact
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: get_hive_contents()
+        result: '{"contents":{"tags":{"0":"work","1":"personal","2":"ideas"}}}'
+
+  - id: inspect_notes_secure_key
+    app: fp_lab_notes
+    category: storage
+    scenario: notes_base
+    initial_state: notes_base loaded; route /
+    question: >
+      In the running notes app, at least one secret is kept in secure storage,
+      with its value redacted when read. What is the *name* of that stored key?
+      Answer with the key name only.
+    answer: lock_pin
+    match: exact
+    max_calls: 8
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: get_secure_storage()
+        result: '1 key(s) in secure storage: lock_pin: [4 chars, redacted]'
+
+  - id: inspect_notes_network_simulation
+    app: fp_lab_notes
+    category: zero_code
+    scenario: notes_base
+    initial_state: notes_base loaded; route /
+    question: >
+      A teammate wants FlutterPilot to simulate the device's network condition
+      (offline or slow) while testing the running notes app. Without reading the
+      app's source, decide from the app's own tool surface whether a FlutterPilot
+      tool for that is available here. Answer `yes` or `no`.
+    answer: "no"
+    match: exact
+    max_calls: 6
+    verified: true
+    platforms: [windows]
+    evidence:
+      - call: tools/list
+        result: >
+          46 tools listed; none is `simulate_network` (the shop's 47 do include
+          it). Calling it answers: Tool 'simulate_network' is disabled.

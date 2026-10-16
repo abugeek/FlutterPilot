@@ -14,13 +14,59 @@ void main() {
   List<Map<String, dynamic>> listJson(Iterable<String> wanted) =>
       server.toolListJson(wanted);
 
-  test('the shared measure is the one the budget test uses', () {
+  test('the shared measure is the legacy character count', () {
     // The old inline measure; if the two drift, the budgets stop meaning what
     // they say.
     final inline = listJson(all)
         .map((tool) => jsonEncode(tool..remove('annotations')).length)
         .fold(0, (a, b) => a + b);
-    expect(toolListTotal(listJson(all)), inline);
+    expect(toolListTotalChars(listJson(all)), inline);
+  });
+
+  test('characters, UTF-8 bytes and wire bytes are separate measures', () {
+    // Arabic, an emoji and an accented label: all are non-ASCII, so a
+    // character count undercounts the bytes that cross the wire. This is the
+    // fixture task 00 asks for; it proves an encoding correction cannot
+    // masquerade as tool growth.
+    final tool = <String, dynamic>{
+      'name': 'get_app_summary',
+      'description': 'Résumé العربية 🚀 — café',
+      'inputSchema': {
+        'type': 'object',
+        'properties': {
+          'label': {'type': 'string', 'description': 'naïve'},
+        },
+      },
+      'annotations': {'readOnlyHint': true, 'destructiveHint': false},
+    };
+    expect(toolListChars(tool), lessThan(toolListUtf8Bytes(tool)));
+    // The wire size includes the annotations, so it is never smaller than the
+    // projection it contains.
+    expect(toolListUtf8Bytes(tool), lessThan(toolListWireBytes(tool)));
+    // The projection drops annotations; the wire object keeps them.
+    expect(toolModelProjection(tool).containsKey('annotations'), isFalse);
+    expect(tool.containsKey('annotations'), isTrue);
+    // The estimate is derived from UTF-8 bytes, and is labelled an estimate.
+    expect(
+      toolListTokens(toolListUtf8Bytes(tool)),
+      toolListUtf8Bytes(tool) ~/ 4,
+    );
+  });
+
+  test('the totals sum their per-tool measure', () {
+    final tools = listJson(all);
+    expect(
+      toolListTotalChars(tools),
+      tools.fold(0, (sum, t) => sum + toolListChars(t)),
+    );
+    expect(
+      toolListTotalUtf8Bytes(tools),
+      tools.fold(0, (sum, t) => sum + toolListUtf8Bytes(t)),
+    );
+    expect(
+      toolListTotalWireBytes(tools),
+      tools.fold(0, (sum, t) => sum + toolListWireBytes(t)),
+    );
   });
 
   test('every profile is a subset of all', () {
@@ -93,22 +139,28 @@ void main() {
   );
 
   test('the profile costs match the budget test\'s numbers', () {
-    int bytes(AppProfile profile) =>
-        profileCost(profile, all, server.toolListJson).bytes;
-    expect(bytes(AppProfile.all), lessThanOrEqualTo(41300));
-    expect(bytes(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29500));
-    expect(bytes(AppProfile.zeroCode), lessThanOrEqualTo(9700));
+    int chars(AppProfile profile) =>
+        profileCost(profile, all, server.toolListJson).chars;
+    expect(chars(AppProfile.all), lessThanOrEqualTo(41300));
+    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29500));
+    expect(chars(AppProfile.zeroCode), lessThanOrEqualTo(9700));
   });
 
   test('a profile cost adds up and is sorted by size', () {
     final cost = profileCost(AppProfile.sdkLabShop, all, server.toolListJson);
     expect(cost.tools, cost.perTool.length);
-    expect(cost.bytes, cost.perTool.fold(0, (sum, t) => sum + t.bytes));
-    expect(cost.tokens, cost.bytes ~/ 4);
+    expect(cost.chars, cost.perTool.fold(0, (sum, t) => sum + t.chars));
+    expect(cost.utf8Bytes, cost.perTool.fold(0, (sum, t) => sum + t.utf8Bytes));
+    expect(cost.wireBytes, cost.perTool.fold(0, (sum, t) => sum + t.wireBytes));
+    // UTF-8 bytes are never fewer than characters: descriptions are ASCII
+    // today, so the two are equal, but the invariant must hold either way.
+    expect(cost.utf8Bytes, greaterThanOrEqualTo(cost.chars));
+    expect(cost.wireBytes, greaterThanOrEqualTo(cost.utf8Bytes));
+    expect(cost.tokens, cost.utf8Bytes ~/ 4);
     for (var i = 1; i < cost.perTool.length; i++) {
       expect(
-        cost.perTool[i - 1].bytes,
-        greaterThanOrEqualTo(cost.perTool[i].bytes),
+        cost.perTool[i - 1].chars,
+        greaterThanOrEqualTo(cost.perTool[i].chars),
       );
     }
   });

@@ -307,11 +307,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(
-            items: JsonSchema.object(),
+            items: compositeStepSchema(),
             description:
                 'Tool calls run in order on each device, e.g. [{"tool": '
-                '"tap_widget", "arguments": {"key": "Log in"}}, {"tool": '
-                '"assert_widget", "arguments": {"text": "Welcome"}}]. '
+                '"tap_widget", "arguments": {"key": "Log in"}}]. '
                 'Tools: ${(_fleetStepTools.toList()..sort()).join(', ')}.',
           ),
           'devices': JsonSchema.array(
@@ -324,30 +323,25 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         required: ['steps'],
       ),
       callback: (p, e) async {
-        CallToolResult error(String text) =>
-            CallToolResult(isError: true, content: [TextContent(text: text)]);
-        final steps = <({String tool, Map<String, dynamic> arguments})>[];
-        for (final s in (p['steps'] as List?) ?? const []) {
-          final tool = s is Map ? s['tool']?.toString() : null;
-          final args = Map<String, dynamic>.from(
-            (s is Map ? s['arguments'] : null) as Map? ?? const {},
-          );
-          final step = tool == null ? null : translateRetiredStep(tool, args);
-          if (step == null ||
-              !_fleetStepTools.contains(step.tool) ||
-              !_toolCallbacks.containsKey(step.tool)) {
-            return error(
-              'Step ${steps.length + 1}: "$tool" can\'t run on devices. '
-              'Tools: ${(_fleetStepTools.where(_toolCallbacks.containsKey).toList()..sort()).join(', ')}.',
-            );
-          }
-          final refusal = stepProfileRefusal(step.tool);
-          if (refusal != null) {
-            return error('Step ${steps.length + 1}: $refusal');
-          }
-          steps.add(step);
-        }
-        if (steps.isEmpty) return error('steps is empty.');
+        // A refusal (an invalid plan, an unknown device list) carries the same
+        // verdict shape, with `status: "refused"` and no devices: a program
+        // can tell it apart from a sweep that ran and disagreed.
+        CallToolResult error(String text) => withVerdict(
+          CallToolResult(isError: true, content: [TextContent(text: text)]),
+          fleetRefusalVerdict(text),
+        );
+        // Validate every step before any device acts: an invalid plan executes
+        // zero steps everywhere.
+        final preflight = preflightChain(
+          p['steps'],
+          allowedTools: _fleetStepTools,
+          isAvailable: _toolCallbacks.containsKey,
+          profileRefusal: stepProfileRefusal,
+          gate: (tool, args) => _toolArgGates[tool]!(args),
+          what: 'run on devices',
+        );
+        if (!preflight.ok) return error(preflight.problem!);
+        final steps = preflight.steps;
         final ids = [
           for (final d in (p['devices'] as List?) ?? _fleetManager.deviceIds)
             d.toString(),
@@ -404,6 +398,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           (r) => r.unreachable != null || r.steps.any((s) => !s.ok),
         );
         final report = fleetReport(steps, runs);
+        // A sweep that reached only some devices is "partial", not a clean
+        // comparison: `same` is false for it either way, but the status names
+        // why.
+        final unreachable = runs.any((r) => r.unreachable != null);
         return CallToolResult(
           isError: failed,
           content: [TextContent(text: report.text)],
@@ -411,6 +409,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             runs,
             stepsRequested: steps.length,
             same: report.same,
+            status: unreachable ? 'partial' : null,
           ),
         );
       },
@@ -547,7 +546,19 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           );
         }
         final res = await _callExtensionRaw('ext.flutterpilot.getErrors', p);
-        if (res.isError) return res.toCallToolResult();
+        if (res.isError) {
+          // The list could not be read: say so, rather than let an empty
+          // default list read as a clean app (task 07).
+          return withVerdict(
+            res.toCallToolResult(),
+            errorsVerdict(
+              since: const [],
+              before: const [],
+              status: 'unavailable',
+              reason: res.errorMessage,
+            ),
+          );
+        }
         final data = res.data ?? const <String, dynamic>{};
         // An error from before the last reload is not an uncaught exception of
         // the code now running: get_errors(report: true) already refuses to

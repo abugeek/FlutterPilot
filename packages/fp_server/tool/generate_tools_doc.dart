@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:fp_server/src/structured_results.dart';
+import 'package:fp_server/src/tool_list_bytes.dart';
 
 /// Generates a schema-derived MCP tool reference.
 ///
@@ -151,17 +152,11 @@ String renderToolsDoc(List<dynamic> tools) {
   return output.toString();
 }
 
-/// The bytes of `tools/list` an agent's model is given: the rest
-/// (annotations, execution) goes to the client.
-int _listBytes(List<dynamic> tools) => tools
-    .whereType<Map>()
-    .map(
-      (tool) => jsonEncode({
-        for (final key in const ['name', 'description', 'inputSchema'])
-          key: tool[key],
-      }).length,
-    )
-    .fold(0, (a, b) => a + b);
+/// The characters of `tools/list` an agent's model is given: the rest
+/// (annotations, execution) goes to the client. The shared legacy measure
+/// (`toolListChars`), so the doc, the budget test and the report can't drift.
+int _listBytes(List<dynamic> tools) =>
+    toolListTotalChars(tools.whereType<Map<String, dynamic>>());
 
 /// A parameter's type, with the values an enum takes.
 String _type(Map<dynamic, dynamic> property) {

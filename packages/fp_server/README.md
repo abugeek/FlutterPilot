@@ -101,7 +101,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ## MCP Tools Reference
 
-67 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
+63 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
 iOS simulators with idb, 15 tools for apps without `fp_sdk`.

@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "flutterpilot": {
+      "type": "stdio",
+      "command": "dart",
+      "args": [
+        "run",
+        "bin/fp_server.dart",
+        "--log-level",
+        "severe",
+        "--no-call-log"
+      ],
+      "cwd": "<absolute path to packages/fp_server>",
+      "env": {
+        "FLUTTERPILOT_LIST_ALL_TOOLS": "1"
+      },
+      "protocolEra": "legacy",
+      "connectionTimeout": 20000
+    }
+  }
+}
