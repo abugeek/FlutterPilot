@@ -24,10 +24,9 @@ enum AppProfile {
 }
 
 /// The service extensions each plugin registers, read from the `extensions`
-/// list at the top of `packages/plugins/flutterpilot_NAME/lib/
-/// flutterpilot_NAME.dart`. Only the extensions a tool is gated on matter
-/// (`plugin_tools.dart`), but the whole list is kept so a new gate can be
-/// checked against it here.
+/// list at the top of `packages/plugins/fp_NAME/lib/fp_NAME.dart`. Only the
+/// extensions a tool is gated on matter (`plugin_tools.dart`), but the whole
+/// list is kept so a new gate can be checked against it here.
 const Map<String, List<String>> pluginExtensions = {
   'bloc': ['ext.flutterpilot.getBlocStates'],
   'connectivity': [
