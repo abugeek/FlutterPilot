@@ -23,14 +23,16 @@ spawn → MCP initialize complete → tools/list complete → first useful read
 
 It exists to answer one question — *does app discovery / VM connection dominate
 MCP readiness, or is a fast executable already enough?* — and to leave behind a
-raw-data decision. It is **not** an approval to reorder server startup.
+raw-data decision. Task 09 did not itself approve reordering server startup; that
+separate approval came later, and "The decision" below records both the original
+measurement and the post-change re-measurement.
 
 We already ship AOT compilation (`packages/fp_cli` invokes `dart compile exe` by
 default and points client configs at `build/fp_server.exe`). What was never
 measured is its effect on readiness, and whether `FlutterPilotServer.start()`
-awaiting `_connectToVmService()` before connecting `StdioServerTransport` costs
-a user anything. This harness is what makes that a measurement instead of an
-assertion.
+awaiting `_connectToVmService()` before connecting `StdioServerTransport` cost a
+user anything — it did: ~2.1 s. This harness is what made that a measurement
+instead of an assertion, and it re-measured the fix.
 
 ## Run it
 
@@ -130,6 +132,22 @@ from the 56-tool dynamic median (780 ms). At this size, readiness is dominated b
 process launch and connection, not by capability discovery; a large static list
 is *not* presented here as a faster equivalent to dynamic discovery.
 
+## Measured result — after the reorder (2026-10-16)
+
+Same machine, same harness, same 20+1 interleaved trials, revision `e7aed0a`
+(dirty working tree), `--mode both --case all`. Every case: 20/20 ok, 0 timeouts,
+0 errors, 56 tools.
+
+| case | source (`dart run`) | AOT (`dart compile exe`) |
+|---|---|---|
+| no-app | **2703 ms** (p95 2758) | **66 ms** (p95 70) |
+| unavailable | **2702 ms** (p95 2837) | **61 ms** (p95 64) |
+
+The `unavailable − no-app` gap collapsed from +2072 ms (source) / +2090 ms (AOT)
+to **−1 ms** / **−5 ms**: MCP readiness no longer pays for the connection attempt.
+The remaining `source` cost is `dart run` JIT start-up. First read tracks
+MCP-ready in every case — no first read was delayed behind the connection.
+
 ## The decision
 
 `computeDecision` compares the **same launch mode** across app states, so JIT
@@ -149,15 +167,35 @@ So the honest reading is two-part:
   MCP is even reachable is a real user-visible cost, and it clears the proposed
   screening threshold (≥ 200 ms and ≥ 20% median).
 
-`startupOrderingChangeRecommended: true` is therefore a **proposal for a
-separately approved change** (start MCP before background discovery), not a
-change made here. Task 09 explicitly forbids reordering startup in this task.
-Any such change must be designed and reviewed against: connecting vs
-disconnected first results (no premature/misleading summary), concurrent-connect
-deduplication, `notifications/tools/list_changed` semantics, roots handling, and
-shutdown ordering — then re-measured with identical trials and a real connected
-e2e. If the reviewed gain lands inside noise, the correct outcome is to keep the
-current ordering.
+`startupOrderingChangeRecommended: true` was therefore a **proposal for a
+separately approved change** (start MCP before background discovery), not a change
+made by task 09. That change **has since been made** (authorized separately,
+2026-10-16) and re-measured with identical trials:
+
+- `no-app` vs `unavailable`, source: `2702 − 2703 = −1 ms`; AOT `61 − 66 = −5 ms`.
+  The ~2.1 s gap is gone, and `computeDecision` now reports *"MCP readiness is not
+  dominated by the connection"* (`startupOrderingChangeRecommended: false`), with
+  the remaining source cost being `dart run` JIT start-up.
+- `no-app/aot` MCP-ready **66 ms**; `unavailable/aot` **61 ms**; 20/20 ok, 0
+  timeouts, 0 errors.
+
+The designed-and-reviewed semantics the proposal called for: connecting vs
+disconnected first results (an app-scoped call during startup answers a retryable
+`[reconnecting] … still connecting …`, never a premature "no app"), concurrent
+connect deduplication (unchanged one shared `_connecting` attempt), `tools/list`
+change notification (unchanged `updateToolVisibility` → one `tools/list_changed`),
+roots handling (client roots are read before discovery ends), and shutdown
+ordering (`_doConnectToVmService` closes, rather than adopts, a connection that
+lands after `stop()`). `test/startup_order_test.dart` pins them.
+
+## Connected case
+
+**Not run here.** It needs a healthy, pre-running FlutterPilot app, and this
+machine had none (the sibling sample labs are neither pre-built nor dependency-
+resolved). Rather than fake it, the connected path is left unmeasured; the
+`--case connected` wiring and the separate `spawnToConnectedReadMs` metric are in
+place and unit-tested, and the run is a documented manual step. A `connected`
+result must never be inferred from the `no-app`/`unavailable` runs.
 
 ## Connected case
 
@@ -274,6 +312,12 @@ bounded by a 30 s timeout. Opt-in counters
 with a live app measure incidence and duration without changing default
 behavior; the extracted `analyzerFallbackErrors` makes every branch (no changed
 files, clean, errors, timeout, process failure) unit-testable.
+
+Re-measured **2026-10-16** on the current revision (15 trials/case, same
+machine): changed-file scan 0 ms (p95 3), log extraction 0 ms (p95 1);
+`analyze-clean` cold **1921** / warm **1964 ms**, `analyze-error` cold **1976** /
+warm **1945 ms** — 15/15 ok, 0 timeouts. A repeated one-shot still does not warm,
+so the reuse gate stays **unclaimed** and **no daemon was added**.
 
 ### Not run
 

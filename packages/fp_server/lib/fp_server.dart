@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
+import 'package:meta/meta.dart';
 import 'package:vm_service/vm_service.dart';
 
 import 'src/action_chain.dart';
@@ -100,6 +101,9 @@ abstract class _FlutterPilotServerBase {
 
   /// Which tools are listed (`--tools core|all`).
   ToolProfile get toolProfile;
+
+  /// Whether the pilot families advertise an MCP `outputSchema` (task 07).
+  bool get advertiseOutputSchemas;
 
   /// Whether [name] is listed at all under the active profile, before asking
   /// whether it works for the app.
@@ -441,6 +445,14 @@ abstract class _FlutterPilotServerBase {
     );
   }
 
+  /// The pilot family's MCP `outputSchema`, or null when [name] is not one
+  /// (task 07). The map is rendered from [structuredContracts], so the wire
+  /// schema and the developer-side validator cannot drift.
+  JsonObject? _pilotOutputSchema(String name) {
+    final schema = structuredOutputSchemas[name];
+    return schema == null ? null : JsonObject.fromJson(schema);
+  }
+
   RegisteredTool _registerTool(
     String name, {
     String? description,
@@ -452,6 +464,9 @@ abstract class _FlutterPilotServerBase {
     description: description,
     inputSchema: inputSchema,
     annotations: annotations,
+    // Task 07: the pilot families advertise a schema only behind the opt-in
+    // flag; every other tool keeps the local-only contract.
+    outputSchema: advertiseOutputSchemas ? _pilotOutputSchema(name) : null,
     callback: (args, extra) async {
       // Only some tools used to take a per-call device, and most ignored it:
       // answering from another device than the one asked for is worse than
@@ -771,6 +786,21 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   bool _isReconnecting = false;
   bool _disposed = false;
+
+  /// True from [start] until the first VM-service connection attempt settles.
+  ///
+  /// [start] now brings the MCP transport up before discovery (task 09), so
+  /// for a short window there may be no app *yet* — not none. While this is
+  /// true an app-scoped call answers "connecting" (a retryable
+  /// [ErrorCategory.reconnecting]) instead of a premature "no app found",
+  /// which a client could read as a dead app rather than a starting one.
+  bool _initialConnectPending = false;
+
+  /// Test-only: replaces [start]'s background VM-service connection, so a test
+  /// can hold the first connection pending and observe the "connecting" answer
+  /// (task 09). Null in production.
+  @visibleForTesting
+  final Future<void> Function()? debugInitialConnect;
   String? _cachedMainIsolateId;
   Timer? _reconnectTimer;
   Duration _currentBackoff = const Duration(seconds: 1);
@@ -794,6 +824,16 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   @override
   final ToolProfile toolProfile;
 
+  /// Whether the task-07 pilot families advertise an MCP `outputSchema`
+  /// (`--output-schemas`, off by default).
+  ///
+  /// Off because the spec gates advertisement on a demonstrated client benefit
+  /// (§11) and none exists here — not for budget reasons: the model-facing
+  /// projection the budgets measure does not move, while the client wire list
+  /// grows by the measured 1,256 B for both schemas. Reversible: one flag.
+  @override
+  final bool advertiseOutputSchemas;
+
   FlutterPilotServer({
     String? vmServiceUri,
     this.allowDestructive = false,
@@ -803,6 +843,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     bool staticTools = false,
     this.toolProfile = ToolProfile.all,
     bool callLog = true,
+    this.debugInitialConnect,
+    this.advertiseOutputSchemas = false,
   }) : callLog =
            callLog && Platform.environment['FLUTTERPILOT_NO_CALL_LOG'] == null,
        staticTools =
@@ -873,18 +915,35 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     }
   }
 
-  Future<void> start() async {
-    try {
-      await _connectToVmService();
-    } catch (e) {
-      _log.warning('Initial VM Service connection skipped: $e');
-    }
-
-    // Start MCP server over stdio
-    final stdioTransport = StdioServerTransport();
-    await server.connect(stdioTransport);
+  /// Starts the MCP transport, then connects to the app in the background.
+  ///
+  /// The order matters (task 09): `initialize` and `tools/list` are what a
+  /// client waits on before it can do anything, and awaiting a blocking VM
+  /// discovery used to delay them by the whole connection attempt (measured
+  /// ~2.1 s against an unreachable endpoint). The transport now comes first
+  /// and the connection runs behind it; until it settles, an app-scoped call
+  /// answers "connecting" rather than a premature "no app"
+  /// ([_initialConnectPending]).
+  ///
+  /// [transport] is for tests (an in-process pipe); production uses stdio.
+  Future<void> start({Transport? transport}) async {
+    _initialConnectPending = true;
+    await server.connect(transport ?? StdioServerTransport());
     _recordListedTools();
     _log.info('FlutterPilot MCP Server started 🚀');
+    unawaited(_initialConnect());
+  }
+
+  /// The background first connection. A failure is logged, never fatal: the
+  /// server is already serving and its tools explain a missing app.
+  Future<void> _initialConnect() async {
+    try {
+      await (debugInitialConnect ?? _connectToVmService).call();
+    } catch (e) {
+      _log.warning('Initial VM Service connection skipped: $e');
+    } finally {
+      _initialConnectPending = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1084,6 +1143,16 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         _vmServiceUri = discovered;
         _vmService = await connectVmService(discovered);
       }
+    }
+    if (_disposed) {
+      // The transport now comes up before the first connection (task 09), so a
+      // shutdown can land while that attempt is still in flight. Do not adopt —
+      // and do not leak — a connection nobody will use.
+      final orphan = _vmService;
+      _vmService = null;
+      _vmServiceUri = null;
+      await orphan?.dispose();
+      return;
     }
     _log.info(
       'Connected to VM Service at ${_redactVmServiceUri(_vmServiceUri!)}',
@@ -1599,6 +1668,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
             name: name,
             description: tool.description,
             inputSchema: tool.inputSchema ?? const ToolInputSchema(),
+            // Present only when advertised (task 07's opt-in pilot): the
+            // measure must carry it, or `tools/list` growth would be invisible
+            // to the budgets and the report.
+            outputSchema: tool.outputSchema,
             annotations: tool.annotations,
           ).toJson(),
     ];
@@ -1815,6 +1888,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     final deviceId =
         context?.deviceId ?? _fleetManager.activeDeviceId ?? 'default';
     if (context == null || context.service == null) {
+      // The first connection is still settling (task 09): answer "connecting",
+      // not "no app" — the app may be mid-startup and discovery is running, so
+      // "no app" would read as a dead app and cancel a working launch.
+      if (_initialConnectPending) {
+        return _ExtensionResult.error(
+          'FlutterPilot is still connecting to the app; retry in a moment.',
+          ErrorCategory.reconnecting,
+        );
+      }
       return _ExtensionResult.error(
         _fleetManager.deviceIds.length > 1
             ? 'Device "$deviceId" is not running (app stopped, or restarted '

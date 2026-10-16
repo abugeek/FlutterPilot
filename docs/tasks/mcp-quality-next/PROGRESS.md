@@ -407,12 +407,15 @@ written but **not run** here.
 
 ## 09 — Startup and MCP-readiness benchmarking
 
-Status: **done** (measurement + decision, non-gated scope). Windows evidence is
-real; the connected-app case and the Linux CI job are **not run** here.
+Status: **done.** Windows evidence is real; the connected-app case and the Linux
+CI job are **not run** here.
 
-Decision deliverable: **AOT is a large, already-shipped win; the remaining
-bottleneck is the blocking VM connection, so a separately approved startup-order
-change is *proposed* — not implemented** (task 09 forbids reordering here).
+Decision deliverable: **AOT is a large, already-shipped win, and the blocking VM
+connection was the remaining readiness bottleneck — so the separately approved
+startup-order change is now implemented.** Task 09 itself forbade reordering; the
+change was authorized separately ("fix these remaining 3 things", 2026-10-16) and
+is independently reversible (`start({transport})`, the `debugInitialConnect` seam
+and `_initialConnectPending`).
 
 ### Delivered
 
@@ -483,6 +486,74 @@ change is *proposed* — not implemented** (task 09 forbids reordering here).
   first-result honesty, reconnect races, cleanup or client compatibility.
 - `dart analyze` clean; `dart format` applied to every touched Dart file.
 
+### Follow-up (2026-10-16) — the reorder, implemented and re-measured
+
+`FlutterPilotServer.start()` now connects the MCP transport **first** and runs the
+first VM-service connection **behind it** (`unawaited(_initialConnect())`), which
+is exactly the change the decision above recommended. The §16 semantics are
+designed, not implied:
+
+- **Connecting vs disconnected.** `_initialConnectPending` is true from `start()`
+  until the first attempt settles. While it is true an app-scoped call answers
+  `[reconnecting] FlutterPilot is still connecting to the app; retry in a
+  moment.` (a retryable category) instead of a premature `No running Flutter app
+  found.` Once the attempt settles — connected or definitively none — the normal
+  message returns. No call sees a misleading "no app" during startup.
+- **Concurrent-connect deduplication.** Pre-existing and unchanged: every path
+  (`start`, `roots/list`, `_refreshClientRoots`, tool calls, the reconnect timer)
+  goes through `_connectToVmService()`, which shares one attempt via
+  `_connecting ??= …`, so the reorder cannot race two live connections.
+- **`tools/list_changed`.** Unchanged mechanism: the initial list is computed
+  with `hasSdk == null` (everything), and `updateToolVisibility` sends one
+  `notifications/tools/list_changed` when the capability probe lands — which the
+  reorder makes *more* likely to fire, not less. `_recordListedTools()` still runs
+  before the background connect.
+- **Roots handling.** `_refreshClientRoots` connects only if not already
+  connected and shares the in-flight attempt; client roots are read before
+  discovery ends, so discovery still honours them.
+- **Shutdown ordering.** `_doConnectToVmService` now re-checks `_disposed` after
+  the connection is established and, if the server stopped mid-attempt, closes
+  the orphan connection instead of adopting it. `stop()` still never waits on the
+  background attempt.
+
+Re-run, same harness, same interleaving, 20 measured trials + 1 warm-up per case,
+`--mode both --case all`, revision `e7aed0a` (dirty working tree, as before):
+
+- `no-app/source` MCP-ready **2703 ms** (p95 2758); `no-app/aot` **66 ms** (p95 70).
+- `unavailable/source` **2702 ms** (p95 2837); `unavailable/aot` **61 ms** (p95 64).
+- 20/20 ok, 0 timeouts, 0 errors, 56 tools in every case; first read tracks
+  MCP-ready (no first read was delayed behind the connection).
+- The connection penalty is **gone**: `unavailable − no-app` was **+2072 ms**
+  (source) and **+2090 ms** (AOT); it is now **−1 ms** and **−5 ms**. The
+  post-change decision line correctly reads *"MCP readiness is not dominated by
+  the connection"* — the remaining source cost is `dart run` JIT start-up, not
+  the VM connection.
+
+Tests: `test/startup_order_test.dart` (2) drives a real `FlutterPilotServer` over
+an in-process `IOStreamTransport` and pins `start()` returning while the
+connection is still pending, the MCP handshake and `tools/list` answering in that
+window, the `[reconnecting]` answer inside it, the normal answer once it settles,
+and a clean shutdown mid-attempt. `dart analyze` clean; full suite **983 passed,
+exit 0** (was 982; the shutdown test is the addition).
+
+**Real connected e2e** (`dart run tool/e2e_test.dart -d windows` — the §17
+requirement). It drives the **local** server source, not an installed build: a
+fresh `flutter create` app, `flutterpilot init --local <repo>`, `flutter run`,
+the server over stdio, then `tools/call` — covering tool visibility/capability
+checks, hot reload/restart, roots (with and without), DTD discovery, `doctor`,
+and the config `mcp install` wrote. Three runs on this revision:
+
+- **Run 1:** every connected check green; the one failure was `doctor`'s mtime
+  warning, because I edited `lib/` *while the run was in flight* and the
+  freshly-compiled `build/fp_server.exe` went stale. Recompiling clears it
+  (noted in the task README); it is an artifact, not behavior.
+- **Run 2:** `doctor` green, but finding **#345** recurred — `enter_text`
+  reported success and the next `press_key` saw `Field: "" (cursor at 0)`,
+  cascading four key checks. Recorded as a second sighting in
+  `docs/field-test-findings.md`. Intermittent: run 1, same code, passed those
+  four.
+- **Run 3:** **`E2E passed`, exit 0** (162 printed checks, no failure marker).
+
 ### Not run / limited
 
 - **Connected-app case — not run.** No healthy pre-running FlutterPilot app
@@ -493,8 +564,9 @@ change is *proposed* — not implemented** (task 09 forbids reordering here).
   number is inferred from the other cases.
 - **Linux execution of the `startup-benchmark` job — not run** here
   (Windows-only workstation).
-- **No startup-order change was made** (explicitly out of scope). The ~2.1 s
-  blocking-connection finding is a recommendation only.
+- **No startup-order change was made *in this task*.** The ~2.1 s
+  blocking-connection finding was a recommendation only here; the separately
+  authorized change and its re-measurement are in the follow-up section above.
 - The measured revision was a **dirty** working tree (`sourceFreshness: dirty`),
   recorded honestly: the measured source is not exactly revision `3c9e322`.
 
@@ -571,6 +643,19 @@ not add a FlutterPilot-owned analysis process.**
   the only production additions are the extracted function and the null-default
   observer.
 
+### Follow-up (2026-10-16) — gated item closed, no code
+
+The gated deliverable was a FlutterPilot-owned persistent analyzer, authorized
+only if the reuse gate is claimed. Re-ran the same harness on the current
+revision (15 trials/case, Windows, Dart 3.13.4): changed-file scan **0 ms**
+(p95 3), log extraction **0 ms** (p95 1); `analyze-clean` cold **1921** vs warm
+**1964 ms**, `analyze-error` cold **1976** vs warm **1945 ms** — 15/15 ok, 0
+timeouts. A repeated one-shot **does not warm**, so the reuse gate is still
+**not claimed** and the recommendation is unchanged: retain the bounded one-shot
+fallback and point at the companion's analysis tools. Nothing was implemented,
+because the gate that would authorize a daemon is not met; there is no code
+change to make.
+
 ## 04 — Trustworthy evaluation runner
 
 Status: **done** (free scope). Paid canary and the live reset check are gated on
@@ -646,6 +731,17 @@ credentials or paid calls. `--max-calls` fixture extended with `FAKE_STRUCTURED`
   results).
 - Cost/pricing: no model price is committed, so a real run reports cost unknown
   until a maintainer adds one.
+
+### Follow-up (2026-10-16) — paid path still blocked; fail-closed re-verified
+
+Ran the default suite with `ANTHROPIC_API_KEY` cleared: the run printed **no
+fixture-preflight issue**, then stopped at the key gate with exit **2** and the
+"everything up to here was free" message — no app was launched, no call was made,
+nothing was spent. So the paid canary remains blocked on the key **and** an
+explicit spend approval (and a price for the model, since `pricing.json` ships
+empty); the free half — including the re-pinned fixture manifest — passes
+end to end through the real runner. This cannot be completed without credentials
+and a spending decision, so it stays open by design, not by omission.
 
 
 ## 05 — Ten read-only evaluations
@@ -730,7 +826,9 @@ milestone.
   `fp_lab_shop` `bde8a67`, `fp_lab_notes` `2700ad3`. `check_fixtures.dart`
   reports "All fixtures match the manifest" and the scenario checksums are
   unchanged. The answers below were taken on `*_scratch` copies of the same
-  source (only the package names differed), so they stand.
+  source (only the package names differed), so they stand; those scratch copies
+  have since been removed, and the rewired committed labs are the fixtures in
+  use.
 - **Linux** — not run (Windows workstation only).
 - **The zero-code answer is surface-dependent** — `inspect_notes_network_simulation`
   (`no`) and any tool-count fact change when the curated tool surface changes,
@@ -835,8 +933,9 @@ byte cap.
 
 - **Live connected-app reads** — the plan/counts/pinning are proven with the
   fake connection and the full server protocol suite, but **not** against a
-  running app this session. Task 05's scratch labs exist; a live confirmed run
-  is not claimed here.
+  running app this session. Task 05's scratch labs were **deleted** during the
+  fixture rewire (their committed, pinned replacements remain), so a live run
+  must use the committed fixtures; a live confirmed run is not claimed here.
 - **Response sizes are a synthetic large fixture**, not a real app screen; they
   demonstrate the bounds and call counts, not a real-world byte total.
 - **Same-device latency samples** (step 13) — **not measured**: the change
@@ -849,7 +948,8 @@ byte cap.
 ## 07 — Structured-result contracts
 
 Status: **done** (non-gated scope). Public `outputSchema` advertisement is the
-gated substep in the spec (§11–12) and is **not done** (see below).
+gated substep in the spec (§11–12); it is now **implemented behind an opt-in
+flag, off by default** (see below).
 
 ### Delivered (all in `packages/fp_server/`)
 
@@ -919,8 +1019,8 @@ gated substep in the spec (§11–12) and is **not done** (see below).
   structured `reason`; the eval adapter still reads `get_app_summary`’s
   structured `route`; the eval `McpSession` still preserves `structuredContent`;
   `fp_bridge` still prints it. No consumer was changed to parse prose.
-- **Registered tool surface unchanged** — no new tool, no `outputSchema`, no
-  description change.
+- **Registered tool surface unchanged** — no new tool, no description change
+  (the opt-in `outputSchema` pilot was added later — see below).
 
 ### Measured evidence (free, Windows, this session)
 
@@ -964,12 +1064,25 @@ bytes of the structured JSON (`out/` scratch harness, deleted after recording):
 
 ### Not run / limited (honest)
 
-- **Public `outputSchema` pilot — not done.** Advertising a schema commits old
-  error paths to SDK validation (spec §11), needs Inspector/eval *client*
-  evidence of benefit, and must be shown not to exceed the per-profile budgets
-  (spec §12). No client here can demonstrate the benefit, so the local
-  contracts are the deliverable and public advertisement is left as an
-  independently reversible gated substep.
+- **Public `outputSchema` pilot — implemented behind an opt-in flag, off by
+  default.** `StructuredSpec.toJsonSchema` renders the authoritative contracts
+  as JSON Schema; `--output-schemas` (`advertiseOutputSchemas`) advertises the
+  two pilot families (`audit_screen_health`, `navigate_to`) and nothing else.
+  It stays **off** because §11 gates advertisement on a *demonstrated client
+  benefit*, which no client here can show — not for budget reasons. Measured
+  2026-10-16 on the full registered list: the **model-facing projection** the
+  budgets measure (name/description/inputSchema) is unchanged at 40 737 chars
+  because it drops `outputSchema` entirely, while the **client wire list** grows
+  47 374 → 48 630 B (**+1 256 B**; `audit_screen_health` 822 B +
+  `navigate_to` 402 B). Error
+  results are exempt from SDK validation on both server and client, so old
+  refusal/unavailable paths cannot break; every documented *non-error* variant
+  of the two families is proven to satisfy both the contract and the exact
+  rendered schema (`test/output_schema_test.dart`, 7 tests, including a real
+  in-process `tools/list` round-trip that shows the SDK enforces the schema).
+  `toolListJson` now carries `outputSchema` when one is present, so the
+  measurement and report can see the cost instead of silently dropping it.
+  Reversible: one flag.
 - **Text-serialization recommendation review against real clients** (spec §13)
   — not done: it needs Inspector or an eval client’s behaviour on these
   payloads, neither of which runs here.
@@ -977,8 +1090,10 @@ bytes of the structured JSON (`out/` scratch harness, deleted after recording):
   session). The audit sweep’s counts, restoration and `incomplete` flag and the
   navigation `current`/`uncertain` fields are proven at the **builder** level and
   the no-app paths through the real callbacks; the counting loop itself is not
-  exercised against a live multi-route app. The scratch labs exist but were
-  left alone (task 05 fixture approval still pending).
+  exercised against a live multi-route app. The scratch labs were **removed**
+  during the fixture rewire (task 05 fixtures are now committed and pinned); the
+  connected e2e does call `audit_screen_health` once against a live app
+  (screen-reader order), which is not a multi-route sweep.
 - **`run_on_devices` “partial”/unreachable** is builder-tested only (no two
   registered devices this session).
 - **Linux** — not run (Windows workstation only).

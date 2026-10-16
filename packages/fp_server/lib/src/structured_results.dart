@@ -74,6 +74,16 @@ abstract class StructuredSpec {
 
   /// The human-readable shape, e.g. `{met: bool, route?: string}`.
   String describe();
+
+  /// This contract as JSON Schema 2020-12, for an MCP `outputSchema`.
+  ///
+  /// Rendered from the same node [problems] checks, so a public schema cannot
+  /// say something the developer-side validator does not: a closed string enum
+  /// becomes `enum`, `required` lists exactly the required fields, and an
+  /// object rejects unknown keys (`additionalProperties: false`) as [problems]
+  /// does. Rendered on demand — nothing here reaches `tools/list` unless a
+  /// caller advertises it (see `advertiseOutputSchemas`).
+  Map<String, dynamic> toJsonSchema();
 }
 
 class _ObjectSpec extends StructuredSpec {
@@ -103,6 +113,21 @@ class _ObjectSpec extends StructuredSpec {
   @override
   String describe() =>
       '{${fields.entries.map((e) => '${e.key}${e.value.required ? '' : '?'}: ${e.value.spec.describe()}').join(', ')}}';
+
+  @override
+  Map<String, dynamic> toJsonSchema() => {
+    'type': 'object',
+    'properties': {
+      for (final MapEntry(key: name, value: field) in fields.entries)
+        name: field.spec.toJsonSchema(),
+    },
+    if (fields.values.any((f) => f.required))
+      'required': [
+        for (final MapEntry(key: name, value: field) in fields.entries)
+          if (field.required) name,
+      ],
+    'additionalProperties': false,
+  };
 }
 
 class _ListSpec extends StructuredSpec {
@@ -123,6 +148,12 @@ class _ListSpec extends StructuredSpec {
 
   @override
   String describe() => '[${items.describe()}]';
+
+  @override
+  Map<String, dynamic> toJsonSchema() => {
+    'type': 'array',
+    'items': items.toJsonSchema(),
+  };
 }
 
 enum _ScalarKind { boolean, integer, number, string }
@@ -167,6 +198,18 @@ class _ScalarSpec extends StructuredSpec {
     _ScalarKind.string when oneOf != null =>
       oneOf!.map((v) => '"$v"').join('|'),
     _ScalarKind.string => 'string',
+  };
+
+  @override
+  Map<String, dynamic> toJsonSchema() => {
+    'type': switch (kind) {
+      _ScalarKind.boolean => 'boolean',
+      _ScalarKind.integer => 'integer',
+      _ScalarKind.number => 'number',
+      _ScalarKind.string => 'string',
+    },
+    // Sorted so the rendered schema is deterministic across runs.
+    if (oneOf != null) 'enum': oneOf!.toList()..sort(),
   };
 }
 
@@ -334,6 +377,30 @@ final structuredShapes = <String, String>{
   for (final MapEntry(key: name, value: spec) in structuredContracts.entries)
     name:
         '${spec.describe()}${_shapeNotes[name] == null ? '' : ' (${_shapeNotes[name]})'}',
+};
+
+/// The pilot families whose contract may be advertised as an MCP
+/// `outputSchema` (task 07 §11: one or two small, stable families).
+///
+/// Both are task-07 pilots whose every documented verdict path — including the
+/// no-app `status: "unavailable"` path — is already proven to return
+/// contract-valid structured content by `structured_results_test`. Nothing
+/// else is advertised.
+const outputSchemaPilotFamilies = {'audit_screen_health', 'navigate_to'};
+
+/// Each pilot family's MCP `outputSchema`, rendered from [structuredContracts]
+/// so the wire schema and the developer-side validator cannot drift apart.
+///
+/// Only read when `advertiseOutputSchemas` is on (off by default): advertising
+/// a schema commits every *non-error* result of that tool to matching it at the
+/// protocol layer and grows the client `tools/list` (measured: 822 B +
+/// 402 B = 1,256 B; the model-facing projection the budgets measure does not
+/// move). Decision and measurements: `docs/tasks/mcp-quality-next/PROGRESS.md`
+/// (task 07 §11–12).
+final structuredOutputSchemas = <String, Map<String, dynamic>>{
+  for (final name in outputSchemaPilotFamilies)
+    if (structuredContracts[name] case final contract?)
+      name: contract.toJsonSchema(),
 };
 
 /// Every way [structured] does not match the contract for the tool [name],

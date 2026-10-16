@@ -73,6 +73,16 @@ Future<void> runFlutterPilotServer(List<String> args) async {
           'arguments or results) in the project\'s '
           '.dart_tool/flutterpilot_calls.jsonl for "flutterpilot stats".',
     )
+    ..addFlag(
+      'output-schemas',
+      negatable: false,
+      help:
+          'Advertise an MCP outputSchema for the two task-07 pilot families '
+          '(audit_screen_health, navigate_to). Off by default: the spec gates '
+          'advertisement on a demonstrated client benefit, and none exists yet. '
+          'The model-facing tool-list projection is unchanged; the client wire '
+          'list grows by ~1.3 KB.',
+    )
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.')
     ..addOption(
       'log-level',
@@ -114,6 +124,7 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     staticTools: results['static-tools'] as bool,
     toolProfile: ToolProfile.byName(results['tools'] as String),
     callLog: results['call-log'] as bool,
+    advertiseOutputSchemas: results['output-schemas'] as bool,
   );
 
   // Handle graceful shutdown

@@ -114,7 +114,11 @@ decision, not an implementation detail.
   list must never read as a clean one.
 - Do **not** advertise a public MCP `outputSchema` without client evidence: that
   commits old error paths to SDK-side validation and grows `tools/list`. The
-  local contracts are the default deliverable.
+  local contracts are the default deliverable. The mechanism exists and is
+  reversible — `StructuredSpec.toJsonSchema` renders a contract as JSON Schema
+  and `--output-schemas` (`advertiseOutputSchemas`) advertises the two pilot
+  families only (`audit_screen_health`, `navigate_to`). It is **off by default**
+  and needs a reviewed decision to turn on, not a code change.
 
 ## 5. The tool reference is generated
 
