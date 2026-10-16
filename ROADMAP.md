@@ -15,11 +15,11 @@ tools that always work beat many tools that sometimes work.
   gesture tools into `gesture_widget(gesture: ...)`); an app sees only the tools that work
   for it (a Dio-only app 43, zero-code 15). SDK + 12 plugins + server + CLI. All packages
   analyze clean and pass unit tests.
-- `packages/flutterpilot_server/tool/e2e_test.dart` — the real gate: creates a
+- `packages/fp_server/tool/e2e_test.dart` — the real gate: creates a
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
   drives it through the MCP server over stdio. 32/32 checks pass on macOS
   (also runs in CI on `macos-latest`).
-- `packages/flutterpilot_server/tool/eval/` — agent evals (2026-10-14): a small
+- `packages/fp_server/tool/eval/` — agent evals (2026-10-14): a small
   Messages API loop drives the task-00 lab apps and reports which tools a model
   picked and how many calls, tokens and seconds each task cost, so curation
   changes can prove they did not make agents worse. Baseline numbers are pending
@@ -48,7 +48,7 @@ tools that always work beat many tools that sometimes work.
 - Round-1 field-test fixes (2026-10-14, task 11): `simulate_network(offline)`
   now beats `mock_http_response` — a mock stands in for the server, offline
   means no request reaches one — and `slow_3g`/`fast_4g` delay a mocked answer
-  too (`packages/plugins/flutterpilot_dio`). `get_debug_logs` merges what the
+  too (`packages/plugins/fp_dio`). `get_debug_logs` merges what the
   app printed before the connection from the SDK's own buffer (deduped by
   time; a zero-code app is told it isn't available). `get_app_summary`'s
   uncaught errors carry the same "before the last reload" mark as
@@ -87,7 +87,7 @@ tools that always work beat many tools that sometimes work.
 1. Build or extend a *real* feature in a real app (`../hn_reader`, or a new app
    for untested plugins — see §2.1).
 2. Drive it only through FlutterPilot tools, like an agent would:
-   `cd packages/flutterpilot_server && dart run tool/fp_bridge.dart -p ../../../hn_reader`
+   `cd packages/fp_server && dart run tool/fp_bridge.dart -p ../../../hn_reader`
    then `curl -s localhost:8765 -d '{"name":"<tool>","arguments":{...}}'`.
    `tool/.fp/calls.jsonl` records latency and response size per call.
 3. For each tool ask: did it do the thing? Is the response true? Is it small?
@@ -100,7 +100,7 @@ tools that always work beat many tools that sometimes work.
 
 - **Hidden windows:** when the app window is covered/minimized the OS reports
   `AppLifecycleState.hidden` and Flutter stops frames. The SDK now pumps forced
-  frames while an agent is active (`_ensureFreshFrame` in `flutterpilot_sdk.dart`).
+  frames while an agent is active (`_ensureFreshFrame` in `fp_sdk.dart`).
   If something looks stale, check `get_app_summary` → "App window: hidden".
 - **Hot reload can't re-run global/static initializers or change registered
   service-extension closures** → SDK changes and provider definitions need
@@ -354,10 +354,10 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    package has a README, LICENSE and CHANGELOG, and the plugin READMEs were
    rewritten from one table (host package, wiring line, tools). `init
    --source auto` (the default) uses `^0.1.0` from pub.dev once
-   `flutterpilot_sdk` is there, with no dependency_overrides (it drops the
+   `fp_sdk` is there, with no dependency_overrides (it drops the
    one a git init left), and git until then. A CLI installed from pub.dev
    has no server beside it: `mcp install` builds one from
-   `~/.flutterpilot/server`, a package depending on `flutterpilot_server`
+   `~/.flutterpilot/server`, a package depending on `fp_server`
    whose bin calls `runFlutterPilotServer` (the server's CLI now lives in
    its library). All 15 names were free on pub.dev on 2026-09-28.
 4. **`flutterpilot doctor`:** done. From the files: SDK added and
@@ -419,7 +419,7 @@ Items 1–9 were re-checked on hn_reader on 2026-10-01; all are closed:
    property whose schema declares no `type` at all (`set_state.value`,
    `mock_platform_channel.result`/`event`) passes through untouched.
 5. **Measure the surface:** done — `dart run
-   packages/flutterpilot_server/tool/tool_list_report.dart` prints what each
+   packages/fp_server/tool/tool_list_report.dart` prints what each
    app profile pays for `tools/list` (bytes per tool, sorted, with a total and
    a token estimate) for `all`, `sdk_no_plugins`, `sdk_dio`, `sdk_lab_shop`,
    `sdk_lab_notes`, `zero_code` and `profile_build`; `--json` writes the same
@@ -891,8 +891,8 @@ the server itself: `flutterpilot stats`).
 - `../pos_lab` — Windows field-test app for §11 (scenarios with databases
   in `flutterpilot/scenarios/`). Launch with
   `flutter run -d windows --vmservice-out-file=.dart_tool/flutterpilot_vm_uri`.
-- `packages/flutterpilot_server/tool/e2e_test.dart` — the gate.
-- `packages/flutterpilot_server/tool/fp_bridge.dart` — shell driver.
+- `packages/fp_server/tool/e2e_test.dart` — the gate.
+- `packages/fp_server/tool/fp_bridge.dart` — shell driver.
 
 ## Definition of done for any roadmap item
 
@@ -900,4 +900,4 @@ the server itself: `flutterpilot stats`).
 - A check in `e2e_test.dart` if it's user-visible.
 - Honest responses (errors say why and what to do next), small outputs.
 - All packages analyze clean, all tests pass, `TOOLS.generated.md` regenerated
-  (`dart run packages/flutterpilot_server/tool/generate_tools_doc.dart`).
+  (`dart run packages/fp_server/tool/generate_tools_doc.dart`).
