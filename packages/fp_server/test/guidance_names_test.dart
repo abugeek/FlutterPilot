@@ -203,4 +203,22 @@ const _notTools = {
   'diagnose_exception',
   'create_integration_test',
   'audit_screen_health',
+  // The packages around the server (task 31 renamed them to fp_*): a pubspec
+  // name in the docs, not a tool. Update this list when a package is added,
+  // renamed or removed.
+  'fp_sdk',
+  'fp_server',
+  'fp_cli',
+  'fp_riverpod',
+  'fp_bloc',
+  'fp_dio',
+  'fp_drift',
+  'fp_sqflite',
+  'fp_hive',
+  'fp_shared_preferences',
+  'fp_supabase',
+  'fp_gorouter',
+  'fp_connectivity',
+  'fp_firebase',
+  'fp_secure_storage',
 };

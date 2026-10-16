@@ -1522,13 +1522,7 @@ Future<void> main(List<String> args) async {
       // flutterpilot doctor reads what the running app registered (§3.4).
       final doctor = await Process.run(
         'dart',
-        [
-          'run',
-          '${repo}packages/fp_cli/bin/fp.dart',
-          'doctor',
-          '-p',
-          app,
-        ],
+        ['run', '${repo}packages/fp_cli/bin/fp.dart', 'doctor', '-p', app],
         stdoutEncoding: utf8,
         stderrEncoding: utf8,
       );
@@ -1665,13 +1659,7 @@ Future<void> main(List<String> args) async {
         if (!zeroCode && !forgotten) {
           final doctor = await Process.run(
             'dart',
-            [
-              'run',
-              '${repo}packages/fp_cli/bin/fp.dart',
-              'doctor',
-              '-p',
-              app,
-            ],
+            ['run', '${repo}packages/fp_cli/bin/fp.dart', 'doctor', '-p', app],
             stdoutEncoding: utf8,
             stderrEncoding: utf8,
           );
