@@ -697,7 +697,7 @@ Future<void> main(List<String> args) async {
           'profile_action refuses a non-action tool',
           'profile_action',
           {'tool': 'get_app_summary'},
-          ['runs an action tool'],
+          ["can't be profiled", 'Tools:'],
           true,
         );
       }
@@ -1014,13 +1014,25 @@ Future<void> main(List<String> args) async {
         'action chain stops at a failed step',
         'execute_action_chain',
         {
-          // The shape steps had before: still read.
+          // Steps are tool calls, one shape (task 02 §3). The first step's
+          // action fails, so the second never runs.
           'steps': [
-            {'action': 'tap', 'target': 'No such button'},
-            {'action': 'enter_text', 'target': 'Name', 'text': 'never'},
+            {
+              'tool': 'tap_widget',
+              'arguments': {'key': 'No such button'},
+            },
+            {
+              'tool': 'enter_text',
+              'arguments': {'key': 'Name', 'text': 'never'},
+            },
           ],
         },
-        ['stopped after 0/2', 'No such button', 'skipped'],
+        [
+          'stopped after 0/2',
+          'Step 1 (tap "No such button")',
+          'Widget not found matching',
+          'No such button',
+        ],
         true,
       );
       await check('interactive elements', 'get_interactive_elements', {}, [

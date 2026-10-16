@@ -1971,15 +1971,17 @@ extension _WidgetExtensions on FlutterPilot {
               r = (
                 status: 'unsupportedAction',
                 error:
-                    'Step $i: unsupported action "$action". Use "tap" '
+                    'Step ${i + 1}: unsupported action "$action". Use "tap" '
                     '(target) or "enter_text" (target, text).',
               );
           }
           if (r.status == 'ok') {
             executedCount++;
           } else {
+            // 1-based, like the tool-path formatter (`describeChain`): a step
+            // is "Step 1", never "Step 0".
             failure =
-                'Step $i (${action ?? '?'} "${target ?? ''}"): ${r.error}';
+                'Step ${i + 1} (${action ?? '?'} "${target ?? ''}"): ${r.error}';
           }
           steps.add({
             'index': i,

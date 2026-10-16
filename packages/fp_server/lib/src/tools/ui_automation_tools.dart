@@ -1298,8 +1298,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                       '$failure\nRemaining steps were skipped. State now:\n',
           );
           for (final step in (res.data?['steps'] as List?) ?? const []) {
-            if (step is Map && step['note'] is String) {
-              buffer.write('Step ${step['index']}: ${step['note']}\n');
+            // `index` is 0-based; the number shown is 1-based like everywhere
+            // else a step is named (`describeChain`, the failure line above).
+            if (step is Map && step['index'] is num && step['note'] is String) {
+              buffer.write(
+                'Step ${(step['index'] as num) + 1}: ${step['note']}\n',
+              );
             }
           }
           buffer.write(_formatActionFeedback('Chain finished', const {}, res));

@@ -14,18 +14,21 @@ void main() {
     expect(chainStep({'tool': 'tap_widget', 'arguments': 'Save'}), isNull);
   });
 
-  test('the former action/target shape still reads', () {
-    final tap = chainStep({'action': 'tap', 'target': 'Save'});
-    expect(tap?.tool, 'tap_widget');
-    expect(tap?.arguments, {'key': 'Save'});
-    final type = chainStep({
-      'action': 'enter_text',
-      'target': 'Title',
-      'text': 'Milk',
-    });
-    expect(type?.tool, 'enter_text');
-    expect(type?.arguments, {'key': 'Title', 'text': 'Milk'});
-    expect(chainStep({'action': 'swipe', 'target': 'List'}), isNull);
+  test('a step is only the canonical tool-call shape', () {
+    // The former {"action": ..., "target": ...} entry is no longer a step:
+    // one shape keeps the envelope readable everywhere (task 02 §3).
+    expect(chainStep({'action': 'tap', 'target': 'Save'}), isNull);
+    expect(
+      chainStep({'action': 'enter_text', 'target': 'Title', 'text': 'Milk'}),
+      isNull,
+    );
+    expect(
+      chainStep({
+        'arguments': {'key': 'Save'},
+      }),
+      isNull,
+    );
+    expect(chainStep(const <String, dynamic>{}), isNull);
   });
 
   test('plain taps and text entries run inside the app', () {

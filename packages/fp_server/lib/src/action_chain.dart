@@ -21,28 +21,20 @@ JsonSchema compositeStepSchema() => JsonSchema.object(
   required: ['tool'],
 );
 
-/// Reads `{"tool": ..., "arguments": {...}}`, or the shape the chain took
-/// before (`{"action": "tap", "target": ...}`); null when it is neither.
+/// Reads one canonical step, `{"tool": ..., "arguments": {...}}`; null for
+/// anything else. A step is exactly a tool call, so there is no second shape
+/// (task 02 §3): an old `{"action": ..., "target": ...}` entry reads as
+/// nothing and is refused with the shape spelled out, never translated.
 ChainStep? chainStep(Object? raw) {
   if (raw is! Map) return null;
   final tool = raw['tool'];
-  if (tool is String) {
-    final arguments = raw['arguments'];
-    if (arguments != null && arguments is! Map) return null;
-    return (
-      tool: tool,
-      arguments: Map<String, dynamic>.from(arguments as Map? ?? const {}),
-    );
-  }
-  final target = raw['target'] ?? raw['key'];
-  return switch (raw['action']) {
-    'tap' || 'tap_widget' => (tool: 'tap_widget', arguments: {'key': ?target}),
-    'enter_text' || 'type' => (
-      tool: 'enter_text',
-      arguments: {'key': ?target, 'text': raw['text'] ?? ''},
-    ),
-    _ => null,
-  };
+  if (tool is! String) return null;
+  final arguments = raw['arguments'];
+  if (arguments != null && arguments is! Map) return null;
+  return (
+    tool: tool,
+    arguments: Map<String, dynamic>.from(arguments as Map? ?? const {}),
+  );
 }
 
 /// [step] as an action of the SDK's own chain, which runs inside the app
