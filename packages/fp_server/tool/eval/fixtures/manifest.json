@@ -5,7 +5,7 @@
     {
       "id": "fp_lab_shop",
       "sourceLocation": "../fp_lab_shop",
-      "revision": "acb5f26d9dce290bd35f6453bd1c643479eb24a3",
+      "revision": "bde8a67e72d72a5d4e32628c5f5d58a597c22345",
       "license": "undeclared (no LICENSE file in the checkout; redistribution not assumed)",
       "plugins": [
         "riverpod",
@@ -42,7 +42,7 @@
     {
       "id": "fp_lab_notes",
       "sourceLocation": "../fp_lab_notes",
-      "revision": "0f5ead4669aebc15040ed9f4620ebd3f612baeec",
+      "revision": "2700ad39fa7477e0807d8f4aec3bd87d36781f7c",
       "license": "undeclared (no LICENSE file in the checkout; redistribution not assumed)",
       "plugins": ["bloc", "drift", "hive", "secure_storage", "connectivity"],
       "buildMode": "debug",

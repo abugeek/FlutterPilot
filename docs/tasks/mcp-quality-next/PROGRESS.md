@@ -722,16 +722,15 @@ milestone.
 
 - **Paid baseline** — **not run** (needs a key and separate approval); no money
   spent. The suite is ready for one canary, then `--repeat 3`.
-- **Fixture identity** — the committed labs (`../fp_lab_shop`,
-  `../fp_lab_notes`) are still wired to the **pre-rename** package names
-  (`flutterpilot_sdk`, …) and no longer resolve against this checkout after the
-  `fp_*` rename (the same blocker task 09 recorded). Rewiring them is a
-  **fixture change that needs separate approval** (task 05 §47), so the live
-  verification used **untracked scratch copies** beside the repo
-  (`../fp_lab_shop_scratch`, `../fp_lab_notes_scratch`): the same app source with
-  only the dependency paths/imports renamed (`flutterpilot_` → `fp_`). Answers
-  are genuine MCP observations of that app; re-running against the committed
-  fixtures is pending fixture approval and is expected to be identical.
+- **Fixture identity — resolved** — the committed labs (`../fp_lab_shop`,
+  `../fp_lab_notes`) were wired to the **pre-rename** package names
+  (`flutterpilot_sdk`, …) and no longer resolved against this checkout after the
+  `fp_*` rename. They are now rewired (`flutterpilot_` → `fp_` in imports and
+  pubspec deps; no app changes — `flutter analyze` clean) and re-pinned:
+  `fp_lab_shop` `bde8a67`, `fp_lab_notes` `2700ad3`. `check_fixtures.dart`
+  reports "All fixtures match the manifest" and the scenario checksums are
+  unchanged. The answers below were taken on `*_scratch` copies of the same
+  source (only the package names differed), so they stand.
 - **Linux** — not run (Windows workstation only).
 - **The zero-code answer is surface-dependent** — `inspect_notes_network_simulation`
   (`no`) and any tool-count fact change when the curated tool surface changes,
