@@ -16,7 +16,7 @@ import 'package:test/test.dart';
 /// description and property description, `CLAUDE.md`, `README.md`,
 /// `docs/*.md`, `skills/flutterpilot/SKILL.md`. Not scanned: histories that
 /// may name what a tool was called at the time (`docs/field-test-findings.md`,
-/// `docs/tasks/**`, `ROADMAP.md`).
+/// `ROADMAP.md`).
 void main() {
   final repoRoot = p.normalize(p.join(Directory.current.path, '..', '..'));
 

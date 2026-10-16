@@ -1,6 +1,6 @@
 # Agent evals
 
-Answer the question later changes in `docs/tasks/mcp-curation/` need: *given only
+Answer the question a curation change must answer (see `ROADMAP.md`): *given only
 FlutterPilot's tools, does a model finish a realistic Flutter task — and how many
 calls, tokens and seconds does it cost?* `tool/e2e_test.dart` proves the tools
 work; this measures whether a model *picks the right tool*. It calls a paid API,
