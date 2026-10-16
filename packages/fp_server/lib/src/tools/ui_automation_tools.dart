@@ -1023,7 +1023,26 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             targets,
             (a) => '`${a['target']}` (${a['type']}): ${a['issue']}',
           );
-          section('Controls without a label', unlabeled, (u) => '$u');
+          // Grouped on purpose: identical controls (one list row repeating one
+          // widget) are one finding. Say both numbers so a count of "1" is
+          // never read as "one control".
+          if (unlabeled.isNotEmpty) {
+            final controls = unlabeled.fold<int>(
+              0,
+              (n, u) => n + _unlabeledControls('$u'),
+            );
+            buffer.writeln(
+              'Controls without a label (${unlabeled.length} '
+              'finding${unlabeled.length == 1 ? '' : 's'}, '
+              '$controls control${controls == 1 ? '' : 's'}):',
+            );
+            for (final item in unlabeled.take(max)) {
+              buffer.writeln('- $item');
+            }
+            if (unlabeled.length > max) {
+              buffer.writeln('- … ${unlabeled.length - max} more');
+            }
+          }
           section('Low contrast text', contrast, (c) => '$c');
           section('Reading order jumps', jumps, (j) => '$j');
           if (buffer.isEmpty) {
@@ -1291,18 +1310,33 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           final executed = (res.data?['executedCount'] as num?)?.toInt() ?? 0;
           final total = (res.data?['totalActions'] as num?)?.toInt() ?? 0;
           final failure = res.data?['failure'] as String?;
+          // One formatter for both chain paths (this in-app fast path and the
+          // tool-at-a-time fallback below): the same words, the same 1-based
+          // step numbers, the same "Not run:" line.
           final buffer = StringBuffer(
             failure == null
                 ? 'Action chain: $executed/$total steps done.\n'
-                : 'Action chain stopped after $executed/$total steps. '
-                      '$failure\nRemaining steps were skipped. State now:\n',
+                : 'Action chain stopped after $executed/$total steps.\n'
+                      'Step ${executed + 1} ${steps[executed].tool} failed: '
+                      '$failure\n',
           );
+          if (failure != null && executed + 1 < steps.length) {
+            final notRun = steps
+                .skip(executed + 1)
+                .map((s) => s.tool)
+                .join(', ');
+            buffer.write('Not run: $notRun.\n');
+          }
           for (final step in (res.data?['steps'] as List?) ?? const []) {
-            // `index` is 0-based; the number shown is 1-based like everywhere
-            // else a step is named (`describeChain`, the failure line above).
+            // Tap notes, one per step that ran; numbered like `describeChain`.
             if (step is Map && step['index'] is num && step['note'] is String) {
+              final index = (step['index'] as num).toInt();
+              final tool = index >= 0 && index < steps.length
+                  ? steps[index].tool
+                  : null;
               buffer.write(
-                'Step ${(step['index'] as num) + 1}: ${step['note']}\n',
+                'Step ${index + 1}${tool == null ? '' : ' $tool'}: '
+                '${step['note']}\n',
               );
             }
           }
@@ -1378,4 +1412,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       },
     );
   }
+}
+
+/// How many controls one `audit_screen_health` unlabeled finding covers. The
+/// auditor groups identical controls as `Role ×N at …` (one list row repeats
+/// one widget); a finding without `×N` is a single control.
+int _unlabeledControls(String finding) {
+  final match = RegExp(r' ×(\d+) ').firstMatch(finding);
+  return match == null ? 1 : int.parse(match.group(1)!);
 }

@@ -527,8 +527,9 @@ extension _WidgetExtensions on FlutterPilot {
         }
 
         if (targetNode != null) {
-          if (targetNode!.hasFlag(SemanticsFlag.hasEnabledState) &&
-              !targetNode!.hasFlag(SemanticsFlag.isEnabled)) {
+          // flagsCollection replaces the deprecated SemanticsNode.hasFlag;
+          // isEnabled == isFalse means "has enabled state and is disabled".
+          if (targetNode!.flagsCollection.isEnabled == ui.Tristate.isFalse) {
             return ServiceExtensionResponse.error(
               ServiceExtensionResponse.extensionError,
               'Semantics #$semanticsId is disabled and cannot be tapped.',
@@ -1971,17 +1972,17 @@ extension _WidgetExtensions on FlutterPilot {
               r = (
                 status: 'unsupportedAction',
                 error:
-                    'Step ${i + 1}: unsupported action "$action". Use "tap" '
-                    '(target) or "enter_text" (target, text).',
+                    'unsupported action "$action". Use "tap" (target) or '
+                    '"enter_text" (target, text).',
               );
           }
           if (r.status == 'ok') {
             executedCount++;
           } else {
-            // 1-based, like the tool-path formatter (`describeChain`): a step
-            // is "Step 1", never "Step 0".
-            failure =
-                'Step ${i + 1} (${action ?? '?'} "${target ?? ''}"): ${r.error}';
+            // The raw error only: the server names the step and the canonical
+            // tool from the chain, so both chain paths read the same
+            // (`describeChain`).
+            failure = r.error;
           }
           steps.add({
             'index': i,

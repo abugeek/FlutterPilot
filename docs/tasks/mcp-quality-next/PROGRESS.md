@@ -695,7 +695,7 @@ milestone.
 | id | category | answer | confirming call |
 |---|---|---|---|
 | inspect_shop_list_products | discovery | `8` | `get_network_logs` body lists ids 1..8 |
-| inspect_shop_unnamed_controls | ui | `1` | `audit_screen_health` ("Controls without a label (1)") |
+| inspect_shop_unnamed_controls | ui | `7` | `audit_screen_health` ("Controls without a label (1 finding, 7 controls)") |
 | inspect_shop_banner_contrast | ui | `1.61:1` | `audit_screen_health` (contrast 1.61:1, #cccccc on #ffffff) |
 | inspect_shop_dark_mode | state | `false` | `get_state` (DarkModeNotifier: false) |
 | inspect_shop_list_status | diagnostics | `200` | `get_network_logs` (RESPONSE … 200 [MOCKED]) |

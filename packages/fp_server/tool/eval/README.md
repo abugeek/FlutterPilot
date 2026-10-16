@@ -89,6 +89,10 @@ not need it:
 dart test test/eval_runner_test.dart test/fixture_manifest_test.dart
 ```
 
+`--base-url` (or the `ANTHROPIC_BASE_URL` environment variable) points the
+runner at a local fake instead of the paid API; the key-shaped check still
+applies, so a fake key of any value is fine.
+
 ## Read-only inspection suite (task 05)
 
 The workflow suite (`tasks.yaml`) drives the app — navigation, mocks, settings,

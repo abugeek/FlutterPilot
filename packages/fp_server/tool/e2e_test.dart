@@ -1029,9 +1029,10 @@ Future<void> main(List<String> args) async {
         },
         [
           'stopped after 0/2',
-          'Step 1 (tap "No such button")',
+          'Step 1 tap_widget failed',
           'Widget not found matching',
           'No such button',
+          'Not run: enter_text',
         ],
         true,
       );

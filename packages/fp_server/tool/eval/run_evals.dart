@@ -94,6 +94,13 @@ Future<void> _run(List<String> argv) async {
       defaultsTo: 'claude-sonnet-5-5',
       help: 'Messages API model id, pinned into the results.',
     )
+    ..addOption(
+      'base-url',
+      help:
+          'Messages API base URL (default: the ANTHROPIC_BASE_URL environment '
+          'variable, else https://api.anthropic.com). Point it at a local fake '
+          'instead of the paid API; the runner still needs a key-shaped value.',
+    )
     ..addOption('tasks', help: 'Comma-separated task ids (default: all).')
     ..addOption(
       'suite',
@@ -181,6 +188,12 @@ Future<void> _run(List<String> argv) async {
 
   final root = _repoRoot();
   final model = '${args['model']}';
+  // A local fake (tests) or a proxy: --base-url wins, then the environment,
+  // then the real endpoint.
+  final baseUrl =
+      (args['base-url'] as String?) ??
+      Platform.environment['ANTHROPIC_BASE_URL'] ??
+      'https://api.anthropic.com';
   final extraServerArgs = _words(args['server-args'] as String? ?? '');
 
   final suiteName = '${args['suite']}';
@@ -315,6 +328,7 @@ Future<void> _run(List<String> argv) async {
   final runner = AnthropicRunner(
     apiKey: apiKey,
     model: model,
+    baseUrl: baseUrl,
     maxTurns: maxTurns,
     maxCalls: maxCalls,
     maxRunSeconds: maxRunSeconds,

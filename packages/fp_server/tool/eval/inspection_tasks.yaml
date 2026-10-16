@@ -51,7 +51,7 @@ questions:
       On the running shop app's home route, how many controls currently on
       screen can a screen reader not name — that is, controls with no
       accessible label? Answer with the number only.
-    answer: "1"
+    answer: "7"
     match: number
     max_calls: 6
     verified: true
@@ -59,8 +59,9 @@ questions:
     evidence:
       - call: audit_screen_health()
         result: >
-          Controls without a label (1): - Button x7 at (1196, 183), ... 40x40 has
-          no label: a screen reader only says "button". Code: IconButton
+          Controls without a label (1 finding, 7 controls): - Button x7 at
+          (1196, 183), (1196, 255), (1196, 327), ... 40x40 has no label: a
+          screen reader only says "button". Code: IconButton
           lib/widgets/product_card.dart:25:19.
 
   - id: inspect_shop_banner_contrast
