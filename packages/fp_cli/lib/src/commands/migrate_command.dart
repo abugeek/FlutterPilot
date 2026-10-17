@@ -188,6 +188,15 @@ class MigrateCommand extends Command<void> {
     var count = 0;
 
     for (final entry in packageMap.entries) {
+      final canonicalImport = "package:${entry.key}/${entry.key}.dart";
+      if (content.contains(canonicalImport)) {
+        final matches = canonicalImport.allMatches(content).length;
+        count += matches;
+        content = content.replaceAll(
+          canonicalImport,
+          "package:${entry.value}/${entry.value}.dart",
+        );
+      }
       final importPattern = "package:${entry.key}/";
       if (content.contains(importPattern)) {
         final matches = importPattern.allMatches(content).length;
