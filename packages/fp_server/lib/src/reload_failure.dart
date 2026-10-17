@@ -230,14 +230,18 @@ String _hintFor(String message) {
   // directory. For a sandboxed macOS app that is inside the app's container,
   // which macOS keeps other processes out of unless the one that ran
   // `flutter run` was allowed to manage apps.
-  if (message.contains('failed to create file') &&
-      message.contains('/Library/Containers/')) {
+  if (message.contains('/Library/Containers/') &&
+      (message.contains('failed to create file') ||
+          message.contains('Operation not permitted') ||
+          message.contains('Permission denied') ||
+          message.contains('FileSystemException'))) {
     return 'HINT: not a compile error. macOS stopped the process that ran '
         '`flutter run` from writing into this sandboxed app\'s container. '
         'Allow that program (the terminal, IDE or agent app) under System '
         'Settings > Privacy & Security > App Management (or Full Disk '
-        'Access), then start `flutter run` again. Until then, stop the app '
-        'and launch it again after each edit.';
+        'Access), or set <key>com.apple.security.app-sandbox</key><false/> '
+        'in macos/Runner/DebugProfile.entitlements, then start `flutter run` '
+        'again. Until then, stop the app and launch it again after each edit.';
   }
   // An asset the build lists is gone (field test: SVGs deleted while the app
   // ran); the agent took "compile error" at its word, then rebuilt the app.

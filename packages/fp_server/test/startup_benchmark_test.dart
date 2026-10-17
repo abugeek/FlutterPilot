@@ -281,7 +281,7 @@ void main() {
         expect(result.ok, isTrue);
         final recorded =
             jsonDecode(record.readAsStringSync()) as Map<String, dynamic>;
-        expect(recorded['cwd'], dir.path);
+        expect(recorded['cwd'], dir.resolveSymbolicLinksSync());
         expect(recorded['args'], contains(root));
       },
     );

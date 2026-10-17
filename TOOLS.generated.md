@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40832 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41073 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -104,6 +104,8 @@ Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']") or visibl
 | `durationMs` | integer | no | Long-press duration (default 600). |
 | `waitFor` | string | no | A widget (key, selector or text) to wait for after the tap, in place of a separate wait_for call. |
 | `timeoutMs` | integer | no | How long to wait for waitFor (default 5000). |
+| `quickSettle` | boolean | no | Settle quickly (<=400ms) without waiting for background tickers/animations. |
+| `settleTimeoutMs` | integer | no | Override screen settle timeout in milliseconds (default 2000). |
 
 ## `enter_text`
 

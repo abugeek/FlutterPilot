@@ -144,5 +144,26 @@ void main() {
       tracker.reset();
       expect(tracker.add({a: Offset.zero}, at(16)), isFalse);
     });
+
+    test('settles when routesSettled is true and elements >= 85% stationary', () {
+      final objects = List.generate(10, (_) => Object());
+      final sample1 = {for (var i = 0; i < 10; i++) objects[i]: Offset(i * 10.0, 0)};
+      final tracker = SettleTracker();
+      expect(tracker.add(sample1, at(0), routesSettled: true), isFalse);
+
+      // Consecutive sample 1: 9 of 10 stationary (90% >= 85%)
+      final sample2 = {
+        for (var i = 0; i < 9; i++) objects[i]: Offset(i * 10.0, 0),
+        Object(): const Offset(95, 0),
+      };
+      expect(tracker.add(sample2, at(16), routesSettled: true), isFalse);
+
+      // Consecutive sample 2: 9 of 10 stationary (90% >= 85%) -> settles!
+      final sample3 = {
+        for (var i = 0; i < 9; i++) objects[i]: Offset(i * 10.0, 0),
+        Object(): const Offset(96, 0),
+      };
+      expect(tracker.add(sample3, at(32), routesSettled: true), isTrue);
+    });
   });
 }

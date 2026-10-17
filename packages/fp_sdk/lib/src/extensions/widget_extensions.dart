@@ -245,13 +245,7 @@ extension _WidgetExtensions on FlutterPilot {
     EditableTextState? field;
     final useFocused = target == null || target.isEmpty || target == 'focused';
     if (useFocused) {
-      FocusManager.instance.primaryFocus?.context?.visitAncestorElements((e) {
-        if (e is StatefulElement && e.state is EditableTextState) {
-          field = e.state as EditableTextState;
-          return false;
-        }
-        return true;
-      });
+      field = KeyboardSimulator.focusedEditable();
     } else {
       var element = PilotWidgetInspector.findElement(target);
       if (element == null) {
@@ -292,20 +286,32 @@ extension _WidgetExtensions on FlutterPilot {
     }
     _lastFieldObscured = state.widget.obscureText;
     state.widget.focusNode.requestFocus();
+    await InteractionManager.pumpAndSettleAdaptive();
     final typed = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
-    state.updateEditingValue(typed);
+    try {
+      state.userUpdateTextEditingValue(typed, SelectionChangedCause.keyboard);
+    } catch (_) {
+      state.updateEditingValue(typed);
+    }
+    if (state.widget.controller.text != text) {
+      state.widget.controller.value = typed;
+    }
     WidgetsBinding.instance.scheduleFrame();
     await InteractionManager.pumpAndSettleAdaptive();
     // On desktop and web a field that gains focus selects all its text, and
     // that lands after the value above: leave the cursor at the end, as
     // after typing (a following press_key backspace deletes one character).
-    if (state.mounted && state.textEditingValue.selection != typed.selection) {
-      state.updateEditingValue(
-        state.textEditingValue.copyWith(selection: typed.selection),
-      );
+    if (state.mounted) {
+      if (state.textEditingValue.text != text) {
+        state.updateEditingValue(typed);
+      } else if (state.textEditingValue.selection != typed.selection) {
+        state.updateEditingValue(
+          state.textEditingValue.copyWith(selection: typed.selection),
+        );
+      }
     }
     if (TestRecorder.active && state.mounted) {
       TestRecorder.add(
@@ -401,9 +407,13 @@ extension _WidgetExtensions on FlutterPilot {
     required String? routeBefore,
     required Map<String, dynamic> treeBefore,
     bool watchQuiet = true,
+    Duration? settleTimeout,
+    bool quickSettle = false,
   }) async {
     var post = await FlutterPilot.getPostActionState(
       previousRoute: routeBefore,
+      settleTimeout: settleTimeout,
+      quickSettle: quickSettle,
     );
     var diff = PilotWidgetInspector.diffWidgetTrees(
       treeBefore,
@@ -416,10 +426,13 @@ extension _WidgetExtensions on FlutterPilot {
     final isTest = WidgetsBinding.instance.runtimeType.toString().contains(
       'Test',
     );
+    final effectiveQuietWatch = quickSettle
+        ? const Duration(milliseconds: 100)
+        : _quietWatch;
     if (watchQuiet && !isTest && quiet()) {
       final watch = Stopwatch()..start();
-      while (watch.elapsed < _quietWatch && quiet()) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+      while (watch.elapsed < effectiveQuietWatch && quiet()) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
         diff = PilotWidgetInspector.diffWidgetTrees(
           treeBefore,
           PilotWidgetInspector.captureWidgetTree(),
@@ -432,6 +445,8 @@ extension _WidgetExtensions on FlutterPilot {
         final errors = post['newErrorCount'] as int? ?? 0;
         post = await FlutterPilot.getPostActionState(
           previousRoute: routeBefore,
+          settleTimeout: settleTimeout,
+          quickSettle: quickSettle,
         );
         post['newErrorCount'] = errors + (post['newErrorCount'] as int? ?? 0);
         diff = PilotWidgetInspector.diffWidgetTrees(
@@ -456,6 +471,11 @@ extension _WidgetExtensions on FlutterPilot {
   static void register() {
     // -- ext.flutterpilot.tapWidget -------------------------------------------
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
+      final quickSettle = parameters['quickSettle'] == 'true';
+      final timeoutMs = int.tryParse(parameters['settleTimeoutMs'] ?? '');
+      final settleTimeout =
+          timeoutMs != null ? Duration(milliseconds: timeoutMs) : null;
+
       final xVal = double.tryParse(parameters['x'] ?? '');
       final yVal = double.tryParse(parameters['y'] ?? '');
       if (xVal != null && yVal != null) {
@@ -469,6 +489,8 @@ extension _WidgetExtensions on FlutterPilot {
         final after = await _afterAction(
           routeBefore: routeBefore,
           treeBefore: treeBefore,
+          settleTimeout: settleTimeout,
+          quickSettle: quickSettle,
         );
         return ServiceExtensionResponse.result(
           json.encode({
@@ -558,6 +580,8 @@ extension _WidgetExtensions on FlutterPilot {
           final after = await _afterAction(
             routeBefore: routeBefore,
             treeBefore: treeBefore,
+            settleTimeout: settleTimeout,
+            quickSettle: quickSettle,
           );
           return ServiceExtensionResponse.result(
             json.encode({
@@ -596,6 +620,8 @@ extension _WidgetExtensions on FlutterPilot {
       final after = await _afterAction(
         routeBefore: routeBefore,
         treeBefore: treeBefore,
+        settleTimeout: settleTimeout,
+        quickSettle: quickSettle,
       );
       return ServiceExtensionResponse.result(
         json.encode({

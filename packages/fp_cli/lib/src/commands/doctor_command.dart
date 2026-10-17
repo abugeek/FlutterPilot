@@ -124,7 +124,8 @@ class DoctorCommand extends Command<void> {
     final source = appSources(project);
 
     // SDK
-    if (!deps.contains('fp_sdk')) {
+    final hasSdk = deps.contains('fp_sdk') || deps.contains('flutterpilot_sdk');
+    if (!hasSdk) {
       checks.add(
         const DoctorCheck.warn(
           'fp_sdk is not a dependency: zero-code mode (inspect '
@@ -151,7 +152,9 @@ class DoctorCommand extends Command<void> {
         if (deps.contains(e.key)) e.value.$1: e.value.$2,
     };
     for (final MapEntry(key: plugin, value: wiring) in wanted.entries) {
-      if (!deps.contains(plugin)) {
+      final legacyPlugin = plugin.replaceFirst('fp_', 'flutterpilot_');
+      final hasPlugin = deps.contains(plugin) || deps.contains(legacyPlugin);
+      if (!hasPlugin) {
         checks.add(
           DoctorCheck.warn(
             '$plugin is not added: its tools are not listed for this app',
@@ -197,6 +200,9 @@ class DoctorCommand extends Command<void> {
             ? DoctorCheck.fail(title, fix)
             : DoctorCheck.warn('$title (if the app makes requests)', fix),
       );
+
+      final sandboxCheck = _checkMacOsSandbox(project);
+      if (sandboxCheck != null) checks.add(sandboxCheck);
     }
 
     // MCP client
@@ -434,7 +440,7 @@ class DoctorCommand extends Command<void> {
     Set<String> extensions,
   ) {
     final deps = _dependencies(project);
-    if (!deps.contains('fp_sdk')) {
+    if (!deps.contains('fp_sdk') && !deps.contains('flutterpilot_sdk')) {
       return [const DoctorCheck.ok('App running (zero-code: inspect only)')];
     }
     final checks = <DoctorCheck>[const DoctorCheck.ok('App running')];
@@ -451,7 +457,8 @@ class DoctorCommand extends Command<void> {
     checks.add(const DoctorCheck.ok('SDK registered in the running app'));
     for (final MapEntry(key: plugin, value: extension)
         in pluginExtensions.entries) {
-      if (!deps.contains(plugin)) continue;
+      final legacyPlugin = plugin.replaceFirst('fp_', 'flutterpilot_');
+      if (!deps.contains(plugin) && !deps.contains(legacyPlugin)) continue;
       final wiring = appPlugins.values
           .firstWhere((v) => v.$1 == plugin, orElse: () => (plugin, ''))
           .$2;
@@ -490,6 +497,62 @@ class DoctorCommand extends Command<void> {
     return RegExp(
       '<key>${RegExp.escape(key)}</key>\\s*<true\\s*/>',
     ).hasMatch(f.readAsStringSync());
+  }
+
+  static DoctorCheck? _checkMacOsSandbox(String project) {
+    if (!Directory(p.join(project, 'macos')).existsSync()) return null;
+
+    final isDebugSandboxed = _entitled(
+      project,
+      'DebugProfile',
+      'com.apple.security.app-sandbox',
+    );
+    if (!isDebugSandboxed) {
+      return const DoctorCheck.ok(
+        'macOS: DebugProfile app-sandbox disabled (unrestricted hot reload)',
+      );
+    }
+
+    final appInfo = File(
+      p.join(project, 'macos', 'Runner', 'Configs', 'AppInfo.xcconfig'),
+    );
+    String? bundleId;
+    if (appInfo.existsSync()) {
+      final match = RegExp(
+        r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([a-zA-Z0-9_.-]+)',
+      ).firstMatch(appInfo.readAsStringSync());
+      if (match != null) bundleId = match.group(1);
+    }
+
+    if (bundleId != null && Platform.isMacOS) {
+      final home = Platform.environment['HOME'];
+      if (home != null) {
+        final containerTmp = Directory(
+          p.join(home, 'Library', 'Containers', bundleId, 'Data', 'tmp'),
+        );
+        if (containerTmp.existsSync()) {
+          final probe = File(p.join(containerTmp.path, '.fp_write_probe'));
+          try {
+            probe.writeAsStringSync('ok');
+            probe.deleteSync();
+            return DoctorCheck.ok(
+              'macOS: sandboxed container write access verified ($bundleId)',
+            );
+          } catch (e) {
+            return DoctorCheck.fail(
+              'macOS: blocked from writing to app container ($bundleId): $e',
+              'Grant terminal App Management permission under System Settings > '
+              'Privacy & Security > App Management, or set '
+              '<key>com.apple.security.app-sandbox</key><false/> in macos/Runner/DebugProfile.entitlements',
+            );
+          }
+        }
+      }
+    }
+
+    return const DoctorCheck.ok(
+      'macOS: app-sandbox entitlement configured for DebugProfile',
+    );
   }
 
   /// flutter run writes `ws://…/ws`; accept the `http://…/` form too.

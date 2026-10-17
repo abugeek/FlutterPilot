@@ -97,6 +97,23 @@ void main() {
     expect(mac.ok, isFalse);
   });
 
+  test('macOS app-sandbox: checks DebugProfile sandbox configuration', () {
+    write(
+      'macos/Runner/DebugProfile.entitlements',
+      '<key>com.apple.security.network.client</key>\n<true/>\n'
+      '<key>com.apple.security.app-sandbox</key>\n<false/>',
+    );
+    write(
+      'macos/Runner/Release.entitlements',
+      '<key>com.apple.security.network.client</key>\n<true/>',
+    );
+    pubspec([]);
+    final checks = DoctorCommand.checkProject(app.path);
+    final sandbox = checks.firstWhere((c) => c.title.contains('app-sandbox'));
+    expect(sandbox.ok, isTrue);
+    expect(sandbox.title, contains('app-sandbox disabled'));
+  });
+
   // Field case: agents ran a server compiled days before its source moved.
   test('a compiled server older than its source is pointed out', () {
     final package = Directory(p.join(app.path, 'fp_server'));

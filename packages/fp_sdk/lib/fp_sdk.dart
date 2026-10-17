@@ -400,8 +400,16 @@ class FlutterPilot {
 
   static Future<Map<String, dynamic>> getPostActionState({
     String? previousRoute,
+    Duration? settleTimeout,
+    bool quickSettle = false,
   }) async {
-    final settled = await _waitForScreenSettled();
+    final settled = await _waitForScreenSettled(
+      timeout: settleTimeout ??
+          (quickSettle
+              ? const Duration(milliseconds: 400)
+              : const Duration(seconds: 2)),
+      quickSettle: quickSettle,
+    );
     final currentRoute = NavigationTracker.currentRoute;
     String? focusedKey;
     final primaryFocus = FocusManager.instance.primaryFocus;
@@ -484,16 +492,25 @@ class FlutterPilot {
 
   static Future<bool> _waitForScreenSettled({
     Duration timeout = const Duration(seconds: 2),
+    bool quickSettle = false,
   }) async {
     if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
       return true;
     }
-    final deadline = DateTime.now().add(timeout);
+    final effectiveTimeout = quickSettle
+        ? const Duration(milliseconds: 400)
+        : timeout;
+    final deadline = DateTime.now().add(effectiveTimeout);
     final tracker = SettleTracker(looping: _loopingText);
     while (DateTime.now().isBefore(deadline)) {
-      if (!_routesSettled()) {
+      final routesSettled = _routesSettled();
+      if (!routesSettled) {
         tracker.reset();
-      } else if (tracker.add(debugTextPositions(), DateTime.now())) {
+      } else if (tracker.add(
+        debugTextPositions(),
+        DateTime.now(),
+        routesSettled: true,
+      )) {
         return true;
       }
       await SchedulerBinding.instance.endOfFrame.timeout(

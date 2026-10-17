@@ -248,6 +248,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'timeoutMs': JsonSchema.integer(
             description: 'How long to wait for waitFor (default 5000).',
           ),
+          'quickSettle': JsonSchema.boolean(
+            description:
+                'Settle quickly (<=400ms) without waiting for background tickers/animations.',
+          ),
+          'settleTimeoutMs': JsonSchema.integer(
+            description:
+                'Override screen settle timeout in milliseconds (default 2000).',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -263,6 +271,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               ..remove('gesture')
               ..remove('waitFor')
               ..remove('timeoutMs');
+            if (p['quickSettle'] != null) {
+              args['quickSettle'] = p['quickSettle'].toString();
+            }
+            if (p['settleTimeoutMs'] != null) {
+              args['settleTimeoutMs'] = p['settleTimeoutMs'].toString();
+            }
             verb = 'Widget tapped';
           case 'secondary':
             extension = 'ext.flutterpilot.secondaryTapWidget';

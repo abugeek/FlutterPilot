@@ -106,7 +106,7 @@ class KeyboardSimulator {
       character = hasShift ? keyDef.character!.toUpperCase() : keyDef.character;
     }
 
-    final field = _focusedEditable();
+    final field = focusedEditable();
     final before = field?.textEditingValue;
 
     for (final modifier in modifierDefs) {
@@ -233,18 +233,41 @@ class KeyboardSimulator {
     return null;
   }
 
-  /// The text field that has focus, if any.
-  static EditableTextState? _focusedEditable() {
-    final context = FocusManager.instance.primaryFocus?.context;
-    if (context == null) return null;
+  /// The text field that has focus, if any. Looks at the focused element, its
+  /// descendants (when Focus wraps EditableText), and ancestors.
+  static EditableTextState? focusedEditable() {
+    final primaryFocus = FocusManager.instance.primaryFocus;
+    if (primaryFocus == null || primaryFocus.context == null) return null;
+    if (primaryFocus is FocusScopeNode) return null;
+
+    final context = primaryFocus.context!;
     if (context is StatefulElement && context.state is EditableTextState) {
-      return context.state as EditableTextState;
+      final state = context.state as EditableTextState;
+      if (state.widget.focusNode.hasFocus) return state;
     }
     EditableTextState? found;
+    void visitDescendant(Element element) {
+      if (found != null) return;
+      if (element is StatefulElement && element.state is EditableTextState) {
+        final state = element.state as EditableTextState;
+        if (state.widget.focusNode.hasFocus) {
+          found = state;
+          return;
+        }
+      }
+      element.visitChildElements(visitDescendant);
+    }
+
+    context.visitChildElements(visitDescendant);
+    if (found != null) return found;
+
     context.visitAncestorElements((element) {
       if (element is StatefulElement && element.state is EditableTextState) {
-        found = element.state as EditableTextState;
-        return false;
+        final state = element.state as EditableTextState;
+        if (state.widget.focusNode.hasFocus) {
+          found = state;
+          return false;
+        }
       }
       return true;
     });
@@ -284,7 +307,7 @@ class KeyboardSimulator {
       return;
     }
 
-    final editableTextState = _focusedEditable();
+    final editableTextState = focusedEditable();
     if (editableTextState == null) return;
 
     final widget = editableTextState.widget;

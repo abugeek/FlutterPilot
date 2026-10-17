@@ -57,20 +57,20 @@ void main() {
         toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // Measured 2026-10-14, after task 04 merged the five gesture tools into
-      // `gesture_widget`; each limit is that profile's measurement plus 300
+      // Measured 2026-10-17, after adding quickSettle and settleTimeoutMs to
+      // tap_widget; each limit is that profile's measurement plus 300
       // (task 09 C, from `tool/tool_list_report.dart`).
-      // Every tool (--static-tools): 63 tools, 40 597 chars.
-      expect(listChars((_) => true), lessThanOrEqualTo(40897));
+      // Every tool (--static-tools): 63 tools, 41 073 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(41373));
       // An app with the SDK and no plugin, not on an iOS simulator:
-      // 28 841 chars.
+      // 29 317 chars on 2026-10-17, plus 300.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(29141),
+        lessThanOrEqualTo(29617),
       );
       // An app without the SDK: 9 674 chars.
       expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));
@@ -92,8 +92,8 @@ void main() {
       // 29 tools; the count limit is VS Code's 128 tools per request
       // (2026-10-14) minus the Dart MCP server's 4 and a small server's 5.
       expect(listed.length, lessThanOrEqualTo(30));
-      // 20 363 bytes on 2026-10-14, plus 300 (task 09 C).
-      expect(bytes, lessThanOrEqualTo(20663));
+      // 20 830 bytes on 2026-10-17, plus 300 (task 09 C).
+      expect(bytes, lessThanOrEqualTo(21130));
     });
 
     test('every tool says what it does to the app', () {

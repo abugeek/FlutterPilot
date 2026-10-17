@@ -15,7 +15,8 @@ Future<void> main(List<String> args) async {
         ..addCommand(TestCommand())
         ..addCommand(AuditCommand())
         ..addCommand(StatsCommand())
-        ..addCommand(SmokeCommand());
+        ..addCommand(SmokeCommand())
+        ..addCommand(MigrateCommand());
 
   try {
     await runner.run(args);

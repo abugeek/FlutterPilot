@@ -25,6 +25,16 @@ void main() {
     expect(text, contains('App Management'));
   });
 
+  test('a permission denied write into a sandboxed macOS container is detected', () {
+    final text = reloadFailureText(
+      'reloadSources',
+      'FileSystemException: An error occurred while writing to /Users/me/Library/Containers/com.example.app/Data/tmp/kernel.dill: Operation not permitted',
+    );
+    expect(text, contains('not a compile error'));
+    expect(text, contains('DebugProfile.entitlements'));
+    expect(text, contains('App Management'));
+  });
+
   // Field test (Octana): carousel SVGs deleted while the app ran.
   test('a missing asset is named as that', () {
     final text = reloadFailureText(
