@@ -121,7 +121,10 @@ String _formatActionDelta(
 /// Tools for tapping, typing, scrolling, swiping, and other UI interactions.
 mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
   /// Tools execute_action_chain runs: the ones that drive or check the
-  /// screen, each answering as when called alone.
+  /// screen, each answering as when called alone — and the ones that set up
+  /// what the screen is tested against (mocked responses and channels, the
+  /// network, app settings). In the call log `mock_http_response` followed
+  /// itself 37 times: each mock was an agent turn of its own.
   static const _chainStepTools = {
     'tap_widget',
     'enter_text',
@@ -133,6 +136,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     'navigate_to',
     'assert_widget',
     'wait_for',
+    'mock_http_response',
+    'mock_platform_channel',
+    'simulate_network',
+    'set_app_settings',
   };
 
   String _formatActionFeedback(
@@ -1151,7 +1158,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           {},
         );
         final start = (before.data?['postActionState'] as Map?)?['route'];
-        for (final route in checked) {
+        final progress = ToolProgress(e, total: checked.length.toDouble());
+        var stoppedEarly = 0;
+        for (var i = 0; i < checked.length; i++) {
+          if (progress.cancelled) {
+            stoppedEarly = checked.length - i;
+            break;
+          }
+          final route = checked[i];
+          await progress.advance(
+            'Auditing route ${i + 1}/${checked.length}: $route',
+          );
           out.writeln('== $route ==');
           final went = await _callExtensionRaw('ext.flutterpilot.navigateTo', {
             'route': route,
@@ -1192,14 +1209,18 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           }
           out.writeln(fine ? 'Clean.' : text);
         }
+        final totalSkipped = skipped + stoppedEarly;
         final skippedNote = skipped > 0
             ? ' $skipped more routes not checked (40 a call).'
+            : stoppedEarly > 0
+            ? ' $stoppedEarly route(s) not checked (cancelled).'
             : '';
         // Where it started: restored is true only when the sweep ended back on
         // it (or never left it). An unknown start cannot be claimed.
-        var restored = start is String && start == routes.last;
+        var restored =
+            start is String && start == routes.last && stoppedEarly == 0;
         var back = '';
-        if (start is String && start != 'Unknown' && start != routes.last) {
+        if (start is String && start != 'Unknown' && !restored) {
           final returned = await _callExtensionRaw(
             'ext.flutterpilot.navigateTo',
             {'route': start},
@@ -1215,12 +1236,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         // A failed route is not clean, and neither is a screen still loading:
         // the sweep is incomplete even when every audit it reached was fine.
         final incomplete =
-            skipped > 0 || failed > 0 || arrivalErrors > 0 || loading;
+            totalSkipped > 0 || failed > 0 || arrivalErrors > 0 || loading;
         return CallToolResult(
           content: [
             TextContent(
               text: FlutterPilotServer._boundToolText(
-                '${checked.length} routes checked, $clean clean.'
+                '${checked.length - stoppedEarly} routes checked, $clean clean.'
                 '$skippedNote\n${out.toString().trim()}$back',
               ),
             ),
@@ -1230,7 +1251,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             visited: visited,
             audited: audited,
             failed: failed,
-            skipped: skipped,
+            skipped: totalSkipped,
             findings: totals,
             restored: restored,
             incomplete: incomplete,
@@ -1245,10 +1266,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       'execute_action_chain',
       description:
           'Runs a known sequence of steps in one call, stopping at the first '
-          'that fails: taps, text, keys, scrolls, navigation, and wait_for / '
-          'assert_widget checks between them. Returns each step\'s outcome '
-          'and the screen after the last one (route, diff, tappable '
-          'elements).',
+          'that fails: taps, text, keys, scrolls, navigation, mocks/settings, '
+          'and wait_for / assert_widget checks between them. Returns each '
+          'step\'s outcome and the screen after the last one (route, diff, '
+          'tappable elements).',
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(
@@ -1357,11 +1378,21 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         }
 
         // Anything else: one tool after the other, each as if called alone.
+        final progress = ToolProgress(e, total: steps.length.toDouble());
         final outcomes = <String>[];
         var failed = false;
         int? failedStep;
         var completed = 0;
         for (final (index, step) in steps.indexed) {
+          if (progress.cancelled) {
+            outcomes.add('Cancelled before running ${step.tool}.');
+            failed = true;
+            failedStep = index + 1;
+            break;
+          }
+          await progress.advance(
+            'Step ${index + 1}/${steps.length}: ${step.tool}',
+          );
           final res = await _toolCallbacks[step.tool]!(
             Map.of(step.arguments),
             e,

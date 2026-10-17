@@ -42,6 +42,7 @@ import 'src/param_aliases.dart';
 import 'src/permission_hint.dart';
 import 'src/phone_state.dart';
 import 'src/plugin_tools.dart';
+import 'src/progress.dart';
 import 'src/redaction.dart';
 import 'src/reload_failure.dart';
 import 'src/scenario.dart';
@@ -1698,14 +1699,29 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// reach the checks that run before a callback.
   Future<CallToolResult> callToolForTest(
     String name,
-    Map<String, dynamic> args,
-  ) {
+    Map<String, dynamic> args, {
+    RequestHandlerExtra? extra,
+  }) {
     final callback = _toolCallbacks[name];
     if (callback == null) {
       throw ArgumentError.value(name, 'name', 'is not a registered tool');
     }
-    return Future.sync(() => callback(args, _testExtra));
+    return Future.sync(() => callback(args, extra ?? _testExtra));
   }
+
+  /// Appends a debug log entry for testing `get_debug_logs` without a live VM.
+  @visibleForTesting
+  void recordDebugLogForTest({
+    required String level,
+    required String message,
+    String logger = 'stdout',
+    String timestamp = '2026-10-17T12:00:00.000Z',
+  }) => _appendDebugLog(
+    level: level,
+    message: message,
+    logger: logger,
+    timestamp: timestamp,
+  );
 
   /// A [RequestHandlerExtra] for [callToolForTest]. Tools that run other tools
   /// pass it along; none of them reaches transport from a test.

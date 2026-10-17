@@ -355,6 +355,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             'with register_device(id, uri).',
           );
         }
+        final progress = ToolProgress(
+          e,
+          total: (ids.length * steps.length).toDouble(),
+        );
         final runs = await Future.wait([
           for (final id in ids)
             runZoned(() async {
@@ -364,7 +368,18 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
                 {},
               );
               if (!before.isError) run.readBaseline(before.data!);
-              for (final step in steps) {
+              for (final (index, step) in steps.indexed) {
+                if (progress.cancelled) {
+                  run.steps.add((
+                    ok: false,
+                    text: 'Cancelled before running ${step.tool}.',
+                    structured: null,
+                  ));
+                  break;
+                }
+                await progress.advance(
+                  '$id: step ${index + 1}/${steps.length} (${step.tool})',
+                );
                 final res = await _toolCallbacks[step.tool]!(
                   Map.of(step.arguments),
                   e,
@@ -689,15 +704,19 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       int repeatCount = 0;
 
       void flushPrevious() {
-        if (prevMessage != null) {
+        final msg = prevMessage;
+        if (msg != null) {
           final loggerPrefix = (prevLogger != null && prevLogger.isNotEmpty)
               ? '($prevLogger) '
               : '';
           final repeatSuffix = repeatCount > 1
               ? ' [x$repeatCount occurrences]'
               : '';
+          final clipped = msg.length > 500
+              ? '${msg.substring(0, 500)}… (+${msg.length - 500} chars)'
+              : msg;
           compacted.add(
-            '[$prevTime] [$prevLevel] $loggerPrefix$prevMessage$repeatSuffix',
+            '[$prevTime] [$prevLevel] $loggerPrefix$clipped$repeatSuffix',
           );
         }
       }
@@ -737,11 +756,12 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       return CallToolResult(
         content: [
           TextContent(
-            text:
-                '${entries.length} log entries (${compacted.length} compacted'
-                '${preConnection.isEmpty ? '' : ', ${preConnection.length} from before FlutterPilot connected'}'
-                ', buffer total: ${serverEntries.length}):\n'
-                '${note == null ? '' : '$note\n'}$lines$zeroCode',
+            text: FlutterPilotServer._boundToolText(
+              '${entries.length} log entries (${compacted.length} compacted'
+              '${preConnection.isEmpty ? '' : ', ${preConnection.length} from before FlutterPilot connected'}'
+              ', buffer total: ${serverEntries.length}):\n'
+              '${note == null ? '' : '$note\n'}$lines$zeroCode',
+            ),
           ),
         ],
       );

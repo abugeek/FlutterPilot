@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 40737 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 40832 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -200,11 +200,11 @@ Layout and accessibility check: layout overflows, tap targets under the platform
 
 ## `execute_action_chain`
 
-Runs a known sequence of steps in one call, stopping at the first that fails: taps, text, keys, scrolls, navigation, and wait_for / assert_widget checks between them. Returns each step's outcome and the screen after the last one (route, diff, tappable elements).
+Runs a known sequence of steps in one call, stopping at the first that fails: taps, text, keys, scrolls, navigation, mocks/settings, and wait_for / assert_widget checks between them. Returns each step's outcome and the screen after the last one (route, diff, tappable elements).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, navigate_to, press_key, scroll_into_view, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, set_app_settings, simulate_network, tap_widget, toggle_checkbox, wait_for. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string, status?: "ok"|"refused"|"unavailable"}`
 

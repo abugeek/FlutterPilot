@@ -12,6 +12,10 @@ class BatchNudge {
     'scroll_into_view',
     'wait_for',
     'assert_widget',
+    'mock_http_response',
+    'mock_platform_channel',
+    'simulate_network',
+    'set_app_settings',
   };
 
   /// The run of single steps that gets the tip, and how many more before it

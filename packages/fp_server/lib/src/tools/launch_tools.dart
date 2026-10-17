@@ -39,7 +39,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
           ),
         },
       ),
-      callback: (p, e) => _launchApp(p),
+      callback: (p, e) => _launchApp(p, e),
     );
   }
 
@@ -49,7 +49,10 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         content: [TextContent(text: text)],
       );
 
-  Future<CallToolResult> _launchApp(Map<String, dynamic> params) async {
+  Future<CallToolResult> _launchApp(
+    Map<String, dynamic> params, [
+    RequestHandlerExtra? extra,
+  ]) async {
     final relaunch = params['relaunch'] == true;
     final context = _activeContext;
     final connected = _vmService != null && context?.service != null;
@@ -170,8 +173,15 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     final wait = waitSeconds == null || waitSeconds <= 0
         ? _launchWait
         : Duration(seconds: waitSeconds.clamp(5, _launchWait.inSeconds));
+    // The build takes minutes: a client that asked for progress sees the
+    // phase, and one that resets its request timeout on progress keeps
+    // waiting instead of cutting the call off at its own default.
+    final progress = ToolProgress(extra);
     while (DateTime.now().difference(waitFrom) < wait) {
       await Future<void>.delayed(const Duration(milliseconds: 500));
+      // Cancelled: nobody reads this answer. The launch itself goes on, and
+      // the next launch_app call waits for it without starting another.
+      if (progress.cancelled) break;
       final text = readLog();
       uri = _launchUriFile(root) ?? vmServiceUriIn(text);
       if (uri != null && await _connectWithUri(uri)) break;
@@ -188,6 +198,9 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
           isError: true,
         );
       }
+      await progress.tick(
+        'Building: ${launchPhase(text) ?? 'flutter run started'}',
+      );
     }
     final seconds = DateTime.now().difference(waitFrom).inSeconds;
     if (uri == null) {
@@ -200,6 +213,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         '${Redaction.text(launchLogTail(readLog(), lines: 8))}',
       );
     }
+    await progress.tick('Connected; waiting for the first frame');
 
     await _sdkExtensionsReady;
     final vm = _vmService;
