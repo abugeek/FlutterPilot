@@ -35,6 +35,18 @@ class KeyboardSimulator {
     'pageup',
     'pagedown',
     'space',
+    'f1',
+    'f2',
+    'f3',
+    'f4',
+    'f5',
+    'f6',
+    'f7',
+    'f8',
+    'f9',
+    'f10',
+    'f11',
+    'f12',
   ];
 
   static const _modifierKeys = <String, _KeyDef>{
@@ -425,6 +437,66 @@ class KeyboardSimulator {
         physical: PhysicalKeyboardKey.space,
         logical: LogicalKeyboardKey.space,
         character: ' ',
+      ),
+      'f1' => (
+        physical: PhysicalKeyboardKey.f1,
+        logical: LogicalKeyboardKey.f1,
+        character: null,
+      ),
+      'f2' => (
+        physical: PhysicalKeyboardKey.f2,
+        logical: LogicalKeyboardKey.f2,
+        character: null,
+      ),
+      'f3' => (
+        physical: PhysicalKeyboardKey.f3,
+        logical: LogicalKeyboardKey.f3,
+        character: null,
+      ),
+      'f4' => (
+        physical: PhysicalKeyboardKey.f4,
+        logical: LogicalKeyboardKey.f4,
+        character: null,
+      ),
+      'f5' => (
+        physical: PhysicalKeyboardKey.f5,
+        logical: LogicalKeyboardKey.f5,
+        character: null,
+      ),
+      'f6' => (
+        physical: PhysicalKeyboardKey.f6,
+        logical: LogicalKeyboardKey.f6,
+        character: null,
+      ),
+      'f7' => (
+        physical: PhysicalKeyboardKey.f7,
+        logical: LogicalKeyboardKey.f7,
+        character: null,
+      ),
+      'f8' => (
+        physical: PhysicalKeyboardKey.f8,
+        logical: LogicalKeyboardKey.f8,
+        character: null,
+      ),
+      'f9' => (
+        physical: PhysicalKeyboardKey.f9,
+        logical: LogicalKeyboardKey.f9,
+        character: null,
+      ),
+      'f10' => (
+        physical: PhysicalKeyboardKey.f10,
+        logical: LogicalKeyboardKey.f10,
+        character: null,
+      ),
+      'f11' => (
+        physical: PhysicalKeyboardKey.f11,
+        logical: LogicalKeyboardKey.f11,
+        character: null,
+      ),
+      'f12' => (
+        physical: PhysicalKeyboardKey.f12,
+        logical: LogicalKeyboardKey.f12,
+        character: null,
       ),
       _ => null,
     };

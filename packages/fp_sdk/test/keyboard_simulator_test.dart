@@ -36,6 +36,38 @@ void main() {
     },
   );
 
+  testWidgets('KeyboardSimulator dispatches function keys F1-F12', (
+    tester,
+  ) async {
+    final events = <KeyEvent>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            events.add(event);
+            return KeyEventResult.ignored;
+          },
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final simulator = KeyboardSimulator();
+    await simulator.pressKey('f2');
+    await simulator.pressKey('F12');
+    await tester.pumpAndSettle();
+
+    final down = events.whereType<KeyDownEvent>().toList();
+    expect(down, hasLength(2));
+    expect(down[0].logicalKey, LogicalKeyboardKey.f2);
+    expect(down[0].physicalKey, PhysicalKeyboardKey.f2);
+    expect(down[0].character, isNull);
+    expect(down[1].logicalKey, LogicalKeyboardKey.f12);
+    expect(down[1].physicalKey, PhysicalKeyboardKey.f12);
+  });
+
   testWidgets('KeyboardSimulator triggers onSubmitted on Enter', (
     tester,
   ) async {
