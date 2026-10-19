@@ -234,7 +234,14 @@ Supabase and Firebase (Auth + Firestore, on the local emulators).
 
 **Devices** — `connect_app`, `list_connected_devices`, `register_device`,
 `switch_device`: one server drives several running apps (e.g. iOS simulator,
-Android emulator, Chrome), one active device at a time.
+Android emulator, Chrome), one active device at a time (`switch_device`
+moves between them; `hot_reload`, `get_debug_logs` and the rest act on the
+active one). `launch_app(device: ...)` on a device with no app yet starts one
+alongside the others, each with its own `flutter run`, log
+(`.dart_tool/flutterpilot_run.<device>.log`) and fleet entry named after the
+device. A `flutterpilot/launch.json` takes the device through a placeholder,
+with a default for calls that pass none:
+`{"command": ["./scripts/run.sh", "-d", "${device}"], "device": "macos"}`.
 
 ### MCP Resources (live context without a tool call)
 

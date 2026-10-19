@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41073 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41069 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -411,7 +411,7 @@ Recompiles edited .dart files and hot reloads them into the running app, keeping
 
 ## `launch_app`
 
-Builds and starts the app (flutter run, or the command in flutterpilot/launch.json), waits for its first frame and connects; the app outlives this session. Takes minutes: with an app already running it refuses unless relaunch:true (pubspec.yaml, assets or native code changed); hot_reload loads Dart changes in a second. A failed build returns the end of its output.
+Builds and starts the app (flutter run, or flutterpilot/launch.json's command) on a device, waits for its first frame and connects; it outlives this session. Takes minutes: with the app running there it refuses unless relaunch:true (pubspec.yaml, assets or native code changed); hot_reload loads Dart changes in a second. A failed build returns its output's end.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

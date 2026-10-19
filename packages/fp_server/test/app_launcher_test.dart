@@ -33,7 +33,8 @@ void main() {
       expect(command.command, [
         'flutter',
         'run',
-        '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
+        // Each device's launch has its own URI file.
+        '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri.macos',
         '--profile',
         '-d',
         'macos',
@@ -71,6 +72,171 @@ void main() {
       );
       file.writeAsStringSync('{nope');
       expect(() => launchCommandFor(dir), throwsFormatException);
+    });
+  });
+
+  group('several devices', () {
+    test('each device has its own launch files; no device keeps the names', () {
+      expect(launchFileFor(launchLogFile, null), launchLogFile);
+      expect(launchFileFor(launchLogFile, 'default'), launchLogFile);
+      expect(
+        launchFileFor(launchLogFile, 'macos'),
+        '.dart_tool/flutterpilot_run.macos.log',
+      );
+      expect(
+        launchFileFor(previousLaunchLogFile, 'emulator-5554'),
+        '.dart_tool/flutterpilot_run.emulator-5554.prev.log',
+      );
+      expect(
+        launchFileFor(launchPidFile, 'iPhone 18 Pro (E2E)'),
+        '.dart_tool/flutterpilot_run.iPhone_18_Pro_E2E_.pid',
+      );
+      expect(
+        launchFileFor('.dart_tool/flutterpilot_vm_uri', 'macos'),
+        '.dart_tool/flutterpilot_vm_uri.macos',
+      );
+    });
+
+    test('flutter run writes the URI file of its device', () {
+      expect(
+        launchCommandFor(app('a'), device: 'emulator-5554').command,
+        contains(
+          '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri.emulator-5554',
+        ),
+      );
+    });
+
+    File config(Directory dir, String json) =>
+        File('${dir.path}/flutterpilot/launch.json')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(json);
+
+    test(r'launch.json takes the device through ${device}', () {
+      final dir = app('a');
+      config(
+        dir,
+        r'{"command": ["./run.sh", "-d", "${device}"], "device": "macos"}',
+      );
+      expect(launchConfigTakesDevice(dir), isTrue);
+      expect(launchConfigDevice(dir), 'macos');
+      final command = launchCommandFor(dir, device: 'emulator-5554');
+      expect(command.takesDevice, isTrue);
+      expect('$command', './run.sh -d emulator-5554');
+      // No device: the config's default.
+      expect('${launchCommandFor(dir)}', './run.sh -d macos');
+    });
+
+    test(r'${device} with no default and no device says what to pass', () {
+      final dir = app('a');
+      config(dir, r'{"command": ["./run.sh", "${device}"]}');
+      expect(
+        () => launchCommandFor(dir),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('pass device'),
+          ),
+        ),
+      );
+    });
+
+    test(r'a launch.json without ${device} keeps its own device', () {
+      final dir = app('a');
+      config(dir, '{"command": ["./run_macos.sh"]}');
+      expect(launchConfigTakesDevice(dir), isFalse);
+      expect('${launchCommandFor(dir, device: 'chrome')}', './run_macos.sh');
+    });
+
+    test('a bad default device is refused', () {
+      final dir = app('a');
+      config(dir, '{"command": ["./run.sh"], "device": 3}');
+      expect(() => launchConfigDevice(dir), throwsFormatException);
+    });
+
+    test('which device a launch is for', () {
+      // The caller's, when the command takes it.
+      expect(
+        launchDevice(
+          requested: ' ios ',
+          hasConfig: true,
+          takesDevice: true,
+          configDevice: 'macos',
+        ),
+        'ios',
+      );
+      expect(
+        launchDevice(requested: 'ios', hasConfig: false, takesDevice: false),
+        'ios',
+      );
+      // Not when launch.json fixes it: its default names the files.
+      expect(
+        launchDevice(
+          requested: 'ios',
+          hasConfig: true,
+          takesDevice: false,
+          configDevice: 'macos',
+        ),
+        'macos',
+      );
+      // A relaunch with none keeps the device it replaces, before the default.
+      expect(
+        launchDevice(
+          hasConfig: true,
+          takesDevice: true,
+          configDevice: 'macos',
+          runningName: 'emulator-5554',
+        ),
+        'emulator-5554',
+      );
+      expect(
+        launchDevice(
+          requested: '',
+          hasConfig: true,
+          takesDevice: true,
+          configDevice: 'macos',
+        ),
+        'macos',
+      );
+      expect(launchDevice(hasConfig: false, takesDevice: false), isNull);
+    });
+
+    test('a device\'s launch has its own log and pid', () async {
+      final code = await superviseLaunch([
+        '--slot=emulator-5554',
+        tmp.path,
+        Platform.resolvedExecutable,
+        '--version',
+      ]);
+      expect(code, 0);
+      final log = File(
+        '${tmp.path}/${launchFileFor(launchLogFile, 'emulator-5554')}',
+      ).readAsStringSync();
+      expect(log, contains('Dart SDK version'));
+      expect(File('${tmp.path}/$launchLogFile').existsSync(), isFalse);
+    });
+
+    test('a running launch is found per device', () {
+      File('${tmp.path}/${launchFileFor(launchPidFile, 'ios')}')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('$pid');
+      expect(runningLaunchPid(tmp, device: 'ios'), pid);
+      expect(runningLaunchPid(tmp, device: 'macos'), isNull);
+      expect(runningLaunchPid(tmp), isNull);
+    });
+
+    test('a new log keeps the previous one per device', () {
+      File('${tmp.path}/${launchFileFor(launchLogFile, 'ios')}')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('old');
+      startLaunchLog(tmp, device: 'ios');
+      expect(
+        File(
+          '${tmp.path}/${launchFileFor(previousLaunchLogFile, 'ios')}',
+        ).readAsStringSync(),
+        'old',
+      );
+      expect(File('${tmp.path}/$previousLaunchLogFile').existsSync(), isFalse);
     });
   });
 

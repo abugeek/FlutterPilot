@@ -12,12 +12,12 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     _tool(
       'launch_app',
       description:
-          'Builds and starts the app (flutter run, or the command in '
-          'flutterpilot/launch.json), waits for its first frame and '
-          'connects; the app outlives this session. Takes minutes: with an '
-          'app already running it refuses unless relaunch:true (pubspec.yaml, '
-          'assets or native code changed); hot_reload loads Dart changes in '
-          'a second. A failed build returns the end of its output.',
+          'Builds and starts the app (flutter run, or flutterpilot/launch.json'
+          "'s command) on a device, waits for its first frame and connects; "
+          'it outlives this session. Takes minutes: with the app running '
+          'there it refuses unless relaunch:true (pubspec.yaml, assets or '
+          'native code changed); hot_reload loads Dart changes in a second. '
+          "A failed build returns its output's end.",
       inputSchema: ToolInputSchema(
         properties: {
           'device': JsonSchema.string(
@@ -57,13 +57,44 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     final context = _activeContext;
     final connected = _vmService != null && context?.service != null;
 
-    if (connected && !relaunch) {
+    // Settled after the "already running" answer when the app's folder
+    // cannot be told: that answer needs none of it.
+    Directory? foundRoot;
+    String? rootProblem;
+    var hasConfig = false;
+    var takesDevice = false;
+    String? configDevice;
+    try {
+      final root = foundRoot = _launchRoot(params['project'] as String?);
+      hasConfig = hasLaunchConfig(root);
+      takesDevice = launchConfigTakesDevice(root);
+      configDevice = launchConfigDevice(root);
+    } on FormatException catch (e) {
+      rootProblem = e.message;
+    }
+    final activeName = _fleetManager.activeDeviceId;
+    final runningName = relaunch && connected && activeName != 'default'
+        ? activeName
+        : null;
+    final asked = launchDevice(
+      requested: params['device'] as String?,
+      hasConfig: hasConfig,
+      takesDevice: takesDevice,
+      configDevice: configDevice,
+      runningName: runningName,
+    );
+    // With no device named, "the app" is the connected one, as before.
+    final runningHere = asked == null ? connected : await _isRunningOn(asked);
+
+    if (runningHere && !relaunch) {
+      final uri = asked == null ? _connectedUri! : _uriRunningOn(asked)!;
       final info = await probeDevice(
-        _connectedUri!,
+        uri,
       ).then<Object>((i) => i, onError: (_) => 'an app');
+      final elsewhere = uri != _connectedUri;
       // When something a reload can't load did change, say so: this is
       // the case relaunch:true is for.
-      final stale = await _staleCodeNote();
+      final stale = elsewhere ? null : await _staleCodeNote();
       if (stale != null && stale.contains('launch_app(relaunch: true)')) {
         return _launchResult(
           'Already running and connected: $info. Nothing was launched. $stale',
@@ -72,27 +103,25 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       }
       return _launchResult(
         'Already running and connected: $info. Nothing was launched. '
-        '${context?.buildMode == BuildMode.profile ? 'It is a profile build (no hot reload): relaunch:true builds it again.' : 'hot_reload(restart: true) loads every changed Dart file and runs main() again in about a second.'} '
+        '${elsewhere ? 'It is not the active device: switch_device(id: "${_fleetManager.idForUri(uri) ?? asked}") targets it. ' : ''}'
+        '${context?.buildMode == BuildMode.profile && !elsewhere ? 'It is a profile build (no hot reload): relaunch:true builds it again.' : 'hot_reload(restart: true) loads every changed Dart file and runs main() again in about a second.'} '
         'Pass relaunch:true only for what that cannot load: pubspec.yaml, '
         'assets, native code, dart-define/.env values, another device or '
-        'mode.',
+        'mode. To run it on another device as well, pass that device.',
         isError: true,
       );
     }
 
-    final Directory root;
-    try {
-      root = _launchRoot(params['project'] as String?);
-    } on FormatException catch (e) {
-      return _launchResult(e.message, isError: true);
-    }
+    if (foundRoot == null) return _launchResult(rootProblem!, isError: true);
+    final root = foundRoot;
+
     // A launch a previous call started is only waited for, as before: the
     // device is not chosen, `flutter devices` is not run and nothing is
     // stopped. Settled before the device question (review of PR #128).
     final inProgress = waitsForRunningLaunch(
       relaunch: relaunch,
-      launchRunning: runningLaunchPid(root) != null,
-      connected: connected,
+      launchRunning: runningLaunchPid(root, device: asked) != null,
+      connected: runningHere,
     );
     // Where this launch runs and what starts it, decided before the app it
     // replaces is stopped: a relaunch must not take it down for something
@@ -102,11 +131,14 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       plan = await prepareLaunch(
         relaunch: relaunch,
         waitingForLaunch: inProgress,
-        // The project's own launch.json command starts the app itself, so
-        // this `device` is ignored and there is nothing to refuse.
-        chooseDevice: !hasLaunchConfig(root),
-        requested: params['device'] as String?,
-        runningPlatform: connected ? context?.operatingSystem : null,
+        // A launch.json command without ${device} starts the app on its own
+        // device, so there is nothing to choose or refuse.
+        chooseDevice: !hasConfig || takesDevice,
+        requested: asked,
+        // Another app running elsewhere says nothing about this device.
+        runningPlatform: connected && asked == null
+            ? context?.operatingSystem
+            : null,
         runningIsWeb: connected && (context?.isWeb ?? false),
         listDevices: flutterDeviceIds,
         commandFor: (device) => launchCommandFor(
@@ -115,7 +147,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
           target: params['target'] as String?,
           mode: params['mode'] as String?,
         ),
-        stop: () => _stopRunningApp(root),
+        stop: () => _stopRunningApp(root, asked),
       );
     } on FormatException catch (e) {
       return _launchResult(e.message, isError: true);
@@ -125,20 +157,26 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     }
     final command = plan.command!;
     final device = plan.device;
+    // The name the files and the fleet entry carry: the planned device, or
+    // the one the config starts.
+    final name = device ?? asked;
     final ignored = command.fromConfig
         ? [
-            for (final name in const ['device', 'target', 'mode'])
-              if (params[name] != null) name,
+            for (final p in const ['device', 'target', 'mode'])
+              if (params[p] != null && !(p == 'device' && takesDevice)) p,
           ]
         : const <String>[];
+    final logFile = launchFileFor(launchLogFile, name);
 
-    final log = File('${root.path}/$launchLogFile');
+    final log = File('${root.path}/$logFile');
     final waitFrom = DateTime.now();
     String? signingTeam;
     if (!inProgress) {
       // A stale URI file would be read as this launch's.
       try {
-        File('${root.path}/${VmDiscoveryService.uriFile}').deleteSync();
+        File(
+          '${root.path}/${launchFileFor(VmDiscoveryService.uriFile, name)}',
+        ).deleteSync();
       } catch (_) {}
       try {
         final team = command.fromConfig
@@ -148,6 +186,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         await startSupervised(
           root,
           command.command,
+          device: name,
           environment: team == null
               ? null
               : {'FLUTTER_XCODE_DEVELOPMENT_TEAM': team},
@@ -183,8 +222,8 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       // the next launch_app call waits for it without starting another.
       if (progress.cancelled) break;
       final text = readLog();
-      uri = _launchUriFile(root) ?? vmServiceUriIn(text);
-      if (uri != null && await _connectWithUri(uri)) break;
+      uri = _launchUriFile(root, name) ?? vmServiceUriIn(text);
+      if (uri != null && await _connectAs(name, uri)) break;
       uri = null;
       final code = launchExitCodeIn(text);
       if (code != null) {
@@ -209,7 +248,7 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
         '${launchPhase(readLog()) == null ? '' : ' (${launchPhase(readLog())})'}'
         '; the launch goes on. Call '
         'launch_app again to keep waiting (it will not start a second '
-        'build). Output so far ($launchLogFile):\n'
+        'build). Output so far ($logFile):\n'
         '${Redaction.text(launchLogTail(readLog(), lines: 8))}',
       );
     }
@@ -229,22 +268,26 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     return _launchResult(
       '${inProgress ? 'The launch finished' : 'Launched'}: $info, connected '
       '($seconds s, "$command").'
-      '${plan.deviceWasRunning ? ' Relaunched on $device (the device it was running on).' : ''}'
+      '${plan.deviceWasRunning || (runningName != null && asked == runningName) ? ' Relaunched on $name (the device it was running on).' : ''}'
+      '${name != null && _fleetManager.deviceIds.length > 1 ? ' Registered as device "$name", now the active one; running: ${_fleetManager.deviceIds.join(', ')} (switch_device moves between them).' : ''}'
       '${drawn ? '' : ' It has not drawn its first frame yet: wait_for or get_app_summary in a moment.'}'
       '${ignored.isEmpty ? '' : ' ${ignored.join(', ')} not applied: $launchConfigFile sets the command.'}'
       '${signingTeam == null ? '' : ' Signed with team $signingTeam (the only Apple Development certificate on this Mac; set FLUTTER_XCODE_DEVELOPMENT_TEAM or a Team in Xcode to choose another).'}'
       '\nLeave it running: after editing Dart code call hot_reload. '
-      'Build output: $launchLogFile'
-      '${relaunch ? ' (the app before it: $previousLaunchLogFile)' : ''}.',
+      'Build output: $logFile'
+      '${relaunch ? ' (the app before it: ${launchFileFor(previousLaunchLogFile, name)})' : ''}.',
     );
   }
 
   /// Settles once the connected app has been checked for the SDK.
   Future<void>? get _sdkExtensionsReady;
 
-  /// The URI `flutter run --vmservice-out-file` wrote for this launch.
-  String? _launchUriFile(Directory root) {
-    final file = File('${root.path}/${VmDiscoveryService.uriFile}');
+  /// The URI `flutter run --vmservice-out-file` wrote for the launch on
+  /// [device].
+  String? _launchUriFile(Directory root, String? device) {
+    final file = File(
+      '${root.path}/${launchFileFor(VmDiscoveryService.uriFile, device)}',
+    );
     try {
       if (!file.existsSync()) return null;
       final text = file.readAsStringSync().trim();
@@ -285,11 +328,65 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     );
   }
 
-  /// Ends the running app and its launch command: asks the app to exit
-  /// (flutter run then ends by itself, whoever started it), then stops a
-  /// launch command of ours that is still there.
-  Future<void> _stopRunningApp(Directory root) async {
-    final vm = _vmService;
+  /// The VM service URI of an app answering on [device]: its fleet entry,
+  /// or a connected desktop app on that platform (found before it had a
+  /// name, as "default").
+  String? _uriRunningOn(String device) {
+    final uri = _fleetManager.uriFor(device);
+    if (uri != null) return uri;
+    for (final MapEntry(key: id, value: c) in _deviceContexts.entries) {
+      if (c.service != null &&
+          deviceForPlatform(c.operatingSystem, isWeb: c.isWeb) == device) {
+        return _fleetManager.uriFor(id) ?? c.uri;
+      }
+    }
+    return null;
+  }
+
+  /// Whether an app answers on [device] now.
+  Future<bool> _isRunningOn(String device) async {
+    final uri = _uriRunningOn(device);
+    if (uri == null) return false;
+    return probeDevice(
+      uri,
+      timeout: const Duration(seconds: 2),
+    ).then((_) => true, onError: (_) => false);
+  }
+
+  /// Connects to the app just launched on [device] as that fleet entry and
+  /// makes it the active device; the apps on other devices keep running and
+  /// stay registered. With no device, the connection the server had before.
+  Future<bool> _connectAs(String? device, String uri) async {
+    if (device == null) return _connectWithUri(uri);
+    final normalized = normalizeVmServiceUri(uri) ?? uri;
+    final before = _fleetManager.activeDeviceId;
+    final previous = _fleetManager.registerDevice(device, normalized);
+    if (previous != null) await _renameDeviceContext(previous, device);
+    _fleetManager.switchDevice(device);
+    if (await _connectWithUri(normalized)) {
+      await _refreshToolVisibility();
+      return true;
+    }
+    if (before != null && before != device && previous != before) {
+      _fleetManager.switchDevice(before);
+      await _connectWithUri(_fleetManager.uriFor(before));
+    }
+    return false;
+  }
+
+  /// Ends the app running on [device] (the connected one when null) and its
+  /// launch command: asks the app to exit (flutter run then ends by itself,
+  /// whoever started it), then stops a launch command of ours that is still
+  /// there.
+  Future<void> _stopRunningApp(Directory root, String? device) async {
+    final uri = device == null ? _connectedUri : _uriRunningOn(device);
+    final own = uri != null && uri != _connectedUri;
+    VmService? vm = own ? null : _vmService;
+    if (own) {
+      try {
+        vm = await connectVmService(uri);
+      } catch (_) {}
+    }
     if (vm != null) {
       try {
         for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
@@ -302,14 +399,23 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       } catch (_) {
         // The app exiting drops the connection mid-call.
       }
+      if (own) unawaited(vm.dispose());
     }
-    for (var i = 0; i < 20 && runningLaunchPid(root) != null; i++) {
+    for (
+      var i = 0;
+      i < 20 && runningLaunchPid(root, device: device) != null;
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    final pid = runningLaunchPid(root);
+    final pid = runningLaunchPid(root, device: device);
     if (pid != null) {
       await killLaunchTree(pid);
-      for (var i = 0; i < 20 && runningLaunchPid(root) != null; i++) {
+      for (
+        var i = 0;
+        i < 20 && runningLaunchPid(root, device: device) != null;
+        i++
+      ) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
       }
     }

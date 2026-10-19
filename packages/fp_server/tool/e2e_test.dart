@@ -1640,7 +1640,8 @@ Future<void> main(List<String> args) async {
       // A plain `flutter run` (or an IDE) writes no URI file: the app is
       // found through the Dart Tooling Daemon it registers with.
       final uriFile = File('$app/.dart_tool/flutterpilot_vm_uri');
-      final hidden = uriFile.renameSync('${uriFile.path}.hidden');
+      // Not `flutterpilot_vm_uri.<x>`: that is a device's URI file.
+      final hidden = uriFile.renameSync('${uriFile.path}_hidden');
       // The daemon keeps its own connection to the app (vm_service's 15 s
       // keep-alive) and forgets the app when that closes: on a stalled CI
       // simulator it then lists no app, and nothing can be found through it.

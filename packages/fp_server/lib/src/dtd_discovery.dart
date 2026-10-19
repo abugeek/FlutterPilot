@@ -49,6 +49,9 @@ class DtdApp {
       }
       if (p.isWithin(workspace, dir)) {
         final name = _packageName(dir);
+        // The app runs from the workspace's own project, so a project inside
+        // it (a git worktree, a nested example) is another copy.
+        if (name != null && _packageName(workspace) == package) continue;
         if (name == null || package == null || name == package) return true;
       }
     }
