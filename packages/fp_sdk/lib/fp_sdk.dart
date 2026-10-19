@@ -7,8 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart' show CupertinoButton;
 import 'package:flutter/material.dart'
     show
+        BackButton,
         ButtonStyleButton,
         Checkbox,
+        CloseButton,
+        DrawerButton,
+        EndDrawerButton,
         IconButton,
         RefreshIndicatorState,
         Slider,

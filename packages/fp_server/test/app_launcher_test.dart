@@ -397,6 +397,8 @@ void main() {
     final tail = launchLogTail(log, lines: 3);
     expect(tail, 'line 97\nline 98\nline 99');
   });
+
+  launchPhaseTests();
 }
 
 void launchPhaseTests() {
@@ -423,6 +425,39 @@ void launchPhaseTests() {
         'Installing and launching...\nSyncing files to device iPhone',
       ),
       contains('first frame'),
+    );
+  });
+
+  group('macLauncherApp', () {
+    test(
+      'wraps the executable in a signed app with privacy texts, once',
+      () async {
+        final tmp = Directory.systemTemp.createTempSync('fp_bundle_');
+        addTearDown(() => tmp.deleteSync(recursive: true));
+        final exe = File('${tmp.path}/fp_server');
+        File('/usr/bin/true').copySync(exe.path);
+        final support = '${tmp.path}/support';
+
+        final app = await macLauncherApp(exe.path, supportDir: support);
+        expect(app, '$support/FlutterPilot.app');
+        final plist = File('$app/Contents/Info.plist').readAsStringSync();
+        expect(plist, contains('NSCameraUsageDescription'));
+        expect(plist, contains('<string>fp_server</string>'));
+        final verify = Process.runSync('codesign', ['--verify', app!]);
+        expect(verify.exitCode, 0, reason: '${verify.stderr}');
+
+        final bin = File('$app/Contents/MacOS/fp_server');
+        final first = bin.statSync().changed;
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        await macLauncherApp(exe.path, supportDir: support);
+        expect(bin.statSync().changed, first, reason: 'unchanged: not copied');
+
+        exe.setLastModifiedSync(DateTime(2030));
+        await macLauncherApp(exe.path, supportDir: support);
+        expect(bin.statSync().changed, isNot(first), reason: 'rebuilt: copied');
+        expect(Process.runSync('codesign', ['--verify', app]).exitCode, 0);
+      },
+      testOn: 'mac-os',
     );
   });
 }

@@ -186,4 +186,29 @@ void main() {
     expect(longRes.isError(), isTrue);
     expect(longRes.errorDetail, contains('is disabled and cannot be tapped'));
   });
+
+  testWidgets('a CloseButton with no onPressed is tappable: it pops', (
+    tester,
+  ) async {
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: nav,
+        home: const Scaffold(body: Text('Home')),
+      ),
+    );
+    nav.currentState!.push(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(appBar: AppBar(), body: const Text('Sheet')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CloseButton), findsOneWidget);
+
+    final res = await callTap(tester, target: 'Close');
+    expect(res.isError(), isFalse, reason: res.errorDetail);
+    await tester.pumpAndSettle();
+    expect(find.text('Sheet'), findsNothing);
+  });
 }
