@@ -104,7 +104,8 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 63 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
-iOS simulators with idb, 15 tools for apps without `fp_sdk`.
+iOS simulators (with idb) and Android (over adb), 15 tools for apps without
+`fp_sdk`.
 Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 `gesture: "double"`, `wait_for` `route: ...`, `hot_reload` `restart: true`).
 
@@ -124,7 +125,16 @@ Families of similar tools are one tool with a parameter (e.g. `tap_widget`
 | Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |
 | Backends | `get_supabase_auth`, `query_supabase_table`, `supabase_session`, `get_firebase_auth`, `query_firestore`, `get_connectivity` |
 | App-specific | `call_custom_tool` |
-| iOS simulator | `native_describe_screen`, `native_tap`, `native_text`, `native_button`, `native_screenshot`, `native_open_app` |
+| iOS simulator, Android | `native_describe_screen`, `native_tap`, `native_text`, `native_button`, `native_screenshot`, `native_open_app` |
+
+System permission dialogs ("Allow MyApp to send you notifications?", camera,
+location) are not in the Flutter tree: `native_describe_screen` lists their
+buttons with tap points and `native_tap` presses one, on an iOS simulator
+(points) or Android (screen pixels). The tools are listed only while the
+active device is one of those. **Not covered: macOS and Windows desktop
+apps** — a macOS privacy prompt (camera, microphone, App Management) can only
+be answered by a person, once per app; on a desktop target, grant it by hand
+or test the flow on a simulator/emulator.
 
 ---
 

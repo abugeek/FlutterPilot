@@ -88,7 +88,7 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         isError: true,
       );
     }
-    ({String root, int? logOffset, DateTime since})? before;
+    ({String root, String logFile, int? logOffset, DateTime since})? before;
     try {
       // These reads do not depend on each other: started together, and the
       // ping below decides whether the others matter.
@@ -163,10 +163,8 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   /// the app's folder, how long launch_app's log of `flutter run` is now,
   /// and since when an edited file is news. Null when the app's folder
   /// can't be told.
-  Future<({String root, int? logOffset, DateTime since})?> _beforeReload(
-    VmService vm,
-    DeviceRuntimeContext context,
-  ) async {
+  Future<({String root, String logFile, int? logOffset, DateTime since})?>
+  _beforeReload(VmService vm, DeviceRuntimeContext context) async {
     try {
       for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
         final isolate = await vm.getIsolate(ref.id!);
@@ -179,12 +177,17 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
         if (uri == null || !uri.startsWith('file:')) continue;
         final root = projectRootOfFile(Uri.parse(uri).toFilePath());
         if (root == null) continue;
-        final log = File('$root/$launchLogFile');
+        // Each device's launch has its own log: the active device's.
+        final device = _fleetManager.activeDeviceId;
+        final logFile = launchFileFor(launchLogFile, device);
+        final log = File('$root/$logFile');
         final started = isolate.startTime;
         return (
           root: root,
+          logFile: logFile,
           logOffset:
-              runningLaunchPid(Directory(root)) != null && log.existsSync()
+              runningLaunchPid(Directory(root), device: device) != null &&
+                  log.existsSync()
               ? log.lengthSync()
               : null,
           since:
@@ -202,11 +205,11 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
   /// `flutter run` output when launch_app started the app, else from
   /// `dart analyze` on the Dart files edited since the last good reload.
   Future<String> _compileErrors(
-    ({String root, int? logOffset, DateTime since}) before,
+    ({String root, String logFile, int? logOffset, DateTime since}) before,
   ) async {
     final offset = before.logOffset;
     if (offset != null) {
-      final log = File('${before.root}/$launchLogFile');
+      final log = File('${before.root}/${before.logFile}');
       final clock = Stopwatch()..start();
       // The supervisor copies flutter run's output a moment after it prints.
       for (var i = 0; i < 6; i++) {

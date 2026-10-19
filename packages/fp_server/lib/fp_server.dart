@@ -634,6 +634,9 @@ abstract class _FlutterPilotServerBase {
   /// A device was registered under a new name: its runtime state follows.
   Future<void> _renameDeviceContext(String from, String to);
 
+  /// Each registered device's connection state, by fleet name.
+  Map<String, DeviceRuntimeContext> get _deviceContexts;
+
   Future<VmService?> _vmServiceForParameters(Map<String, dynamic> parameters);
 
   Future<DeviceRuntimeContext?> _deviceContextForParameters(
@@ -810,6 +813,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   static final Random _random = Random();
   int _connectionGeneration = 0;
   int _nextOperationId = 0;
+  @override
   final Map<String, DeviceRuntimeContext> _deviceContexts = {};
 
   /// Lists every tool from the start and never changes the list

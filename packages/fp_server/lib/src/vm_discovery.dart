@@ -95,6 +95,15 @@ class VmDiscoveryService {
       if (visited++ > _maxDirs) return;
       final file = File(p.join(dir.path, uriFile));
       if (file.existsSync()) found.add(file);
+      // launch_app's per-device files: flutterpilot_vm_uri.<device>.
+      try {
+        for (final f in file.parent.listSync()) {
+          if (f is File &&
+              p.basename(f.path).startsWith('${p.basename(uriFile)}.')) {
+            found.add(f);
+          }
+        }
+      } catch (_) {}
       if (depth >= maxDepth) return;
       List<FileSystemEntity> children;
       try {

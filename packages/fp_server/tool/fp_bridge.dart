@@ -1,6 +1,7 @@
 // Drive FlutterPilot from a shell, the way an MCP client would.
 //
-// Holds one MCP stdio session to the server and exposes it on localhost:8765:
+// Holds one MCP stdio session to the server and exposes it on localhost:8765
+// (FP_BRIDGE_PORT to change):
 //   dart run tool/fp_bridge.dart -p /path/to/app [--allow-destructive]
 //   curl -s localhost:8765 -d '{"name":"get_app_summary","arguments":{}}'
 //   curl -s localhost:8765 -d '{"method":"resources/list"}'
@@ -18,11 +19,16 @@ import 'dart:io';
 Future<void> main(List<String> args) async {
   final tool = File(Platform.script.toFilePath()).parent.path;
   final here = Directory('$tool/.fp')..createSync(recursive: true);
-  final server = await Process.start('dart', [
-    'run',
-    '$tool/../bin/fp_server.dart',
-    ...args,
-  ]);
+  // FP_SERVER=<compiled fp_server> runs that build instead (on macOS it
+  // launches apps through FlutterPilot.app, as an MCP client's server does).
+  final exe = Platform.environment['FP_SERVER'];
+  final server = exe == null
+      ? await Process.start('dart', [
+          'run',
+          '$tool/../bin/fp_server.dart',
+          ...args,
+        ])
+      : await Process.start(exe, args);
   final log = File('${here.path}/server.log').openWrite();
   server.stderr.transform(utf8.decoder).listen(log.write);
   final pending = <int, Completer<Map>>{};
@@ -63,8 +69,11 @@ Future<void> main(List<String> args) async {
   final calls = File('${here.path}/calls.jsonl');
   var shot = 0;
 
-  final http = await HttpServer.bind(InternetAddress.loopbackIPv4, 8765);
-  print('bridge ready on :8765');
+  // FP_BRIDGE_PORT when 8765 is taken (another session's bridge).
+  final port =
+      int.tryParse(Platform.environment['FP_BRIDGE_PORT'] ?? '') ?? 8765;
+  final http = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+  print('bridge ready on :$port');
   await for (final req in http) {
     // Any web page can POST to localhost: browsers say where they come from
     // (Origin, Sec-Fetch-*), curl and scripts don't. Refuse browsers, so a

@@ -30,63 +30,163 @@ const launchPidFile = '.dart_tool/flutterpilot_run.pid';
 /// `{"command": ["./scripts/run_macos.sh", "-t", "tool/pilot_main.dart"]}`.
 const launchConfigFile = 'flutterpilot/launch.json';
 
+/// The name a launch's files carry for [device], so apps on several devices
+/// run side by side, each with its own log, pid and URI file. Null (the
+/// original names) when no device is named.
+String? launchSlot(String? device) {
+  final d = device?.trim();
+  if (d == null || d.isEmpty || d == 'default') return null;
+  return d.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
+}
+
+/// [file] (one of the launch files above, or the URI file) for the launch on
+/// [device]: `flutterpilot_run.log` becomes `flutterpilot_run.<slot>.log`.
+String launchFileFor(String file, String? device) {
+  final slot = launchSlot(device);
+  if (slot == null) return file;
+  final base = file.lastIndexOf('/') + 1;
+  final dot = file.indexOf('.', base);
+  return dot < 0
+      ? '$file.$slot'
+      : '${file.substring(0, dot)}.$slot${file.substring(dot)}';
+}
+
 /// What the supervisor writes to the log when the command exits.
 const _exitMarker = '[flutterpilot] launch command exited with code ';
 
 /// The command that starts the app in [root].
 class LaunchCommand {
-  const LaunchCommand(this.command, {required this.fromConfig});
+  const LaunchCommand(
+    this.command, {
+    required this.fromConfig,
+    this.takesDevice = false,
+  });
 
   final List<String> command;
 
-  /// From [launchConfigFile]: device, target and mode are the project's.
+  /// From [launchConfigFile]: target and mode are the project's, and the
+  /// device too unless [takesDevice].
   final bool fromConfig;
+
+  /// The config's command has a `${device}` placeholder: the caller's device
+  /// was put in.
+  final bool takesDevice;
 
   @override
   String toString() => command.join(' ');
 }
 
-/// Whether [root] starts its app its own way ([launchConfigFile]): `device`,
-/// `target` and `mode` are the project's then, not the caller's.
+/// Whether [root] starts its app its own way ([launchConfigFile]): `target`
+/// and `mode` are the project's then, and `device` too unless its command has
+/// a `${device}` placeholder ([launchConfigTakesDevice]).
 bool hasLaunchConfig(Directory root) =>
     File(p.join(root.path, launchConfigFile)).existsSync();
 
-/// [launchConfigFile]'s command when the project has one, else `flutter run`
-/// with [device], [target] and [mode]. Throws a [FormatException] naming
-/// what is wrong with the file.
+const _devicePlaceholder = r'${device}';
+
+/// [launchConfigFile]'s `command` and optional default `device`. Throws a
+/// [FormatException] naming what is wrong with the file.
+({List<String> command, String? device}) _readLaunchConfig(Directory root) {
+  final config = File(p.join(root.path, launchConfigFile));
+  final Object? json;
+  try {
+    json = jsonDecode(config.readAsStringSync());
+  } on FormatException catch (e) {
+    throw FormatException('$launchConfigFile is not JSON: ${e.message}');
+  }
+  final command = json is Map ? json['command'] : null;
+  if (command is! List ||
+      command.isEmpty ||
+      command.any((part) => part is! String || part.isEmpty)) {
+    throw const FormatException(
+      '$launchConfigFile needs "command": a list of strings, e.g. '
+      '{"command": ["flutter", "run", "-d", "macos"]}',
+    );
+  }
+  final device = (json as Map)['device'];
+  if (device != null && (device is! String || device.trim().isEmpty)) {
+    throw const FormatException(
+      '$launchConfigFile "device" must be a device id, e.g. "macos".',
+    );
+  }
+  return (command: command.cast<String>(), device: (device as String?)?.trim());
+}
+
+/// Whether [launchConfigFile]'s command takes the caller's `device` through a
+/// `${device}` placeholder, so one config starts the app on any device.
+bool launchConfigTakesDevice(Directory root) =>
+    hasLaunchConfig(root) &&
+    _readLaunchConfig(root).command.any((p) => p.contains(_devicePlaceholder));
+
+/// [launchConfigFile]'s default `device`: the one a launch with no `device`
+/// runs on (and the name its files and fleet entry carry).
+String? launchConfigDevice(Directory root) =>
+    hasLaunchConfig(root) ? _readLaunchConfig(root).device : null;
+
+/// [launchConfigFile]'s command when the project has one (with [device], or
+/// its default `device`, in place of `${device}`), else `flutter run` with
+/// [device], [target] and [mode]. Throws a [FormatException] naming what is
+/// wrong with the file.
 LaunchCommand launchCommandFor(
   Directory root, {
   String? device,
   String? target,
   String? mode,
 }) {
-  final config = File(p.join(root.path, launchConfigFile));
-  if (config.existsSync()) {
-    final Object? json;
-    try {
-      json = jsonDecode(config.readAsStringSync());
-    } on FormatException catch (e) {
-      throw FormatException('$launchConfigFile is not JSON: ${e.message}');
+  if (hasLaunchConfig(root)) {
+    final config = _readLaunchConfig(root);
+    final takesDevice = config.command.any(
+      (part) => part.contains(_devicePlaceholder),
+    );
+    if (!takesDevice) {
+      return LaunchCommand(config.command, fromConfig: true);
     }
-    final command = json is Map ? json['command'] : null;
-    if (command is! List ||
-        command.isEmpty ||
-        command.any((part) => part is! String || part.isEmpty)) {
+    final asked = device == null || device.trim().isEmpty
+        ? config.device
+        : device.trim();
+    if (asked == null) {
       throw const FormatException(
-        '$launchConfigFile needs "command": a list of strings, e.g. '
-        '{"command": ["flutter", "run", "-d", "macos"]}',
+        '$launchConfigFile runs the app on \${device} and sets no default '
+        '"device": pass device, e.g. launch_app(device: "macos").',
       );
     }
-    return LaunchCommand(command.cast<String>(), fromConfig: true);
+    return LaunchCommand(
+      [
+        for (final part in config.command)
+          part.replaceAll(_devicePlaceholder, asked),
+      ],
+      fromConfig: true,
+      takesDevice: true,
+    );
   }
   return LaunchCommand([
     'flutter',
     'run',
-    '--vmservice-out-file=${VmDiscoveryService.uriFile}',
+    '--vmservice-out-file=${launchFileFor(VmDiscoveryService.uriFile, device)}',
     if (mode == 'profile') '--profile',
     if (device != null && device.isNotEmpty) ...['-d', device],
     if (target != null && target.isNotEmpty) ...['-t', target],
   ], fromConfig: false);
+}
+
+/// The device a `launch_app` call is for, which also names its launch files
+/// ([launchSlot]) and its fleet entry: the caller's [requested] device (unless
+/// launch.json fixes the device: [hasConfig] without [takesDevice]), else
+/// [runningName], the device a relaunch replaces, else launch.json's default
+/// [configDevice]. Null leaves the choice to [prepareLaunch].
+String? launchDevice({
+  String? requested,
+  required bool hasConfig,
+  required bool takesDevice,
+  String? configDevice,
+  String? runningName,
+}) {
+  final asked = requested?.trim();
+  return (hasConfig && !takesDevice || asked == null || asked.isEmpty
+          ? null
+          : asked) ??
+      runningName ??
+      configDevice;
 }
 
 /// The `-d` id of an app running on [operatingSystem], when the platform
@@ -302,9 +402,10 @@ String launchLogTail(String log, {int lines = 30, int maxChars = 3000}) {
   return tail;
 }
 
-/// The pid in [root]'s [launchPidFile] if that process is still running.
-int? runningLaunchPid(Directory root) {
-  final file = File(p.join(root.path, launchPidFile));
+/// The pid in [root]'s [launchPidFile] (for the launch on [device]) if that
+/// process is still running.
+int? runningLaunchPid(Directory root, {String? device}) {
+  final file = File(p.join(root.path, launchFileFor(launchPidFile, device)));
   if (!file.existsSync()) return null;
   final pid = int.tryParse(file.readAsStringSync().trim());
   if (pid == null) return null;
@@ -326,7 +427,8 @@ bool _isRunning(int pid) {
 /// Starts [command] in [root] under a supervisor (this same executable with
 /// `--supervise`) that is detached from the MCP server: the app keeps
 /// running when the agent's session ends, and the next one finds it.
-/// No shell is involved; the output goes to [launchLogFile].
+/// No shell is involved; the output goes to [launchLogFile] (the one for
+/// [device]: each device's launch has its own files).
 ///
 /// On macOS the supervisor runs as [macLauncherApp], opened through
 /// LaunchServices, when that works; otherwise it is started directly.
@@ -334,8 +436,10 @@ Future<void> startSupervised(
   Directory root,
   List<String> command, {
   Map<String, String>? environment,
+  String? device,
 }) async {
-  startLaunchLog(root);
+  startLaunchLog(root, device: device);
+  final slot = launchSlot(device);
   final exe = Platform.resolvedExecutable;
   final compiled = !p.basenameWithoutExtension(exe).startsWith('dart');
   if (Platform.isMacOS && compiled) {
@@ -349,6 +453,7 @@ Future<void> startSupervised(
         for (final e in env.entries) ...['--env', '${e.key}=${e.value}'],
         '--args',
         superviseFlag,
+        if (slot != null) '$_slotFlag$slot',
         root.absolute.path,
         ...command,
       ]);
@@ -360,6 +465,7 @@ Future<void> startSupervised(
     [
       if (!compiled) Platform.script.toFilePath(),
       superviseFlag,
+      if (slot != null) '$_slotFlag$slot',
       root.absolute.path,
       ...command,
     ],
@@ -443,12 +549,14 @@ const _launcherInfoPlist = '''
 
 /// Empties [launchLogFile] for a new launch, keeping what the last one
 /// wrote as [previousLaunchLogFile].
-void startLaunchLog(Directory root) {
-  final log = File(p.join(root.path, launchLogFile));
+void startLaunchLog(Directory root, {String? device}) {
+  final log = File(p.join(root.path, launchFileFor(launchLogFile, device)));
   log.parent.createSync(recursive: true);
   try {
     if (log.existsSync() && log.lengthSync() > 0) {
-      log.copySync(p.join(root.path, previousLaunchLogFile));
+      log.copySync(
+        p.join(root.path, launchFileFor(previousLaunchLogFile, device)),
+      );
     }
   } catch (_) {
     // Losing the old output must not stop the new launch.
@@ -459,14 +567,23 @@ void startLaunchLog(Directory root) {
 /// First argument of the supervisor invocation; see [superviseLaunch].
 const superviseFlag = '--supervise';
 
-/// The supervisor: runs `args[1..]` in the folder `args[0]`, copies its
-/// output to [launchLogFile], keeps its pid in [launchPidFile] while it
-/// runs, and records the exit code. Returns that code.
+/// Optional argument before the folder: whose launch files ([launchSlot]).
+const _slotFlag = '--slot=';
+
+/// The supervisor: runs `args[1..]` in the folder `args[0]` (after an
+/// optional `--slot=<slot>`), copies its output to [launchLogFile], keeps its
+/// pid in [launchPidFile] while it runs, and records the exit code. Returns
+/// that code.
 Future<int> superviseLaunch(List<String> args) async {
+  String? slot;
+  if (args.isNotEmpty && args.first.startsWith(_slotFlag)) {
+    slot = args.first.substring(_slotFlag.length);
+    args = args.sublist(1);
+  }
   if (args.length < 2) return 64;
   final root = Directory(args.first);
-  final log = File(p.join(root.path, launchLogFile));
-  final pidFile = File(p.join(root.path, launchPidFile));
+  final log = File(p.join(root.path, launchFileFor(launchLogFile, slot)));
+  final pidFile = File(p.join(root.path, launchFileFor(launchPidFile, slot)));
   log.parent.createSync(recursive: true);
   final sink = log.openWrite(mode: FileMode.append);
   int code;

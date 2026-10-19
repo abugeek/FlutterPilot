@@ -86,6 +86,19 @@ void main() {
     );
   });
 
+  test("finds launch_app's per-device URI files", () {
+    writeUri('app', liveUri);
+    File(
+      p.join(tmp.path, 'app', '${VmDiscoveryService.uriFile}.ios'),
+    ).writeAsStringSync(liveUri);
+    expect(
+      VmDiscoveryService.findUriFiles(
+        tmp,
+      ).map((f) => p.basename(f.path)).toSet(),
+      {'flutterpilot_vm_uri', 'flutterpilot_vm_uri.ios'},
+    );
+  });
+
   test('nothing found without roots', () async {
     expect(await VmDiscoveryService.discover(), isNull);
   });
@@ -241,6 +254,22 @@ void main() {
       final shop = Directory(p.join(tmp.path, 'shop'));
       expect(app('', package: 'shop').isUnder([shop]), isTrue);
       expect(app('', package: 'blog').isUnder([shop]), isFalse);
+    });
+
+    test("a git worktree inside the project is not the project's app", () {
+      File(p.join(tmp.path, 'app', 'pubspec.yaml'))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('name: shop\n');
+      final worktree = Directory(
+        p.join(tmp.path, 'app', '.claude', 'worktrees', 'w1'),
+      )..createSync(recursive: true);
+      File(
+        p.join(worktree.path, 'pubspec.yaml'),
+      ).writeAsStringSync('name: shop\n');
+      expect(app('app', package: 'shop').isUnder([worktree]), isFalse);
+      // A folder of the project itself still finds it.
+      final lib = Directory(p.join(tmp.path, 'app', 'lib'))..createSync();
+      expect(app('app', package: 'shop').isUnder([lib]), isTrue);
     });
 
     test('the newest launch wins across URI files and daemons', () async {
