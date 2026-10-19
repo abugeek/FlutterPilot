@@ -327,6 +327,9 @@ bool _isRunning(int pid) {
 /// `--supervise`) that is detached from the MCP server: the app keeps
 /// running when the agent's session ends, and the next one finds it.
 /// No shell is involved; the output goes to [launchLogFile].
+///
+/// On macOS the supervisor runs as [macLauncherApp], opened through
+/// LaunchServices, when that works; otherwise it is started directly.
 Future<void> startSupervised(
   Directory root,
   List<String> command, {
@@ -335,6 +338,23 @@ Future<void> startSupervised(
   startLaunchLog(root);
   final exe = Platform.resolvedExecutable;
   final compiled = !p.basenameWithoutExtension(exe).startsWith('dart');
+  if (Platform.isMacOS && compiled) {
+    final app = await macLauncherApp(exe);
+    if (app != null) {
+      final env = {...Platform.environment, ...?environment};
+      final opened = await Process.run('open', [
+        '-n',
+        '-g',
+        app,
+        for (final e in env.entries) ...['--env', '${e.key}=${e.value}'],
+        '--args',
+        superviseFlag,
+        root.absolute.path,
+        ...command,
+      ]);
+      if (opened.exitCode == 0) return;
+    }
+  }
   await Process.start(
     exe,
     [
@@ -348,6 +368,78 @@ Future<void> startSupervised(
     mode: ProcessStartMode.detached,
   );
 }
+
+/// The macOS app bundle the supervisor runs as, so macOS has a real app to ask
+/// for camera, microphone and other privacy permissions.
+///
+/// macOS charges a process's privacy requests to its *responsible* process:
+/// whatever started the chain. `flutter run` starts the app as its own child,
+/// so an app launched from the MCP server answered to the agent's command-line
+/// server, which cannot show a prompt, and every camera request was denied
+/// without one (Octana, "Scan customer card"). Opened through LaunchServices,
+/// this bundle is the responsible process of `flutter run` and of the app
+/// under it: macOS asks once for "FlutterPilot", like it would for Terminal,
+/// and the user can allow it under App Management for hot reload into a
+/// sandboxed app's container.
+///
+/// The bundle is [exe] with an Info.plist, ad-hoc signed, under
+/// [supportDir] (default `~/Library/Application Support/FlutterPilot`), and is
+/// refreshed when [exe] changes. Null when it cannot be made: the caller then
+/// starts the supervisor directly.
+Future<String?> macLauncherApp(String exe, {String? supportDir}) async {
+  try {
+    final dir =
+        supportDir ??
+        p.join(
+          Platform.environment['HOME']!,
+          'Library',
+          'Application Support',
+          'FlutterPilot',
+        );
+    final app = p.join(dir, 'FlutterPilot.app');
+    final source = File(exe);
+    final bin = File(p.join(app, 'Contents', 'MacOS', 'fp_server'));
+    // Signing rewrites the copy, so which build it is lives beside the bundle
+    // (inside, it would break the signature).
+    final stamp = File('$app.stamp');
+    final stat = source.statSync();
+    final id = '$exe ${stat.size} ${stat.modified.toIso8601String()}';
+    if (bin.existsSync() &&
+        stamp.existsSync() &&
+        stamp.readAsStringSync() == id) {
+      return app;
+    }
+    bin.parent.createSync(recursive: true);
+    source.copySync(bin.path);
+    File(
+      p.join(app, 'Contents', 'Info.plist'),
+    ).writeAsStringSync(_launcherInfoPlist);
+    final sign = await Process.run('codesign', ['--force', '-s', '-', app]);
+    if (sign.exitCode != 0) return null;
+    stamp.writeAsStringSync(id);
+    return app;
+  } catch (_) {
+    return null;
+  }
+}
+
+const _launcherInfoPlist = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>dev.flutterpilot.launcher</string>
+	<key>CFBundleName</key><string>FlutterPilot</string>
+	<key>CFBundleExecutable</key><string>fp_server</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>LSUIElement</key><true/>
+	<key>NSCameraUsageDescription</key><string>Apps FlutterPilot launches for testing can use the camera.</string>
+	<key>NSMicrophoneUsageDescription</key><string>Apps FlutterPilot launches for testing can use the microphone.</string>
+	<key>NSLocationUsageDescription</key><string>Apps FlutterPilot launches for testing can use your location.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key><string>Apps FlutterPilot launches for testing can use Bluetooth.</string>
+</dict>
+</plist>
+''';
 
 /// Empties [launchLogFile] for a new launch, keeping what the last one
 /// wrote as [previousLaunchLogFile].

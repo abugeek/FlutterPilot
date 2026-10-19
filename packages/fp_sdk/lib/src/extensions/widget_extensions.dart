@@ -72,6 +72,14 @@ extension _WidgetExtensions on FlutterPilot {
     if (widget is ButtonStyleButton) {
       return !widget.enabled;
     }
+    // With no onPressed these IconButtons do their default action (pop the route, open
+    // the drawer), so a null onPressed does not mean disabled.
+    if (widget is CloseButton ||
+        widget is BackButton ||
+        widget is DrawerButton ||
+        widget is EndDrawerButton) {
+      return false;
+    }
     if (widget is IconButton) {
       return widget.onPressed == null;
     }
