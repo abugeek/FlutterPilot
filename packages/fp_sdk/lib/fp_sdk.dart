@@ -625,6 +625,10 @@ class FlutterPilot {
 
     _setupModules();
     registerServiceExtensions();
+    // A detailed layout report an agent can call on any app without waiting
+    // for a server release: cramped lists and clipped labels throw nothing,
+    // so the audit's counts alone do not say where to look.
+    registerCustomTool('layout_report', (params) => UiHealthAuditor.audit());
     _setupFpsCounter();
     _setupDebugPrintCapture();
     FrameBudgetProfiler.initialize();
