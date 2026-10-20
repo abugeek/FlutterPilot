@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41069 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41047 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -296,7 +296,7 @@ _Read-only._
 
 ## `set_app_settings`
 
-Changes how the app renders, several settings at once, the way the device would (no app code): theme, locale, text scale, a simulated on-screen keyboard, orientation, window size and the debug overlays. The response says what the app shows, e.g. when it does not support the locale or clamps text scaling. Pair with audit_screen_health to catch overflows.
+Changes how the app renders — theme, locale, text scale, a simulated keyboard, orientation, window size, the debug overlays — as the device would (no app code), and says what the app shows back. Orientation pins: "portrait"/"landscape" outlive the call; "auto" releases. Pair with audit_screen_health to catch overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -304,7 +304,7 @@ Changes how the app renders, several settings at once, the way the device would 
 | `locale` | string | no | BCP-47 tag ("fr", "ar", "zh-Hans-CN"); "system" restores the device's. |
 | `textScale` | number | no | 1.0 is normal, 2.0 tests large text; 0 restores the system value. |
 | `keyboardInset` | number | no | Lay out as with an on-screen keyboard this tall open (a phone's is 300–350 logical pixels); 0 removes it. |
-| `orientation` | string: portrait \| landscape \| all | no | Phones. |
+| `orientation` | string: portrait \| landscape \| all \| auto | no | Phones. |
 | `windowSize` | string | no | "WIDTHxHEIGHT" in logical pixels, e.g. "390x844" for a phone width (macOS and Windows desktop; on macOS the title bar is included). |
 | `debugPaint` | boolean | no |  |
 | `repaintRainbow` | boolean | no |  |

@@ -201,12 +201,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_app_settings',
       description:
-          'Changes how the app renders, several settings at once, the way '
-          'the device would (no app code): theme, locale, text scale, a '
-          'simulated on-screen keyboard, orientation, window size and the '
-          'debug overlays. The response says what the app shows, e.g. '
-          'when it does not support the locale or clamps text scaling. '
-          'Pair with audit_screen_health to catch overflows.',
+          'Changes how the app renders — theme, locale, text scale, a '
+          'simulated keyboard, orientation, window size, the debug overlays — '
+          'as the device would (no app code), and says what the app shows '
+          'back. Orientation pins: "portrait"/"landscape" outlive the call; '
+          '"auto" releases. Pair with audit_screen_health to catch '
+          'overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
@@ -226,7 +226,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                 'phone\'s is 300–350 logical pixels); 0 removes it.',
           ),
           'orientation': JsonSchema.string(
-            enumValues: ['portrait', 'landscape', 'all'],
+            enumValues: ['portrait', 'landscape', 'all', 'auto'],
             description: 'Phones.',
           ),
           'windowSize': JsonSchema.string(
@@ -274,7 +274,11 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             (
               'orientation ${p['orientation']}',
               'ext.flutterpilot.setOrientation',
-              {'orientation': p['orientation'].toString()},
+              {
+                'orientation': orientationExtensionArgument(
+                  p['orientation'].toString(),
+                ),
+              },
             ),
           if (p['debugPaint'] != null)
             (
@@ -332,6 +336,10 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             });
           }
         }
+        final pinNote = p['orientation'] == null
+            ? null
+            : orientationPinNote(p['orientation'].toString());
+        if (pinNote != null) lines.add(pinNote);
         return CallToolResult(
           isError: failed,
           content: [TextContent(text: lines.join('\n'))],
@@ -416,3 +424,24 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     return (line: '✓ $label (viewport now $after)', failed: false);
   }
 }
+
+/// The extension argument for `set_app_settings`'s `orientation`.
+///
+/// `auto` releases the pin and follows the sensor; every SDK version spells
+/// that `all`, so the server translates instead of requiring a newer app.
+String orientationExtensionArgument(String orientation) =>
+    orientation == 'auto' ? 'all' : orientation;
+
+/// What to tell the caller after a pinning `set_app_settings(orientation: …)`.
+///
+/// `SystemChrome.setPreferredOrientations` is applied to the running app and
+/// stays in force: after it, physically rotating the phone does nothing until
+/// `auto` is set or the app restarts. The tool used to say only
+/// "✓ orientation landscape", which made that look like a device setting.
+String? orientationPinNote(String orientation) => switch (orientation) {
+  'portrait' || 'landscape' =>
+    'note: the app stays pinned to $orientation — the phone no longer follows '
+        'its sensor. Pass orientation:"auto" to release it (or restart the '
+        'app).',
+  _ => null,
+};
