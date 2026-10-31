@@ -35,7 +35,6 @@ const Map<String, List<String>> pluginExtensions = {
   ],
   'dio': [
     'ext.flutterpilot.getNetworkLogs',
-    'ext.flutterpilot.simulateNetwork',
     'ext.flutterpilot.addHttpMock',
     'ext.flutterpilot.getHttpMocks',
     'ext.flutterpilot.clearHttpMocks',

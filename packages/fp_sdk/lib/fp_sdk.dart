@@ -35,6 +35,7 @@ import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
+import 'src/network_simulation.dart';
 import 'src/platform_channel_mocks.dart';
 import 'src/redaction.dart';
 import 'src/restart_store.dart';
@@ -62,6 +63,7 @@ export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
 export 'src/keyboard_simulator.dart';
 export 'src/navigation_tracker.dart';
+export 'src/network_simulation.dart';
 export 'src/platform_channel_mocks.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
@@ -408,7 +410,8 @@ class FlutterPilot {
     bool quickSettle = false,
   }) async {
     final settled = await _waitForScreenSettled(
-      timeout: settleTimeout ??
+      timeout:
+          settleTimeout ??
           (quickSettle
               ? const Duration(milliseconds: 400)
               : const Duration(seconds: 2)),
@@ -610,6 +613,7 @@ class FlutterPilot {
     // Before anything creates the binding: FlutterPilot's own lets
     // mock_platform_channel answer the app's plugin calls.
     PlatformChannelMocks.install();
+    NetworkSimulation.install();
     final channelMocks = RestartStore.take('channelMocks');
     if (channelMocks is List) {
       for (final m in channelMocks.whereType<Map>()) {

@@ -39,7 +39,6 @@ class DioPilotInterceptor extends Interceptor {
     maxLogEntries,
   );
   static bool _initialized = false;
-  static NetworkCondition _condition = NetworkCondition.normal;
   static final Map<String, Map<String, dynamic>> _mocks = {};
   static const int _maxDelayMs = 60000;
 
@@ -92,7 +91,22 @@ class DioPilotInterceptor extends Interceptor {
   /// *or a mock* — offline means no server answers, and a mock stands in for
   /// one — while the slow conditions delay a mocked answer too. What
   /// `ext.flutterpilot.simulateNetwork` sets.
-  static void simulate(NetworkCondition condition) => _condition = condition;
+  ///
+  /// [latencyMs] replaces the condition's built-in delay with your own (up to
+  /// 60 s), to hold every request open long enough to act while it is in
+  /// flight (leave the screen mid-save).
+  static void simulate(NetworkCondition condition, {int? latencyMs}) {
+    final preset = switch (condition) {
+      NetworkCondition.slow3g => NetworkSimulation.presets['slow_3g'],
+      NetworkCondition.fast4g => NetworkSimulation.presets['fast_4g'],
+      _ => null,
+    };
+    final ms = (latencyMs ?? preset)?.clamp(0, _maxDelayMs);
+    NetworkSimulation.set(
+      offline: condition == NetworkCondition.offline,
+      latency: ms == null ? null : Duration(milliseconds: ms),
+    );
+  }
 
   static void register() {
     if (!_initialized) {
@@ -153,7 +167,6 @@ class DioPilotInterceptor extends Interceptor {
       version: '1',
       extensions: [
         'ext.flutterpilot.getNetworkLogs',
-        'ext.flutterpilot.simulateNetwork',
         'ext.flutterpilot.addHttpMock',
         'ext.flutterpilot.clearHttpMocks',
       ],
@@ -172,33 +185,6 @@ class DioPilotInterceptor extends Interceptor {
     ) async {
       return ServiceExtensionResponse.result(
         json.encode({'logs': _logs.toList()}),
-      );
-    });
-
-    registerExtension('ext.flutterpilot.simulateNetwork', (
-      method,
-      parameters,
-    ) async {
-      final conditionStr = parameters['condition'];
-      final NetworkCondition condition;
-      switch (conditionStr) {
-        case 'offline':
-          condition = NetworkCondition.offline;
-        case 'slow_3g':
-          condition = NetworkCondition.slow3g;
-        case 'fast_4g':
-          condition = NetworkCondition.fast4g;
-        case 'normal':
-          condition = NetworkCondition.normal;
-        default:
-          return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.invalidParams,
-            'condition must be: normal | slow_3g | fast_4g | offline',
-          );
-      }
-      simulate(condition);
-      return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', 'condition': conditionStr}),
       );
     });
 
@@ -303,8 +289,7 @@ class DioPilotInterceptor extends Interceptor {
     // URL fails the same way an unmocked one does. The slow conditions put
     // their delay on a mocked answer too. The mocks are kept — `normal`
     // brings the mocked answers back (field test #335).
-    final condition = _condition;
-    if (condition == NetworkCondition.offline) {
+    if (NetworkSimulation.offline) {
       handler.reject(
         DioException(
           requestOptions: options,
@@ -315,12 +300,6 @@ class DioPilotInterceptor extends Interceptor {
       );
       return;
     }
-    final conditionDelay = switch (condition) {
-      NetworkCondition.slow3g => const Duration(milliseconds: 1500),
-      NetworkCondition.fast4g => const Duration(milliseconds: 100),
-      _ => null,
-    };
-    if (conditionDelay != null) await Future.delayed(conditionDelay);
 
     // A mock answers without the network at all.
     final uri = options.uri.toString();
@@ -331,6 +310,15 @@ class DioPilotInterceptor extends Interceptor {
         break;
       }
     }
+
+    // A real request is delayed by the dart:io wrapper, so it is only waited
+    // for here when the request never gets there: a mock, or no wrapper.
+    final latency = NetworkSimulation.latency;
+    if (latency != null &&
+        (mockEntry != null || !NetworkSimulation.intercepting)) {
+      await Future.delayed(latency);
+    }
+
     if (mockEntry != null) {
       final mock = mockEntry.value;
       final delayMs = ((mock['delayMs'] as int?) ?? 0).clamp(0, _maxDelayMs);

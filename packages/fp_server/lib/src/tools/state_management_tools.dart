@@ -530,15 +530,16 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_network',
       description:
-          'Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or '
-          'normal again, to test loading and offline states.',
+          'Makes every HTTP request (http, dart:io, Dio) slow, fail '
+          '(offline) or normal again. delayMs holds each one that long, to '
+          'act mid-request.',
       inputSchema: ToolInputSchema(
         properties: {
           'condition': JsonSchema.string(
             enumValues: ['normal', 'slow_3g', 'fast_4g', 'offline'],
           ),
+          'delayMs': JsonSchema.integer(description: 'Up to 60000.'),
         },
-        required: ['condition'],
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.simulateNetwork',
