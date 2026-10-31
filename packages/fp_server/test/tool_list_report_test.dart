@@ -137,7 +137,7 @@ void main() {
     int chars(AppProfile profile) =>
         profileCost(profile, all, server.toolListJson).chars;
     expect(chars(AppProfile.all), lessThanOrEqualTo(41300));
-    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29700));
+    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29800));
     expect(chars(AppProfile.zeroCode), lessThanOrEqualTo(9700));
   });
 

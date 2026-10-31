@@ -808,7 +808,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'level': JsonSchema.string(
-            enumValues: ['debug', 'info', 'warning', 'error'],
+            enumValues: ['debug', 'info', 'warning', 'warn', 'error'],
           ),
           'query': JsonSchema.string(
             description: 'Only messages containing this.',
@@ -824,9 +824,12 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           'clear': JsonSchema.boolean(),
         },
       ),
-      callback: (params, extra) => params['clear'] == true
-          ? executeClearAllLogs(params)
-          : executeGetLogs(params),
+      callback: (params, extra) {
+        if (params['level'] == 'warn') params = {...params, 'level': 'warning'};
+        return params['clear'] == true
+            ? executeClearAllLogs(params)
+            : executeGetLogs(params);
+      },
     );
 
     _tool(

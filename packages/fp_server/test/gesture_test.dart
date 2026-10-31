@@ -5,22 +5,31 @@ import 'package:test/test.dart';
 /// reasons a merged tool is only as easy to use as the separate ones: the mode
 /// has to be named, and its arguments must not be ignored in another mode.
 void main() {
+  primaryButtonTests();
   group('gesture_widget request', () {
     test('each mode needs its own arguments', () {
       expect(gestureRequestError({'gesture': 'swipe'}), contains('direction'));
+      expect(
+        gestureRequestError({'gesture': 'swipe', 'direction': 'up'}),
+        contains('key'),
+      );
       expect(
         gestureRequestError({'gesture': 'drag', 'fromKey': 'a'}),
         contains('toKey'),
       );
       expect(gestureRequestError({'gesture': 'pinch'}), contains('scale'));
-      expect(gestureRequestError({'gesture': 'slide'}), contains('value'));
+      expect(gestureRequestError({'gesture': 'slide', 'key': 's'}), contains('value'));
       // focus works on the focused field, or unfocuses everything.
       expect(gestureRequestError({'gesture': 'focus'}), isNull);
     });
 
     test('a valid call for every mode passes', () {
       expect(
-        gestureRequestError({'gesture': 'swipe', 'direction': 'down'}),
+        gestureRequestError({
+          'gesture': 'swipe',
+          'key': 'list',
+          'direction': 'down',
+        }),
         isNull,
       );
       expect(
@@ -28,7 +37,8 @@ void main() {
         isNull,
       );
       expect(gestureRequestError({'gesture': 'pinch', 'scale': 2.0}), isNull);
-      expect(gestureRequestError({'gesture': 'slide', 'value': 5}), isNull);
+      expect(gestureRequestError({'gesture': 'slide', 'key': 's', 'value': 5}),
+        isNull);
       expect(gestureRequestError({'gesture': 'focus', 'key': 'field'}), isNull);
     });
 
@@ -44,6 +54,7 @@ void main() {
       expect(
         gestureRequestError({
           'gesture': 'swipe',
+          'key': 'list',
           'direction': 'down',
           'value': 5,
         }),
@@ -58,5 +69,17 @@ void main() {
         allOf(contains('got "tap"'), contains('swipe')),
       );
     });
+  });
+}
+
+void primaryButtonTests() {
+  test('primaryButtons picks only filled/elevated buttons', () {
+    final all = [
+      {'type': 'TextButton', 'text': 'Cancel'},
+      {'type': 'ElevatedButton', 'text': 'Save'},
+      {'type': 'FilledButton', 'key': '[<\'go\'>]'},
+    ];
+    expect(primaryButtons(all), ["ElevatedButton['Save']", '[<\'go\'>]']);
+    expect(primaryButtons(null), isEmpty);
   });
 }

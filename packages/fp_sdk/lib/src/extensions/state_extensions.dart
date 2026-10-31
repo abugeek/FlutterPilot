@@ -198,7 +198,10 @@ extension _StateExtensions on FlutterPilot {
         status = 'no_effect';
         note = r['appSetsLocale'] != null
             ? 'the app sets MaterialApp(locale: ${r['appSetsLocale']}) '
-                  'itself, so the device locale does not change it'
+                  'itself, so the device locale does not change it. Change the '
+                  'language in the app\'s own settings screen (find it with '
+                  'get_interactive_elements or inspect_widget), or the state '
+                  'it reads the locale from (get_state/set_state)'
             : 'the app does not support ${requested.languageCode} '
                   '(supportedLocales: $supported); it shows $shown';
       } else {

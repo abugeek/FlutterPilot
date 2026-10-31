@@ -71,7 +71,7 @@ void main() {
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(29717),
+        lessThanOrEqualTo(29800),
       );
       // An app without the SDK: 9 674 chars.
       expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));

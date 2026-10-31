@@ -58,6 +58,10 @@ String _screenNow(Map<String, dynamic>? data, {ScreenMemory? memory}) {
       '\n${(memory ?? ScreenMemory()).tappable(shown, count ?? shown.length)}',
     );
   }
+  final draft = post?['draft'];
+  if (draft is String && draft.isNotEmpty) {
+    buffer.write('\nDraft: ${Redaction.text(draft)}');
+  }
   if (post?['stillMoving'] == true) {
     buffer.write(
       '\nThe screen was still moving 2 s after the action (a looping '
@@ -736,11 +740,34 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'Optional key/selector of the button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
           ),
+          'submit': JsonSchema.boolean(description: 'Tap the one primary button.'),
         },
         required: ['fields'],
       ),
       callback: (p, e) async {
-        final submit = p['submitWith'] ?? p['submitTarget'];
+        var submit = p['submitWith'] ?? p['submitTarget'];
+        if (submit == null && p['submit'] == true) {
+          final found = await _callExtensionRaw(
+            'ext.flutterpilot.getInteractiveElements',
+            {},
+          );
+          final primary = primaryButtons(found.data?['elements']);
+          if (primary.length != 1) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'submit: true needs exactly one primary button on '
+                      'screen; found ${primary.length}'
+                      '${primary.isEmpty ? '' : ' (${primary.join(', ')})'}. '
+                      'Name it in submitWith.',
+                ),
+              ],
+            );
+          }
+          submit = primary.single;
+        }
         final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
           'fields': json.encode(p['fields']),
           if (submit != null) 'submitWith': submit.toString(),
@@ -776,7 +803,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             content: [
               TextContent(
                 text:
-                    'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '.'}'
+                    'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '. Not submitted: pass submitWith (a button) or submit: true.'}'
                     '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
               ),
             ],
@@ -803,6 +830,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'Key, selector or text that must be on screen.',
           ),
+          'gone': JsonSchema.boolean(description: 'key: until gone.'),
           'route': JsonSchema.string(
             description: 'The route to be on, e.g. "/dashboard".',
           ),
@@ -886,11 +914,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           final t = timeoutOf(3000);
           final res = await _callExtensionRaw(
             'ext.flutterpilot.waitForCondition',
-            {'selector': selector.toString(), 'timeoutMs': ?timeout},
+            {
+              'selector': selector.toString(),
+              'timeoutMs': ?timeout,
+              if (p['gone'] == true) 'gone': 'true',
+            },
           );
           if (res.isError) return unmet('key', t, res);
           return waited(
-            '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
+            p['gone'] == true
+                ? '"$selector" is gone (${res.data?['elapsedMs'] ?? 0}ms).'
+                : '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
             condition: 'key',
             met: true,
             timeoutMs: t,

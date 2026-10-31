@@ -362,6 +362,13 @@ extension _WidgetExtensions on FlutterPilot {
   static String _echoText(String text) =>
       _lastFieldObscured ? '•' * text.length : text;
 
+  /// Lists only show what is on screen; a control below the fold in a lazy
+  /// list is not built yet, so "not found" may mean "not scrolled to".
+  static const _offScreenHint =
+      '\nIf it is below the fold or in a lazy list it is not built yet: '
+      'scroll_into_view(key: <exact text or key>) or gesture_widget(swipe) '
+      'on the list, then retry.';
+
   static String _makeWidgetNotFoundMessage(String target) {
     final ambiguity = PilotWidgetInspector.lastAmbiguity;
     if (ambiguity != null && ambiguity.contains('"${target.trim()}"')) {
@@ -372,9 +379,11 @@ extension _WidgetExtensions on FlutterPilot {
       return 'Widget not found matching: "$target".\n'
           'HINT: Visible actionable targets on current screen:\n'
           '${suggestions.map((s) => ' • "$s"').join('\n')}\n'
-          'Or call get_widget_tree() / get_interactive_elements() to inspect the UI hierarchy.';
+          'Or call get_widget_tree() / get_interactive_elements() to inspect the UI hierarchy.'
+          '$_offScreenHint';
     }
-    return 'Widget not found matching: "$target". HINT: Call get_interactive_elements() or get_widget_tree() to inspect available widgets.';
+    return 'Widget not found matching: "$target". HINT: Call get_interactive_elements() or get_widget_tree() to inspect available widgets.'
+        '$_offScreenHint';
   }
 
   /// After a pull to refresh, waits (up to [timeout]) until no progress
@@ -916,7 +925,8 @@ extension _WidgetExtensions on FlutterPilot {
       if (target == null || target.isEmpty) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
-          'Missing key or target parameter',
+          'scroll_into_view needs key (a key, selector or visible text); '
+          'target is accepted as the same thing.',
         );
       }
       // No exact match in any list: a partial one already on screen will do.
@@ -1762,9 +1772,12 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
 
+      // gone: true waits for the widget to leave the screen (a sync banner,
+      // a spinner label); matching what is already there is no wait at all.
+      final gone = parameters['gone'] == 'true';
       while (DateTime.now().isBefore(deadline)) {
         final element = PilotWidgetInspector.findElement(selector);
-        if (element != null) {
+        if (gone ? element == null : element != null) {
           return ServiceExtensionResponse.result(
             json.encode({
               'status': 'matched',
@@ -1780,7 +1793,10 @@ extension _WidgetExtensions on FlutterPilot {
 
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
-        'Timeout: Element matching "$selector" did not appear within ${timeoutMs}ms',
+        gone
+            ? 'Timeout: Element matching "$selector" was still on screen '
+                  'after ${timeoutMs}ms'
+            : 'Timeout: Element matching "$selector" did not appear within ${timeoutMs}ms',
       );
     });
 

@@ -221,6 +221,21 @@ class FlutterPilot {
   /// starts relying on something new here.
   static const protocol = 2;
 
+  /// Set by the app to describe work in progress that should survive (or not)
+  /// navigation: `() => 'cart: 3 items, customer Acme'`, null when there is
+  /// none. Every action response then ends with "Draft: ..." so a check can
+  /// see whether a draft carried over. Keep it cheap and free of secrets.
+  static String? Function()? draftSummary;
+
+  static String? _draft() {
+    try {
+      final text = draftSummary?.call();
+      return text == null || text.isEmpty ? null : text;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Whether the SDK has been initialized via [initialize].
   ///
   /// Plugins should check this before registering service extensions to ensure
@@ -444,6 +459,7 @@ class FlutterPilot {
               : (e['text'] ?? e['key'] ?? e['type']),
       ],
       'newErrorCount': newErrors,
+      'draft': ?_draft(),
       if (!settled) 'stillMoving': true,
       if (_progressShowing()) 'loading': true,
     };

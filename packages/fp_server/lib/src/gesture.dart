@@ -38,8 +38,13 @@ String? gestureRequestError(Map<String, dynamic> params) {
   final to = params['toKey'];
   switch (gesture) {
     case 'swipe':
-      if (params['direction'] == null) {
-        return 'gesture: swipe needs direction (up/down/left/right).';
+      final missing = [
+        if (params['key'] == null) 'key (the widget to swipe)',
+        if (params['direction'] == null) 'direction (up/down/left/right)',
+      ];
+      if (missing.isNotEmpty) {
+        return 'gesture: swipe needs ${missing.join(' and ')}; '
+            'distance is optional.';
       }
     case 'drag':
       if (from == null || to == null) {
@@ -50,9 +55,19 @@ String? gestureRequestError(Map<String, dynamic> params) {
         return 'gesture: pinch needs scale.';
       }
     case 'slide':
-      if (params['value'] == null) {
-        return 'gesture: slide needs value.';
+      if (params['key'] == null || params['value'] == null) {
+        return 'gesture: slide needs key (the Slider) and value.';
       }
   }
   return null;
 }
+
+/// Selectors of the primary buttons (ElevatedButton, FilledButton) in a
+/// `getInteractiveElements` list: the key if it has one, else the type with
+/// its label. `fill_form(submit: true)` taps the only one.
+List<String> primaryButtons(Object? elements) => [
+  for (final e in elements is List ? elements : const [])
+    if (e is Map &&
+        (e['type'] == 'ElevatedButton' || e['type'] == 'FilledButton'))
+      (e['key'] ?? "${e['type']}['${e['text']}']").toString(),
+];

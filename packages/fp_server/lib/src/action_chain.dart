@@ -17,7 +17,10 @@ typedef ChainStep = ({String tool, Map<String, dynamic> arguments});
 /// [chainStep]; the `steps`/`cycle` description carries the tool list and an
 /// example.
 JsonSchema compositeStepSchema() => JsonSchema.object(
-  properties: {'tool': JsonSchema.string(), 'arguments': JsonSchema.object()},
+  properties: {
+    'tool': JsonSchema.string(),
+    'arguments': JsonSchema.object(),
+  },
   required: ['tool'],
 );
 
