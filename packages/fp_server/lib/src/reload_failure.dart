@@ -235,15 +235,18 @@ String _hintFor(String message) {
           message.contains('Operation not permitted') ||
           message.contains('Permission denied') ||
           message.contains('FileSystemException'))) {
-    return 'HINT: not a compile error. macOS stopped the process that ran '
-        '`flutter run` from writing into this sandboxed app\'s container. '
-        'Allow that program under System Settings > Privacy & Security > App '
-        'Management (or Full Disk Access): for an app launch_app started on '
-        'macOS that is FlutterPilot (~/Library/Application Support/'
-        'FlutterPilot/FlutterPilot.app; add it with +, then Cmd+Shift+G to '
-        'paste the path), else the terminal, IDE or agent app. Or set <key>com.apple.security.app-sandbox</key><false/> '
-        'in macos/Runner/DebugProfile.entitlements, then start `flutter run` '
-        'again. Until then, stop the app and launch it again after each edit.';
+    // The old hint ended "relaunch after each edit", and agents did: 224
+    // launch_app calls at ~38 s each against 111 hot reloads (Octana log).
+    return 'HINT: not a compile error. macOS stopped `flutter run` from '
+        'writing into this sandboxed app\'s container. Fix it once: in '
+        'macos/Runner/DebugProfile.entitlements set '
+        '<key>com.apple.security.app-sandbox</key><false/> (debug builds '
+        'only; Release stays sandboxed; `fp init` does this), then '
+        'launch_app(relaunch: true) once — hot reload works after that. To '
+        'keep the sandbox instead, the user can allow the program that ran '
+        '`flutter run` under System Settings > Privacy & Security > App '
+        'Management (for launch_app on macOS: FlutterPilot, '
+        '~/Library/Application Support/FlutterPilot/FlutterPilot.app).';
   }
   // An asset the build lists is gone (field test: SVGs deleted while the app
   // ran); the agent took "compile error" at its word, then rebuilt the app.

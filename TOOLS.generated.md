@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 63
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41047 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41239 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -71,7 +71,7 @@ What the app printed: print(), debugPrint() and dart:developer log(), plus what 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `level` | string: debug \| info \| warning \| error | no |  |
+| `level` | string: debug \| info \| warning \| warn \| error | no |  |
 | `query` | string | no | Only messages containing this. |
 | `sinceSeconds` | integer | no | Only the last N seconds. |
 | `limit` | integer | no | Default 100. |
@@ -169,6 +169,7 @@ Fills several fields in one call and optionally taps a submit button: text for t
 |---|---|---:|---|
 | `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
 | `submitWith` | string | no | Optional key/selector of the button to tap after filling (e.g. "ElevatedButton['Log In']"). |
+| `submit` | boolean | no | Tap the one primary button. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, status?: "ok"|"unavailable"}`
 
@@ -181,6 +182,7 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or text that must be on screen. |
+| `gone` | boolean | no | key: until gone. |
 | `route` | string | no | The route to be on, e.g. "/dashboard". |
 | `animations` | boolean | no | Until animations and frame callbacks have settled. |
 | `state` | string | no | Provider or bloc name from get_state, with expectedValue (needs the Riverpod or Bloc plugin). |
@@ -499,11 +501,12 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `simulate_network`
 
-Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or normal again, to test loading and offline states.
+Makes every HTTP request (http, dart:io, Dio) slow, fail (offline) or normal again. delayMs holds each one that long, to act mid-request.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `condition` | string: normal \| slow_3g \| fast_4g \| offline | yes |  |
+| `condition` | string: normal \| slow_3g \| fast_4g \| offline | no |  |
+| `delayMs` | integer | no | Up to 60000. |
 
 ## `mock_http_response`
 

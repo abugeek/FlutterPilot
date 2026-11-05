@@ -239,6 +239,18 @@ crash reports.
 
 ---
 
+### "Tool 'x' is disabled" or a tool is missing
+Only the tools that can work for the connected app are enabled; `get_app_summary(setup: true)` shows why. `simulate_network` (normal, slow_3g, fast_4g, offline; http, dart:io and Dio) needs `fp_sdk` in the app; `get_network_logs` and `mock_http_response` need `fp_dio`; `exec_sql_query` needs `fp_drift` or `fp_sqflite`. Offline without the SDK: switch the device's network off, or `mock_http_response(error: "connection")` per URL.
+
+### Unattended iOS simulator runs
+A swipe sent through the simulator control asks the user to approve each time. Scrolling by key does not: `scroll_into_view(key)`, `gesture_widget(gesture: "swipe", key, direction)` and `tap_widget` (which scrolls first) go through FlutterPilot's own connection.
+
+### `launch_app(device: <UDID>)` on a running simulator
+Attaches to the app already running there in about a second, with no rebuild; `relaunch: true` rebuilds.
+
+### Seeing a draft survive navigation
+Set `FlutterPilot.draftSummary = () => 'cart: 3 items, customer Acme';` in the app and every action response ends with `Draft: ...`.
+
 ## Performance Tips
 
 1. **Parallel queries** — Server batches requests (e.g., `Future.wait` for multiple tools)

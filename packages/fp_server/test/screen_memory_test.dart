@@ -60,4 +60,12 @@ void main() {
     final memory = ScreenMemory()..tappable(screen, 6, at: t0);
     expect(memory.tappable(screen, 9, at: t0), contains('(9): as after'));
   });
+
+  test('a cut list says how many more and where to see them', () {
+    expect(
+      ScreenMemory().tappable(['A', 'B'], 30),
+      'Tappable now (30): "A", "B" (+28 more: get_interactive_elements)',
+    );
+    expect(ScreenMemory().tappable(['A'], 1), 'Tappable now (1): "A"');
+  });
 }

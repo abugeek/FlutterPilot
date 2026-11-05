@@ -340,7 +340,8 @@ class InitCommand extends Command<void> {
 
   /// macOS apps run sandboxed: without `com.apple.security.network.client`
   /// every HTTP request fails with errno = 1. Adds it to both entitlement
-  /// files when the project has a macOS runner; returns lines for the user.
+  /// files when the project has a macOS runner, and turns the sandbox off in
+  /// DebugProfile (see [withoutSandbox]); returns lines for the user.
   static List<String> addMacosNetworkClient(String rootPath) {
     final runner = Directory(p.join(rootPath, 'macos', 'Runner'));
     if (!runner.existsSync()) return const [];
@@ -355,7 +356,17 @@ class InitCommand extends Command<void> {
         );
         continue;
       }
-      final content = file.readAsStringSync();
+      var content = file.readAsStringSync();
+      if (name == 'DebugProfile') {
+        final open = withoutSandbox(content);
+        if (open != content) {
+          file.writeAsStringSync(content = open);
+          out.add(
+            '✅ Turned the app sandbox off in $rel so hot reload works '
+            'without App Management permission (Release stays sandboxed).',
+          );
+        }
+      }
       final patched = withNetworkClient(content);
       if (patched == null) {
         out.add(
@@ -372,6 +383,18 @@ class InitCommand extends Command<void> {
     }
     return out;
   }
+
+  /// [plist] with `com.apple.security.app-sandbox` true changed to false.
+  ///
+  /// Hot reload on macOS copies the new kernel into the app's temp directory;
+  /// for a sandboxed app that is inside `~/Library/Containers/<id>`, which
+  /// macOS keeps the process that ran `flutter run` out of unless it has App
+  /// Management permission. flutter_tools always writes the file directly
+  /// for desktop devices, so this is the only fix needing no permission.
+  static String withoutSandbox(String plist) => plist.replaceFirstMapped(
+    RegExp(r'(<key>com\.apple\.security\.app-sandbox</key>\s*)<true\s*/>'),
+    (m) => '${m[1]}<false/>',
+  );
 
   /// [plist] with `com.apple.security.network.client` set to true before
   /// the top-level `</dict>`; unchanged if the key is there (even false:

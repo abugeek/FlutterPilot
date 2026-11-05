@@ -567,7 +567,7 @@ class PilotWidgetInspector {
 
   /// Collects top visible actionable targets (buttons, inputs, key names) on screen.
   /// Used to provide actionable suggestions to AI agents when an element is not found.
-  static List<String> getAvailableActionableTargets({int limit = 6}) {
+  static List<String> getAvailableActionableTargets({int limit = 12}) {
     final root = WidgetsBinding.instance.rootElement;
     if (root == null) return [];
 

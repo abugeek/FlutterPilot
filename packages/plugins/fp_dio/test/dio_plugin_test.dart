@@ -343,5 +343,17 @@ void main() {
         );
       });
     }
+
+    test('latencyMs sets a custom delay', () async {
+      DioPilotInterceptor.mock('/todos', statusCode: 200, body: '[1]');
+      DioPilotInterceptor.simulate(NetworkCondition.normal, latencyMs: 300);
+      final started = DateTime.now();
+      await dio().get<List<dynamic>>('/todos');
+      expect(
+        DateTime.now().difference(started).inMilliseconds,
+        greaterThanOrEqualTo(280),
+      );
+      DioPilotInterceptor.simulate(NetworkCondition.normal);
+    });
   });
 }

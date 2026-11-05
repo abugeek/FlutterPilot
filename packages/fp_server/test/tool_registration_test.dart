@@ -63,14 +63,15 @@ void main() {
       // Every tool (--static-tools): 63 tools, 41 073 chars.
       expect(listChars((_) => true), lessThanOrEqualTo(41373));
       // An app with the SDK and no plugin, not on an iOS simulator:
-      // 29 317 chars on 2026-10-17, plus 300.
+      // 29 317 chars on 2026-10-17, plus 300; simulate_network joined it (no
+      // longer Dio-only) on 2026-10-31, at 29 655.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(29617),
+        lessThanOrEqualTo(29800),
       );
       // An app without the SDK: 9 674 chars.
       expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));

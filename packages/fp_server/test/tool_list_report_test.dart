@@ -116,12 +116,7 @@ void main() {
       final shop = profileToolNames(AppProfile.sdkLabShop, all).toSet();
       final notes = profileToolNames(AppProfile.sdkLabNotes, all).toSet();
       final none = profileToolNames(AppProfile.sdkNoPlugins, all).toSet();
-      for (final tool in [
-        'get_network_logs',
-        'simulate_network',
-        'exec_sql_query',
-        'get_state',
-      ]) {
+      for (final tool in ['get_network_logs', 'exec_sql_query', 'get_state']) {
         expect(shop, contains(tool), reason: tool);
         expect(none, isNot(contains(tool)), reason: tool);
       }
@@ -142,7 +137,7 @@ void main() {
     int chars(AppProfile profile) =>
         profileCost(profile, all, server.toolListJson).chars;
     expect(chars(AppProfile.all), lessThanOrEqualTo(41300));
-    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29500));
+    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(29800));
     expect(chars(AppProfile.zeroCode), lessThanOrEqualTo(9700));
   });
 

@@ -324,6 +324,10 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         final asked = p['sql']?.toString().trim() ?? '';
+        // Results follow switch_device: say whose database answered.
+        final origin =
+            'Device "${_fleetManager.activeDeviceId ?? 'default'}", local '
+            'app database (not the server)';
         // No query: the schema, so the first real one need not guess.
         final schemaOnly = asked.isEmpty;
         final sql = schemaOnly ? _sqlTablesQuery : asked;
@@ -414,7 +418,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             content: [
               TextContent(
                 text: FlutterPilotServer._boundToolText(
-                  '${rows.length} tables'
+                  '$origin: ${rows.length} tables'
                   '${rows.length > 80 ? ' (80 shown)' : ''}:\n'
                   '${lines.join('\n')}',
                 ),
@@ -429,7 +433,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           what: 'rows (first kept)',
           how: 'Page with LIMIT/OFFSET in the SQL, or narrow with WHERE.',
         );
-        final buf = StringBuffer('${rows.length} row(s)');
+        final buf = StringBuffer('$origin: ${rows.length} row(s)');
         if (note != null) buf.write('\n$note');
         for (final row in rows.take(50)) {
           buf.write('\n${jsonEncode(row)}');
@@ -530,15 +534,16 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_network',
       description:
-          'Makes every Dio request slow (slow_3g, fast_4g), fail (offline) or '
-          'normal again, to test loading and offline states.',
+          'Makes every HTTP request (http, dart:io, Dio) slow, fail '
+          '(offline) or normal again. delayMs holds each one that long, to '
+          'act mid-request.',
       inputSchema: ToolInputSchema(
         properties: {
           'condition': JsonSchema.string(
             enumValues: ['normal', 'slow_3g', 'fast_4g', 'offline'],
           ),
+          'delayMs': JsonSchema.integer(description: 'Up to 60000.'),
         },
-        required: ['condition'],
       ),
       callback: (p, e) => _callExtensionRaw(
         'ext.flutterpilot.simulateNetwork',

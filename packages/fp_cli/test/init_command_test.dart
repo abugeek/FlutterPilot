@@ -382,6 +382,28 @@ Future<void> main() async {
       }
     });
 
+    test('the sandbox is turned off in DebugProfile only', () {
+      final out = InitCommand.withoutSandbox(template);
+      expect(
+        out,
+        contains('<key>com.apple.security.app-sandbox</key>\n\t<false/>'),
+      );
+      expect(InitCommand.withoutSandbox(out), out);
+
+      for (final f in ['DebugProfile', 'Release']) {
+        File(p.join(app.path, 'macos', 'Runner', '$f.entitlements'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync(template);
+      }
+      InitCommand.addMacosNetworkClient(app.path);
+      String read(String f) => File(
+        p.join(app.path, 'macos', 'Runner', '$f.entitlements'),
+      ).readAsStringSync();
+      expect(read('DebugProfile'), contains('<false/>'));
+      expect(read('DebugProfile'), contains('network.client'));
+      expect(read('Release'), isNot(contains('<false/>')));
+    });
+
     test('no macOS runner: nothing to do', () {
       expect(InitCommand.addMacosNetworkClient(app.path), isEmpty);
       expect(Directory(p.join(app.path, 'macos')).existsSync(), isFalse);

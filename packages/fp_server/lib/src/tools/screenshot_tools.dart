@@ -578,8 +578,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           p,
         );
         if (res.isError) return res.toCallToolResult();
+        // The list is never cut short, but it is only the screen: say so, so
+        // a long form below the fold does not look short.
         return CallToolResult(
-          content: [TextContent(text: jsonEncode(res.data))],
+          content: [
+            TextContent(
+              text: jsonEncode({
+                ...?res.data,
+                'total': res.data?['count'],
+                'truncated': false,
+                'scope': 'on screen only',
+                'note':
+                    'Controls below or beside the viewport (lazy lists, a '
+                    'long form) are not listed. scroll_into_view(key) brings '
+                    'one on screen; this list is then complete for what shows.',
+              }),
+            ),
+          ],
         );
       },
     );

@@ -15,7 +15,6 @@ const Map<String, List<String>> pluginToolExtensions = {
   ],
   // fp_dio
   'get_network_logs': ['ext.flutterpilot.getNetworkLogs'],
-  'simulate_network': ['ext.flutterpilot.simulateNetwork'],
   'mock_http_response': ['ext.flutterpilot.addHttpMock'],
   // fp_hive
   'get_hive_contents': ['ext.flutterpilot.getHiveContents'],

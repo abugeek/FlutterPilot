@@ -68,6 +68,40 @@ Map<String, dynamic> debugSemanticsNodeToMap(
 
 extension _DiagnosticsExtensions on FlutterPilot {
   static void register() {
+    // -- ext.flutterpilot.simulateNetwork -------------------------------------
+    // Every dart:io request (package:http, Dio, HttpClient) goes through
+    // NetworkSimulation, set here.
+    registerExtension('ext.flutterpilot.simulateNetwork', (
+      method,
+      parameters,
+    ) async {
+      final delayMs = int.tryParse(parameters['delayMs'] ?? '');
+      final condition =
+          parameters['condition'] ?? (delayMs == null ? null : 'normal');
+      final preset = NetworkSimulation.presets[condition];
+      if (condition != 'normal' && condition != 'offline' && preset == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'condition must be: normal | slow_3g | fast_4g | offline',
+        );
+      }
+      final ms = (delayMs ?? preset)?.clamp(0, 60000);
+      NetworkSimulation.set(
+        offline: condition == 'offline',
+        latency: ms == null ? null : Duration(milliseconds: ms),
+      );
+      return ServiceExtensionResponse.result(
+        json.encode({
+          'status': 'success',
+          'condition': condition,
+          'latencyMs': ?ms,
+          'covers': NetworkSimulation.intercepting
+              ? 'package:http, dart:io, Dio'
+              : 'Dio only (dart:io clients are not wrapped on this platform)',
+        }),
+      );
+    });
+
     // -- ext.flutterpilot.getAppSnapshot --------------------------------------
     registerExtension('ext.flutterpilot.getAppSnapshot', (
       method,

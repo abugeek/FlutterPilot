@@ -295,6 +295,9 @@ tools that always work beat many tools that sometimes work.
   unless the program that ran `flutter run` has App Management (or Full Disk
   Access), so hot reload from an agent fails with "failed to create file".
   `hot_reload` now says so (`reload_failure.dart`); it is not a compile error.
+  flutter_tools always writes this file directly for desktop devices
+  (`DesktopDevice.createDevFSWriter` → `LocalDevFSWriter`, no flag), so
+  `fp init` turns `app-sandbox` off in DebugProfile.entitlements only.
 - **Riverpod 3 retries failed providers forever by default** (endless spinner).
 - **`dart format` on a whole directory reformats unrelated files** → format
   only files you touched.

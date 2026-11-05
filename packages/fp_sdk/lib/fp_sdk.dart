@@ -35,6 +35,7 @@ import 'src/app_settings_override.dart';
 import 'src/error_inspector.dart';
 import 'src/interaction_manager.dart';
 import 'src/navigation_tracker.dart';
+import 'src/network_simulation.dart';
 import 'src/platform_channel_mocks.dart';
 import 'src/redaction.dart';
 import 'src/restart_store.dart';
@@ -62,6 +63,7 @@ export 'src/hit_test_utils.dart';
 export 'src/interaction_manager.dart';
 export 'src/keyboard_simulator.dart';
 export 'src/navigation_tracker.dart';
+export 'src/network_simulation.dart';
 export 'src/platform_channel_mocks.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
@@ -218,6 +220,21 @@ class FlutterPilot {
   /// the server's sdk_protocol.dart): raised together whenever the server
   /// starts relying on something new here.
   static const protocol = 2;
+
+  /// Set by the app to describe work in progress that should survive (or not)
+  /// navigation: `() => 'cart: 3 items, customer Acme'`, null when there is
+  /// none. Every action response then ends with "Draft: ..." so a check can
+  /// see whether a draft carried over. Keep it cheap and free of secrets.
+  static String? Function()? draftSummary;
+
+  static String? _draft() {
+    try {
+      final text = draftSummary?.call();
+      return text == null || text.isEmpty ? null : text;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Whether the SDK has been initialized via [initialize].
   ///
@@ -408,7 +425,8 @@ class FlutterPilot {
     bool quickSettle = false,
   }) async {
     final settled = await _waitForScreenSettled(
-      timeout: settleTimeout ??
+      timeout:
+          settleTimeout ??
           (quickSettle
               ? const Duration(milliseconds: 400)
               : const Duration(seconds: 2)),
@@ -434,13 +452,17 @@ class FlutterPilot {
       'previousRoute': previousRoute,
       'focusedElement': focusedKey,
       'interactiveElementsCount': interactive.length,
+      // 25, not 10: with 10, agents called get_interactive_elements after
+      // 233 of 1794 taps (Octana log) to see the rest of a busy screen. The
+      // server sends a repeat as a difference, so the cost stays low.
       'visibleInteractiveElements': [
-        for (final e in interactive.take(10))
+        for (final e in interactive.take(25))
           e['key'] != null && e['text'] != null
               ? '${e['text']} [${e['key']}]'
               : (e['text'] ?? e['key'] ?? e['type']),
       ],
       'newErrorCount': newErrors,
+      'draft': ?_draft(),
       if (!settled) 'stillMoving': true,
       if (_progressShowing()) 'loading': true,
     };
@@ -610,6 +632,7 @@ class FlutterPilot {
     // Before anything creates the binding: FlutterPilot's own lets
     // mock_platform_channel answer the app's plugin calls.
     PlatformChannelMocks.install();
+    NetworkSimulation.install();
     final channelMocks = RestartStore.take('channelMocks');
     if (channelMocks is List) {
       for (final m in channelMocks.whereType<Map>()) {

@@ -33,7 +33,7 @@ Listed by the server only once the app has registered the plugin:
 
 - **`get_network_logs`** — recent requests and responses: method, URL, status, timing, truncated and redacted bodies, errors; mocked ones marked
 - **`mock_http_response`** — answer matching requests with a canned status/body (test error handling without a backend)
-- **`simulate_network`** — slow 3G, fast 4G, offline or normal for requests made through Dio
+- **`simulate_network`** — slow 3G, fast 4G, offline, a custom `delayMs` or normal, for Dio and (through the SDK) every `package:http` / `dart:io` request
 
 The full tool reference is
 [TOOLS.generated.md](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md).
