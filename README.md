@@ -353,7 +353,15 @@ flutter pub get
 ```
 Plugins do nothing until wired up — `init` prints the exact line for each one.
 If the app has a macOS runner, `init` also adds the `network.client`
-entitlement (sandboxed macOS apps can't make HTTP requests without it).
+entitlement (sandboxed macOS apps can't make HTTP requests without it) and
+turns the app sandbox off in `macos/Runner/DebugProfile.entitlements`. Hot
+reload copies the new code into the app's container folder, and macOS blocks
+that unless the agent or terminal has App Management permission. Release builds
+stay sandboxed. In a debug build, files the app saves then go to
+`~/Library/Application Support/<bundle id>` instead of the container. Only
+macOS desktop apps need this; iOS, Android and web don't. To keep the sandbox
+in debug builds, set it back to `<true/>` and allow the program that runs
+`flutter run` under System Settings > Privacy & Security > App Management.
 `fp doctor` checks the wiring (SDK initialized, each plugin used,
 macOS network entitlement, MCP config) and, while the app runs, that the SDK
 and every plugin registered — with the exact fix for anything missing.
