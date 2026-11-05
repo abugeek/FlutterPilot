@@ -452,8 +452,11 @@ class FlutterPilot {
       'previousRoute': previousRoute,
       'focusedElement': focusedKey,
       'interactiveElementsCount': interactive.length,
+      // 25, not 10: with 10, agents called get_interactive_elements after
+      // 233 of 1794 taps (Octana log) to see the rest of a busy screen. The
+      // server sends a repeat as a difference, so the cost stays low.
       'visibleInteractiveElements': [
-        for (final e in interactive.take(10))
+        for (final e in interactive.take(25))
           e['key'] != null && e['text'] != null
               ? '${e['text']} [${e['key']}]'
               : (e['text'] ?? e['key'] ?? e['type']),

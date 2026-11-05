@@ -289,7 +289,8 @@ extension _WidgetExtensions on FlutterPilot {
       return (
         status: 'noTextField',
         error:
-            'Could not find text input field for "${target ?? 'focused element'}"',
+            'Could not find text input field for "${target ?? 'focused element'}".'
+            '${_fieldsOnScreenHint()}',
       );
     }
     _lastFieldObscured = state.widget.obscureText;
@@ -368,6 +369,21 @@ extension _WidgetExtensions on FlutterPilot {
       '\nIf it is below the fold or in a lazy list it is not built yet: '
       'scroll_into_view(key: <exact text or key>) or gesture_widget(swipe) '
       'on the list, then retry.';
+
+  static final _fieldType = RegExp(r'Text(Form)?Field|SearchBar|Editable');
+
+  /// The text fields on screen, by the name enter_text takes, so a missed
+  /// name is fixed on the next call (field logs: agents tapped around instead).
+  static String _fieldsOnScreenHint() {
+    final names = [
+      for (final e in PilotWidgetInspector.getInteractiveElements())
+        if (_fieldType.hasMatch(e['type'] as String))
+          (e['key'] ?? e['text'] ?? e['type']) as String,
+    ];
+    if (names.isEmpty) return '\nNo text field is on screen.$_offScreenHint';
+    return '\nText fields on screen:\n'
+        '${names.map((n) => ' • "$n"').join('\n')}$_offScreenHint';
+  }
 
   static String _makeWidgetNotFoundMessage(String target) {
     final ambiguity = PilotWidgetInspector.lastAmbiguity;
@@ -490,8 +506,9 @@ extension _WidgetExtensions on FlutterPilot {
     registerExtension('ext.flutterpilot.tapWidget', (method, parameters) async {
       final quickSettle = parameters['quickSettle'] == 'true';
       final timeoutMs = int.tryParse(parameters['settleTimeoutMs'] ?? '');
-      final settleTimeout =
-          timeoutMs != null ? Duration(milliseconds: timeoutMs) : null;
+      final settleTimeout = timeoutMs != null
+          ? Duration(milliseconds: timeoutMs)
+          : null;
 
       final xVal = double.tryParse(parameters['x'] ?? '');
       final yVal = double.tryParse(parameters['y'] ?? '');
@@ -875,7 +892,7 @@ extension _WidgetExtensions on FlutterPilot {
           if (element == null) {
             return ServiceExtensionResponse.error(
               ServiceExtensionResponse.extensionError,
-              'Widget not found: $target',
+              _makeWidgetNotFoundMessage(target),
             );
           }
           final ro = element.renderObject;
@@ -965,7 +982,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final ro = element.renderObject;
@@ -1010,7 +1027,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final ro = element.renderObject;
@@ -1060,7 +1077,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final ro = element.renderObject;
@@ -1146,13 +1163,13 @@ extension _WidgetExtensions on FlutterPilot {
       if (fromEl == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $fromTarget',
+          _makeWidgetNotFoundMessage(fromTarget),
         );
       }
       if (toEl == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $toTarget',
+          _makeWidgetNotFoundMessage(toTarget),
         );
       }
       final fromRo = fromEl.renderObject;
@@ -1202,7 +1219,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       bool found = false;
@@ -1259,7 +1276,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final renderObject = element.renderObject;
@@ -1297,7 +1314,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       RenderBox? renderBox;
@@ -1368,7 +1385,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       Element? sliderElement;
@@ -1445,7 +1462,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       final props = <String, dynamic>{
@@ -1705,7 +1722,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       return FlutterPilot._assertWidgetState(
@@ -1730,7 +1747,7 @@ extension _WidgetExtensions on FlutterPilot {
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          'Widget not found: $target',
+          _makeWidgetNotFoundMessage(target),
         );
       }
       return FlutterPilot._assertWidgetState(

@@ -2084,12 +2084,13 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         );
       }
     });
+    final deadline = allowingWait(_operationDeadline, parameters);
     try {
       return await Future.any([
         scheduled.timeout(
-          _operationDeadline,
+          deadline,
           onTimeout: () => _ExtensionResult.error(
-            'No answer from the app within ${_operationDeadline.inSeconds} s. '
+            'No answer from the app within ${deadline.inSeconds} s. '
             'Check the app state before retrying: a change may still apply.',
             ErrorCategory.deadlineExceeded,
           ),
@@ -2102,6 +2103,18 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   }
 
   static const _operationDeadline = Duration(seconds: 30);
+
+  /// [base], or longer when the call itself waits up to `timeoutMs`: a
+  /// `wait_for(timeoutMs: 20000)` was cut off at 15 s, retried, and reported
+  /// "No answer from the app" instead of what it waited for (16 times in
+  /// the Octana call log).
+  @visibleForTesting
+  static Duration allowingWait(Duration base, Map<String, dynamic> parameters) {
+    final ms = int.tryParse('${parameters['timeoutMs'] ?? ''}');
+    if (ms == null) return base;
+    final needed = Duration(milliseconds: ms) + const Duration(seconds: 5);
+    return needed > base ? needed : base;
+  }
 
   void _markContextConnectionLost(DeviceRuntimeContext? context) {
     if (context == null) {
@@ -2239,9 +2252,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     // twice. It gets the whole operation deadline instead. A replay-safe
     // observation is asked again after the shorter timeout.
     final replaySafe = extensionPolicyOf(extension, parameters).replaySafe;
-    final callTimeout = replaySafe
-        ? _Constants.extensionCallTimeout
-        : _operationDeadline;
+    final callTimeout = allowingWait(
+      replaySafe ? _Constants.extensionCallTimeout : _operationDeadline,
+      parameters,
+    );
     final actionTimedOut = _ExtensionResult.error(
       'No answer from the app within ${callTimeout.inSeconds} s. The action '
       'may or may not have run — check with get_app_summary before retrying.',

@@ -25,7 +25,9 @@ class ScreenMemory {
     String full() {
       _short = 0;
       _fullAt = now;
-      return 'Tappable now ($count): $quoted';
+      final rest = count - shown.length;
+      return 'Tappable now ($count): $quoted'
+          '${rest > 0 ? ' (+$rest more: get_interactive_elements)' : ''}';
     }
 
     final String line;
