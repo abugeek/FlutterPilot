@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// The widget constructor call that starts at a creation location, found by
 /// matching its parentheses in the source text.
 ///
@@ -215,3 +217,131 @@ int? _skipString(String s, int start, {bool raw = false}) {
 bool _identStart(String c) => RegExp(r'[A-Za-z_$]').hasMatch(c);
 bool _identChar(String s, int i) => i >= 0 && RegExp(r'[\w$]').hasMatch(s[i]);
 bool _isSpace(String c) => c == ' ' || c == '\n' || c == '\t' || c == '\r';
+
+/// Result of finding a widget constructor call statically in Dart source files.
+typedef AstMatchResult = ({
+  String file,
+  int line,
+  int column,
+  String? type,
+  ConstructorSpan span,
+  String snippet,
+});
+
+/// Searches [source] for a widget constructor containing [targetKey].
+AstMatchResult? findWidgetConstructorInSource(
+  String source,
+  String targetKey, {
+  String filePath = '',
+}) {
+  final escaped = RegExp.escape(targetKey);
+  const q = '["\']';
+  // Match key: ...Key('targetKey') / Key("targetKey") / ValueKey('targetKey') / ValueKey("targetKey")
+  final keyPattern = RegExp(
+    r'\bkey\s*:\s*(?:const\s+)?(?:[A-Za-z_$][\w$]*\.)?(?:Key|ValueKey)(?:<[^>]*>)?\s*\(\s*'
+    '$q$escaped$q'
+    r'\s*\)',
+  );
+  var match = keyPattern.firstMatch(source);
+  if (match == null) {
+    // Match raw Key('targetKey') or ValueKey('targetKey')
+    final rawKeyPattern = RegExp(
+      r'(?:const\s+)?(?:[A-Za-z_$][\w$]*\.)?(?:Key|ValueKey)(?:<[^>]*>)?\s*\(\s*'
+      '$q$escaped$q'
+      r'\s*\)',
+    );
+    match = rawKeyPattern.firstMatch(source);
+  }
+  if (match == null) {
+    // Match Text('targetKey')
+    final textPattern = RegExp(
+      r'\bText\s*\(\s*'
+      '$q$escaped$q'
+      r'\s*[,)]',
+    );
+    match = textPattern.firstMatch(source);
+  }
+  if (match == null) return null;
+
+  final targetOffset = match.start;
+  final targetEnd = match.end;
+
+  // Compute 1-based line of the match
+  var matchLine = 1;
+  var lastLineStart = 0;
+  for (var i = 0; i < targetOffset; i++) {
+    if (source[i] == '\n') {
+      matchLine++;
+      lastLineStart = i + 1;
+    }
+  }
+
+  // If the match is a Text widget itself and has no enclosing constructor we care about,
+  // or if we find an enclosing constructor (like a button or tile) that wraps this Text/key
+  final enclosing = enclosingConstructorSpan(
+    source,
+    targetOffset,
+    targetEnd,
+    hintLine: matchLine,
+  );
+
+  final span = enclosing ??
+      (source.substring(targetOffset).startsWith('Text')
+          ? constructorSpanAt(
+              source,
+              matchLine,
+              (targetOffset - lastLineStart) + 1,
+            )
+          : null);
+  if (span == null) return null;
+
+  var spanLine = 1;
+  var spanLineStart = 0;
+  for (var i = 0; i < span.offset; i++) {
+    if (source[i] == '\n') {
+      spanLine++;
+      spanLineStart = i + 1;
+    }
+  }
+  final spanCol = (span.offset - spanLineStart) + 1;
+
+  final headMatch = RegExp(
+    r'(?:const\s+|new\s+)?([A-Za-z_$][\w$]*)(?:\.[A-Za-z_$][\w$]*)?\s*\(',
+  ).matchAsPrefix(source, span.offset);
+  final type = headMatch?.group(1);
+
+  return (
+    file: filePath,
+    line: spanLine,
+    column: spanCol,
+    type: type,
+    span: span,
+    snippet: source.substring(span.offset, span.end),
+  );
+}
+
+/// Recursively scans Dart files in [dir] for a widget constructor matching [targetKey].
+Future<AstMatchResult?> findWidgetConstructorInProject(
+  Directory dir,
+  String targetKey,
+) async {
+  if (!dir.existsSync()) return null;
+  await for (final entity in dir.list(recursive: true, followLinks: false)) {
+    if (entity is! File || !entity.path.endsWith('.dart')) continue;
+    if (entity.path.endsWith('.g.dart') ||
+        entity.path.endsWith('.freezed.dart')) {
+      continue;
+    }
+    try {
+      final content = await entity.readAsString();
+      if (!content.contains(targetKey)) continue;
+      final result = findWidgetConstructorInSource(
+        content,
+        targetKey,
+        filePath: entity.path,
+      );
+      if (result != null) return result;
+    } catch (_) {}
+  }
+  return null;
+}

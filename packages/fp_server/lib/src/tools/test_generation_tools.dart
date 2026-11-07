@@ -34,28 +34,52 @@ mixin _TestGenerationToolsMixin
         var line = (p['line'] as num?)?.toInt();
         var column = (p['column'] as num?)?.toInt();
         String? type;
+        var isStaticFallback = false;
         if (file == null) {
           if (p['key'] == null) return fail('Give key, or file and line.');
+          final keyStr = p['key'].toString();
           final res = await _callExtensionRaw(
             'ext.flutterpilot.inspectWidget',
-            {'key': p['key'].toString()},
+            {'key': keyStr},
           );
-          if (res.isError) return res.toCallToolResult();
-          final source = res.data?['source'];
-          final loc = source is Map ? source['loc']?.toString() : null;
+          final source = !res.isError && res.data?['source'] is Map
+              ? res.data!['source'] as Map
+              : null;
+          final loc = source?['loc']?.toString();
           final m = loc == null
               ? null
               : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
-          if (m == null) {
-            return fail(
-              'No source location for "${p['key']}": it is not created by '
-              "the app's code, or this is not a debug build.",
-            );
+          if (m != null) {
+            type = source?['type']?.toString();
+            file = m[1]!;
+            line = int.parse(m[2]!);
+            column = int.parse(m[3]!);
+          } else {
+            // Live widget not mounted in current viewport / tree:
+            // Fall back to scanning the app's lib/ directory statically.
+            final vm = (await _deviceContextForParameters(const {}))?.service;
+            final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+            final root = isolateId == null
+                ? null
+                : (await _appEntrypoint(vm!, isolateId))?.root;
+            final appRoot = root ?? Directory.current.path;
+            final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
+            final match =
+                await findWidgetConstructorInProject(searchDir, keyStr);
+            if (match != null) {
+              file = path_pkg.relative(match.file, from: appRoot);
+              line = match.line;
+              column = match.column;
+              type = match.type;
+              isStaticFallback = true;
+            } else {
+              if (res.isError) return res.toCallToolResult();
+              return fail(
+                'No source location for "$keyStr": it is not created by '
+                "the app's code, or this is not a debug build.",
+              );
+            }
           }
-          type = source is Map ? source['type']?.toString() : null;
-          file = m[1]!;
-          line = int.parse(m[2]!);
-          column = int.parse(m[3]!);
         }
         if (line == null) return fail('Give line with file.');
 
@@ -95,6 +119,7 @@ mixin _TestGenerationToolsMixin
                   '${type ?? 'Call'} at $file:$line-$endLine '
                   '(offset ${span.offset}–${span.end}). Named arguments: '
                   '$args.${cut ? ' Showing 80 of ${lines.length} lines.' : ''}'
+                  '${isStaticFallback ? ' (resolved via offline AST fallback: unmounted/off-screen)' : ''}'
                   '\n```dart\n$snippet\n```',
             ),
           ],
@@ -153,28 +178,52 @@ mixin _TestGenerationToolsMixin
         var column = (p['column'] as num?)?.toInt();
         String? type;
 
+        var isStaticFallback = false;
         if (file == null) {
           if (p['key'] == null) return fail('Give key, or file and line.');
+          final keyStr = p['key'].toString();
           final res = await _callExtensionRaw(
             'ext.flutterpilot.inspectWidget',
-            {'key': p['key'].toString()},
+            {'key': keyStr},
           );
-          if (res.isError) return res.toCallToolResult();
-          final source = res.data?['source'];
-          final loc = source is Map ? source['loc']?.toString() : null;
+          final source = !res.isError && res.data?['source'] is Map
+              ? res.data!['source'] as Map
+              : null;
+          final loc = source?['loc']?.toString();
           final m = loc == null
               ? null
               : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
-          if (m == null) {
-            return fail(
-              'No source location for "${p['key']}": it is not created by '
-              "the app's code, or this is not a debug build.",
-            );
+          if (m != null) {
+            type = source?['type']?.toString();
+            file = m[1]!;
+            line = int.parse(m[2]!);
+            column = int.parse(m[3]!);
+          } else {
+            // Live widget not mounted in current viewport / tree:
+            // Fall back to scanning the app's lib/ directory statically.
+            final vm = (await _deviceContextForParameters(const {}))?.service;
+            final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+            final root = isolateId == null
+                ? null
+                : (await _appEntrypoint(vm!, isolateId))?.root;
+            final appRoot = root ?? Directory.current.path;
+            final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
+            final match =
+                await findWidgetConstructorInProject(searchDir, keyStr);
+            if (match != null) {
+              file = path_pkg.relative(match.file, from: appRoot);
+              line = match.line;
+              column = match.column;
+              type = match.type;
+              isStaticFallback = true;
+            } else {
+              if (res.isError) return res.toCallToolResult();
+              return fail(
+                'No source location for "$keyStr": it is not created by '
+                "the app's code, or this is not a debug build.",
+              );
+            }
           }
-          type = source is Map ? source['type']?.toString() : null;
-          file = m[1]!;
-          line = int.parse(m[2]!);
-          column = int.parse(m[3]!);
         }
         if (line == null) return fail('Give line with file.');
 
@@ -310,7 +359,10 @@ mixin _TestGenerationToolsMixin
         final overflows = (auditData['overflows'] as List?) ?? const [];
         final a11y = (auditData['accessibilityIssues'] as List?) ?? const [];
 
-        final buf = StringBuffer('✓ Patched $file:$line via hot reload:\n');
+        final buf = StringBuffer(
+          '✓ Patched $file:$line via hot reload'
+          '${isStaticFallback ? ' (resolved via offline AST)' : ''}:\n',
+        );
         buf.writeln(
           '```dart\n// Replaced:\n$originalCall\n\n// With:\n$newCall\n```',
         );

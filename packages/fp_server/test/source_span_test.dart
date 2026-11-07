@@ -119,4 +119,31 @@ Widget build() {
     expect(innermost, isNotNull);
     expect(src.substring(innermost!.offset, innermost.end), startsWith('Center('));
   });
+
+  test('findWidgetConstructorInSource locates widget by key in single and multi-line calls', () {
+    const src = '''
+Widget build() {
+  return Column(
+    children: [
+      Divider(key: Key('divider')),
+      FloatingActionButton.extended(
+        key: const Key("add_todo"),
+        label: const Text("Add"),
+      ),
+    ],
+  );
+}
+''';
+    final divMatch = findWidgetConstructorInSource(src, 'divider');
+    expect(divMatch, isNotNull);
+    expect(divMatch!.type, 'Divider');
+    expect(divMatch.line, 4);
+    expect(divMatch.snippet, "Divider(key: Key('divider'))");
+
+    final fabMatch = findWidgetConstructorInSource(src, 'add_todo');
+    expect(fabMatch, isNotNull);
+    expect(fabMatch!.type, 'FloatingActionButton');
+    expect(fabMatch.line, 5);
+    expect(fabMatch.snippet, startsWith('FloatingActionButton.extended('));
+  });
 }

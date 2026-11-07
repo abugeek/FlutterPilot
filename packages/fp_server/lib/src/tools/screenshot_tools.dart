@@ -390,9 +390,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'changed bounds, and diff image.',
       inputSchema: ToolInputSchema(
         properties: {
-          'name': JsonSchema.string(
-            description: 'Baseline name (omit for comparePrevious).',
-          ),
+          'name': JsonSchema.string(description: 'Baseline name.'),
           'comparePrevious': JsonSchema.boolean(
             description: 'Compare against previous frame.',
           ),
@@ -402,11 +400,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'threshold': JsonSchema.number(
             description: 'Allowed diff % before failing (default 1.0).',
           ),
-          'scale': JsonSchema.number(
-            description: '0.2–1.0 (default 0.5, matching capture_screenshot).',
-          ),
+          'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
           'ignoreStatusBar': JsonSchema.boolean(
-            description: 'Ignore differences in top status bar.',
+            description: 'Ignore status bar.',
+          ),
+          'ignoreKeys': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Widget keys to mask out during diffing.',
           ),
         },
       ),
@@ -528,7 +528,25 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final ignoreStatusBar = p['ignoreStatusBar'] == true;
         final statusBarHeight =
             ignoreStatusBar ? (currentImg.height * 0.06).round() : 0;
-        final total = currentImg.width * (currentImg.height - statusBarHeight);
+
+        final rawKeys = p['ignoreKeys'];
+        final ignoreKeys = rawKeys is List
+            ? rawKeys.map((k) => k.toString()).toList()
+            : const <String>[];
+        final maskedBoxes = <({double left, double top, double right, double bottom, String key})>[];
+        for (final k in ignoreKeys) {
+          final info = await _callExtensionRaw('ext.flutterpilot.inspectWidget', {'key': k});
+          final b = info.data?['widget']?['bounds'] as Map?;
+          if (b != null) {
+            final x = (b['x'] as num).toDouble() * scale;
+            final y = (b['y'] as num).toDouble() * scale;
+            final w = (b['w'] as num).toDouble() * scale;
+            final h = (b['h'] as num).toDouble() * scale;
+            maskedBoxes.add((left: x, top: y, right: x + w, bottom: y + h, key: k));
+          }
+        }
+
+        var total = currentImg.width * (currentImg.height - statusBarHeight);
         diffImg = currentImg.convert(
           format: img.Format.uint8,
           numChannels: 4,
@@ -548,13 +566,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           ) {
             final py = (i ~/ 4) ~/ currentImg.width;
             if (py < statusBarHeight) continue;
+            final px = (i ~/ 4) % currentImg.width;
+
+            // Check if pixel falls inside any masked key bounding box
+            var isMasked = false;
+            for (final box in maskedBoxes) {
+              if (px >= box.left && px <= box.right && py >= box.top && py <= box.bottom) {
+                isMasked = true;
+                break;
+              }
+            }
+            if (isMasked) continue;
 
             if (baseBytes[i] != currBytes[i] ||
                 baseBytes[i + 1] != currBytes[i + 1] ||
                 baseBytes[i + 2] != currBytes[i + 2] ||
                 baseBytes[i + 3] != currBytes[i + 3]) {
               diffPixels++;
-              final px = (i ~/ 4) % currentImg.width;
               if (px < minX) minX = px;
               if (px > maxX) maxX = px;
               if (py < minY) minY = py;
@@ -576,6 +604,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
 
         final passed = diffPercent <= threshold;
         final diffStr = diffPercent.toStringAsFixed(2);
+        final maskNote = maskedBoxes.isEmpty
+            ? ''
+            : ' (masked: ${maskedBoxes.map((b) => b.key).join(", ")})';
 
         Map<String, dynamic>? changedBounds;
         String? region;
@@ -597,11 +628,11 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final buf = StringBuffer();
         if (passed) {
           buf.write(
-            'Visual comparison PASSED — diff: $diffStr% (threshold: $threshold%)',
+            'Visual comparison PASSED — diff: $diffStr% (threshold: $threshold%)$maskNote',
           );
         } else {
           buf.write(
-            'Visual comparison FAILED — diff: $diffStr% exceeds threshold $threshold%',
+            'Visual comparison FAILED — diff: $diffStr% exceeds threshold $threshold%$maskNote',
           );
         }
         if (changedBounds != null) {

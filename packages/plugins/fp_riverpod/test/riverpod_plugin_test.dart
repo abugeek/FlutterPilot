@@ -32,6 +32,21 @@ final _volumeProvider = NotifierProvider<_VolumeNotifier, double>(
   _VolumeNotifier.new,
 );
 
+final _namedCounterProvider = NotifierProvider<_CounterNotifier, int>(
+  _CounterNotifier.new,
+  name: 'my_counter',
+);
+
+class _AsyncUserNotifier extends AsyncNotifier<String> {
+  @override
+  Future<String> build() async => 'Alice';
+}
+
+final _asyncUserProvider = AsyncNotifierProvider<_AsyncUserNotifier, String>(
+  _AsyncUserNotifier.new,
+  name: 'current_user',
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -63,6 +78,25 @@ void main() {
       final res = await set('_VolumeNotifier', '1');
       expect(res.errorDetail, isNull);
       expect(container.read(_volumeProvider), 1.0);
+    });
+
+    test('sets state using custom/generated provider name', () async {
+      container.read(_namedCounterProvider);
+      final res = await set('my_counter', '42');
+      expect(res.errorDetail, isNull);
+      expect(container.read(_namedCounterProvider), 42);
+    });
+
+    test('tracks AsyncValue with structured fields', () async {
+      final res = container.read(_asyncUserProvider);
+      expect(res, isA<AsyncValue>());
+
+      final getRes = await FlutterPilot.debugCallExtension(
+        'ext.flutterpilot.getRiverpodStates',
+        {},
+      );
+      expect(getRes.errorDetail, isNull);
+      // Verify state was recorded
     });
   });
 

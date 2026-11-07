@@ -176,45 +176,79 @@ base class RiverpodPilotObserver extends ProviderObserver {
     _initialized = false;
   }
 
+  static String _providerKey(ProviderObserverContext context) {
+    final customName = context.provider.name;
+    if (customName != null && customName.isNotEmpty) {
+      return customName;
+    }
+    return context.provider.runtimeType.toString();
+  }
+
+  static Map<String, dynamic> _formatStateValue(Object? value) {
+    final entry = <String, dynamic>{
+      'value': value?.toString() ?? 'null',
+      'type': value.runtimeType.toString(),
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+    if (value is AsyncValue) {
+      entry['async'] = {
+        'isLoading': value.isLoading,
+        'hasValue': value.hasValue,
+        'hasError': value.hasError,
+        'value': value.hasValue ? (value as dynamic).value?.toString() : null,
+        'error': value.hasError ? (value as dynamic).error?.toString() : null,
+      };
+    }
+    return entry;
+  }
+
   @override
   void didUpdateProvider(
     ProviderObserverContext context,
     Object? previousValue,
     Object? newValue,
   ) {
-    final name = context.provider.runtimeType.toString();
+    final name = _providerKey(context);
+    final typeName = context.provider.runtimeType.toString();
     _providers[name] = context.provider;
     _containers[name] = context.container;
+    if (name != typeName) {
+      _providers[typeName] = context.provider;
+      _containers[typeName] = context.container;
+    }
 
-    _states[name] = {
-      'value': newValue?.toString() ?? 'null',
-      'type': newValue.runtimeType.toString(),
-      'timestamp': DateTime.now().toIso8601String(),
-    };
+    _states[name] = _formatStateValue(newValue);
     _cleanStaleEntries();
     FlutterPilot.logStateChange('riverpod', name, newValue);
   }
 
   @override
   void didAddProvider(ProviderObserverContext context, Object? value) {
-    final name = context.provider.runtimeType.toString();
+    final name = _providerKey(context);
+    final typeName = context.provider.runtimeType.toString();
     _providers[name] = context.provider;
     _containers[name] = context.container;
+    if (name != typeName) {
+      _providers[typeName] = context.provider;
+      _containers[typeName] = context.container;
+    }
 
-    _states[name] = {
-      'value': value?.toString() ?? 'null',
-      'type': value.runtimeType.toString(),
-      'timestamp': DateTime.now().toIso8601String(),
-    };
+    _states[name] = _formatStateValue(value);
     FlutterPilot.logStateChange('riverpod', name, value);
   }
 
   @override
   void didDisposeProvider(ProviderObserverContext context) {
-    final name = context.provider.runtimeType.toString();
+    final name = _providerKey(context);
+    final typeName = context.provider.runtimeType.toString();
     _states.remove(name);
     _providers.remove(name);
     _containers.remove(name);
+    if (name != typeName) {
+      _states.remove(typeName);
+      _providers.remove(typeName);
+      _containers.remove(typeName);
+    }
     FlutterPilot.logStateDisposed('riverpod', name);
   }
 }

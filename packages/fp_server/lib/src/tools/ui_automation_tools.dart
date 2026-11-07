@@ -1092,6 +1092,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             );
             for (final item in unlabeled.take(max)) {
               buffer.writeln('- $item');
+              final srcMatch = RegExp(
+                r'Code:\s*([^\s,;()]+\.dart):(\d+):(\d+)',
+              ).firstMatch('$item');
+              if (srcMatch != null) {
+                final f = srcMatch.group(1)!;
+                final l = srcMatch.group(2)!;
+                buffer.writeln(
+                  '  → Fix: apply_patch_and_verify(file: "$f", line: $l, ...) or add tooltip: \'...\' / Semantics(label: \'...\')',
+                );
+              }
             }
             if (unlabeled.length > max) {
               buffer.writeln('- … ${unlabeled.length - max} more');

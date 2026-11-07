@@ -272,6 +272,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           res = await _callExtensionRaw('ext.flutterpilot.assertTextVisible', {
             'text': p['text'].toString(),
             if (p['exact'] != null) 'exact': p['exact'].toString(),
+            if (p['autoScroll'] == true) 'autoScroll': 'true',
           });
         } else if (p['type'] != null && p['count'] != null) {
           check = 'count';
@@ -297,7 +298,10 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           found = 1;
           res = await _callExtensionRaw(
             'ext.flutterpilot.assertWidgetVisible',
-            {'key': target.toString()},
+            {
+              'key': target.toString(),
+              if (p['autoScroll'] == true) 'autoScroll': 'true',
+            },
           );
         } else {
           return withVerdict(

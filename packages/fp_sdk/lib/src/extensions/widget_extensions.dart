@@ -1644,7 +1644,12 @@ extension _WidgetExtensions on FlutterPilot {
       final y = double.tryParse(parameters['y'] ?? '');
       final Element? element;
       if (target != null && target.trim().isNotEmpty) {
-        element = PilotWidgetInspector.findElement(target);
+        var found = PilotWidgetInspector.findElement(target);
+        if (found == null && parameters['autoScroll'] != 'false') {
+          await ScrollSimulator.scrollUntilVisible(target);
+          found = PilotWidgetInspector.findElement(target);
+        }
+        element = found;
         if (element == null) {
           return ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
@@ -1751,7 +1756,12 @@ extension _WidgetExtensions on FlutterPilot {
           'Missing key or target',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
+      var element = PilotWidgetInspector.findElement(target);
+      if ((element == null || !HitTestUtils.isElementHittable(element)) &&
+          parameters['autoScroll'] == 'true') {
+        await ScrollSimulator.scrollUntilVisible(target);
+        element = PilotWidgetInspector.findElement(target);
+      }
       if (element == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
@@ -1783,6 +1793,30 @@ extension _WidgetExtensions on FlutterPilot {
           ServiceExtensionResponse.invalidParams,
           'Missing text',
         );
+      }
+      if (parameters['autoScroll'] == 'true') {
+        bool hasTextOnScreen() {
+          bool foundText = false;
+          void check(Element e) {
+            if (foundText) return;
+            if (e.widget is Text) {
+              final data = (e.widget as Text).data ?? '';
+              foundText = exact ? data == text : data.contains(text);
+            } else if (e.widget is RichText) {
+              final plain = (e.widget as RichText).text.toPlainText();
+              foundText = exact ? plain == text : plain.contains(text);
+            }
+            if (!foundText) e.debugVisitOnstageChildren(check);
+          }
+
+          final root = WidgetsBinding.instance.rootElement;
+          if (root != null) check(root);
+          return foundText;
+        }
+
+        if (!hasTextOnScreen()) {
+          await ScrollSimulator.scrollUntilVisible(text);
+        }
       }
       bool found = false;
       void findText(Element e) {

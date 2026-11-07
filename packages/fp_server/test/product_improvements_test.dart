@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:fp_server/fp_server.dart';
+import 'package:fp_server/src/source_span.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -174,14 +177,44 @@ void main() {
       expect(props.containsKey('assertRoute'), isTrue);
     });
 
-    test('compare_screenshot supports comparePrevious and ignoreStatusBar', () {
+    test('compare_screenshot supports comparePrevious, ignoreStatusBar, and ignoreKeys', () {
       final tools = server.toolListJson();
       final cmp = tools.firstWhere((t) => t['name'] == 'compare_screenshot');
       final schema = cmp['inputSchema'] as Map;
       final props = schema['properties'] as Map;
       expect(props.containsKey('comparePrevious'), isTrue);
       expect(props.containsKey('ignoreStatusBar'), isTrue);
+      expect(props.containsKey('ignoreKeys'), isTrue);
       expect(schema.containsKey('required'), isFalse);
+    });
+
+    test('findWidgetConstructorInProject finds unmounted/off-screen widgets in source files', () async {
+      final tempDir = Directory.systemTemp.createTempSync('fp_ast_test');
+      try {
+        final libDir = Directory('${tempDir.path}/lib')..createSync();
+        final file = File('${libDir.path}/components.dart');
+        file.writeAsStringSync('''
+import 'package:flutter/material.dart';
+
+class MyList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      children: [
+        Divider(key: Key('offscreen_divider')),
+      ],
+    );
+  }
+}
+''');
+        final match = await findWidgetConstructorInProject(libDir, 'offscreen_divider');
+        expect(match, isNotNull);
+        expect(match!.type, 'Divider');
+        expect(match.line, 8);
+        expect(match.snippet, "Divider(key: Key('offscreen_divider'))");
+      } finally {
+        tempDir.deleteSync(recursive: true);
+      }
     });
 
     test('curated workflow prompts include 1-turn and design workflows', () {
