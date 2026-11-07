@@ -81,10 +81,19 @@ Future<void> main(List<String> args) async {
   var wsUri =
       uriIdx >= 0 && uriIdx + 1 < args.length ? args[uriIdx + 1] : null;
 
+  final tIdx = args.indexOf('-t');
+  String? target = tIdx >= 0 && tIdx + 1 < args.length ? args[tIdx + 1] : null;
+  if (target == null &&
+      !File(p.join(appPath, 'lib', 'main.dart')).existsSync() &&
+      File(p.join(appPath, 'lib', 'main_development.dart')).existsSync()) {
+    target = 'lib/main_development.dart';
+  }
+
   print('===============================================================');
   print('FlutterPilot Autonomous Capabilities Field Test Runner');
   print('App:    $appPath');
   print('Device: $device');
+  if (target != null) print('Target: $target');
   print('===============================================================');
 
   Process? flutterProcess;
@@ -100,6 +109,7 @@ Future<void> main(List<String> args) async {
         '--vmservice-out-file=.dart_tool/flutterpilot_vm_uri',
         '-d',
         device,
+        if (target != null) ...['-t', target],
       ],
       workingDirectory: appPath,
       runInShell: Platform.isWindows,
@@ -177,6 +187,12 @@ Future<void> main(List<String> args) async {
     final stopwatch = Stopwatch()..start();
     try {
       final msg = await client.callTool(toolName, arguments);
+      if (msg.containsKey('error')) {
+        failedCount++;
+        print('FAIL (${stopwatch.elapsedMilliseconds}ms)');
+        print('      [rpc error] ${msg['error']}');
+        return;
+      }
       final res = msg['result'] as Map<String, dynamic>? ?? {};
       final isError = res['isError'] == true;
       final ok = !isError && (verify == null || verify(res));
@@ -185,9 +201,13 @@ Future<void> main(List<String> args) async {
         passedCount++;
         print('PASS (${stopwatch.elapsedMilliseconds}ms)');
         final content = res['content'] as List? ?? [];
-        final firstText = content.isNotEmpty ? content.first['text']?.toString().split('\n').first ?? '' : '';
+        final firstText = content.isNotEmpty ? content.first['text']?.toString() ?? '' : '';
         if (firstText.isNotEmpty) {
-          print('      → $firstText');
+          if (label == 'get_app_summary') {
+            print('--- APP SUMMARY ---\n$firstText\n-------------------');
+          } else {
+            print('      → ${firstText.split('\n').first}');
+          }
         }
       } else {
         failedCount++;
@@ -241,8 +261,23 @@ Future<void> main(List<String> args) async {
 
     // 4. AST Source Locator & Surgical Patching (on initial screen)
     final isHn = appPath.contains('hn_reader');
-    final targetKey = isHn ? 'Hacker News' : 'add_todo';
-    final targetExpectedFile = isHn ? 'feed_screen.dart' : 'screens.dart';
+    final isBloc = appPath.contains('flutter_todos');
+    final isProviderApp = appPath.contains('provider_testing_app') || appPath.contains('testing_app');
+    final isM3 = appPath.contains('material_3_demo');
+    final targetKey = isHn
+        ? 'Hacker News'
+        : (isBloc
+            ? 'homeView_addTodo_floatingActionButton'
+            : (isProviderApp
+                ? 'icon_0'
+                : (isM3 ? 'Elevated' : 'add_todo')));
+    final targetExpectedFile = isHn
+        ? 'feed_screen.dart'
+        : (isBloc
+            ? 'home_page.dart'
+            : (isProviderApp
+                ? 'home.dart'
+                : (isM3 ? 'component_screen.dart' : 'screens.dart')));
 
     await runTest('locate_source_ast', 'locate_source_ast', {'key': targetKey}, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
@@ -271,6 +306,33 @@ Future<void> main(List<String> args) async {
       return text.contains('Crawled');
     });
 
+    // In-App Action Chain (tap item 0 & 1 favorites)
+    if (isProviderApp) {
+      await runTest('execute_action_chain', 'execute_action_chain', {
+        'steps': [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'icon_0'},
+          },
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': 'icon_1'},
+          },
+        ],
+      }, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Action chain: 2/2 steps done');
+      });
+
+      // GoRouter Navigation test
+      await runTest('navigate_to (/favorites_page)', 'navigate_to', {
+        'route': '/favorites_page',
+      }, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('favorites_page');
+      });
+    }
+
     // 6. Reactive Rebuild Profiler
     await runTest('get_rebuild_stats (init)', 'get_rebuild_stats', {}, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
@@ -283,10 +345,24 @@ Future<void> main(List<String> args) async {
       return text.contains("app's code") || text.contains("theme");
     });
 
-    // 9. Export Network Mocks
-    await runTest('export_network_mocks', 'export_network_mocks', {}, verify: (r) {
-      return (r['content'] as List?)?.isNotEmpty == true;
-    });
+    // Check available tools for plugin-specific tests
+    final toolsRes = await client.request('tools/list', {});
+    final availableTools = [
+      for (final t in (toolsRes['result']?['tools'] as List? ?? const []))
+        t['name']?.toString() ?? '',
+    ];
+
+    if (availableTools.contains('get_state')) {
+      await runTest('get_state', 'get_state', {}, verify: (r) {
+        return (r['content'] as List?)?.isNotEmpty == true;
+      });
+    }
+
+    if (availableTools.contains('export_network_mocks')) {
+      await runTest('export_network_mocks', 'export_network_mocks', {}, verify: (r) {
+        return (r['content'] as List?)?.isNotEmpty == true;
+      });
+    }
 
   } finally {
     print('===============================================================');

@@ -206,42 +206,43 @@ mixin _TestGenerationToolsMixin
         if (p['replaceCall'] != null) {
           newCall = p['replaceCall'].toString();
         } else if (p['unwrap'] == true) {
-          final childMatch = RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
-          if (childMatch != null) {
-            var depth = 0;
-            var startIdx = childMatch.end;
-            var endIdx = originalCall.length - 1;
-            for (var i = startIdx; i < originalCall.length; i++) {
-              final c = originalCall[i];
-              if (c == '(' || c == '[' || c == '{') {
-                depth++;
-              } else if (c == ')' || c == ']' || c == '}') {
-                if (depth == 0) {
+          // Check if this widget is enclosed by a wrapper widget (Center, Padding, etc.)
+          final parent = enclosingConstructorSpan(
+            text,
+            span.offset,
+            span.end,
+            hintLine: line,
+          );
+          if (parent != null &&
+              text
+                  .substring(parent.offset, span.offset)
+                  .contains(RegExp(r'\bchild\s*:'))) {
+            patchOffset = parent.offset;
+            patchEnd = parent.end;
+            newCall = originalCall;
+          } else {
+            final childMatch =
+                RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
+            if (childMatch != null) {
+              var depth = 0;
+              var startIdx = childMatch.end;
+              var endIdx = originalCall.length - 1;
+              for (var i = startIdx; i < originalCall.length; i++) {
+                final c = originalCall[i];
+                if (c == '(' || c == '[' || c == '{') {
+                  depth++;
+                } else if (c == ')' || c == ']' || c == '}') {
+                  if (depth == 0) {
+                    endIdx = i;
+                    break;
+                  }
+                  depth--;
+                } else if (depth == 0 && c == ',') {
                   endIdx = i;
                   break;
                 }
-                depth--;
-              } else if (depth == 0 && c == ',') {
-                endIdx = i;
-                break;
               }
-            }
-            newCall = originalCall.substring(startIdx, endIdx).trim();
-          } else {
-            // Widget has no child: argument. Check if it is wrapped by an enclosing widget.
-            final parent = enclosingConstructorSpan(
-              text,
-              span.offset,
-              span.end,
-              hintLine: line,
-            );
-            if (parent != null &&
-                text
-                    .substring(parent.offset, span.offset)
-                    .contains(RegExp(r'\bchild\s*:'))) {
-              patchOffset = parent.offset;
-              patchEnd = parent.end;
-              newCall = originalCall;
+              newCall = originalCall.substring(startIdx, endIdx).trim();
             } else {
               return fail(
                 'Cannot unwrap ${type ?? 'widget'}: no "child:" parameter found, '
