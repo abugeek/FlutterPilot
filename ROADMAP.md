@@ -220,6 +220,27 @@ tools that always work beat many tools that sometimes work.
   tools 40 737 chars / 47 374 wire bytes; `zero_code` 15 / 9 698). Paid
   before/after curation is **inconclusive** — no approved comparable run, no
   money spent. Tests: `test/docs_freshness_test.dart` 17; full suite 974.
+- The 12 features added on 2026-11-07 field-tested on hn_reader (macOS) and
+  fixed the same day. Six did not work as shipped: `crawl_app` tapped "Open
+  link" and Save (a real bookmark written) and recorded every edge as "/ → /";
+  `locate_source_ast` always failed (read `source` as a string);
+  `export_network_mocks` returned 0 mocks (read `requests`, the log is `logs`);
+  `synthesize_golden_test` pumped `Text('<name>')`, not the screen;
+  `simulate_viewport_matrix` only overrode MediaQuery (no real resize, so no
+  overflows); `generate_test(fromCrash)` wrote a test it never ran. The
+  rebuild, token and spacing audits flagged framework internals. Now: one
+  shared cause fixed (`getNavigationStack` has `current`); crawl taps only
+  rows/cards/tabs/destinations, one row per list; audits look only at widgets
+  the app creates (`debugIsWidgetLocalCreation`) with file:line; the golden
+  test pumps the real screen and runs; a crash repro runs and says
+  reproduced or not (and what the steps don't carry); marks refuse when stale
+  and keyed marks tap through the key; mock export says which bodies the log
+  cut, and the Dio log keeps numbers as numbers. Rebuild counting starts on
+  the first call: Flutter's `builtOnce` flag is only updated while
+  `debugPrintRebuildDirtyWidgets` is on, and DevTools' rebuild tracking
+  asserts no other hook is installed. Also: the server exits when the client
+  closes stdin, and `doctor` checks the script of a `dart run` config in
+  ~/.claude.json. Not yet field-tested: these on a phone or the web.
 
 ### How to work (the method that found every real bug so far)
 

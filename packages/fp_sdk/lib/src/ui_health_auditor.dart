@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-import 'design_token_auditor.dart';
 import 'navigation_tracker.dart';
 import 'source_locator.dart';
 import 'widget_inspector.dart';
@@ -32,10 +31,7 @@ class UiHealthAuditor {
     }
   }
 
-  static Map<String, dynamic> audit({
-    bool designQuality = false,
-    bool tokenAudit = false,
-  }) {
+  static Map<String, dynamic> audit({bool designQuality = false}) {
     final root = WidgetsBinding.instance.rootElement;
     final overflows = <Map<String, dynamic>>[];
     final cramped = <Map<String, dynamic>>[];
@@ -110,26 +106,49 @@ class UiHealthAuditor {
       }
       // Design Quality: 4/8dp spacing grid adherence & typography audit
       if (designQuality) {
+        // Only padding the app's code sets (a Padding, or a Container's
+        // padding/margin): the framework's own (a chip's 1dp) can't be
+        // changed by the app.
+        Element? owner;
         if (ro is RenderPadding && ro.attached) {
-          final insets = ro.padding.resolve(TextDirection.ltr);
-          final offValues = [
+          if (debugIsWidgetLocalCreation(element.widget)) {
+            owner = element;
+          } else {
+            element.visitAncestorElements((a) {
+              if (a.widget is Container &&
+                  debugIsWidgetLocalCreation(a.widget)) {
+                owner = a;
+              }
+              return false;
+            });
+          }
+        }
+        if (owner != null && SourceLocator.available) {
+          final insets = (ro as RenderPadding).padding.resolve(
+            TextDirection.ltr,
+          );
+          final off = [
             insets.left,
             insets.top,
             insets.right,
             insets.bottom,
           ].where((v) => v > 0 && v % 4 != 0).toList();
-          if (offValues.isNotEmpty && spacingGridIssues.length < 15) {
-            final bad = offValues.first;
-            final rec = ((bad / 4).round() * 4).clamp(0, 999);
-            spacingGridIssues.add({
-              'widget': element.widget.runtimeType.toString(),
-              'padding':
-                  '${insets.left.round()}, ${insets.top.round()}, '
-                  '${insets.right.round()}, ${insets.bottom.round()}',
-              'details':
-                  'Padding ${bad.round()}dp off standard 4/8dp grid. Suggestion: ${rec.round()}dp.',
-              'source': _source(element),
-            });
+          final at = SourceLocator.locationOf(owner!);
+          if (off.isNotEmpty && at != null) {
+            final seen = spacingGridIssues.where((g) => g['source'] == at);
+            if (seen.isNotEmpty) {
+              seen.first['count'] = (seen.first['count'] as int) + 1;
+            } else if (spacingGridIssues.length < 15) {
+              final bad = off.first;
+              spacingGridIssues.add({
+                'widget': owner!.widget.runtimeType.toString(),
+                'details':
+                    'padding ${bad.round() == bad ? bad.round() : bad} is off '
+                    'the 4dp grid (nearest ${(bad / 4).round() * 4})',
+                'source': at,
+                'count': 1,
+              });
+            }
           }
         }
         if (ro is RenderParagraph && ro.attached) {
@@ -182,9 +201,6 @@ class UiHealthAuditor {
       result['typographyHierarchy'] = [
         for (final s in sortedSizes) '${s.round()}sp',
       ];
-    }
-    if (tokenAudit) {
-      result['tokenAudit'] = DesignTokenAuditor.audit();
     }
     return result;
   }

@@ -202,6 +202,29 @@ void main() {
     expect(fine.title, contains('Claude Code (~/.claude.json)'));
   });
 
+  test("Claude Code's dart run config with a moved script fails", () {
+    pubspec([]);
+    final home = Directory(p.join(app.path, 'home'))..createSync();
+    final script = p.join(app.path, 'gone', 'bin', 'server.dart');
+    File(p.join(home.path, '.claude.json')).writeAsStringSync(
+      jsonEncode({
+        'projects': {
+          p.normalize(p.absolute(app.path)): {
+            'mcpServers': {
+              'flutterpilot': {
+                'command': 'dart',
+                'args': ['run', script],
+              },
+            },
+          },
+        },
+      }),
+    );
+    final check = DoctorCommand.checkMcpConfig(app.path, home: home.path);
+    expect(check.title, contains('$script, which does not exist'));
+    expect(check.fix, 'flutterpilot mcp install');
+  });
+
   test('MCP config: missing, pointing at a missing server, fine', () {
     pubspec([]);
     expect(

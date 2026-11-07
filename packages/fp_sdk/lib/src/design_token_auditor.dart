@@ -1,222 +1,165 @@
 import 'package:flutter/material.dart';
+
 import 'source_locator.dart';
 
-/// Audits design system token compliance on active Flutter screens.
+/// Colors and corner radii the app's own code hard-codes instead of taking
+/// from its theme.
 ///
-/// Detects hardcoded raw hex colors, unthemed text/containers, and
-/// off-grid border radii (non-4/8dp multiples).
+/// Only widgets created in the app's code are checked: the framework derives
+/// its own colors (an input decorator's hint, a navigation bar's labels), and
+/// an agent can't change those. Needs creation locations (debug builds).
 class DesignTokenAuditor {
   DesignTokenAuditor._();
 
-  /// Audits the widget tree starting from the root element.
   static Map<String, dynamic> audit() {
     final root = WidgetsBinding.instance.rootElement;
-    if (root == null) {
+    if (!SourceLocator.available || root == null) {
       return {
-        'tokenComplianceScore': 100,
-        'violationsCount': 0,
-        'unthemedColors': <Map<String, dynamic>>[],
-        'offGridBorderRadii': <Map<String, dynamic>>[],
-        'prescriptions': <String>[],
+        'unavailable':
+            'Needs a debug build: only it records which widgets the app '
+            'creates.',
       };
     }
+    final colors = <Map<String, dynamic>>[];
+    final radii = <Map<String, dynamic>>[];
+    var checked = 0;
 
-    final unthemedColors = <Map<String, dynamic>>[];
-    final offGridRadii = <Map<String, dynamic>>[];
-    var totalStyledElements = 0;
+    void color(Element element, String what, Color? c) {
+      if (c == null) return;
+      checked++;
+      final scheme = Theme.of(element).colorScheme;
+      if (_tokenFor(c, scheme) != null) return;
+      colors.add({
+        'widget': what,
+        'color': _hex(c),
+        'location': ?SourceLocator.locationOf(element),
+        'closestToken': _closestToken(c, scheme),
+      });
+    }
+
+    void radius(Element element, String what, BorderRadiusGeometry? r) {
+      if (r is! BorderRadius) return;
+      final value = r.topLeft.x;
+      checked++;
+      if (value <= 0 || value % 4 == 0 || value >= 999) return;
+      radii.add({
+        'widget': what,
+        'radius': value,
+        'location': ?SourceLocator.locationOf(element),
+        'nearest': (value / 4).round() * 4,
+      });
+    }
+
+    void decoration(Element element, String what, Decoration? d) {
+      if (d is! BoxDecoration) return;
+      color(element, what, d.color);
+      radius(element, what, d.borderRadius);
+    }
 
     void visit(Element element) {
       final widget = element.widget;
-      final type = widget.runtimeType.toString();
-
-      // Skip internal framework widgets
-      if (type.startsWith('_')) {
-        element.visitChildren(visit);
-        return;
-      }
-
-      // 1. Audit Text Styles for hardcoded colors
-      if (widget is Text) {
-        final color = widget.style?.color;
-        if (color != null) {
-          totalStyledElements++;
-          final hex = _toHex(color);
-          final theme = _findTheme(element);
-          if (theme != null && !_isThemeColor(color, theme.colorScheme)) {
-            final loc = SourceLocator.locationOf(element);
-            unthemedColors.add({
-              'widget': 'Text("${_truncate(widget.data ?? '', 20)}")',
-              'color': hex,
-              'location': loc,
-              'suggestedToken': _findClosestToken(color, theme.colorScheme),
-            });
-          }
+      if (debugIsWidgetLocalCreation(widget)) {
+        switch (widget) {
+          case Text():
+            color(
+              element,
+              'Text("${_short(widget.data ?? '')}")',
+              widget.style?.color,
+            );
+          case Icon():
+            color(element, 'Icon', widget.color);
+          case Container():
+            color(element, 'Container', widget.color);
+            decoration(element, 'Container', widget.decoration);
+          case DecoratedBox():
+            decoration(element, 'DecoratedBox', widget.decoration);
+          case ClipRRect():
+            radius(element, 'ClipRRect', widget.borderRadius);
+          case Card():
+            color(element, 'Card', widget.color);
+          default:
         }
       }
-
-      // 2. Audit Container / DecoratedBox for colors and border radius
-      if (widget is DecoratedBox) {
-        final decoration = widget.decoration;
-        if (decoration is BoxDecoration) {
-          if (decoration.color != null) {
-            totalStyledElements++;
-            final color = decoration.color!;
-            final hex = _toHex(color);
-            final theme = _findTheme(element);
-            if (theme != null && !_isThemeColor(color, theme.colorScheme)) {
-              final loc = SourceLocator.locationOf(element);
-              unthemedColors.add({
-                'widget': 'DecoratedBox',
-                'color': hex,
-                'location': loc,
-                'suggestedToken': _findClosestToken(color, theme.colorScheme),
-              });
-            }
-          }
-
-          if (decoration.borderRadius != null && decoration.borderRadius is BorderRadius) {
-            final br = decoration.borderRadius as BorderRadius;
-            final r = br.topLeft.x;
-            if (r > 0 && r % 4.0 != 0 && r < 999) {
-              totalStyledElements++;
-              final loc = SourceLocator.locationOf(element);
-              offGridRadii.add({
-                'widget': 'BoxDecoration(borderRadius)',
-                'radius': r,
-                'location': loc,
-                'suggestedRadius': (r / 4.0).round() * 4.0,
-              });
-            }
-          }
-        }
-      }
-
-      // 3. Audit ClipRRect
-      if (widget is ClipRRect && widget.borderRadius is BorderRadius) {
-        final br = widget.borderRadius as BorderRadius;
-        final r = br.topLeft.x;
-        if (r > 0 && r % 4.0 != 0 && r < 999) {
-          totalStyledElements++;
-          final loc = SourceLocator.locationOf(element);
-          offGridRadii.add({
-            'widget': 'ClipRRect',
-            'radius': r,
-            'location': loc,
-            'suggestedRadius': (r / 4.0).round() * 4.0,
-          });
-        }
-      }
-
       element.visitChildren(visit);
     }
 
     visit(root);
-
-    final violations = unthemedColors.length + offGridRadii.length;
-    final score = totalStyledElements == 0
-        ? 100
-        : (((totalStyledElements - violations) / totalStyledElements) * 100).clamp(0, 100).round();
-
-    final prescriptions = <String>[];
-    if (unthemedColors.isNotEmpty) {
-      prescriptions.add(
-        'Found ${unthemedColors.length} raw unthemed color(s). Migrate to Theme.of(context).colorScheme tokens.',
-      );
-    }
-    if (offGridRadii.isNotEmpty) {
-      prescriptions.add(
-        'Found ${offGridRadii.length} off-grid border radius value(s). Snap radii to multiples of 4dp (e.g. 8dp, 12dp, 16dp).',
-      );
-    }
-
     return {
-      'tokenComplianceScore': score,
-      'violationsCount': violations,
-      'unthemedColorCount': unthemedColors.length,
-      'offGridBorderRadiiCount': offGridRadii.length,
-      'unthemedColors': unthemedColors.take(15).toList(),
-      'offGridBorderRadii': offGridRadii.take(15).toList(),
-      'prescriptions': prescriptions,
+      'checked': checked,
+      'unthemedColors': colors.take(15).toList(),
+      'unthemedColorCount': colors.length,
+      'offGridRadii': radii.take(15).toList(),
+      'offGridRadiusCount': radii.length,
     };
   }
 
-  static ThemeData? _findTheme(Element element) {
-    try {
-      return Theme.of(element);
-    } catch (_) {
-      return null;
+  /// The scheme's colors by name. A token used with an opacity
+  /// (`onSurface.withValues(alpha: .6)`) is still that token, so alpha is
+  /// ignored when matching.
+  static Map<String, Color> _tokens(ColorScheme s) => {
+    'primary': s.primary,
+    'onPrimary': s.onPrimary,
+    'primaryContainer': s.primaryContainer,
+    'onPrimaryContainer': s.onPrimaryContainer,
+    'secondary': s.secondary,
+    'onSecondary': s.onSecondary,
+    'secondaryContainer': s.secondaryContainer,
+    'onSecondaryContainer': s.onSecondaryContainer,
+    'tertiary': s.tertiary,
+    'onTertiary': s.onTertiary,
+    'tertiaryContainer': s.tertiaryContainer,
+    'onTertiaryContainer': s.onTertiaryContainer,
+    'error': s.error,
+    'onError': s.onError,
+    'errorContainer': s.errorContainer,
+    'onErrorContainer': s.onErrorContainer,
+    'surface': s.surface,
+    'onSurface': s.onSurface,
+    'onSurfaceVariant': s.onSurfaceVariant,
+    'surfaceContainerLowest': s.surfaceContainerLowest,
+    'surfaceContainerLow': s.surfaceContainerLow,
+    'surfaceContainer': s.surfaceContainer,
+    'surfaceContainerHigh': s.surfaceContainerHigh,
+    'surfaceContainerHighest': s.surfaceContainerHighest,
+    'inverseSurface': s.inverseSurface,
+    'onInverseSurface': s.onInverseSurface,
+    'inversePrimary': s.inversePrimary,
+    'outline': s.outline,
+    'outlineVariant': s.outlineVariant,
+    'shadow': s.shadow,
+    'scrim': s.scrim,
+  };
+
+  static int _rgb(Color c) => c.toARGB32() & 0xFFFFFF;
+
+  static String? _tokenFor(Color c, ColorScheme scheme) {
+    // Fully transparent, black and white aren't brand colors.
+    if (c.a == 0 || _rgb(c) == 0 || _rgb(c) == 0xFFFFFF) return 'plain';
+    for (final MapEntry(:key, :value) in _tokens(scheme).entries) {
+      if (_rgb(value) == _rgb(c)) return key;
     }
+    return null;
   }
 
-  static bool _isThemeColor(Color color, ColorScheme scheme) {
-    if (color == Colors.transparent ||
-        color == Colors.black ||
-        color == Colors.white ||
-        color == Colors.black87 ||
-        color == Colors.white70) {
-      return true;
-    }
-
-    final csColors = <Color>[
-      scheme.primary,
-      scheme.onPrimary,
-      scheme.primaryContainer,
-      scheme.onPrimaryContainer,
-      scheme.secondary,
-      scheme.onSecondary,
-      scheme.secondaryContainer,
-      scheme.onSecondaryContainer,
-      scheme.tertiary,
-      scheme.onTertiary,
-      scheme.surface,
-      scheme.onSurface,
-      scheme.error,
-      scheme.onError,
-      scheme.outline,
-      scheme.outlineVariant,
-    ];
-
-    return csColors.any((c) => c.toARGB32() == color.toARGB32());
-  }
-
-  static String _findClosestToken(Color color, ColorScheme scheme) {
-    final candidates = <String, Color>{
-      'colorScheme.primary': scheme.primary,
-      'colorScheme.secondary': scheme.secondary,
-      'colorScheme.surface': scheme.surface,
-      'colorScheme.error': scheme.error,
-      'colorScheme.outline': scheme.outline,
-      'colorScheme.onSurface': scheme.onSurface,
-    };
-
-    String bestToken = 'colorScheme.primary';
-    double minDiff = double.infinity;
-
-    for (final entry in candidates.entries) {
-      final diff = _colorDistance(color, entry.value);
-      if (diff < minDiff) {
-        minDiff = diff;
-        bestToken = entry.key;
+  static String _closestToken(Color c, ColorScheme scheme) {
+    var best = 'primary';
+    var bestDistance = double.infinity;
+    for (final MapEntry(:key, :value) in _tokens(scheme).entries) {
+      final dr = (c.r - value.r) * 255;
+      final dg = (c.g - value.g) * 255;
+      final db = (c.b - value.b) * 255;
+      final d = dr * dr + dg * dg + db * db;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = key;
       }
     }
-
-    return bestToken;
+    return 'colorScheme.$best';
   }
 
-  static double _colorDistance(Color a, Color b) {
-    final argbA = a.toARGB32();
-    final argbB = b.toARGB32();
-    final dr = ((argbA >> 16) & 0xFF) - ((argbB >> 16) & 0xFF);
-    final dg = ((argbA >> 8) & 0xFF) - ((argbB >> 8) & 0xFF);
-    final db = (argbA & 0xFF) - (argbB & 0xFF);
-    return (dr * dr + dg * dg + db * db).toDouble();
-  }
+  static String _hex(Color c) =>
+      '#${c.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
 
-  static String _toHex(Color color) {
-    return '#${color.toARGB32().toRadixString(16).padLeft(8, '0').toUpperCase()}';
-  }
-
-  static String _truncate(String s, int max) {
-    return s.length > max ? '${s.substring(0, max)}...' : s;
-  }
+  static String _short(String s) =>
+      s.length > 20 ? '${s.substring(0, 20)}…' : s;
 }

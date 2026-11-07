@@ -1,134 +1,147 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fp_sdk/fp_sdk.dart';
+import 'package:fp_sdk/src/source_locator.dart';
 
 void main() {
-  group('Autonomous Superpowers SDK Suite', () {
-    testWidgets('RebuildProfiler tracks widget rebuild counts and identifies hot rebuilders',
-        (tester) async {
-      RebuildProfiler.initialize();
-      RebuildProfiler.reset();
+  // As the SDK does with the folder the server sends: it is what tells the
+  // app's widgets from the framework's.
+  setUp(() {
+    // ignore: invalid_use_of_protected_member
+    WidgetInspectorService.instance.addPubRootDirectories([
+      pubRootFor(Directory.current.path),
+    ]);
+  });
 
-      int count = 0;
-      late StateSetter outerSetState;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StatefulBuilder(
-            builder: (context, setState) {
-              outerSetState = setState;
-              return Scaffold(
-                body: Column(
-                  children: [
-                    Text('Count: $count'),
-                    ElevatedButton(
-                      key: const Key('btn'),
-                      onPressed: () {
-                        setState(() {
-                          count++;
-                        });
-                      },
-                      child: const Text('Increment'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+  testWidgets('RebuildProfiler counts rebuilds of app widgets only', (
+    tester,
+  ) async {
+    addTearDown(RebuildProfiler.dispose);
+    expect(RebuildProfiler.getStats()['started'], isTrue);
+    var count = 0;
+    late StateSetter rebuild;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return Scaffold(
+              body: Column(
+                children: [
+                  Text('Count: $count'),
+                  ElevatedButton(onPressed: () {}, child: const Text('Go')),
+                ],
+              ),
+            );
+          },
         ),
-      );
+      ),
+    );
+    RebuildProfiler.reset();
+    for (var i = 0; i < 5; i++) {
+      rebuild(() => count++);
+      await tester.pump();
+    }
+    final rows = (RebuildProfiler.getStats()['rebuilds'] as List).cast<Map>();
+    final text = rows.firstWhere((r) => r['widget'] == 'Text');
+    expect(text['rebuilds'], 5); // the const Text('Go') never rebuilds
+    expect(text['createdAt'], contains('autonomous_superpowers_test.dart'));
+    // The button's own internals (InkWell, Material…) are not app code.
+    expect(rows.any((r) => r['widget'] == 'InkWell'), isFalse);
+  });
 
-      // Rebuild 5 times
-      for (var i = 0; i < 5; i++) {
-        outerSetState(() {
-          count++;
-        });
-        await tester.pump();
-      }
-
-      final stats = RebuildProfiler.getStats();
-      expect(stats['totalRebuilds'], greaterThanOrEqualTo(5));
-      expect(stats['distinctWidgetCount'], greaterThan(0));
-
-      final counts = stats['rebuildCounts'] as List;
-      expect(counts, isNotEmpty);
-      expect(counts.any((e) => e['widget'].toString().contains('Text')), isTrue);
-    });
-
-    testWidgets('DesignTokenAuditor flags unthemed colors and off-grid border radii',
-        (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          ),
-          home: Scaffold(
-            body: Column(
-              children: [
-                // Hardcoded raw color not in colorScheme
-                Text(
-                  'Unthemed Text',
-                  style: TextStyle(color: const Color(0xFFE53935)),
-                ),
-                // Off-grid border radius (7.0 dp)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2196F3),
-                    borderRadius: BorderRadius.circular(7.0),
+  testWidgets('DesignTokenAuditor flags app colors and radii, not the '
+      "framework's", (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(colorSchemeSeed: Colors.blue),
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Text('Raw', style: TextStyle(color: Color(0xFFE53935))),
+              Builder(
+                builder: (context) => Text(
+                  'Token',
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: .5),
                   ),
-                  child: const SizedBox(width: 50, height: 50),
                 ),
-              ],
-            ),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: const SizedBox(width: 50, height: 50),
+              ),
+              // The framework colors the hint itself: not the app's to fix.
+              const TextField(decoration: InputDecoration(hintText: 'Hint')),
+            ],
           ),
         ),
-      );
+      ),
+    );
+    final audit = DesignTokenAuditor.audit();
+    final colors = (audit['unthemedColors'] as List).cast<Map>();
+    expect(colors.map((c) => c['color']), ['#FFE53935']);
+    expect(colors.single['location'], contains('autonomous_superpowers'));
+    final radii = (audit['offGridRadii'] as List).cast<Map>();
+    expect(radii.single['radius'], 7.0);
+    expect(radii.single['nearest'], 8);
+  });
 
-      final audit = DesignTokenAuditor.audit();
-      expect(audit['unthemedColorCount'], greaterThanOrEqualTo(1));
-      expect(audit['offGridBorderRadiiCount'], greaterThanOrEqualTo(1));
-      expect(audit['tokenComplianceScore'], lessThan(100));
-
-      final offGrid = audit['offGridBorderRadii'] as List;
-      expect(offGrid.any((e) => e['radius'] == 7.0), isTrue);
-      expect(offGrid.first['suggestedRadius'], 8.0);
-
-      final unthemed = audit['unthemedColors'] as List;
-      expect(unthemed.any((e) => e['suggestedToken'] != null), isTrue);
-    });
-
-    testWidgets('AppCrawler gathers candidates and evaluates screen health',
-        (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            appBar: AppBar(title: const Text('Home Screen')),
-            body: ListView(
-              children: [
-                ListTile(
-                  key: const Key('settings_tile'),
-                  title: const Text('Settings'),
-                  onTap: () {},
-                ),
-                ElevatedButton(
-                  key: const Key('delete_btn'),
-                  onPressed: () {},
-                  child: const Text('Delete Account'),
-                ),
-              ],
-            ),
+  testWidgets('AppCrawler offers rows, never buttons or action rows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              ListTile(title: const Text('Settings'), onTap: () {}),
+              ListTile(title: const Text('Delete account'), onTap: () {}),
+              ElevatedButton(onPressed: () {}, child: const Text('Profile')),
+            ],
           ),
         ),
-      );
+      ),
+    );
+    final labels = [
+      for (final c
+          in AppCrawler.inspectScreenForCrawl()['navigableCandidates'] as List)
+        c['label'],
+    ];
+    expect(labels, ['Settings']);
+  });
 
-      final crawl = AppCrawler.inspectScreenForCrawl();
-      expect(crawl['navigableCandidateCount'], greaterThan(0));
-
-      final candidates = crawl['navigableCandidates'] as List;
-      // Should find Settings ListTile
-      expect(candidates.any((c) => c['label'].toString().contains('Settings')), isTrue);
-      // Should filter out destructive Delete button
-      expect(candidates.any((c) => c['label'].toString().toLowerCase().contains('delete')), isFalse);
-    });
+  testWidgets('spacing audit reports app padding with its source', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Padding(padding: EdgeInsets.all(13), child: Text('A')),
+              const Padding(padding: EdgeInsets.all(16), child: Text('B')),
+              Container(
+                padding: const EdgeInsets.all(6),
+                child: const Text('C'),
+              ),
+              // A chip pads itself by 1: framework, not reported.
+              const Chip(label: Text('chip')),
+            ],
+          ),
+        ),
+      ),
+    );
+    final report = UiHealthAuditor.audit(designQuality: true);
+    final issues = (report['spacingGridIssues'] as List).cast<Map>();
+    expect(issues.map((i) => i['widget']), ['Padding', 'Container']);
+    expect(issues.first['details'], contains('padding 13'));
+    expect(issues.first['source'], contains('autonomous_superpowers'));
   });
 }

@@ -126,7 +126,10 @@ extension _NavigationExtensions on FlutterPilot {
       parameters,
     ) async {
       return ServiceExtensionResponse.result(
-        json.encode({'stack': NavigationTracker.stack}),
+        json.encode({
+          'stack': NavigationTracker.stack,
+          'current': NavigationTracker.currentRoute,
+        }),
       );
     });
 

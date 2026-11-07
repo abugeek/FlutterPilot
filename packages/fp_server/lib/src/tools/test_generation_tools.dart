@@ -6,6 +6,112 @@ mixin _TestGenerationToolsMixin
     on _FlutterPilotServerBase, _DevtoolsToolsMixin {
   void _registerTestGenerationTools() {
     _tool(
+      'locate_source_ast',
+      description:
+          'The source of the constructor call that creates a widget: the '
+          'whole call as text, its file:line, its top-level named arguments, '
+          'and its start/end offset in the file (for an exact edit). Give a '
+          'widget (key, selector or text) or file + line + column. Debug '
+          'builds.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description: 'Key, selector or visible text of the widget.',
+          ),
+          'file': JsonSchema.string(
+            description: 'File in the app, e.g. "lib/ui/tile.dart".',
+          ),
+          'line': JsonSchema.integer(description: '1-based line, with file.'),
+          'column': JsonSchema.integer(
+            description: '1-based column where the call starts, with file.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        CallToolResult fail(String s) =>
+            CallToolResult(isError: true, content: [TextContent(text: s)]);
+        var file = p['file']?.toString();
+        var line = (p['line'] as num?)?.toInt();
+        var column = (p['column'] as num?)?.toInt();
+        String? type;
+        if (file == null) {
+          if (p['key'] == null) return fail('Give key, or file and line.');
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.inspectWidget',
+            {'key': p['key'].toString()},
+          );
+          if (res.isError) return res.toCallToolResult();
+          final source = res.data?['source'];
+          final loc = source is Map ? source['loc']?.toString() : null;
+          final m = loc == null
+              ? null
+              : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
+          if (m == null) {
+            return fail(
+              'No source location for "${p['key']}": it is not created by '
+              "the app's code, or this is not a debug build.",
+            );
+          }
+          type = source is Map ? source['type']?.toString() : null;
+          file = m[1]!;
+          line = int.parse(m[2]!);
+          column = int.parse(m[3]!);
+        }
+        if (line == null) return fail('Give line with file.');
+
+        // Locations are relative to the app's folder, not the server's.
+        var path = file;
+        if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
+        if (!path_pkg.isAbsolute(path)) {
+          final vm = (await _deviceContextForParameters(const {}))?.service;
+          final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+          final root = isolateId == null
+              ? null
+              : (await _appEntrypoint(vm!, isolateId))?.root;
+          path = path_pkg.join(root ?? Directory.current.path, path);
+        }
+        final f = File(path);
+        if (!f.existsSync()) return fail('Not found on disk: $path');
+        final text = f.readAsStringSync();
+        final span = constructorSpanAt(text, line, column ?? 1);
+        if (span == null) {
+          return fail(
+            'No widget constructor call starts at $file:$line:${column ?? 1}'
+            '${column == null ? ' (give the column where it starts)' : ''}.',
+          );
+        }
+        var snippet = text.substring(span.offset, span.end);
+        final lines = snippet.split('\n');
+        final cut = lines.length > 80;
+        if (cut) snippet = '${lines.take(80).join('\n')}\n…';
+        final endLine = line + lines.length - 1;
+        final args = span.namedArgs.isEmpty
+            ? 'none'
+            : span.namedArgs.join(', ');
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  '${type ?? 'Call'} at $file:$line-$endLine '
+                  '(offset ${span.offset}–${span.end}). Named arguments: '
+                  '$args.${cut ? ' Showing 80 of ${lines.length} lines.' : ''}'
+                  '\n```dart\n$snippet\n```',
+            ),
+          ],
+          structuredContent: {
+            'file': file,
+            'line': line,
+            'endLine': endLine,
+            'offset': span.offset,
+            'end': span.end,
+            'namedArgs': span.namedArgs,
+            'widget': ?type,
+          },
+        );
+      },
+    );
+
+    _tool(
       'generate_test',
       description:
           'Turns what you do in the app into an integration_test. '
@@ -53,54 +159,143 @@ mixin _TestGenerationToolsMixin
     _tool(
       'synthesize_golden_test',
       description:
-          'Generates a runnable Flutter golden test matching the active route across phone, tablet, and desktop viewports.',
+          'Writes and runs a golden widget test for one of the app\'s '
+          'screens at phone, tablet and desktop sizes; returns the image '
+          'paths to look at (no network, test font).',
       inputSchema: ToolInputSchema(
         properties: {
-          'name': JsonSchema.string(
-            description: 'File name in test/goldens/ (default "screen_golden").',
+          'screen': JsonSchema.string(
+            description: 'Class ("FeedScreen") or call ("StoryScreen(id: 1)").',
           ),
-          'screenWidget': JsonSchema.string(
-            description: 'Root widget class name (e.g. "HomeScreen").',
+          'name': JsonSchema.string(
+            description: 'lower_snake_case (default from screen).',
           ),
           'viewports': JsonSchema.array(
-            items: JsonSchema.string(),
-            description: 'Viewports to test: "phone", "tablet", "desktop" (default all three).',
+            items: JsonSchema.string(
+              enumValues: ['phone', 'tablet', 'desktop'],
+            ),
+            description: 'Default all three.',
           ),
-          'write': JsonSchema.boolean(
-            description: 'Write file to disk (default true).',
-          ),
+          'run': JsonSchema.boolean(description: 'Default true.'),
         },
+        required: ['screen'],
       ),
       callback: (p, e) async {
-        final name = p['name']?.toString() ?? 'screen_golden';
-        final screenWidget = p['screenWidget']?.toString() ?? 'HomeScreen';
-        final write = p['write'] != false;
-        final viewports = (p['viewports'] as List?)?.map((x) => x.toString()).toList() ??
-            ['phone', 'tablet', 'desktop'];
-
-        final code = _generateGoldenTestCode(name, screenWidget, viewports);
-        final filePath = path_pkg.join('test', 'goldens', '${name}_test.dart');
-
-        if (write) {
-          final file = File(path_pkg.join(Directory.current.path, filePath));
-          file.parent.createSync(recursive: true);
-          file.writeAsStringSync(code);
+        CallToolResult fail(String s) =>
+            CallToolResult(isError: true, content: [TextContent(text: s)]);
+        final screen = '${p['screen'] ?? ''}'.trim();
+        final className = RegExp(r'^[A-Za-z_]\w*').stringMatch(screen);
+        if (className == null) {
+          return fail('screen must be a class name or a constructor call.');
         }
+        final name =
+            p['name']?.toString() ??
+            className
+                .replaceAllMapped(
+                  RegExp(r'(?<=[a-z0-9])([A-Z])'),
+                  (m) => '_${m[1]}',
+                )
+                .toLowerCase();
+        if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(name)) {
+          return fail('name must be lower_snake_case.');
+        }
+        final sizes = {
+          'phone': (390, 844),
+          'tablet': (768, 1024),
+          'desktop': (1280, 800),
+        };
+        final viewports = [
+          for (final v in (p['viewports'] as List?) ?? sizes.keys)
+            if (sizes.containsKey(v)) '$v',
+        ];
 
-        final buf = StringBuffer('Synthesized Golden Test:\n');
-        buf.writeln('- Path: $filePath');
-        buf.writeln('- Viewports: ${viewports.join(", ")}');
-        buf.writeln('- Update command: flutter test $filePath --update-goldens\n');
-        buf.writeln('Code:\n```dart\n$code\n```');
-
+        final vm = (await _deviceContextForParameters(const {}))?.service;
+        final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+        final app = isolateId == null
+            ? null
+            : await _appEntrypoint(vm!, isolateId);
+        if (app == null) return fail('No running app to write the test in.');
+        final package = RegExp(
+          r'^package:([^/]+)/',
+        ).firstMatch(app.mainImport)?[1];
+        final declaring = findClassFile(
+          Directory('${app.root}/lib'),
+          className,
+        );
+        if (package == null || declaring == null) {
+          return fail('No "class $className" in ${app.root}/lib.');
+        }
+        final import =
+            'package:$package/${path_pkg.relative(declaring.path, from: '${app.root}/lib').replaceAll(r'\', '/')}';
+        final pubspec = File('${app.root}/pubspec.yaml');
+        final riverpod =
+            pubspec.existsSync() &&
+            RegExp(
+              r'^\s+(flutter_riverpod|hooks_riverpod):',
+              multiLine: true,
+            ).hasMatch(pubspec.readAsStringSync());
+        final code = goldenTestSource(
+          name: name,
+          import: import,
+          widget: screen.contains('(') ? screen : '$className()',
+          viewports: {for (final v in viewports) v: sizes[v]!},
+          riverpod: riverpod,
+        );
+        final relative = 'test/${name}_golden_test.dart';
+        final file = File('${app.root}/$relative')
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(code);
+        await runProgram(['dart', 'format', file.path]);
+        if (p['run'] == false) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Wrote $relative. Make the images: flutter test '
+                    '$relative --update-goldens',
+              ),
+            ],
+          );
+        }
+        final ProcessResult result;
+        try {
+          result = await Process.run(
+            'flutter',
+            ['test', relative, '--update-goldens'],
+            workingDirectory: app.root,
+            runInShell: Platform.isWindows,
+          ).timeout(const Duration(minutes: 10));
+        } on TimeoutException {
+          return fail('Wrote $relative; running it took over 10 minutes.');
+        }
+        final images = [
+          for (final v in viewports)
+            if (File('${app.root}/test/goldens/${name}_$v.png').existsSync())
+              '${app.root}/test/goldens/${name}_$v.png',
+        ];
+        if (result.exitCode != 0) {
+          final output = '${result.stdout}\n${result.stderr}'.trim();
+          final tail = output.split('\n');
+          return fail(
+            'Wrote $relative, but it fails (often: the screen needs '
+            'arguments, providers or a router the test does not give it — '
+            'edit the test):\n'
+            '${tail.skip(tail.length > 40 ? tail.length - 40 : 0).join('\n')}',
+          );
+        }
         return CallToolResult(
-          content: [TextContent(text: buf.toString().trim())],
-          structuredContent: {
-            'file': filePath,
-            'screen': screenWidget,
-            'viewports': viewports,
-            'code': code,
-          },
+          content: [
+            TextContent(
+              text:
+                  'Wrote $relative and its images (look at them before '
+                  'committing):\n${images.join('\n')}\nIn a widget test '
+                  'requests fail, text is drawn as boxes (the test font) and '
+                  'the theme is the default one, not the app\'s: edit the '
+                  'test to give it mocks, fonts or the theme. Check later: '
+                  'flutter test $relative (fails when the screen changes).',
+            ),
+          ],
+          structuredContent: {'file': relative, 'images': images},
         );
       },
     );
@@ -150,64 +345,70 @@ mixin _TestGenerationToolsMixin
     );
   }
 
+  /// Writes the steps the app recorded before its latest error as an
+  /// integration test, runs it, and says whether it fails with that error:
+  /// reproduced means the test is a regression test that passes once fixed.
   Future<CallToolResult> _generateCrashReproTest(String name) async {
     CallToolResult fail(String s) =>
         CallToolResult(isError: true, content: [TextContent(text: s)]);
     final res = await _callExtensionRaw('ext.flutterpilot.getErrors', {});
-    final data = res.data ?? const <String, dynamic>{};
-    final errors = (data['errors'] as List?)?.whereType<Map>().toList() ?? [];
+    if (res.isError) return res.toCallToolResult();
+    final errors = [
+      for (final e in (res.data?['errors'] as List? ?? const []))
+        if (e is Map && (e['recentInteractions'] as List?)?.isNotEmpty == true)
+          e,
+    ];
     if (errors.isEmpty) {
-      return fail('No recent crash or errors found to reproduce.');
+      return fail(
+        'No error with recorded steps before it. The app records the last 20 '
+        'taps, text entries and keys FlutterPilot made; an error raised '
+        'before any (at startup), or after a restart cleared them, has none.',
+      );
     }
-    final lastError = errors.last;
-    final recent =
-        (lastError['recentInteractions'] as List?)?.whereType<Map>().toList() ??
-        [];
-    if (recent.isEmpty) {
-      return fail('No recent interactions captured before the crash.');
-    }
-
-    final context = await _deviceContextForParameters(const {});
-    final vm = context?.service;
-    if (vm == null) return fail('No running app.');
-    final isolateId = await _uiIsolateId(vm, null);
-    if (isolateId == null) return fail('No UI isolate.');
-    final app = await _appEntrypoint(vm, isolateId);
-    if (app == null) return fail("Could not locate app root.");
-
-    final steps = <Map<String, dynamic>>[];
-    for (final action in recent) {
-      final type = action['type']?.toString();
-      if (type == null) continue;
-      steps.add({
-        'type': type,
-        'target': action['target'] ?? action['key'],
-        if (action['finder'] != null) 'finder': action['finder'],
-        if (action['text'] != null) 'text': action['text'],
-        if (action['x'] != null) 'x': action['x'],
-        if (action['y'] != null) 'y': action['y'],
-      });
-    }
-
-    final test = writeIntegrationTest(
-      name: name,
-      mainImport: app.mainImport,
-      steps: steps,
-    );
-    final file = File('${app.root}/integration_test/${name}_test.dart');
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(test.source);
-    await runProgram(['dart', 'format', file.path]);
-    final relative = 'integration_test/${name}_test.dart';
-
+    final error = errors.last;
+    final message = '${error['exception'] ?? ''}'.split('\n').first.trim();
+    final recent = (error['recentInteractions'] as List).cast<Map>();
+    final steps = [
+      for (final r in recent)
+        if (r['type'] != null)
+          {
+            for (final MapEntry(:key, :value) in r.entries)
+              if (key != 'timestamp') '$key': value,
+          },
+    ];
+    final out = await _writeAndRunSteps(name, steps, const [], run: true);
+    final output = out.output;
+    if (output == null) return out.result;
+    final notes = [
+      for (final c in out.result.content)
+        if (c is TextContent) c.text,
+    ].join('\n');
+    final probe = message.length > 60 ? message.substring(0, 60) : message;
+    final reproduced = out.result.isError == true && output.contains(probe);
+    final full = recent.length >= 20
+        ? ' Only the last 20 steps were kept, so earlier ones are missing.'
+        : '';
     return CallToolResult(
+      isError: !reproduced,
       content: [
         TextContent(
-          text:
-              'Generated crash reproduction test ($relative, ${steps.length} steps):\n\n'
-              '${test.source.length > 500 ? "${test.source.substring(0, 500)}...\n[truncated]" : test.source}',
+          text: reproduced
+              ? 'Reproduced "$message": integration_test/${name}_test.dart '
+                    'fails with it. Keep it as the regression test; it passes '
+                    'once the bug is fixed.\n$notes'
+              : 'NOT reproduced "$message" by replaying ${steps.length} '
+                    'step(s).$full What the steps do not carry: settings set '
+                    'with set_app_settings (text scale, window size, theme), '
+                    'mocks, and the data the app had. Edit the test to set '
+                    'those up, or record the flow with generate_test(start: '
+                    'true).\n$notes',
         ),
       ],
+      structuredContent: {
+        'reproduced': reproduced,
+        'error': message,
+        'steps': steps.length,
+      },
     );
   }
 
@@ -240,6 +441,26 @@ mixin _TestGenerationToolsMixin
       );
     }
 
+    return (await _writeAndRunSteps(name, steps, secrets, run: run)).result;
+  }
+
+  /// Writes [steps] as integration_test/[name]_test.dart in the app and, when
+  /// [run], runs it on a matching device. [output] is the test run's output,
+  /// null when it did not run.
+  Future<({CallToolResult result, String? output})> _writeAndRunSteps(
+    String name,
+    List<Map<String, dynamic>> steps,
+    List<String> secrets, {
+    required bool run,
+  }) async {
+    ({CallToolResult result, String? output}) fail(String s) => (
+      result: CallToolResult(isError: true, content: [TextContent(text: s)]),
+      output: null,
+    );
+    ({CallToolResult result, String? output}) done(List<String> notes) => (
+      result: CallToolResult(content: [TextContent(text: notes.join('\n'))]),
+      output: null,
+    );
     final context = await _deviceContextForParameters(const {});
     final vm = context?.service;
     if (vm == null) return fail('No running app.');
@@ -275,9 +496,7 @@ mixin _TestGenerationToolsMixin
     ];
     final added = await _ensureIntegrationTestDependency(app.root);
     if (added != null) notes.add(added);
-    if (!run) {
-      return CallToolResult(content: [TextContent(text: notes.join('\n'))]);
-    }
+    if (!run) return done(notes);
 
     final device = await _testDevice(context!.operatingSystem);
     if (device == null) {
@@ -285,7 +504,7 @@ mixin _TestGenerationToolsMixin
         'Not run: integration tests need a desktop, simulator or emulator '
         'target (this app runs on ${context.operatingSystem}).',
       );
-      return CallToolResult(content: [TextContent(text: notes.join('\n'))]);
+      return done(notes);
     }
     final started = DateTime.now();
     // Obscured text goes in a file only this user can read, not on the
@@ -345,9 +564,12 @@ mixin _TestGenerationToolsMixin
         'the app again (flutter run) to keep driving it.',
       );
     }
-    return CallToolResult(
-      isError: !passed,
-      content: [TextContent(text: notes.join('\n'))],
+    return (
+      result: CallToolResult(
+        isError: !passed,
+        content: [TextContent(text: notes.join('\n'))],
+      ),
+      output: output,
     );
   }
 
@@ -425,41 +647,5 @@ mixin _TestGenerationToolsMixin
         }
     }
     return null;
-  }
-
-  String _generateGoldenTestCode(
-    String name,
-    String screen,
-    List<String> viewports,
-  ) {
-    final buf = StringBuffer();
-    buf.writeln("import 'package:flutter/material.dart';");
-    buf.writeln("import 'package:flutter_test/flutter_test.dart';\n");
-    buf.writeln("void main() {");
-    buf.writeln("  testWidgets('Golden test for $screen', (WidgetTester tester) async {");
-    buf.writeln("    final viewports = <String, Size>{");
-    if (viewports.contains('phone')) buf.writeln("      'phone': const Size(390, 844),");
-    if (viewports.contains('tablet')) buf.writeln("      'tablet': const Size(768, 1024),");
-    if (viewports.contains('desktop')) buf.writeln("      'desktop': const Size(1280, 800),");
-    buf.writeln("    };\n");
-    buf.writeln("    for (final entry in viewports.entries) {");
-    buf.writeln("      tester.view.physicalSize = entry.value * tester.view.devicePixelRatio;");
-    buf.writeln("      addTearDown(tester.view.resetPhysicalSize);\n");
-    buf.writeln("      await tester.pumpWidget(");
-    buf.writeln("        MaterialApp(");
-    buf.writeln("          home: const Scaffold(");
-    buf.writeln("            body: Center(child: Text('$screen')),");
-    buf.writeln("          ),");
-    buf.writeln("        ),");
-    buf.writeln("      );");
-    buf.writeln("      await tester.pumpAndSettle();\n");
-    buf.writeln("      await expectLater(");
-    buf.writeln("        find.byType(Scaffold),");
-    buf.writeln("        matchesGoldenFile('goldens/${name}_\${entry.key}.png'),");
-    buf.writeln("      );");
-    buf.writeln("    }");
-    buf.writeln("  });");
-    buf.writeln("}");
-    return buf.toString();
   }
 }

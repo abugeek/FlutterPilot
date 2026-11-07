@@ -1,129 +1,145 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-/// Tracks widget rebuilds in FlutterPilot using Flutter's native
-/// [debugOnRebuildDirtyWidget] callback.
+import 'source_locator.dart';
+
+/// Counts rebuilds of the widgets the app's own code creates, through
+/// Flutter's [debugOnRebuildDirtyWidget] hook (debug builds only).
 ///
-/// Records element rebuild frequencies, identifies rebuild cascades
-/// (hot rebuilders), and warns when root widgets rebuild excessively.
+/// Framework internals (the AnimatedBuilder inside a chip) are left out: an
+/// agent can only change the app's code, so those are noise. Each type keeps
+/// one live element to name where it is created.
 class RebuildProfiler {
   RebuildProfiler._();
 
-  static final Map<String, int> _rebuildCounts = <String, int>{};
-  static final Set<int> _knownElementIds = <int>{};
-  static DateTime? _trackingStarted;
+  static final Map<Type, int> _counts = {};
+  // Elements built at least once. Flutter's builtOnce flag is only kept up
+  // to date while debugPrintRebuildDirtyWidgets is on, so it can't tell a
+  // first build from a rebuild. An Expando lets unmounted elements go.
+  static final Expando<bool> _built = Expando();
+  static final Map<Type, WeakReference<Element>> _samples = {};
+  static DateTime _since = DateTime.now();
   static bool _installed = false;
-  static RebuildDirtyWidgetCallback? _previousCallback;
+  static RebuildDirtyWidgetCallback? _previous;
 
-  /// Initializes the rebuild profiler hook. Safe to call multiple times.
+  /// Starts counting. Not at app start: DevTools' "track widget rebuilds"
+  /// asserts that no other hook is installed when it turns on.
+  // ponytail: hook conflicts with DevTools rebuild tracking turned on later;
+  // the inspector's own trackRebuildDirtyWidgets events avoid that if needed.
   static void initialize() {
-    if (_installed) return;
+    if (_installed || !kDebugMode) return;
     _installed = true;
-    _trackingStarted = DateTime.now();
-
-    _previousCallback = debugOnRebuildDirtyWidget;
+    _since = DateTime.now();
+    _previous = debugOnRebuildDirtyWidget;
     debugOnRebuildDirtyWidget = _onRebuild;
   }
 
-  /// Stops tracking and restores previous callback.
+  /// Stops counting and puts back the hook that was there before.
   static void dispose() {
     if (!_installed) return;
     _installed = false;
-    debugOnRebuildDirtyWidget = _previousCallback;
-    _previousCallback = null;
+    debugOnRebuildDirtyWidget = _previous;
+    _previous = null;
+    reset();
   }
 
-  /// Clears accumulated rebuild counts and resets tracking start timestamp.
   static void reset() {
-    _rebuildCounts.clear();
-    _knownElementIds.clear();
-    _trackingStarted = DateTime.now();
+    _counts.clear();
+    _samples.clear();
+    _since = DateTime.now();
   }
 
   static void _onRebuild(Element element, bool builtOnce) {
-    _previousCallback?.call(element, builtOnce);
-
-    final widgetType = element.widget.runtimeType.toString();
-    // Exclude internal framework/overlay widgets that animate on every frame.
-    if (widgetType.startsWith('_') ||
-        widgetType == 'Transform' ||
-        widgetType == 'CustomPaint' ||
-        widgetType == 'RepaintBoundary') {
+    _previous?.call(element, builtOnce);
+    if (_built[element] != true) {
+      _built[element] = true; // its first build, not a rebuild
       return;
     }
-
-    final id = identityHashCode(element);
-    final isRebuild = builtOnce || !_knownElementIds.add(id);
-
-    if (isRebuild) {
-      final keyStr = element.widget.key != null ? ' [key: ${element.widget.key}]' : '';
-      final identifier = '$widgetType$keyStr';
-      _rebuildCounts[identifier] = (_rebuildCounts[identifier] ?? 0) + 1;
-    }
+    if (!debugIsWidgetLocalCreation(element.widget)) return;
+    final type = element.widget.runtimeType;
+    _counts[type] = (_counts[type] ?? 0) + 1;
+    _samples[type] = WeakReference(element);
   }
 
-  /// Returns current rebuild stats, sorted by rebuild frequency.
   static Map<String, dynamic> getStats({String? filter, int minCount = 1}) {
-    initialize();
+    if (!kDebugMode) {
+      return {
+        'unavailable':
+            'Rebuild counts need a debug build: Flutter only reports '
+            'rebuilds there. Use profile_action for timings in profile.',
+      };
+    }
+    if (!_installed) {
+      initialize();
+      return {
+        'started': true,
+        'sinceMs': 0,
+        'totalRebuilds': 0,
+        'widgetTypes': 0,
+        'rebuilds': const [],
+        'hints': const [],
+      };
+    }
+    final f = filter?.toLowerCase();
+    final rows = [
+      for (final MapEntry(key: type, value: count) in _counts.entries)
+        if (count >= minCount &&
+            (f == null || type.toString().toLowerCase().contains(f)))
+          (type: type, count: count),
+    ]..sort((a, b) => b.count.compareTo(a.count));
 
-    final now = DateTime.now();
-    final durationMs = _trackingStarted != null
-        ? now.difference(_trackingStarted!).inMilliseconds
-        : 0;
+    String? where(Type type) {
+      final element = _samples[type]?.target;
+      return element != null && element.mounted
+          ? SourceLocator.locationOf(element)
+          : null;
+    }
 
-    final sortedRebuilds = _rebuildCounts.entries
-        .where((e) => e.value >= minCount)
-        .where((e) => filter == null || e.key.toLowerCase().contains(filter.toLowerCase()))
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    int countOf(bool Function(String) test) => _counts.entries
+        .where((e) => test(e.key.toString()))
+        .fold(0, (sum, e) => sum + e.value);
 
-    final totalRebuilds = _rebuildCounts.values.fold<int>(0, (sum, count) => sum + count);
-
-    // Identify hot rebuilders (widgets rebuilt >= 4 times)
-    final hotRebuilders = sortedRebuilds
-        .where((e) => e.value >= 4)
-        .map((e) => {'widget': e.key, 'rebuilds': e.value})
-        .toList();
-
-    // Check if root MaterialApp/CupertinoApp or Scaffold rebuilt frequently
-    final rootRebuilds = _rebuildCounts.entries
-        .where((e) => e.key.startsWith('MaterialApp') || e.key.startsWith('CupertinoApp') || e.key.startsWith('WidgetsApp'))
-        .fold<int>(0, (sum, e) => sum + e.value);
-
-    final prescriptions = <String>[];
-    if (hotRebuilders.isNotEmpty) {
-      prescriptions.add(
-        '${hotRebuilders.length} widget(s) rebuilt >= 4 times. '
-        'Consider using const constructors, extracting subtrees into const widgets, or scoping state listeners.',
+    final hints = <String>[];
+    final consumers = countOf(
+      (t) => t.startsWith('Consumer') || t.startsWith('ConsumerWidget'),
+    );
+    if (consumers >= 10) {
+      hints.add(
+        'Riverpod Consumers rebuilt $consumers times: '
+        'ref.watch(provider.select(...)) rebuilds only when that field changes.',
       );
     }
-    if (rootRebuilds > 2) {
-      prescriptions.add(
-        'Root app rebuilt $rootRebuilds times. Check for top-level MediaQuery or InheritedWidget subscriptions.',
+    final blocBuilders = countOf((t) => t.startsWith('BlocBuilder'));
+    if (blocBuilders >= 10) {
+      hints.add(
+        'BlocBuilders rebuilt $blocBuilders times: buildWhen skips states '
+        'they do not show.',
       );
     }
-    if (_rebuildCounts.entries.any((e) => e.key.contains('Consumer') && e.value >= 4)) {
-      prescriptions.add(
-        'Riverpod Consumer rebuilt frequently. Use ref.watch(provider.select(...)) to listen only to necessary fields.',
-      );
-    }
-    if (_rebuildCounts.entries.any((e) => e.key.contains('BlocBuilder') && e.value >= 4)) {
-      prescriptions.add(
-        'BlocBuilder rebuilt frequently. Add a buildWhen condition to filter redundant state updates.',
+    final roots = countOf(
+      (t) => const {'MaterialApp', 'CupertinoApp', 'WidgetsApp'}.contains(t),
+    );
+    if (roots > 2) {
+      hints.add(
+        'The app root rebuilt $roots times: something above it '
+        '(a provider or a MediaQuery read) changes; every screen rebuilds.',
       );
     }
 
     return {
-      'trackingDurationMs': durationMs,
-      'totalRebuilds': totalRebuilds,
-      'distinctWidgetCount': _rebuildCounts.length,
-      'hotRebuilderCount': hotRebuilders.length,
-      'rootAppRebuilds': rootRebuilds,
-      'hotRebuilders': hotRebuilders,
-      'rebuildCounts': [
-        for (final entry in sortedRebuilds.take(20))
-          {'widget': entry.key, 'rebuilds': entry.value},
+      'sinceMs': DateTime.now().difference(_since).inMilliseconds,
+      'totalRebuilds': _counts.values.fold(0, (a, b) => a + b),
+      'widgetTypes': _counts.length,
+      'rebuilds': [
+        for (final row in rows.take(20))
+          {
+            'widget': row.type.toString(),
+            'rebuilds': row.count,
+            'createdAt': ?where(row.type),
+          },
       ],
-      'prescriptions': prescriptions,
+      if (rows.length > 20) 'moreTypes': rows.length - 20,
+      'hints': hints,
     };
   }
 }

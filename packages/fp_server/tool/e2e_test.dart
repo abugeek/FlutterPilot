@@ -647,6 +647,33 @@ Future<void> main(List<String> args) async {
         Duration.zero,
         2048,
       );
+      await check(
+        'locate_source_ast returns the Send call',
+        'locate_source_ast',
+        {'key': 'Send'},
+        ['at lib/main.dart:90', '```dart'],
+        false,
+        Duration.zero,
+        4096,
+      );
+      await check(
+        'get_rebuild_stats starts counting',
+        'get_rebuild_stats',
+        {},
+        ['Started counting'],
+      );
+      await check(
+        'get_rebuild_stats counts app widgets',
+        'get_rebuild_stats',
+        {},
+        ["rebuilds of the app's own widgets"],
+      );
+      await check(
+        'audit_design_tokens checks app code',
+        'audit_design_tokens',
+        {},
+        ["set in the app's code"],
+      );
       // ROADMAP §5.7: the audit reads the semantics tree (labels, order).
       await check(
         'audit_screen_health lists the screen reader order',
