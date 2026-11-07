@@ -492,13 +492,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'press_key',
       description:
-          'Presses a key on the focused widget: enter (submits a text '
-          'field), tab, escape (closes menus and dialogs), arrows, a '
-          'character, or a shortcut with modifiers. "back" is the system '
-          'back button: it pops the route and never quits the app from '
-          'the root. In a focused text field keys edit it as typing '
-          'would, and the response shows the field\'s text and cursor; '
-          'enter_text sets a whole value.',
+          'Presses a key on focused widget (enter, tab, escape, arrows, '
+          'or "back" to pop). Use count to repeat; pass waitFor to await a '
+          'widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -511,19 +507,38 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'Optional modifier keys: "shift", "ctrl", "alt", "meta".',
           ),
+          'count': JsonSchema.integer(
+            description: 'Number of times to press the key (1–20, default 1).',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget key/selector to wait for.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor in ms (default 5000).',
+          ),
         },
         required: ['key'],
       ),
       callback: (p, e) async {
+        final count = ((p['count'] as num?)?.toInt() ?? 1).clamp(1, 20);
         if (p['key']?.toString().toLowerCase() == 'back') {
-          final res = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
-          if (res.isError) return res.toCallToolResult();
-          final popped = res.data?['popped'] as bool? ?? false;
+          _ExtensionResult? lastRes;
+          var popped = false;
+          for (var i = 0; i < count; i++) {
+            lastRes = await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+            if (lastRes.isError) return lastRes.toCallToolResult();
+            if (lastRes.data?['popped'] == true) popped = true;
+          }
+          final res = lastRes!;
           return CallToolResult(
             content: [
               TextContent(
                 text: popped
-                    ? _formatActionFeedback('Back pressed', const {}, res)
+                    ? _formatActionFeedback(
+                        count > 1 ? 'Back pressed x$count' : 'Back pressed',
+                        const {},
+                        res,
+                      )
                     : 'Back pressed — already at root (nothing to pop).',
               ),
             ],
@@ -536,16 +551,59 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               ? mods.join(',')
               : mods.toString();
         }
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.pressKey',
-          callParams,
-        );
-        if (res.isError) return res.toCallToolResult();
+        _ExtensionResult? lastRes;
+        for (var i = 0; i < count; i++) {
+          lastRes = await _callExtensionRaw(
+            'ext.flutterpilot.pressKey',
+            callParams,
+          );
+          if (lastRes.isError) return lastRes.toCallToolResult();
+        }
+        final res = lastRes!;
+        final verb = count > 1
+            ? 'Key "${p['key']}" pressed x$count on'
+            : 'Key "${p['key']}" pressed on';
         final feedback = _formatActionFeedback(
-          'Key "${p['key']}" pressed on',
+          verb,
           p,
           res,
         );
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final fromRoute =
+              (res.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': waitFor,
+              'timeoutMs':
+                  ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString(),
+              'previousRoute': ?fromRoute?.toString(),
+            },
+          );
+          if (waitRes.isError) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      '$feedback\nBut "$waitFor" did not appear: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: _formatActionFeedback(
+                  '$verb; then appeared',
+                  const {},
+                  waitRes,
+                ),
+              ),
+            ],
+          );
+        }
         // In a text field, say what the field holds now: the diff above only
         // tracks widgets, and a cursor move changes no widget.
         final field = res.data?['field'] as Map<String, dynamic>?;
@@ -799,9 +857,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'toggle_checkbox',
       description:
-          'Toggles the Checkbox, Switch or Radio under the key, also one '
-          'inside a tappable row, where tap_widget would tap the row. The '
-          'response shows its new value (= true/false).',
+          'Toggles Checkbox, Switch or Radio. Pass value to set idempotently '
+          'or waitFor to await next widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -809,25 +866,76 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Key, selector or label of the toggle, or of the row that '
                 'holds it.',
           ),
+          'value': JsonSchema.boolean(
+            description:
+                'Target state (true/false). If already set, does not toggle.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget key to wait for.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor in ms (default 5000).',
+          ),
         },
       ),
       callback: (p, e) async {
+        final key = (p['key'] ?? p['target']).toString();
         final res = await _callExtensionRaw('ext.flutterpilot.toggleCheckbox', {
-          'key': (p['key'] ?? p['target']).toString(),
+          'key': key,
+          if (p.containsKey('value')) 'value': (p['value'] == true).toString(),
         });
-        return res.isError
-            ? res.toCallToolResult()
-            : CallToolResult(
-                content: [
-                  TextContent(
-                    text: _formatActionDelta(
-                      res.data,
-                      verb: 'Toggled',
-                      memory: _activeContext?.screenMemory,
-                    ),
-                  ),
-                ],
-              );
+        if (res.isError) return res.toCallToolResult();
+        if (res.data?['alreadySet'] == true) {
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: 'Toggle "$key" is already ${res.data?['value']} (no-op).',
+              ),
+            ],
+          );
+        }
+        final feedback = _formatActionDelta(
+          res.data,
+          verb: 'Toggled',
+          memory: _activeContext?.screenMemory,
+        );
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final fromRoute =
+              (res.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': waitFor,
+              'timeoutMs':
+                  ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString(),
+              'previousRoute': ?fromRoute?.toString(),
+            },
+          );
+          if (waitRes.isError) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      '$feedback\nBut "$waitFor" did not appear: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: _formatActionFeedback(
+                  'Toggled; then appeared',
+                  const {},
+                  waitRes,
+                ),
+              ),
+            ],
+          );
+        }
+        return CallToolResult(content: [TextContent(text: feedback)]);
       },
     );
 
@@ -989,14 +1097,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'wait_for',
       description:
-          'Waits for one condition, polling (never a blind sleep), and '
-          'fails with the reason on timeout: a widget on screen (key), a '
-          'route, settled animations, a Riverpod/Bloc value (state + '
-          'expectedValue) or a number of frames.',
+          'Waits for condition: widget key, anyOf targets, route, animations, '
+          'state, or frames. Supports failureKey for fast error abort.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description: 'Key, selector or text on screen.',
+          ),
+          'anyOf': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Wait until any one of these keys/selectors appears.',
+          ),
+          'failureKey': JsonSchema.string(
+            description:
+                'Immediate failure key (e.g. error banner). Aborts wait immediately if seen.',
           ),
           'gone': JsonSchema.boolean(description: 'Until key is gone.'),
           'route': JsonSchema.string(
@@ -1076,19 +1190,27 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         // pointing back here: change one, change the other.
         int timeoutOf(int fallback) => int.tryParse(timeout ?? '') ?? fallback;
         final selector = p['selector'] ?? p['target'] ?? p['key'];
-        if (selector != null) {
+        final rawAnyOf = p['anyOf'];
+        final anyOfStr = rawAnyOf is List
+            ? rawAnyOf.map((s) => s.toString()).join(',')
+            : rawAnyOf?.toString();
+        final failureKey = p['failureKey']?.toString();
+        if (selector != null || anyOfStr != null || failureKey != null) {
           final t = timeoutOf(3000);
           final res =
               await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
-                'selector': selector.toString(),
+                if (selector != null) 'selector': selector.toString(),
+                'anyOf': ?anyOfStr,
+                'failureKey': ?failureKey,
                 'timeoutMs': ?timeout,
                 if (p['gone'] == true) 'gone': 'true',
               });
           if (res.isError) return unmet('key', t, res);
+          final matched = res.data?['selector'] ?? selector ?? anyOfStr;
           return waited(
             p['gone'] == true
-                ? '"$selector" is gone (${res.data?['elapsedMs'] ?? 0}ms).'
-                : '"$selector" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
+                ? '"$matched" is gone (${res.data?['elapsedMs'] ?? 0}ms).'
+                : '"$matched" is on screen (${res.data?['elapsedMs'] ?? 0}ms).',
             condition: 'key',
             met: true,
             timeoutMs: t,

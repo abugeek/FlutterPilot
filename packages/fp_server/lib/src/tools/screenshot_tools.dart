@@ -134,9 +134,28 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         isError: true,
       );
     }
-    final Uint8List decoded;
+    Uint8List decoded;
     try {
       decoded = base64Decode(base64Str);
+      final cropKey = p['key']?.toString();
+      if (cropKey != null && cropKey.isNotEmpty) {
+        final info = await _callExtensionRaw(
+          'ext.flutterpilot.inspectWidget',
+          {'key': cropKey},
+        );
+        final b = info.data?['widget']?['bounds'] as Map?;
+        if (b != null) {
+          final decodedImg = img.decodeImage(decoded);
+          if (decodedImg != null) {
+            final x = ((b['x'] as num).toDouble()).round().clamp(0, decodedImg.width);
+            final y = ((b['y'] as num).toDouble()).round().clamp(0, decodedImg.height);
+            final w = ((b['w'] as num).toDouble()).round().clamp(1, decodedImg.width - x);
+            final h = ((b['h'] as num).toDouble()).round().clamp(1, decodedImg.height - y);
+            final cropped = img.copyCrop(decodedImg, x: x, y: y, width: w, height: h);
+            decoded = Uint8List.fromList(img.encodePng(cropped));
+          }
+        }
+      }
       _lastScreenshotBytes = decoded;
     } on FormatException {
       return CallToolResult(
@@ -501,12 +520,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'compare_screenshot',
       description:
-          'Visual diff against baseline (or previous frame with '
-          'comparePrevious). save:true saves baseline. Returns diff %, '
-          'changed bounds, and diff image.',
+          'Visual diff against baseline or previous frame. Supports '
+          'key cropping, diff %, changed bounds, and diff image.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(description: 'Baseline name.'),
+          'key': JsonSchema.string(
+            description: 'Widget key to crop comparison to.',
+          ),
           'comparePrevious': JsonSchema.boolean(
             description: 'Compare against previous frame.',
           ),
@@ -611,7 +632,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
 
         // Decode both images format-agnostically (PNG, JPEG, etc.) and compare pixel-by-pixel.
         var baselineImg = img.decodeImage(baseline);
-        final currentImg = img.decodeImage(currentBytes);
+        var currentImg = img.decodeImage(currentBytes);
 
         if (baselineImg == null || currentImg == null) {
           return CallToolResult(
@@ -622,6 +643,56 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             ],
             isError: true,
           );
+        }
+
+        final cropKey = p['key']?.toString();
+        if (cropKey != null && cropKey.isNotEmpty) {
+          final info = await _callExtensionRaw(
+            'ext.flutterpilot.inspectWidget',
+            {'key': cropKey},
+          );
+          final b = info.data?['widget']?['bounds'] as Map?;
+          if (b != null) {
+            final x = (((b['x'] as num).toDouble()) * scale)
+                .round()
+                .clamp(0, currentImg.width);
+            final y = (((b['y'] as num).toDouble()) * scale)
+                .round()
+                .clamp(0, currentImg.height);
+            final w = (((b['w'] as num).toDouble()) * scale)
+                .round()
+                .clamp(1, currentImg.width - x);
+            final h = (((b['h'] as num).toDouble()) * scale)
+                .round()
+                .clamp(1, currentImg.height - y);
+            currentImg = img.copyCrop(
+              currentImg,
+              x: x,
+              y: y,
+              width: w,
+              height: h,
+            );
+            if (baselineImg.width != currentImg.width ||
+                baselineImg.height != currentImg.height) {
+              if (baselineImg.width > w && baselineImg.height > h) {
+                baselineImg = img.copyCrop(
+                  baselineImg,
+                  x: x.clamp(0, baselineImg.width - 1),
+                  y: y.clamp(0, baselineImg.height - 1),
+                  width: w.clamp(1, baselineImg.width - x),
+                  height: h.clamp(1, baselineImg.height - y),
+                );
+              }
+              if (baselineImg.width != currentImg.width ||
+                  baselineImg.height != currentImg.height) {
+                baselineImg = img.copyResize(
+                  baselineImg,
+                  width: currentImg.width,
+                  height: currentImg.height,
+                );
+              }
+            }
+          }
         }
 
         if (baselineImg.width != currentImg.width ||

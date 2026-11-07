@@ -726,6 +726,36 @@ Future<void> main(List<String> args) async {
       return text.contains('Field Verification') || text.contains('PASS') || text.contains('criteria');
     });
 
+    // 14. Tier 5: Multi-Key Stroke Sequence (press_key count)
+    await runTest('press_key (count sequence)', 'press_key', {
+      'key': 'down',
+      'count': 2,
+    }, allowError: true, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('pressed') || text.contains('Key');
+    });
+
+    // 15. Tier 5: Race-Free Multi-Target Wait (wait_for anyOf)
+    await runTest('wait_for (anyOf targets)', 'wait_for', {
+      'anyOf': ['title_field', targetKey, 'phantom_never_appearing_widget'],
+      'timeoutMs': 3000,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('is on screen') || text.contains('matched');
+    });
+
+    if (isExample) {
+      await runTest('press_key (return to root)', 'press_key', {'key': 'back'}, allowError: true);
+      // 16. Tier 5: Idempotent Toggle Checkbox
+      await runTest('toggle_checkbox (idempotent value)', 'toggle_checkbox', {
+        'key': 'todo_1',
+        'value': true,
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Toggled') || text.contains('already');
+      });
+    }
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

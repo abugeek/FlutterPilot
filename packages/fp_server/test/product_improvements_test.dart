@@ -389,6 +389,48 @@ class MyList extends StatelessWidget {
       expect(props['assert']['type'], 'object');
     });
 
+    test('press_key advertises count, waitFor, and timeoutMs parameters', () {
+      final tools = server.toolListJson();
+      final pkTool = tools.firstWhere((t) => t['name'] == 'press_key');
+      final schema = pkTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('count'), isTrue);
+      expect(props['count']['type'], 'integer');
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('toggle_checkbox advertises value, waitFor, and timeoutMs parameters', () {
+      final tools = server.toolListJson();
+      final tcTool = tools.firstWhere((t) => t['name'] == 'toggle_checkbox');
+      final schema = tcTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('value'), isTrue);
+      expect(props['value']['type'], 'boolean');
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('wait_for advertises anyOf and failureKey parameters', () {
+      final tools = server.toolListJson();
+      final wfTool = tools.firstWhere((t) => t['name'] == 'wait_for');
+      final schema = wfTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('anyOf'), isTrue);
+      expect(props['anyOf']['type'], 'array');
+      expect(props.containsKey('failureKey'), isTrue);
+      expect(props['failureKey']['type'], 'string');
+    });
+
+    test('compare_screenshot advertises key parameter for component cropping', () {
+      final tools = server.toolListJson();
+      final csTool = tools.firstWhere((t) => t['name'] == 'compare_screenshot');
+      final schema = csTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('key'), isTrue);
+      expect(props['key']['type'], 'string');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

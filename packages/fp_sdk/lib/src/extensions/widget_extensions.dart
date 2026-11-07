@@ -1474,6 +1474,19 @@ extension _WidgetExtensions on FlutterPilot {
           _makeWidgetNotFoundMessage(target),
         );
       }
+      if (parameters['value'] != null) {
+        final targetBool = parameters['value'] == 'true';
+        final currentVal = PilotWidgetInspector.controlValue(element);
+        if (currentVal is bool && currentVal == targetBool) {
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'success',
+              'alreadySet': true,
+              'value': targetBool,
+            }),
+          );
+        }
+      }
       RenderBox? renderBox;
       void findToggleable(Element e) {
         if (renderBox != null) return;
@@ -1966,6 +1979,13 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       final selector =
           parameters['selector'] ?? parameters['target'] ?? parameters['key'];
+      final anyOfStr = parameters['anyOf'];
+      final List<String> targets = anyOfStr != null && anyOfStr.isNotEmpty
+          ? (anyOfStr.contains(',')
+              ? anyOfStr.split(',').map((s) => s.trim()).toList()
+              : [anyOfStr])
+          : (selector != null ? [selector.toString()] : const <String>[]);
+      final failureKey = parameters['failureKey'];
       // 3000 is the default the server's `wait_for` copies (its `timeoutOf`
       // fallback in packages/fp_server/lib/src/tools/
       // ui_automation_tools.dart, which points back here): change one, change
@@ -1973,7 +1993,7 @@ extension _WidgetExtensions on FlutterPilot {
       final timeoutMs = int.tryParse(parameters['timeoutMs'] ?? '3000') ?? 3000;
       final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
 
-      if (selector == null) {
+      if (targets.isEmpty && failureKey == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'Missing selector/target parameter',
@@ -1984,17 +2004,30 @@ extension _WidgetExtensions on FlutterPilot {
       // a spinner label); matching what is already there is no wait at all.
       final gone = parameters['gone'] == 'true';
       while (DateTime.now().isBefore(deadline)) {
-        final element = PilotWidgetInspector.findElement(selector);
-        if (gone ? element == null : element != null) {
-          return ServiceExtensionResponse.result(
-            json.encode({
-              'status': 'matched',
-              'selector': selector,
-              'elapsedMs':
-                  timeoutMs -
-                  deadline.difference(DateTime.now()).inMilliseconds,
-            }),
-          );
+        if (failureKey != null) {
+          final failEl = PilotWidgetInspector.findElement(failureKey);
+          if (failEl != null) {
+            final elapsed =
+                timeoutMs - deadline.difference(DateTime.now()).inMilliseconds;
+            return ServiceExtensionResponse.error(
+              ServiceExtensionResponse.extensionError,
+              'Aborted: Failure condition "$failureKey" appeared on screen after ${elapsed}ms',
+            );
+          }
+        }
+        for (final target in targets) {
+          final element = PilotWidgetInspector.findElement(target);
+          if (gone ? element == null : element != null) {
+            return ServiceExtensionResponse.result(
+              json.encode({
+                'status': 'matched',
+                'selector': target,
+                'elapsedMs':
+                    timeoutMs -
+                    deadline.difference(DateTime.now()).inMilliseconds,
+              }),
+            );
+          }
         }
         await Future.delayed(const Duration(milliseconds: 50));
       }
@@ -2002,9 +2035,9 @@ extension _WidgetExtensions on FlutterPilot {
       return ServiceExtensionResponse.error(
         ServiceExtensionResponse.extensionError,
         gone
-            ? 'Timeout: Element matching "$selector" was still on screen '
+            ? 'Timeout: Element matching "${targets.join(', ')}" was still on screen '
                   'after ${timeoutMs}ms'
-            : 'Timeout: Element matching "$selector" did not appear within ${timeoutMs}ms',
+            : 'Timeout: Element matching "${targets.join(', ')}" did not appear within ${timeoutMs}ms',
       );
     });
 

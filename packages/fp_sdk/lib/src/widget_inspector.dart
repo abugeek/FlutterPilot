@@ -187,6 +187,8 @@ class PilotWidgetInspector {
   /// The state of a switch, checkbox or slider at [element] or, for an app
   /// widget wrapping one (a SwitchListTile), the first one inside it: a
   /// toggle changes nothing else a diff could see.
+  static Object? controlValue(Element element) => _controlValue(element);
+
   static Object? _controlValue(Element element) {
     Object? valueOf(Widget w) => switch (w) {
       Switch s => s.value,

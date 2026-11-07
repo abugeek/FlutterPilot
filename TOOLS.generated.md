@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46548 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46954 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -135,12 +135,15 @@ Types text into a field by key, selector or label (or focused field). Fires onCh
 
 ## `press_key`
 
-Presses a key on the focused widget: enter (submits a text field), tab, escape (closes menus and dialogs), arrows, a character, or a shortcut with modifiers. "back" is the system back button: it pops the route and never quits the app from the root. In a focused text field keys edit it as typing would, and the response shows the field's text and cursor; enter_text sets a whole value.
+Presses a key on focused widget (enter, tab, escape, arrows, or "back" to pop). Use count to repeat; pass waitFor to await a widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | yes | E.g. "enter", "tab", "escape", "back", "arrowDown", "space", "backspace", or a single character. |
 | `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
+| `count` | integer | no | Number of times to press the key (1–20, default 1). |
+| `waitFor` | string | no | Optional widget key/selector to wait for. |
+| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
 
 ## `gesture_widget`
 
@@ -173,11 +176,14 @@ Scrolls until widget (key, selector, or text) is visible. Pass tap: true to tap 
 
 ## `toggle_checkbox`
 
-Toggles the Checkbox, Switch or Radio under the key, also one inside a tappable row, where tap_widget would tap the row. The response shows its new value (= true/false).
+Toggles Checkbox, Switch or Radio. Pass value to set idempotently or waitFor to await next widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or label of the toggle, or of the row that holds it. |
+| `value` | boolean | no | Target state (true/false). If already set, does not toggle. |
+| `waitFor` | string | no | Optional widget key to wait for. |
+| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
 
 ## `fill_form`
 
@@ -195,13 +201,15 @@ Fills several fields in one call and optionally taps a submit button: text for t
 
 ## `wait_for`
 
-Waits for one condition, polling (never a blind sleep), and fails with the reason on timeout: a widget on screen (key), a route, settled animations, a Riverpod/Bloc value (state + expectedValue) or a number of frames.
+Waits for condition: widget key, anyOf targets, route, animations, state, or frames. Supports failureKey for fast error abort.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or text on screen. |
+| `anyOf` | array | no | Wait until any one of these keys/selectors appears. |
+| `failureKey` | string | no | Immediate failure key (e.g. error banner). Aborts wait immediately if seen. |
 | `gone` | boolean | no | Until key is gone. |
 | `route` | string | no | Target route (e.g. "/dashboard"). |
 | `animations` | boolean | no | Until animations have settled. |
@@ -389,11 +397,12 @@ _Read-only._
 
 ## `compare_screenshot`
 
-Visual diff against baseline (or previous frame with comparePrevious). save:true saves baseline. Returns diff %, changed bounds, and diff image.
+Visual diff against baseline or previous frame. Supports key cropping, diff %, changed bounds, and diff image.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `name` | string | no | Baseline name. |
+| `key` | string | no | Widget key to crop comparison to. |
 | `comparePrevious` | boolean | no | Compare against previous frame. |
 | `save` | boolean | no | Save current screen as baseline. |
 | `threshold` | number | no | Allowed diff % before failing (default 1.0). |
