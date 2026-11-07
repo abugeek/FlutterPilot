@@ -254,6 +254,15 @@ extension _WidgetExtensions on FlutterPilot {
     final useFocused = target == null || target.isEmpty || target == 'focused';
     if (useFocused) {
       field = KeyboardSimulator.focusedEditable();
+      if (field == null) {
+        final root = WidgetsBinding.instance.rootElement;
+        if (root != null) {
+          final fields = PilotWidgetInspector.fieldsUnder(root);
+          if (fields.length == 1) {
+            field = fields.first;
+          }
+        }
+      }
     } else {
       var element = PilotWidgetInspector.findElement(target);
       if (element == null) {
@@ -2130,6 +2139,7 @@ extension _WidgetExtensions on FlutterPilot {
           treeBefore: treeBefore,
           watchQuiet: submitted,
         );
+        final validationErrors = FormInspector.problemsOnScreen();
         return ServiceExtensionResponse.result(
           json.encode({
             'status': 'success',
@@ -2137,6 +2147,7 @@ extension _WidgetExtensions on FlutterPilot {
             'totalFields': fields.length,
             'submitted': submitted,
             'failedFields': failedFields,
+            if (validationErrors.isNotEmpty) 'validationErrors': validationErrors,
             ...after,
           }),
         );

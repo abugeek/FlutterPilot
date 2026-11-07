@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46916 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46794 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -99,36 +99,39 @@ How often each of the app's own widgets rebuilt, with where it is created (debug
 
 ## `tap_widget`
 
-Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']") or visible text, scrolling to it first — or taps at x/y. Exact text wins; text that several widgets merely contain is refused with the candidates. Reports the route change, a widget-tree diff and what is tappable now.
+Taps a widget by key, selector or text (scrolling first) or at x/y. Reports route change, widget diff and tappable elements now.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector, visible text or icon name. |
 | `mark` | integer | no | Mark number from capture_screenshot. |
 | `identifier` | string | no | Semantics identifier. |
-| `semanticsId` | integer | no | SemanticsNode id from get_semantics_tree. |
+| `semanticsId` | integer | no | SemanticsNode id. |
 | `text` | string | no | Visible text inside the widget. |
 | `type` | string | no | Widget type, e.g. "IconButton". |
-| `x` | number | no | X in logical pixels (top-left origin), with y. |
+| `x` | number | no | X in logical pixels, with y. |
 | `y` | number | no | Y in logical pixels. |
 | `gesture` | string: tap \| double \| long \| secondary | no | Default tap (or double/long/secondary). |
 | `durationMs` | integer | no | Long-press duration (default 600). |
 | `waitFor` | string | no | Widget to wait for after tap. |
 | `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
-| `quickSettle` | boolean | no | Settle in <=400ms without background tickers. |
-| `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
+| `quickSettle` | boolean | no | Settle in <=400ms. |
+| `settleTimeoutMs` | integer | no | Screen settle timeout in ms. |
 
 ## `enter_text`
 
-Types text into a text field found by key, selector (e.g. "TextField['Email']") or label — or into the focused field when no key is given — replacing what it holds. Fires onChanged; press_key("enter") afterwards submits.
+Types text into a field by key, selector or label (or focused field). Fires onChanged; pass submit:true to press Enter, or waitFor to poll for a resulting widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `text` | string | yes | Text to enter ("" clears the field). |
 | `key` | string | no | Key, selector or label. Omit for focused field. |
 | `mark` | integer | no | Mark number from capture_screenshot. |
-| `identifier` | string | no | Semantics identifier. |
-| `clearFirst` | boolean | no | Clear existing text before typing (default true). |
+| `identifier` | string | no | Semantics id. |
+| `clearFirst` | boolean | no | Clear existing text first (default true). |
+| `submit` | boolean | no | Press Enter to submit. |
+| `waitFor` | string | no | Widget or text to wait for. |
+| `timeoutMs` | integer | no | Timeout in ms (default 5000). |
 
 ## `press_key`
 
@@ -141,7 +144,7 @@ Presses a key on the focused widget: enter (submits a text field), tab, escape (
 
 ## `gesture_widget`
 
-Drives a widget with a gesture other than a tap: swipe (scroll a list, dismiss a card, open a drawer, pull to refresh), drag one widget onto another, pinch to zoom, focus a field (or unfocus), or slide a Slider to value. Pass gesture and that gesture's arguments; another gesture's arguments are refused. Reports what changed.
+Drives a widget with swipe, drag, pinch, focus or slide. Reports what changed in route and tree.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -152,7 +155,7 @@ Drives a widget with a gesture other than a tap: swipe (scroll a list, dismiss a
 | `fromKey` | string | no | Drag source key/selector. |
 | `toKey` | string | no | Drag target key/selector. |
 | `scale` | number | no | Pinch scale (>1 zoom in, <1 zoom out). |
-| `identifier` | string | no | Semantics identifier for pinch. |
+| `identifier` | string | no | Semantics id. |
 | `x` | number | no | Center x for pinch, with y. |
 | `y` | number | no |  |
 | `value` | number | no | Slider value for slide. |
@@ -180,10 +183,12 @@ Fills several fields in one call and optionally taps a submit button: text for t
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
-| `submitWith` | string | no | Optional key/selector of the button to tap after filling (e.g. "ElevatedButton['Log In']"). |
+| `submitWith` | string | no | Optional button to tap after filling (e.g. "ElevatedButton['Log In']"). |
 | `submit` | boolean | no | Tap the one primary button. |
+| `waitFor` | string | no | Widget or text to wait for after submitting. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, status?: "ok"|"unavailable"}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, validationErrors?: [string], status?: "ok"|"unavailable"}`
 
 ## `wait_for`
 
@@ -414,7 +419,8 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `types` | array | no | Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]). |
+| `types` | array | no | Optional filter for widget types (e.g. ["ElevatedButton"]). |
+| `collapse` | boolean | no | Collapse repeated list items to save tokens (default true). |
 
 ## `get_app_summary`
 

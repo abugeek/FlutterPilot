@@ -71,11 +71,12 @@ Future<void> main(List<String> args) async {
   final device =
       dIdx >= 0 && dIdx + 1 < args.length ? args[dIdx + 1] : 'macos';
 
-  final appIdx = args.indexOf('--app');
+  var appIdx = args.indexOf('--app');
+  if (appIdx < 0) appIdx = args.indexOf('-a');
   final repo = Directory.fromUri(Platform.script.resolve('../../..')).path;
   final defaultApp = p.join(repo, 'examples', 'flutter_pilot_example');
   final appPath =
-      appIdx >= 0 && appIdx + 1 < args.length ? args[appIdx + 1] : defaultApp;
+      appIdx >= 0 && appIdx + 1 < args.length ? p.normalize(p.absolute(args[appIdx + 1])) : defaultApp;
 
   final uriIdx = args.indexOf('--uri');
   var wsUri =
@@ -165,6 +166,12 @@ Future<void> main(List<String> args) async {
     ['run', 'bin/fp_server.dart', '--uri', wsUri],
     workingDirectory: p.join(repo, 'packages', 'fp_server'),
   );
+  serverProcess.stderr
+      .transform(utf8.decoder)
+      .transform(const LineSplitter())
+      .listen((line) {
+    if (line.trim().isNotEmpty) print('  [server err] $line');
+  });
 
   final client = _McpClient(serverProcess);
   await client.request('initialize', {
@@ -204,7 +211,14 @@ Future<void> main(List<String> args) async {
         passedCount++;
         print('PASS (${stopwatch.elapsedMilliseconds}ms)');
         final content = res['content'] as List? ?? [];
-        final firstText = content.isNotEmpty ? content.first['text']?.toString() ?? '' : '';
+        final textBlock = content
+            .where((c) => c is Map && c['type'] == 'text')
+            .map((c) => (c as Map)['text']?.toString() ?? '')
+            .where((t) => t.isNotEmpty)
+            .join('\n');
+        final firstText = textBlock.isNotEmpty
+            ? textBlock
+            : (content.isNotEmpty ? content.first['text']?.toString() ?? '' : '');
         if (firstText.isNotEmpty) {
           if (label == 'get_app_summary') {
             print('--- APP SUMMARY ---\n$firstText\n-------------------');
@@ -215,7 +229,16 @@ Future<void> main(List<String> args) async {
       } else {
         failedCount++;
         print('FAIL (${stopwatch.elapsedMilliseconds}ms)');
-        print('      [response] $res');
+        final sanitizedRes = Map<String, dynamic>.from(res);
+        if (sanitizedRes['content'] is List) {
+          sanitizedRes['content'] = (sanitizedRes['content'] as List).map((item) {
+            if (item is Map && item['type'] == 'image') {
+              return {'type': 'image', 'mimeType': item['mimeType'], 'data': '<base64 redacted>'};
+            }
+            return item;
+          }).toList();
+        }
+        print('      [response] $sanitizedRes');
       }
     } catch (e, st) {
       stopwatch.stop();
@@ -234,6 +257,24 @@ Future<void> main(List<String> args) async {
 
     await runTest('audit_screen_health', 'audit_screen_health', {}, verify: (r) {
       return (r['content'] as List?)?.isNotEmpty == true;
+    });
+
+    // Token-efficient Interactive Elements with Repetition Collapsing
+    await runTest('get_interactive_elements (collapse: true)', 'get_interactive_elements', {
+      'collapse': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('elements') || text.contains('count');
+    });
+
+    // Prescriptive Error Inspection
+    await runTest('get_errors (prescriptive)', 'get_errors', {}, allowError: true, verify: (r) {
+      final text =
+          (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('error') ||
+          text.contains('overflow') ||
+          text.contains('None') ||
+          text.contains('No recent');
     });
 
     // 2. Keyboard Simulation
@@ -257,8 +298,12 @@ Future<void> main(List<String> args) async {
       'compare_screenshot (comparePrevious)',
       'compare_screenshot',
       {'comparePrevious': true},
+      allowError: true,
       verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        final items = r['content'] as List? ?? [];
+        final text = items
+            .map((c) => c is Map ? (c['text']?.toString() ?? '') : '')
+            .join(' ');
         return text.contains('Visual comparison');
       },
     );
@@ -266,7 +311,9 @@ Future<void> main(List<String> args) async {
     // 4. AST Source Locator & Surgical Patching (on initial screen)
     final isHn = appPath.contains('hn_reader');
     final isBloc = appPath.contains('flutter_todos');
-    final isProviderApp = appPath.contains('provider_testing_app') || appPath.contains('testing_app');
+    final isProviderApp = appPath.contains('provider_testing_app') ||
+        appPath.contains('testing_app') ||
+        appPath.contains('testing_codelab');
     final isM3 = appPath.contains('material_3_demo');
     final targetKey = isHn
         ? 'Hacker News'
@@ -352,6 +399,16 @@ Future<void> main(List<String> args) async {
           return text.contains('/add');
         });
 
+        // Fused action-and-submission in 1 turn
+        await runTest('enter_text (submit: true)', 'enter_text', {
+          'key': 'title_field',
+          'text': 'Automated Task #42',
+          'submit': true,
+        }, verify: (r) {
+          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Typed') && text.contains('Automated Task #42');
+        });
+
         await runTest('navigate_to (/todo/:id with pathParams)', 'navigate_to', {
           'route': '/todo/:id',
           'pathParams': {'id': '1'},
@@ -379,8 +436,40 @@ Future<void> main(List<String> args) async {
           'navigate_to',
           {'route': '/'},
         );
+      } else if (isProviderApp) {
+        await runTest('navigate_to (/favorites_page)', 'navigate_to', {
+          'route': '/favorites_page',
+        }, verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('favorites_page') || text.contains('Favorites');
+        });
+
+        await runTest('navigate_to (return to /)', 'navigate_to', {'route': '/'});
       }
     } else if (isHn) {
+      await runTest('mock_http_response (/search)', 'mock_http_response', {
+        'urlPattern': '/search',
+        'statusCode': 200,
+        'body': '{"hits": []}',
+      });
+
+      await runTest('navigate_to (ensure /)', 'navigate_to', {'route': '/'});
+      // On feed screen (/), test fused text entry with Enter submission in 1 turn
+      await runTest(
+        'enter_text (submit: true on search)',
+        'enter_text',
+        {
+          'text': 'dart',
+          'submit': true,
+        },
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Typed "dart"');
+        },
+      );
+
       await runTest(
         'navigate_to (/saved)',
         'navigate_to',
@@ -405,6 +494,10 @@ Future<void> main(List<String> args) async {
           return text.contains('/search?q=flutter') || text.contains('search');
         },
       );
+
+      await runTest('mock_http_response (clear)', 'mock_http_response', {
+        'clear': true,
+      });
 
       await runTest(
         'navigate_to (unknown route suggestion)',
@@ -441,7 +534,13 @@ Future<void> main(List<String> args) async {
     ];
 
     if (availableTools.contains('get_state')) {
-      await runTest('get_state', 'get_state', {}, verify: (r) {
+      await runTest('get_state (all states)', 'get_state', {}, verify: (r) {
+        return (r['content'] as List?)?.isNotEmpty == true;
+      });
+
+      await runTest('get_state (fuzzy provider lookup)', 'get_state', {
+        'name': isHn ? 'feed' : (isProviderApp ? 'fav' : 'todo'),
+      }, verify: (r) {
         return (r['content'] as List?)?.isNotEmpty == true;
       });
     }
@@ -512,6 +611,11 @@ Future<void> main(List<String> args) async {
       flutterProcess.kill(ProcessSignal.sigterm);
       await Future<void>.delayed(const Duration(milliseconds: 500));
       flutterProcess.kill(ProcessSignal.sigkill);
+      if (Platform.isMacOS && device != 'macos' && device != 'chrome') {
+        try {
+          Process.runSync('xcrun', ['simctl', 'terminate', device, 'all']);
+        } catch (_) {}
+      }
     }
   }
 

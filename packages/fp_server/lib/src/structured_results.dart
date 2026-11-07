@@ -328,6 +328,7 @@ final structuredContracts = <String, StructuredSpec>{
     'filledCount': _req(StructuredSpec.integer()),
     'totalFields': _req(StructuredSpec.integer()),
     'failedField': _opt(StructuredSpec.string()),
+    'validationErrors': _opt(StructuredSpec.list(StructuredSpec.string())),
     'status': _opt(StructuredSpec.string(oneOf: {'ok', 'unavailable'})),
   }),
   'audit_screen_health': StructuredSpec.object({
@@ -599,6 +600,41 @@ String? firstStackLocation(String? stack) {
   return RegExp(r'(?:package:|file:)[^\s)]+').firstMatch(stack)?.group(0);
 }
 
+/// The first frame of [stack] originating from user application code, skipping
+/// Flutter and Dart core framework packages.
+String? firstAppStackLocation(String? stack) {
+  if (stack == null || stack.isEmpty) return null;
+  for (final line in stack.split('\n')) {
+    final match = RegExp(r'(?:package:|file:)[^\s)]+').firstMatch(line);
+    if (match != null) {
+      final loc = match.group(0)!;
+      if (!loc.startsWith('package:flutter/') &&
+          !loc.startsWith('package:flutter_test/') &&
+          !loc.startsWith('dart:') &&
+          !loc.startsWith('package:sky_engine/')) {
+        return loc;
+      }
+    }
+  }
+  return firstStackLocation(stack);
+}
+
+/// A short prescriptive recommendation for layout overflow errors.
+String? prescribeOverflowText(String exception) {
+  if (!exception.contains('RenderFlex overflowed')) return null;
+  final match = RegExp(
+    r'overflowed by ([\d.]+) pixels on the (bottom|right|top|left)',
+  ).firstMatch(exception);
+  final pixels = match?.group(1);
+  final side = match?.group(2) ?? 'edge';
+  if (side == 'bottom' || side == 'top') {
+    return 'Fix $side overflow (${pixels ?? '?'}px): Wrap flex child in Expanded/Flexible or wrap Column in SingleChildScrollView.';
+  } else if (side == 'right' || side == 'left') {
+    return 'Fix $side overflow (${pixels ?? '?'}px): Wrap expanding child in Expanded/Flexible or replace Row with Wrap.';
+  }
+  return 'Fix overflow (${pixels ?? '?'}px): Wrap in scrollable or flexible container.';
+}
+
 /// `get_errors`' structured result: whether the app has uncaught errors, how
 /// many, and each one's kind, message, source location and freshness.
 ///
@@ -635,10 +671,11 @@ Map<String, dynamic> _structuredError(
   required bool beforeReload,
 }) {
   final message = error['exception']?.toString() ?? 'Unknown error';
+  final stack = error['stackTrace']?.toString();
   return {
     'kind': _errorKind(message),
     'message': message,
-    'location': ?firstStackLocation(error['stackTrace']?.toString()),
+    'location': ?firstAppStackLocation(stack),
     'beforeReload': beforeReload,
   };
 }
@@ -703,12 +740,14 @@ Map<String, dynamic> fillFormVerdict({
   required int filledCount,
   required int totalFields,
   String? failedField,
+  List<String>? validationErrors,
   String? status,
 }) => {
   'submitted': submitted,
   'filledCount': filledCount,
   'totalFields': totalFields,
   'failedField': ?failedField,
+  'validationErrors': ?validationErrors,
   'status': ?status,
 };
 

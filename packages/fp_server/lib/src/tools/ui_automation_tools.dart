@@ -208,12 +208,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'tap_widget',
       description:
-          'Taps a widget found by key, selector (e.g. '
-          '"ElevatedButton[\'Log In\']") or visible text, scrolling to it '
-          'first — or taps at x/y. '
-          'Exact text wins; text that several widgets merely contain is '
-          'refused with the candidates. Reports the route change, a '
-          'widget-tree diff and what is tappable now.',
+          'Taps a widget by key, selector or text (scrolling first) or at x/y. '
+          'Reports route change, widget diff and tappable elements now.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -226,7 +222,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Semantics identifier.',
           ),
           'semanticsId': JsonSchema.integer(
-            description: 'SemanticsNode id from get_semantics_tree.',
+            description: 'SemanticsNode id.',
           ),
           'text': JsonSchema.string(
             description: 'Visible text inside the widget.',
@@ -235,7 +231,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Widget type, e.g. "IconButton".',
           ),
           'x': JsonSchema.number(
-            description: 'X in logical pixels (top-left origin), with y.',
+            description: 'X in logical pixels, with y.',
           ),
           'y': JsonSchema.number(description: 'Y in logical pixels.'),
           'gesture': JsonSchema.string(
@@ -252,10 +248,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Timeout for waitFor (default 5000).',
           ),
           'quickSettle': JsonSchema.boolean(
-            description: 'Settle in <=400ms without background tickers.',
+            description: 'Settle in <=400ms.',
           ),
           'settleTimeoutMs': JsonSchema.integer(
-            description: 'Screen settle timeout in ms (default 2000).',
+            description: 'Screen settle timeout in ms.',
           ),
         },
       ),
@@ -379,10 +375,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'enter_text',
       description:
-          'Types text into a text field found by key, selector (e.g. '
-          '"TextField[\'Email\']") or label — or into the focused field '
-          'when no key is given — replacing what it holds. Fires '
-          'onChanged; press_key("enter") afterwards submits.',
+          'Types text into a field by key, selector or label (or focused '
+          'field). Fires onChanged; pass submit:true to press Enter, or '
+          'waitFor to poll for a resulting widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(
@@ -395,10 +390,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Mark number from capture_screenshot.',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier.',
+            description: 'Semantics id.',
           ),
           'clearFirst': JsonSchema.boolean(
-            description: 'Clear existing text before typing (default true).',
+            description: 'Clear existing text first (default true).',
+          ),
+          'submit': JsonSchema.boolean(
+            description: 'Press Enter to submit.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Widget or text to wait for.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout in ms (default 5000).',
           ),
         },
         required: ['text'],
@@ -416,20 +420,69 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                   content: [TextContent(text: 'Cleared "$target".')],
                 );
         }
+        final callParams = Map.of(p)
+          ..remove('submit')
+          ..remove('waitFor')
+          ..remove('timeoutMs');
         final res = await _callExtensionRaw('ext.flutterpilot.enterText', {
-          ...p,
+          ...callParams,
           if (target == null) 'focused_element': true,
         });
         if (res.isError) return res.toCallToolResult();
+
+        final shouldSubmit = p['submit'] == true;
+        _ExtensionResult activeRes = res;
+        if (shouldSubmit) {
+          final pressRes = await _callExtensionRaw(
+            'ext.flutterpilot.pressKey',
+            {'key': 'enter'},
+          );
+          if (pressRes.isError) return pressRes.toCallToolResult();
+          activeRes = pressRes;
+        }
+
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final timeout =
+              ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString();
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {'key': waitFor, 'timeoutMs': timeout},
+          );
+          if (waitRes.isError) {
+            final verb = 'Typed "${res.data?['text'] ?? ''}" into';
+            final prefix = _formatActionFeedback(
+              verb,
+              {'key': target ?? 'the focused field'},
+              activeRes,
+            );
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      '$prefix\nBut "$waitFor" did not appear: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
+        }
+
+        final verb = 'Typed "${res.data?['text'] ?? ''}" into';
+        final feedback = _formatActionFeedback(
+          verb,
+          {'key': target ?? 'the focused field'},
+          activeRes,
+        );
+        final notes = <String>[
+          if (shouldSubmit) 'submitted with Enter',
+          if (waitFor != null && waitFor.isNotEmpty) 'settled on "$waitFor"',
+        ];
+        final suffix = notes.isEmpty ? '' : ' (${notes.join(', ')}).';
         return CallToolResult(
           content: [
             TextContent(
-              // Echo the SDK's copy of the text: it masks password fields.
-              text: _formatActionFeedback(
-                'Typed "${res.data?['text'] ?? ''}" into',
-                {'key': target ?? 'the focused field'},
-                res,
-              ),
+              text: '$feedback$suffix',
             ),
           ],
         );
@@ -519,12 +572,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'gesture_widget',
       description:
-          'Drives a widget with a gesture other than a tap: swipe (scroll a '
-          'list, dismiss a card, open a drawer, pull to refresh), drag one '
-          'widget onto another, pinch to zoom, focus a field (or unfocus), or '
-          'slide a Slider to value. Pass gesture and that gesture\'s '
-          'arguments; another gesture\'s arguments are refused. Reports what '
-          'changed.',
+          'Drives a widget with swipe, drag, pinch, focus or slide. Reports '
+          'what changed in route and tree.',
       inputSchema: ToolInputSchema(
         properties: {
           'gesture': JsonSchema.string(
@@ -549,7 +598,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Pinch scale (>1 zoom in, <1 zoom out).',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier for pinch.',
+            description: 'Semantics id.',
           ),
           'x': JsonSchema.number(description: 'Center x for pinch, with y.'),
           'y': JsonSchema.number(),
@@ -724,10 +773,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'submitWith': JsonSchema.string(
             description:
-                'Optional key/selector of the button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
+                'Optional button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
           ),
           'submit': JsonSchema.boolean(
             description: 'Tap the one primary button.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Widget or text to wait for after submitting.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor (default 5000).',
           ),
         },
         required: ['fields'],
@@ -740,21 +795,32 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             {},
           );
           final primary = primaryButtons(found.data?['elements']);
-          if (primary.length != 1) {
-            return CallToolResult(
-              isError: true,
-              content: [
-                TextContent(
-                  text:
-                      'submit: true needs exactly one primary button on '
-                      'screen; found ${primary.length}'
-                      '${primary.isEmpty ? '' : ' (${primary.join(', ')})'}. '
-                      'Name it in submitWith.',
-                ),
-              ],
+          if (primary.length == 1) {
+            submit = primary.single;
+          } else {
+            final submitPattern = RegExp(
+              r'submit|save|continue|log\s*in|sign\s*in|register|next|confirm|done|send',
+              caseSensitive: false,
             );
+            final matching =
+                primary.where((b) => submitPattern.hasMatch(b)).toList();
+            if (matching.length == 1) {
+              submit = matching.single;
+            } else {
+              return CallToolResult(
+                isError: true,
+                content: [
+                  TextContent(
+                    text:
+                        'submit: true needs exactly one primary button on '
+                        'screen; found ${primary.length}'
+                        '${primary.isEmpty ? '' : ' (${primary.join(', ')})'}. '
+                        'Name it in submitWith.',
+                  ),
+                ],
+              );
+            }
           }
-          submit = primary.single;
         }
         final res = await _callExtensionRaw('ext.flutterpilot.fillForm', {
           'fields': json.encode(p['fields']),
@@ -776,6 +842,45 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final submitted = res.data?['submitted'] == true;
         final failedField = (res.data?['failedFields'] as List?)?.firstOrNull
             ?.toString();
+        final validationList = (res.data?['validationErrors'] as List?)
+            ?.map((e) => e.toString())
+            .toList();
+        final validationNote =
+            (validationList != null && validationList.isNotEmpty)
+                ? '\n⚠️ Form validation issues (${validationList.length}): ${validationList.join('; ')}'
+                : '';
+
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final timeout =
+              ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString();
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {'key': waitFor, 'timeoutMs': timeout},
+          );
+          if (waitRes.isError) {
+            return withVerdict(
+              CallToolResult(
+                isError: true,
+                content: [
+                  TextContent(
+                    text:
+                        'Filled $filled/$total fields${submitted ? ' and submitted' : ''}, but "$waitFor" did not appear: ${waitRes.errorMessage}$validationNote',
+                  ),
+                ],
+              ),
+              fillFormVerdict(
+                submitted: submitted,
+                filledCount: filled,
+                totalFields: total,
+                failedField: failedField,
+                validationErrors: validationList,
+                status: 'unavailable',
+              ),
+            );
+          }
+        }
+
         final delta = res.data?['delta'] as Map<String, dynamic>?;
         final navigated = delta?['navigated'] == true;
         final routeNote = navigated
@@ -786,13 +891,15 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final diffNote = _widgetDiffSummary(
           delta?['widgetDiff'] as Map<String, dynamic>?,
         );
+        final waitNote =
+            waitFor != null && waitFor.isNotEmpty ? ' Settled on "$waitFor".' : '';
         return withVerdict(
           CallToolResult(
             content: [
               TextContent(
                 text:
                     'Filled $filled/$total fields${submitted ? ' and tapped submit.' : '. Not submitted: pass submitWith (a button) or submit: true.'}'
-                    '$routeNote$diffNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
+                    '$routeNote$diffNote$waitNote$validationNote${_quietNote(delta)}${_screenNow(res.data, memory: _activeContext?.screenMemory)}',
               ),
             ],
           ),
@@ -801,6 +908,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             filledCount: filled,
             totalFields: total,
             failedField: failedField,
+            validationErrors: validationList,
           ),
         );
       },

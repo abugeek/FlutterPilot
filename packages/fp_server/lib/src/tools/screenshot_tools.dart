@@ -5,6 +5,45 @@ part of '../../fp_server.dart';
 mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
   static Uint8List? _lastScreenshotBytes;
 
+  static List<dynamic> _collapseRepeatedElements(
+    List elements, {
+    int threshold = 4,
+  }) {
+    if (elements.length <= threshold) return elements;
+    final result = <dynamic>[];
+    var i = 0;
+    while (i < elements.length) {
+      final current = elements[i];
+      final currentType = current is Map ? current['type'] : null;
+
+      var j = i + 1;
+      while (j < elements.length &&
+          elements[j] is Map &&
+          elements[j]['type'] == currentType) {
+        j++;
+      }
+      final streak = j - i;
+      if (streak > threshold && currentType != null) {
+        result.add(elements[i]);
+        result.add(elements[i + 1]);
+        final collapsedCount = streak - 3;
+        result.add({
+          'type': currentType,
+          'collapsed': true,
+          'collapsedCount': collapsedCount,
+          'note':
+              '$collapsedCount more $currentType elements omitted; pass collapse:false to show all',
+        });
+        result.add(elements[j - 1]);
+        i = j;
+      } else {
+        result.add(current);
+        i++;
+      }
+    }
+    return result;
+  }
+
   String _baselineKey(String name) =>
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
@@ -242,7 +281,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       }
     }
     summary.writeln('• Tappable Elements (${elements.length}):');
-    for (final el in elements.take(15)) {
+    final displayed = _collapseRepeatedElements(
+      elements.take(15).toList(),
+      threshold: 3,
+    );
+    for (final el in displayed) {
+      if (el is Map && el['collapsed'] == true) {
+        summary.writeln(
+          '  - ... (${el['collapsedCount']} more [${el['type']}] items) ...',
+        );
+        continue;
+      }
       final label = el['text']?.toString() ?? '';
       final key = (el['key'] ?? el['identifier'] ?? '').toString();
       final type = el['type']?.toString() ?? 'Widget';
@@ -747,25 +796,36 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'types': JsonSchema.array(
             items: JsonSchema.string(),
             description:
-                'Optional filter for specific widget types (e.g. ["ElevatedButton", "TextField"]).',
+                'Optional filter for widget types (e.g. ["ElevatedButton"]).',
+          ),
+          'collapse': JsonSchema.boolean(
+            description:
+                'Collapse repeated list items to save tokens (default true).',
           ),
         },
       ),
       callback: (p, e) async {
+        final callParams = <String, dynamic>{
+          if (p['types'] != null) 'types': p['types'],
+        };
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getInteractiveElements',
-          p,
+          callParams,
         );
         if (res.isError) return res.toCallToolResult();
-        // The list is never cut short, but it is only the screen: say so, so
-        // a long form below the fold does not look short.
+        final rawElements = (res.data?['elements'] as List?) ?? const [];
+        final shouldCollapse = p['collapse'] != false;
+        final elements = shouldCollapse
+            ? _collapseRepeatedElements(rawElements)
+            : rawElements;
         return CallToolResult(
           content: [
             TextContent(
               text: jsonEncode({
-                ...?res.data,
-                'total': res.data?['count'],
-                'truncated': false,
+                'count': elements.length,
+                'total': res.data?['count'] ?? rawElements.length,
+                'elements': elements,
+                if (elements.length < rawElements.length) 'collapsed': true,
                 'scope': 'on screen only',
                 'note':
                     'Controls below or beside the viewport (lazy lists, a '

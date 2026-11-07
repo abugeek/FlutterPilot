@@ -709,6 +709,7 @@ abstract class _FlutterPilotServerBase {
   /// "bloc"): the one whose plugin lists it, else the plugin the app has.
   Future<String> _stateTypeOf(String name) async {
     String? available;
+    final lower = name.toLowerCase();
     for (final (type, ext) in [
       ('riverpod', 'ext.flutterpilot.getRiverpodStates'),
       ('bloc', 'ext.flutterpilot.getBlocStates'),
@@ -717,7 +718,12 @@ abstract class _FlutterPilotServerBase {
       if (res.isError) continue;
       available ??= type;
       final states = res.data?['states'];
-      if (states is Map && states.containsKey(name)) return type;
+      if (states is Map) {
+        if (states.containsKey(name)) return type;
+        for (final k in states.keys) {
+          if (k.toString().toLowerCase().contains(lower)) return type;
+        }
+      }
     }
     return available ?? 'riverpod';
   }

@@ -267,6 +267,34 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('deepLink'), isTrue);
     });
 
+    test('enter_text advertises submit and waitFor parameters', () {
+      final tools = server.toolListJson();
+      final enterText = tools.firstWhere((t) => t['name'] == 'enter_text');
+      final schema = enterText['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('submit'), isTrue);
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('fill_form advertises waitFor and timeoutMs parameters', () {
+      final tools = server.toolListJson();
+      final fillForm = tools.firstWhere((t) => t['name'] == 'fill_form');
+      final schema = fillForm['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('get_interactive_elements advertises collapse parameter', () {
+      final tools = server.toolListJson();
+      final elementsTool =
+          tools.firstWhere((t) => t['name'] == 'get_interactive_elements');
+      final schema = elementsTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('collapse'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

@@ -726,15 +726,25 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           });
         }
 
-        var restored = current == start;
+        var restored = (await route()) == start;
         if (p['restore'] != false && !restored) {
-          await _callExtensionRaw('ext.flutterpilot.navigateTo', {
-            'route': start,
-          });
-          await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
-            'timeoutMs': '1000',
-          });
-          restored = await route() == start;
+          for (var i = 0; i < taps && (await route()) != start; i++) {
+            final popped =
+                await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+            if (popped.isError || (popped.data?['popped'] == false)) break;
+            await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+              'timeoutMs': '300',
+            });
+          }
+          if ((await route()) != start) {
+            await _callExtensionRaw('ext.flutterpilot.navigateTo', {
+              'route': start,
+            });
+            await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+              'timeoutMs': '600',
+            });
+          }
+          restored = (await route()) == start;
         }
 
         final buf = StringBuffer(

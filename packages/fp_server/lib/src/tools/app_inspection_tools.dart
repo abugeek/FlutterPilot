@@ -551,10 +551,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
 
       return deduped.values
           .map((e) {
-            final prescription = prescribeOverflow(e['exception'] as String);
-            return '--- Error (x${e['count']}) ---\n${e['exception']}\n'
+            final exception = e['exception'] as String;
+            final stack = e['stackTrace']?.toString();
+            final sourceLoc = firstAppStackLocation(stack);
+            final prescription =
+                prescribeOverflowText(exception) ?? prescribeOverflow(exception);
+            return '--- Error (x${e['count']}) ---\n$exception\n'
                 '${e['widget'] != null ? 'Widget: ${e['widget']}\n' : ''}'
-                '${prescription != null ? '$prescription\n' : ''}'
+                '${sourceLoc != null ? 'Source: $sourceLoc\n' : ''}'
+                '${prescription != null ? 'Prescription: $prescription\n' : ''}'
                 'Latest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}';
           })
           .join('\n\n');
