@@ -44,6 +44,73 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     return result;
   }
 
+  static Map<String, dynamic> _collapseWidgetTreeNode(
+    Map<String, dynamic> node, {
+    int threshold = 4,
+  }) {
+    final result = Map<String, dynamic>.from(node);
+    final children = result['children'];
+    if (children is List && children.isNotEmpty) {
+      final collapsedChildren = <dynamic>[];
+      var i = 0;
+      while (i < children.length) {
+        final current = children[i];
+        final currentType =
+            current is Map ? (current['type'] ?? current['widget']) : null;
+        var j = i + 1;
+        while (j < children.length &&
+            children[j] is Map &&
+            (children[j]['type'] ?? children[j]['widget']) == currentType) {
+          j++;
+        }
+        final streak = j - i;
+        if (streak > threshold && currentType != null) {
+          final first = current is Map
+              ? _collapseWidgetTreeNode(
+                  Map<String, dynamic>.from(current),
+                  threshold: threshold,
+                )
+              : current;
+          final second = children[i + 1] is Map
+              ? _collapseWidgetTreeNode(
+                  Map<String, dynamic>.from(children[i + 1] as Map),
+                  threshold: threshold,
+                )
+              : children[i + 1];
+          final last = children[j - 1] is Map
+              ? _collapseWidgetTreeNode(
+                  Map<String, dynamic>.from(children[j - 1] as Map),
+                  threshold: threshold,
+                )
+              : children[j - 1];
+          final collapsedCount = streak - 3;
+          collapsedChildren.add(first);
+          collapsedChildren.add(second);
+          collapsedChildren.add({
+            'type': currentType,
+            'collapsed': true,
+            'collapsedCount': collapsedCount,
+            'note':
+                '$collapsedCount more $currentType widgets omitted; pass collapse:false to show all',
+          });
+          collapsedChildren.add(last);
+          i = j;
+        } else {
+          final processed = current is Map
+              ? _collapseWidgetTreeNode(
+                  Map<String, dynamic>.from(current),
+                  threshold: threshold,
+                )
+              : current;
+          collapsedChildren.add(processed);
+          i++;
+        }
+      }
+      result['children'] = collapsedChildren;
+    }
+    return result;
+  }
+
   String _baselineKey(String name) =>
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
@@ -722,28 +789,28 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_tree',
       description:
-          'The app\'s own widgets on screen (the DevTools summary tree) '
-          'with keys, text, selectors and bounds (rect: [x, y, w, h], '
-          'left out when the same as the parent\'s). diff:true returns '
-          'only what changed since the previous call.',
+          'App widgets on screen with keys, text, selectors and bounds. '
+          'diff:true returns changes since last call.',
       inputSchema: ToolInputSchema(
         properties: {
           'diff': JsonSchema.boolean(),
           'rootKey': JsonSchema.string(
-            description:
-                'Key or selector of the subtree to return (a dialog, a form).',
+            description: 'Subtree key or selector.',
           ),
+          'subtree': JsonSchema.string(description: 'Subtree root key.'),
           'maxDepth': JsonSchema.integer(description: 'Default 50.'),
           'compact': JsonSchema.boolean(
-            description:
-                'false keeps the unkeyed layout wrappers (default true: '
-                'pruned).',
+            description: 'false keeps unkeyed layout wrappers (default true).',
+          ),
+          'collapse': JsonSchema.boolean(
+            description: 'Collapse repeated sibling widgets.',
           ),
         },
       ),
       callback: (p, e) async {
         final maxDepth = (p['maxDepth'] as num?)?.toInt().clamp(1, 200) ?? 50;
         final compact = p['compact'] != false;
+        final shouldCollapse = p['collapse'] != false;
         if (p['diff'] == true) {
           final res = await _callExtensionRaw(
             'ext.flutterpilot.getWidgetTreeDiff',
@@ -758,7 +825,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
-        final rootKey = p['rootKey'] as String?;
+        final rootKey = (p['rootKey'] ?? p['subtree']) as String?;
         final params = <String, String>{
           'maxDepth': maxDepth.toString(),
           'compact': compact.toString(),
@@ -771,11 +838,21 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           params,
         );
         if (res.isError) return res.toCallToolResult();
+        var data = res.data != null ? Map<String, dynamic>.from(res.data!) : null;
+        if (shouldCollapse && data != null) {
+          if (data['tree'] is Map) {
+            data['tree'] = _collapseWidgetTreeNode(
+              Map<String, dynamic>.from(data['tree'] as Map),
+            );
+          } else if (data['children'] is List) {
+            data = _collapseWidgetTreeNode(data);
+          }
+        }
         return CallToolResult(
           content: [
             TextContent(
               text:
-                  '${jsonEncode(res.data)}\n\n'
+                  '${jsonEncode(data ?? res.data)}\n\n'
                   '${res.data?['sdkMode'] == 'zero-code' ? 'Zero-code mode: widgets off screen (covered routes, hidden IndexedStack children) are left out.' : 'HINT: You can now use tap_widget(key) or enter_text(key) using the keys found in this tree.'}',
             ),
           ],

@@ -240,12 +240,14 @@ final structuredContracts = <String, StructuredSpec>{
     'passed': _req(StructuredSpec.boolean()),
     'check': _req(
       StructuredSpec.string(
-        oneOf: {'text', 'key', 'enabled', 'disabled', 'count', 'none'},
+        oneOf: {'text', 'key', 'enabled', 'disabled', 'count', 'none', 'batch'},
       ),
     ),
     'expected': _opt(StructuredSpec.string()),
     'found': _opt(StructuredSpec.integer()),
     'reason': _opt(StructuredSpec.string()),
+    'total': _opt(StructuredSpec.integer()),
+    'passedCount': _opt(StructuredSpec.integer()),
   }),
   'wait_for': StructuredSpec.object({
     'met': _req(StructuredSpec.boolean()),
@@ -471,12 +473,18 @@ Map<String, dynamic> assertWidgetVerdict({
   required bool passed,
   int? found,
   String? reason,
+  int? total,
+  int? passedCount,
+  List<Map<String, dynamic>>? results,
 }) => {
   'passed': passed,
   'check': check,
   if (expected != null) 'expected': Redaction.text(expected),
   'found': ?found,
   if (reason != null) 'reason': Redaction.text(reason),
+  'total': ?total,
+  'passedCount': ?passedCount,
+  'results': ?results,
 };
 
 /// `wait_for`'s structured result: whether the condition held, how long it

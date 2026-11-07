@@ -223,83 +223,142 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
     _tool(
       'assert_widget',
       description:
-          'Checks the screen in the running app in milliseconds; an error '
-          'result is a failed assertion. One check per call: text — that text '
-          'is visible (substring unless exact); key — that widget is on '
-          'screen, or with enabled true/false that it is enabled/disabled; '
-          'type + count — exactly that many widgets of the type. Only what '
-          'the user can see counts (not covered routes or hidden tabs).',
+          'Checks screen in milliseconds; error is a failed assertion. '
+          'Single check (text, key, enabled, or type+count) or batch via asserts:[...].',
       inputSchema: ToolInputSchema(
         properties: {
-          'text': JsonSchema.string(description: 'Text expected on screen.'),
-          'exact': JsonSchema.boolean(
-            description: 'Require an exact text match (default substring).',
-          ),
-          'key': JsonSchema.string(
-            description: 'Key, selector or label of the widget.',
-          ),
-          'enabled': JsonSchema.boolean(
-            description:
-                'With key: expect enabled (true) or disabled (false), i.e. '
-                'onPressed/onTap/onChanged set or null.',
-          ),
-          'type': JsonSchema.string(
-            description: 'Widget type to count (e.g. "ListTile").',
-          ),
+          'text': JsonSchema.string(description: 'Expected text.'),
+          'exact': JsonSchema.boolean(description: 'Exact text match.'),
+          'key': JsonSchema.string(description: 'Key, selector or label.'),
+          'enabled': JsonSchema.boolean(description: 'Expect enabled/disabled.'),
+          'type': JsonSchema.string(description: 'Widget type (e.g. ListTile).'),
           'count': JsonSchema.integer(description: 'Expected count of type.'),
+          'asserts': JsonSchema.array(
+            description:
+                'Batch of checks: [{text, exact, key, enabled, type, count}].',
+          ),
         },
       ),
       callback: (p, e) async {
         const nothingToCheck =
             'Say what to check: text, key (optionally with enabled), '
             'or type with count.';
-        final target = p['target'] ?? p['key'];
-        final _ExtensionResult res;
-        // What the check is, and what it saw: a text, key or enabled check
-        // sees one widget when it passes, and a count check reads the count
-        // back from the payload its text is built from too.
-        late final String check;
-        String? expected;
-        int? found;
-        if (p['text'] != null) {
-          check = 'text';
-          expected = p['text'].toString();
-          found = 1;
-          res = await _callExtensionRaw('ext.flutterpilot.assertTextVisible', {
-            'text': p['text'].toString(),
-            if (p['exact'] != null) 'exact': p['exact'].toString(),
-            if (p['autoScroll'] == true) 'autoScroll': 'true',
-          });
-        } else if (p['type'] != null && p['count'] != null) {
-          check = 'count';
-          expected = '${p['count']} ${p['type']}';
-          res = await _callExtensionRaw('ext.flutterpilot.assertWidgetCount', {
-            'type': p['type'].toString(),
-            'count': p['count'].toString(),
-          });
-          found = (res.data?['count'] as num?)?.toInt();
-        } else if (target != null && p['enabled'] != null) {
-          check = p['enabled'] == true ? 'enabled' : 'disabled';
-          expected = target.toString();
-          found = 1;
-          res = await _callExtensionRaw(
-            p['enabled'] == true
-                ? 'ext.flutterpilot.assertWidgetEnabled'
-                : 'ext.flutterpilot.assertWidgetDisabled',
-            {'key': target.toString()},
+
+        Future<({_ExtensionResult res, String check, String? expected, int? found})>
+        evalCheck(Map<String, dynamic> checkParams) async {
+          final target = checkParams['target'] ?? checkParams['key'];
+          if (checkParams['text'] != null) {
+            final expected = checkParams['text'].toString();
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.assertTextVisible',
+              {
+                'text': expected,
+                if (checkParams['exact'] != null)
+                  'exact': checkParams['exact'].toString(),
+                if (checkParams['autoScroll'] == true) 'autoScroll': 'true',
+              },
+            );
+            return (res: res, check: 'text', expected: expected, found: 1);
+          } else if (checkParams['type'] != null && checkParams['count'] != null) {
+            final expected = '${checkParams['count']} ${checkParams['type']}';
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.assertWidgetCount',
+              {
+                'type': checkParams['type'].toString(),
+                'count': checkParams['count'].toString(),
+              },
+            );
+            return (
+              res: res,
+              check: 'count',
+              expected: expected,
+              found: (res.data?['count'] as num?)?.toInt(),
+            );
+          } else if (target != null && checkParams['enabled'] != null) {
+            final enabled = checkParams['enabled'] == true;
+            final expected = target.toString();
+            final res = await _callExtensionRaw(
+              enabled
+                  ? 'ext.flutterpilot.assertWidgetEnabled'
+                  : 'ext.flutterpilot.assertWidgetDisabled',
+              {'key': expected},
+            );
+            return (
+              res: res,
+              check: enabled ? 'enabled' : 'disabled',
+              expected: expected,
+              found: 1,
+            );
+          } else if (target != null) {
+            final expected = target.toString();
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.assertWidgetVisible',
+              {
+                'key': expected,
+                if (checkParams['autoScroll'] == true) 'autoScroll': 'true',
+              },
+            );
+            return (res: res, check: 'key', expected: expected, found: 1);
+          }
+          return (
+            res: _ExtensionResult.error(
+              nothingToCheck,
+              ErrorCategory.validation,
+            ),
+            check: 'none',
+            expected: null,
+            found: null,
           );
-        } else if (target != null) {
-          check = 'key';
-          expected = target.toString();
-          found = 1;
-          res = await _callExtensionRaw(
-            'ext.flutterpilot.assertWidgetVisible',
-            {
-              'key': target.toString(),
-              if (p['autoScroll'] == true) 'autoScroll': 'true',
-            },
+        }
+
+        if (p['asserts'] is List && (p['asserts'] as List).isNotEmpty) {
+          final batch = (p['asserts'] as List).whereType<Map>().toList();
+          final results = <Map<String, dynamic>>[];
+          final outBuffer = StringBuffer();
+          var allPassed = true;
+          var passedCount = 0;
+
+          for (var i = 0; i < batch.length; i++) {
+            final item = Map<String, dynamic>.from(batch[i]);
+            final eval = await evalCheck(item);
+            final ok = !eval.res.isError;
+            if (ok) {
+              passedCount++;
+              outBuffer.writeln(
+                '✓ [${i + 1}/${batch.length}] Passed: ${eval.expected ?? eval.check}',
+              );
+            } else {
+              allPassed = false;
+              outBuffer.writeln(
+                '✗ [${i + 1}/${batch.length}] Failed: ${eval.res.errorMessage ?? 'assertion failed'}',
+              );
+            }
+            results.add({
+              'index': i,
+              'passed': ok,
+              'check': eval.check,
+              if (eval.expected != null) 'expected': eval.expected,
+              if (!ok) 'reason': eval.res.errorMessage,
+            });
+          }
+
+          return withVerdict(
+            CallToolResult(
+              isError: !allPassed,
+              content: [TextContent(text: outBuffer.toString().trim())],
+            ),
+            assertWidgetVerdict(
+              check: 'batch',
+              passed: allPassed,
+              total: batch.length,
+              passedCount: passedCount,
+              results: results,
+            ),
           );
-        } else {
+        }
+
+        final eval = await evalCheck(p);
+        if (eval.check == 'none') {
           return withVerdict(
             CallToolResult(
               isError: true,
@@ -313,13 +372,13 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           );
         }
         return withVerdict(
-          res.toCallToolResult(),
+          eval.res.toCallToolResult(),
           assertWidgetVerdict(
-            check: check,
-            expected: expected,
-            passed: !res.isError,
-            found: res.isError ? null : found,
-            reason: res.isError ? res.errorMessage : null,
+            check: eval.check,
+            expected: eval.expected,
+            passed: !eval.res.isError,
+            found: eval.res.isError ? null : eval.found,
+            reason: eval.res.isError ? eval.res.errorMessage : null,
           ),
         );
       },

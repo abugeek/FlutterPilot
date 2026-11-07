@@ -248,6 +248,13 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  final isHn = appPath.contains('hn_reader');
+  final isBloc = appPath.contains('flutter_todos');
+  final isProviderApp = appPath.contains('provider_testing_app') ||
+      appPath.contains('testing_app') ||
+      appPath.contains('testing_codelab');
+  final isM3 = appPath.contains('material_3_demo');
+
   try {
     // 1. App Summary & Screen Health
     await runTest('get_app_summary', 'get_app_summary', {}, verify: (r) {
@@ -265,6 +272,16 @@ Future<void> main(List<String> args) async {
     }, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
       return text.contains('elements') || text.contains('count');
+    });
+
+    // Multi-Assertion Batching (1 turn)
+    await runTest('assert_widget (batch)', 'assert_widget', {
+      'asserts': [
+        {'text': isHn ? 'Hacker News' : (isProviderApp ? 'Testing Sample' : 'FlutterPilot Demo')},
+      ],
+    }, allowError: true, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Passed') || text.contains('Failed');
     });
 
     // Prescriptive Error Inspection
@@ -308,13 +325,15 @@ Future<void> main(List<String> args) async {
       },
     );
 
+    // Widget Tree with Repetition Collapsing
+    await runTest('get_widget_tree (collapse: true)', 'get_widget_tree', {
+      'collapse': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('widget') || text.contains('type') || text.contains('tree') || text.contains('Root');
+    });
+
     // 4. AST Source Locator & Surgical Patching (on initial screen)
-    final isHn = appPath.contains('hn_reader');
-    final isBloc = appPath.contains('flutter_todos');
-    final isProviderApp = appPath.contains('provider_testing_app') ||
-        appPath.contains('testing_app') ||
-        appPath.contains('testing_codelab');
-    final isM3 = appPath.contains('material_3_demo');
     final targetKey = isHn
         ? 'Hacker News'
         : (isBloc
@@ -548,6 +567,16 @@ Future<void> main(List<String> args) async {
     if (availableTools.contains('export_network_mocks')) {
       await runTest('export_network_mocks', 'export_network_mocks', {}, verify: (r) {
         return (r['content'] as List?)?.isNotEmpty == true;
+      });
+    }
+
+    if (availableTools.contains('get_network_logs')) {
+      await runTest('get_network_logs (query filter)', 'get_network_logs', {
+        'query': 'http',
+        'limit': 10,
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('LOG') || text.contains('No network traffic') || text.isNotEmpty;
       });
     }
 

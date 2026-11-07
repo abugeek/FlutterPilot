@@ -295,6 +295,34 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('collapse'), isTrue);
     });
 
+    test('assert_widget advertises asserts batch parameter', () {
+      final tools = server.toolListJson();
+      final assertTool = tools.firstWhere((t) => t['name'] == 'assert_widget');
+      final schema = assertTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('asserts'), isTrue);
+      expect(props['asserts']['type'], 'array');
+    });
+
+    test('get_widget_tree advertises collapse and subtree parameters', () {
+      final tools = server.toolListJson();
+      final treeTool = tools.firstWhere((t) => t['name'] == 'get_widget_tree');
+      final schema = treeTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('collapse'), isTrue);
+      expect(props.containsKey('subtree'), isTrue);
+    });
+
+    test('get_network_logs advertises query, errorsOnly, and limit parameters', () {
+      final tools = server.toolListJson();
+      final netTool = tools.firstWhere((t) => t['name'] == 'get_network_logs');
+      final schema = netTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('errorsOnly'), isTrue);
+      expect(props.containsKey('limit'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

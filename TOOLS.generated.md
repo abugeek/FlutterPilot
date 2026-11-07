@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46794 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46537 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -400,16 +400,18 @@ Visual diff against baseline (or previous frame with comparePrevious). save:true
 
 ## `get_widget_tree`
 
-The app's own widgets on screen (the DevTools summary tree) with keys, text, selectors and bounds (rect: [x, y, w, h], left out when the same as the parent's). diff:true returns only what changed since the previous call.
+App widgets on screen with keys, text, selectors and bounds. diff:true returns changes since last call.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `diff` | boolean | no |  |
-| `rootKey` | string | no | Key or selector of the subtree to return (a dialog, a form). |
+| `rootKey` | string | no | Subtree key or selector. |
+| `subtree` | string | no | Subtree root key. |
 | `maxDepth` | integer | no | Default 50. |
-| `compact` | boolean | no | false keeps the unkeyed layout wrappers (default true: pruned). |
+| `compact` | boolean | no | false keeps unkeyed layout wrappers (default true). |
+| `collapse` | boolean | no | Collapse repeated sibling widgets. |
 
 ## `get_interactive_elements`
 
@@ -523,12 +525,15 @@ Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several
 
 ## `get_network_logs`
 
-Requests that went through Dio, including those a mock answered (which never reach get_http_profile): method, URL, status, error and body (truncated, secrets redacted). On web it is the only request log; elsewhere get_http_profile covers every client, with timing and headers.
+Dio network requests (including mocks). Filter by query or errorsOnly, with limit.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `query` | string | no | URL or message filter. |
+| `errorsOnly` | boolean | no | Only failed requests (status >= 400 or error). |
+| `limit` | integer | no | Max entries to return (default 50). |
 
 ## `get_hive_contents`
 
@@ -626,20 +631,21 @@ Stands in for the native side of a plugin (camera, scanner, permissions, Bluetoo
 
 ## `assert_widget`
 
-Checks the screen in the running app in milliseconds; an error result is a failed assertion. One check per call: text — that text is visible (substring unless exact); key — that widget is on screen, or with enabled true/false that it is enabled/disabled; type + count — exactly that many widgets of the type. Only what the user can see counts (not covered routes or hidden tabs).
+Checks screen in milliseconds; error is a failed assertion. Single check (text, key, enabled, or type+count) or batch via asserts:[...].
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `text` | string | no | Text expected on screen. |
-| `exact` | boolean | no | Require an exact text match (default substring). |
-| `key` | string | no | Key, selector or label of the widget. |
-| `enabled` | boolean | no | With key: expect enabled (true) or disabled (false), i.e. onPressed/onTap/onChanged set or null. |
-| `type` | string | no | Widget type to count (e.g. "ListTile"). |
+| `text` | string | no | Expected text. |
+| `exact` | boolean | no | Exact text match. |
+| `key` | string | no | Key, selector or label. |
+| `enabled` | boolean | no | Expect enabled/disabled. |
+| `type` | string | no | Widget type (e.g. ListTile). |
 | `count` | integer | no | Expected count of type. |
+| `asserts` | array | no | Batch of checks: [{text, exact, key, enabled, type, count}]. |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none", expected?: string, found?: int, reason?: string}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none"|"batch", expected?: string, found?: int, reason?: string, total?: int, passedCount?: int}`
 
 ## `export_network_mocks`
 

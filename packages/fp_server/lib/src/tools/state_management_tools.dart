@@ -263,34 +263,75 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     // extension or a new one — an SDK protocol change (round 1/2 rule). The
     // eval runner's `shop_detail_requests` counts entries in the newest
     // window instead (field test #330).
-    _registerAppTool(
-      name: 'get_network_logs',
+    _tool(
+      'get_network_logs',
       description:
-          'Requests that went through Dio, including those a mock '
-          'answered (which never reach get_http_profile): method, URL, '
-          'status, error and body (truncated, secrets redacted). On web '
-          'it is the only request log; elsewhere get_http_profile covers '
-          'every client, with timing and headers.',
-      extension: 'ext.flutterpilot.getNetworkLogs',
-      formatResult: (json) {
-        final logs = json['logs'] as List?;
-        if (logs == null || logs.isEmpty) return 'No network traffic captured.';
-        return logs
+          'Dio network requests (including mocks). Filter by query or errorsOnly, with limit.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'query': JsonSchema.string(description: 'URL or message filter.'),
+          'errorsOnly': JsonSchema.boolean(
+            description: 'Only failed requests (status >= 400 or error).',
+          ),
+          'limit': JsonSchema.integer(
+            description: 'Max entries to return (default 50).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getNetworkLogs',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
+        var logs =
+            (res.data?['logs'] as List?)
+                ?.whereType<Map>()
+                .map((m) => Map<String, dynamic>.from(m))
+                .toList() ??
+            [];
+        if (p['errorsOnly'] == true) {
+          logs = logs.where((l) {
+            final code = l['statusCode'] as num?;
+            final hasError = l['message'] != null || l['error'] != null;
+            return hasError || (code != null && code >= 400);
+          }).toList();
+        }
+        final query = p['query']?.toString().toLowerCase();
+        if (query != null && query.isNotEmpty) {
+          logs = logs.where((l) {
+            final uri = (l['uri'] ?? '').toString().toLowerCase();
+            final msg = (l['message'] ?? '').toString().toLowerCase();
+            final body = (l['body'] ?? '').toString().toLowerCase();
+            return uri.contains(query) ||
+                msg.contains(query) ||
+                body.contains(query);
+          }).toList();
+        }
+        final limit = (p['limit'] as num?)?.toInt().clamp(1, 200) ?? 50;
+        if (logs.length > limit) {
+          logs = logs.sublist(logs.length - limit);
+        }
+        if (logs.isEmpty) {
+          return CallToolResult(
+            content: [TextContent(text: 'No network traffic captured.')],
+          );
+        }
+        final formatted = logs
             .map((l) {
               final type = l['type']?.toString().toUpperCase() ?? 'LOG';
               final method = l['method'] != null ? '${l['method']} ' : '';
               final uri = l['uri'] ?? '';
-              final status = l['statusCode'] != null
-                  ? ' ${l['statusCode']}'
-                  : '';
+              final status =
+                  l['statusCode'] != null ? ' ${l['statusCode']}' : '';
               final mocked = l['mocked'] == true ? ' [MOCKED]' : '';
-              final msg = l['message'] != null
-                  ? ' error="${l['message']}"'
-                  : '';
+              final msg =
+                  l['message'] != null ? ' error="${l['message']}"' : '';
               final body = l['body'] != null ? ' body=${l['body']}' : '';
               return '[${l['timestamp']}] $type $method$uri$status$mocked$msg$body';
             })
             .join('\n');
+        return CallToolResult(content: [TextContent(text: formatted)]);
       },
     );
 
