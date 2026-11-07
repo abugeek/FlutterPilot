@@ -522,7 +522,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
               '\n  • RenderFlex bottom overflow (${overflows.length} issue(s)):',
             );
             for (final o in overflows) {
-              buf.write('\n    - ${o['details'] ?? o['type']}');
+              final src = o['source'] != null ? ' at ${o['source']}' : '';
+              buf.write('\n    - ${o['details'] ?? o['type']}$src');
+              if (o['source'] != null) {
+                buf.write(
+                  '\n      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "SingleChildScrollView")',
+                );
+              }
             }
             buf.write(
               '\n  Prescription: Wrap the screen body in SingleChildScrollView or set Scaffold.resizeToAvoidBottomInset: false.',

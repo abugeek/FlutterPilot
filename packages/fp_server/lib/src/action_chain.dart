@@ -41,18 +41,39 @@ ChainStep? chainStep(Object? raw) {
 }
 
 /// [step] as an action of the SDK's own chain, which runs inside the app
-/// without a round trip per step: a plain tap or text entry on a widget.
-/// Null for anything it can't do (a gesture, waitFor, clearing a field).
+/// without a round trip per step: tap, text entry, scrolling, assertions,
+/// waits, or clearing fields.
 Map<String, String>? inAppChainAction(ChainStep step) {
   final arguments = step.arguments;
-  final key = (arguments['key'] ?? arguments['target'])?.toString();
-  if (key == null || key.isEmpty) return null;
-  final others = arguments.keys.toSet()..removeAll(const ['key', 'target']);
+  final target = (arguments['key'] ??
+          arguments['target'] ??
+          arguments['text'] ??
+          arguments['selector'])
+      ?.toString();
+  if (target == null || target.isEmpty) return null;
   final text = arguments['text'];
+  final exact = arguments['exact'] == true;
+  final timeout = arguments['timeoutMs']?.toString() ?? '3000';
+
   return switch (step.tool) {
-    'tap_widget' when others.isEmpty => {'action': 'tap', 'target': key},
-    'enter_text' when others.length == 1 && text is String && text.isNotEmpty =>
-      {'action': 'enter_text', 'target': key, 'text': text},
+    'tap_widget' => {'action': 'tap', 'target': target},
+    'enter_text' when text is String && text.isNotEmpty => {
+        'action': 'enter_text',
+        'target': target,
+        'text': text,
+      },
+    'scroll_into_view' => {'action': 'scroll_into_view', 'target': target},
+    'assert_widget' => {
+        'action': 'assert_widget',
+        'target': target,
+        if (exact) 'exact': 'true',
+      },
+    'wait_for' => {
+        'action': 'wait_for',
+        'target': target,
+        'timeoutMs': timeout,
+      },
+    'clear_text' => {'action': 'clear_text', 'target': target},
     _ => null,
   };
 }

@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 47159 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 47113 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -375,15 +375,16 @@ _Read-only._
 
 ## `compare_screenshot`
 
-Visual diff: save:true stores baseline; else compares against baseline (or prior frame if comparePrevious: true), returning diff %, changed bounds, and diff image.
+Visual diff against baseline (or previous frame with comparePrevious). save:true saves baseline. Returns diff %, changed bounds, and diff image.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `name` | string | no | Baseline name (e.g. "home"). Omit for comparePrevious. |
-| `comparePrevious` | boolean | no | Compare against previous frame without a named baseline. |
+| `name` | string | no | Baseline name (omit for comparePrevious). |
+| `comparePrevious` | boolean | no | Compare against previous frame. |
 | `save` | boolean | no | Save current screen as baseline. |
 | `threshold` | number | no | Allowed diff % before failing (default 1.0). |
 | `scale` | number | no | 0.2–1.0 (default 0.5, matching capture_screenshot). |
+| `ignoreStatusBar` | boolean | no | Ignore differences in top status bar. |
 
 ## `get_widget_tree`
 
@@ -410,7 +411,7 @@ _Read-only._
 
 ## `get_app_summary`
 
-Start here. The running app in a few lines: route, viewport, focused widget, the tappable elements (labels + keys), uncaught errors, recent logs, jank, and whether the window is visible or covered by a system alert.
+Start here. The running app in a few lines: route, viewport, focus, tappable elements, errors, health, logs, jank, and window visibility.
 
 _Read-only._
 

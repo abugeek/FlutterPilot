@@ -333,6 +333,46 @@ extension _WidgetExtensions on FlutterPilot {
     return (status: 'ok', error: null);
   }
 
+  /// Clears the text field [target] resolves to.
+  static Future<bool> _clearTarget(String target) async {
+    final element = PilotWidgetInspector.findElement(target);
+    if (element == null) return false;
+    bool found = false;
+    void clearText(Element e) {
+      if (found) return;
+      if (e is StatefulElement && e.state is EditableTextState) {
+        try {
+          final state = e.state;
+          if (state is EditableTextState) {
+            state.updateEditingValue(TextEditingValue.empty);
+            found = true;
+          }
+        } catch (_) {
+          try {
+            (e.state as dynamic).controller.clear();
+            found = true;
+          } catch (_) {}
+        }
+        if (found && TestRecorder.active) {
+          TestRecorder.add(
+            'enterText',
+            element: e,
+            field: true,
+            data: {'key': target, 'text': '', 'what': 'clear'},
+          );
+        }
+        return;
+      }
+      e.debugVisitOnstageChildren(clearText);
+    }
+
+    clearText(element);
+    if (found) {
+      await InteractionManager.pumpAndSettleAdaptive();
+    }
+    return found;
+  }
+
   /// How long a chain step waits for a target the step before it may still
   /// be bringing on screen (a page that loads its content after opening).
   static const _chainStepAppearWithin = Duration(seconds: 3);
@@ -391,8 +431,24 @@ extension _WidgetExtensions on FlutterPilot {
       return ambiguity;
     }
     final suggestions = PilotWidgetInspector.getAvailableActionableTargets();
+    String didYouMean = '';
+    if (suggestions.isNotEmpty) {
+      double bestSim = 0.0;
+      String? bestTarget;
+      for (final s in suggestions) {
+        final sim = PilotWidgetInspector.calculateSimilarity(target, s);
+        if (sim > bestSim) {
+          bestSim = sim;
+          bestTarget = s;
+        }
+      }
+      if (bestSim >= 0.55 && bestTarget != null) {
+        didYouMean = 'Did you mean "$bestTarget"?\n';
+      }
+    }
     if (suggestions.isNotEmpty) {
       return 'Widget not found matching: "$target".\n'
+          '$didYouMean'
           'HINT: Visible actionable targets on current screen:\n'
           '${suggestions.map((s) => ' • "$s"').join('\n')}\n'
           'Or call get_widget_tree() / get_interactive_elements() to inspect the UI hierarchy.'
@@ -2143,15 +2199,56 @@ extension _WidgetExtensions on FlutterPilot {
             case 'enter_text' || 'enterText' || 'type':
               r = await _enterTextInto(
                 target,
-                (item as Map)['text']?.toString() ?? '',
+                item['text']?.toString() ?? '',
                 appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
               );
+            case 'scroll_into_view' || 'scrollIntoView' when target != null:
+              final ok = await ScrollSimulator.scrollUntilVisible(target);
+              r = ok
+                  ? (status: 'ok', error: null)
+                  : (status: 'notFound', error: 'Could not scroll "$target" into view.');
+            case 'assert_widget' || 'assertWidget' when target != null:
+              final exact =
+                  item['exact'] == 'true' ||
+                  item['exact'] == true;
+              final found =
+                  PilotWidgetInspector.findElement(target, partial: !exact);
+              r = found != null
+                  ? (status: 'ok', error: null)
+                  : (
+                      status: 'assertionFailed',
+                      error: 'Widget "$target" is not visible on screen.',
+                    );
+            case 'wait_for' || 'waitFor' when target != null:
+              final ms =
+                  int.tryParse(
+                    item['timeoutMs']?.toString() ?? '3000',
+                  ) ??
+                  3000;
+              final found = await _awaitTarget(
+                target,
+                Duration(milliseconds: ms),
+              );
+              r = found != null
+                  ? (status: 'ok', error: null)
+                  : (
+                      status: 'timeout',
+                      error: 'Widget "$target" did not appear within ${ms}ms.',
+                    );
+            case 'clear_text' || 'clearTextField' when target != null:
+              final ok = await _clearTarget(target);
+              r = ok
+                  ? (status: 'ok', error: null)
+                  : (
+                      status: 'notFound',
+                      error: 'Text field "$target" could not be cleared.',
+                    );
             default:
               r = (
                 status: 'unsupportedAction',
                 error:
-                    'unsupported action "$action". Use "tap" (target) or '
-                    '"enter_text" (target, text).',
+                    'unsupported action "$action". Use "tap", "enter_text", '
+                    '"scroll_into_view", "assert_widget", "wait_for", or "clear_text".',
               );
           }
           if (r.status == 'ok') {

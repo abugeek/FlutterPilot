@@ -402,6 +402,18 @@ class FlutterPilot {
       'recentErrors': recentErrors.take(5).toList(),
       'errorCount': ErrorInspector.capturedCount,
       'lastError': ?recentErrors.lastOrNull?['exception'],
+      'health': () {
+        try {
+          final h = UiHealthAuditor.audit();
+          return {
+            'isHealthy': h['isHealthy'] ?? true,
+            'overflowCount': h['overflowCount'] ?? 0,
+            'accessibilityIssueCount': h['accessibilityIssueCount'] ?? 0,
+          };
+        } catch (_) {
+          return null;
+        }
+      }(),
       'recentLogs': recentLogs,
     };
   }

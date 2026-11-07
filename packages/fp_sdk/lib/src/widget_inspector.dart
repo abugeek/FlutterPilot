@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'ai_overlay_manager.dart';
 import 'form_inspector.dart';
 import 'hit_test_utils.dart';
+import 'source_locator.dart';
 
 extension on Element {
   /// On-screen children, minus FlutterPilot's own overlay (the AI tap badge).
@@ -1206,6 +1207,7 @@ class PilotWidgetInspector {
         if (text.isNotEmpty) 'text': text,
         // A field's validation error, when one is shown.
         'fieldError': ?FormInspector.of(target)?.shown,
+        'source': ?_source(target),
         'bounds': {
           'x': pos.dx.round(),
           'y': pos.dy.round(),
@@ -1222,6 +1224,15 @@ class PilotWidgetInspector {
       }
     }
     return elements;
+  }
+
+  static String? _source(Element element) {
+    if (!SourceLocator.available) return null;
+    try {
+      return SourceLocator.locationOf(element);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Whether [box] takes up (nearly) all of the view it is in.

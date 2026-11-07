@@ -250,10 +250,20 @@ mixin _TestGenerationToolsMixin
             }
           }
         } else if (p['wrapWith'] != null) {
-          final wrapper = p['wrapWith'].toString();
+          final wrapper = p['wrapWith'].toString().trim();
           if (wrapper == 'Padding') {
             newCall =
                 'Padding(\n  padding: const EdgeInsets.all(16.0),\n  child: $originalCall,\n)';
+          } else if (wrapper.contains('(')) {
+            final lastParen = wrapper.lastIndexOf(')');
+            if (lastParen > 0) {
+              final prefix = wrapper.substring(0, lastParen).trim();
+              final hasArgs = prefix.contains(RegExp(r'\(\s*\S'));
+              final separator = hasArgs ? ', ' : '';
+              newCall = '$prefix$separator child: $originalCall\n)';
+            } else {
+              newCall = '$wrapper(\n  child: $originalCall,\n)';
+            }
           } else {
             newCall = '$wrapper(\n  child: $originalCall,\n)';
           }
@@ -266,6 +276,9 @@ mixin _TestGenerationToolsMixin
             text.substring(0, patchOffset) + newCall + text.substring(patchEnd);
 
         f.writeAsStringSync(newText);
+        try {
+          await Process.run('dart', ['format', f.path]);
+        } catch (_) {}
 
         final reload = _toolCallbacks['hot_reload'];
         final reloadRes = reload != null
@@ -275,6 +288,9 @@ mixin _TestGenerationToolsMixin
 
         if (reloadFailed) {
           f.writeAsStringSync(originalText);
+          try {
+            await Process.run('dart', ['format', f.path]);
+          } catch (_) {}
           if (reload != null) await reload(const {}, e);
           final err = reloadRes.content
               .whereType<TextContent>()

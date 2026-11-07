@@ -174,6 +174,7 @@ class UiHealthAuditor {
             'issue':
                 'Tap target ${e['bounds']['width']}x${e['bounds']['height']} '
                 'is smaller than ${min.round()}x${min.round()}.',
+            if (e['source'] != null) 'source': e['source'],
           },
     ];
 

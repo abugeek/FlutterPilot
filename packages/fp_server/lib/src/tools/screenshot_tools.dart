@@ -224,6 +224,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         'get_errors(report: true) has the crash report when one was built.',
       );
     }
+    final health = data['health'];
+    if (health is Map) {
+      final isHealthy = health['isHealthy'] == true;
+      final overflows = (health['overflowCount'] as num?)?.toInt() ?? 0;
+      final a11y = (health['accessibilityIssueCount'] as num?)?.toInt() ?? 0;
+      if (isHealthy) {
+        summary.writeln('• Health: ✓ Clean (no overflows or small tap targets)');
+      } else {
+        final issues = [
+          if (overflows > 0) '$overflows layout overflow(s)',
+          if (a11y > 0) '$a11y small tap target(s)',
+        ];
+        summary.writeln(
+          '• Health: ⚠️ ${issues.join(', ')} — call audit_screen_health for details',
+        );
+      }
+    }
     summary.writeln('• Tappable Elements (${elements.length}):');
     for (final el in elements.take(15)) {
       final label = el['text']?.toString() ?? '';
@@ -368,16 +385,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'compare_screenshot',
       description:
-          'Visual diff: save:true stores baseline; else compares against '
-          'baseline (or prior frame if comparePrevious: true), returning '
-          'diff %, changed bounds, and diff image.',
+          'Visual diff against baseline (or previous frame with '
+          'comparePrevious). save:true saves baseline. Returns diff %, '
+          'changed bounds, and diff image.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
-            description: 'Baseline name (e.g. "home"). Omit for comparePrevious.',
+            description: 'Baseline name (omit for comparePrevious).',
           ),
           'comparePrevious': JsonSchema.boolean(
-            description: 'Compare against previous frame without a named baseline.',
+            description: 'Compare against previous frame.',
           ),
           'save': JsonSchema.boolean(
             description: 'Save current screen as baseline.',
@@ -387,6 +404,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           ),
           'scale': JsonSchema.number(
             description: '0.2–1.0 (default 0.5, matching capture_screenshot).',
+          ),
+          'ignoreStatusBar': JsonSchema.boolean(
+            description: 'Ignore differences in top status bar.',
           ),
         },
       ),
@@ -505,7 +525,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         int minY = currentImg.height;
         int maxY = 0;
 
-        final total = currentImg.width * currentImg.height;
+        final ignoreStatusBar = p['ignoreStatusBar'] == true;
+        final statusBarHeight =
+            ignoreStatusBar ? (currentImg.height * 0.06).round() : 0;
+        final total = currentImg.width * (currentImg.height - statusBarHeight);
         diffImg = currentImg.convert(
           format: img.Format.uint8,
           numChannels: 4,
@@ -523,13 +546,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             i + 3 < baseBytes.length && i + 3 < currBytes.length;
             i += 4
           ) {
+            final py = (i ~/ 4) ~/ currentImg.width;
+            if (py < statusBarHeight) continue;
+
             if (baseBytes[i] != currBytes[i] ||
                 baseBytes[i + 1] != currBytes[i + 1] ||
                 baseBytes[i + 2] != currBytes[i + 2] ||
                 baseBytes[i + 3] != currBytes[i + 3]) {
               diffPixels++;
               final px = (i ~/ 4) % currentImg.width;
-              final py = (i ~/ 4) ~/ currentImg.width;
               if (px < minX) minX = px;
               if (px > maxX) maxX = px;
               if (py < minY) minY = py;
@@ -606,6 +631,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             'passed': passed,
             'diffPercent': diffPercent,
             'diffPixels': diffPixels,
+            if (ignoreStatusBar) 'ignoreStatusBar': true,
             'changedBounds': ?changedBounds,
             'region': ?region,
           },
@@ -725,9 +751,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       'get_app_summary',
       description:
           'Start here. The running app in a few lines: route, viewport, '
-          'focused widget, the tappable elements (labels + keys), uncaught '
-          'errors, recent logs, jank, and whether the window is visible or '
-          'covered by a system alert.',
+          'focus, tappable elements, errors, health, logs, jank, and '
+          'window visibility.',
       inputSchema: ToolInputSchema(
         properties: {
           'setup': JsonSchema.boolean(

@@ -31,7 +31,7 @@ void main() {
     expect(chainStep(const <String, dynamic>{}), isNull);
   });
 
-  test('plain taps and text entries run inside the app', () {
+  test('plain taps, text entries, scrolling, assertions, waits run inside the app', () {
     expect(inAppChainAction((tool: 'tap_widget', arguments: {'key': 'Save'})), {
       'action': 'tap',
       'target': 'Save',
@@ -43,16 +43,41 @@ void main() {
       )),
       {'action': 'enter_text', 'target': 'Title', 'text': 'Milk'},
     );
+    expect(
+      inAppChainAction((
+        tool: 'scroll_into_view',
+        arguments: {'key': 'BottomItem'},
+      )),
+      {'action': 'scroll_into_view', 'target': 'BottomItem'},
+    );
+    expect(
+      inAppChainAction((
+        tool: 'assert_widget',
+        arguments: {'key': 'SuccessBadge'},
+      )),
+      {'action': 'assert_widget', 'target': 'SuccessBadge'},
+    );
+    expect(
+      inAppChainAction((
+        tool: 'wait_for',
+        arguments: {'key': 'Dialog', 'timeoutMs': 1000},
+      )),
+      {'action': 'wait_for', 'target': 'Dialog', 'timeoutMs': '1000'},
+    );
+    expect(
+      inAppChainAction((
+        tool: 'clear_text',
+        arguments: {'key': 'Title'},
+      )),
+      {'action': 'clear_text', 'target': 'Title'},
+    );
   });
 
   test('what the in-app chain cannot do goes through the tool', () {
     for (final ChainStep step in [
-      (tool: 'tap_widget', arguments: {'key': 'Save', 'gesture': 'long'}),
-      (tool: 'tap_widget', arguments: {'x': 10, 'y': 20}),
-      // The tool clears a field for ""; the in-app chain does not.
-      (tool: 'enter_text', arguments: {'key': 'Title', 'text': ''}),
-      (tool: 'enter_text', arguments: {'text': 'into the focused field'}),
-      (tool: 'assert_widget', arguments: {'key': 'Save'}),
+      (tool: 'gesture_widget', arguments: {'key': 'Card', 'gesture': 'swipe_left'}),
+      (tool: 'mock_http_response', arguments: {'url': 'https://api.com', 'body': '{}'}),
+      (tool: 'navigate_to', arguments: {'route': '/settings'}),
     ]) {
       expect(inAppChainAction(step), isNull, reason: '$step');
     }

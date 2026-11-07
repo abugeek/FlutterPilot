@@ -364,6 +364,12 @@ void main() {
       );
       expect(labels(), ['A', 'B', 'Title', 'Delete']);
     });
+
+    test('calculateSimilarity computes bigram Dice coefficient accurately', () {
+      expect(PilotWidgetInspector.calculateSimilarity('submit', 'submit'), 1.0);
+      expect(PilotWidgetInspector.calculateSimilarity('submt', 'submit'), greaterThanOrEqualTo(0.6));
+      expect(PilotWidgetInspector.calculateSimilarity('save', 'cancel'), lessThan(0.3));
+    });
   });
 }
 

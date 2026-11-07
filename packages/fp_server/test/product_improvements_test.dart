@@ -174,12 +174,13 @@ void main() {
       expect(props.containsKey('assertRoute'), isTrue);
     });
 
-    test('compare_screenshot supports comparePrevious without requiring name', () {
+    test('compare_screenshot supports comparePrevious and ignoreStatusBar', () {
       final tools = server.toolListJson();
       final cmp = tools.firstWhere((t) => t['name'] == 'compare_screenshot');
       final schema = cmp['inputSchema'] as Map;
       final props = schema['properties'] as Map;
       expect(props.containsKey('comparePrevious'), isTrue);
+      expect(props.containsKey('ignoreStatusBar'), isTrue);
       expect(schema.containsKey('required'), isFalse);
     });
 

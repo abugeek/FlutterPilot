@@ -1058,12 +1058,24 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           section(
             'Layout overflows',
             overflows,
-            (o) => '${o['type']}: ${o['details']}',
+            (o) {
+              final src = o['source'] != null ? ' at ${o['source']}' : '';
+              final fix = o['source'] != null
+                  ? '\n  → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded") or wrap in SingleChildScrollView'
+                  : '';
+              return '${o['type']}$src: ${o['details']}$fix';
+            },
           );
           section(
             'Small tap targets',
             targets,
-            (a) => '`${a['target']}` (${a['type']}): ${a['issue']}',
+            (a) {
+              final src = a['source'] != null ? ' at ${a['source']}' : '';
+              final fix = a['source'] != null
+                  ? '\n  → Fix: apply_patch_and_verify(target: "${a['source']}", wrapWith: "SizedBox(width: 48, height: 48)") or add padding'
+                  : '';
+              return '`${a['target']}` (${a['type']})$src: ${a['issue']}$fix';
+            },
           );
           // Grouped on purpose: identical controls (one list row repeating one
           // widget) are one finding. Say both numbers so a count of "1" is
