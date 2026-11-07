@@ -204,6 +204,44 @@ void main() {
       expect(diff['modified'], contains(contains('updated first')));
     });
 
+    test('diffWidgetTrees detects layout movements and bounding box shifts', () {
+      final before = {
+        'type': 'ListView',
+        'children': [
+          {
+            'type': 'Card',
+            'key': 'item_0',
+            'layout': {'x': 0, 'y': 100, 'w': 300, 'h': 60},
+          },
+          {
+            'type': 'Card',
+            'key': 'item_1',
+            'layout': {'x': 0, 'y': 170, 'w': 300, 'h': 60},
+          },
+        ],
+      };
+      final after = {
+        'type': 'ListView',
+        'children': [
+          {
+            'type': 'Card',
+            'key': 'item_0',
+            'layout': {'x': 0, 'y': 50, 'w': 300, 'h': 60},
+          },
+          {
+            'type': 'Card',
+            'key': 'item_1',
+            'layout': {'x': 0, 'y': 120, 'w': 300, 'h': 60},
+          },
+        ],
+      };
+
+      final diff = PilotWidgetInspector.diffWidgetTrees(before, after);
+      expect(diff['hasChanges'], isTrue);
+      expect(diff['movedCount'], 2);
+      expect(diff['moved'], contains(contains('dy: -50px')));
+    });
+
     testWidgets(
       'findElement matches chained (Parent -> Child) and positional selectors',
       (tester) async {

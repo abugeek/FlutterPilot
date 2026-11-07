@@ -257,6 +257,16 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('testFilePath'), isTrue);
     });
 
+    test('navigate_to advertises pathParams and queryParams for dynamic routing', () {
+      final tools = server.toolListJson();
+      final nav = tools.firstWhere((t) => t['name'] == 'navigate_to');
+      final schema = nav['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('pathParams'), isTrue);
+      expect(props.containsKey('queryParams'), isTrue);
+      expect(props.containsKey('deepLink'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

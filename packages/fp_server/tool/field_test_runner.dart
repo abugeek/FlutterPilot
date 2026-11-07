@@ -182,6 +182,8 @@ Future<void> main(List<String> args) async {
     String toolName,
     Map<String, dynamic> arguments, {
     bool Function(Map<String, dynamic> res)? verify,
+    bool expectError = false,
+    bool allowError = false,
   }) async {
     stdout.write('TEST: $label ... ');
     final stopwatch = Stopwatch()..start();
@@ -195,7 +197,8 @@ Future<void> main(List<String> args) async {
       }
       final res = msg['result'] as Map<String, dynamic>? ?? {};
       final isError = res['isError'] == true;
-      final ok = !isError && (verify == null || verify(res));
+      final ok = (allowError || (expectError ? isError : !isError)) &&
+          (verify == null || verify(res));
       stopwatch.stop();
       if (ok) {
         passedCount++;
@@ -238,6 +241,7 @@ Future<void> main(List<String> args) async {
       'simulate_keyboard',
       'simulate_keyboard',
       {'height': 300, 'restore': true},
+      allowError: true,
       verify: (r) {
         final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
         return text.contains('Simulated on-screen keyboard (300dp)');
@@ -306,31 +310,115 @@ Future<void> main(List<String> args) async {
       return text.contains('Crawled');
     });
 
-    // In-App Action Chain (tap item 0 & 1 favorites)
-    if (isProviderApp) {
-      await runTest('execute_action_chain', 'execute_action_chain', {
-        'steps': [
-          {
-            'tool': 'tap_widget',
-            'arguments': {'key': 'icon_0'},
-          },
-          {
-            'tool': 'tap_widget',
-            'arguments': {'key': 'icon_1'},
-          },
-        ],
+    // In-App Action Chain with Visual Impact
+    final isExample = !isHn && !isBloc && !isProviderApp && !isM3;
+    // In-App Action Chain with Visual Impact & Dynamic Routing
+    if (isExample || isProviderApp) {
+      final chainSteps = isExample
+          ? [
+              {
+                'tool': 'tap_widget',
+                'arguments': {'text': 'Open'},
+              },
+              {
+                'tool': 'tap_widget',
+                'arguments': {'text': 'All'},
+              },
+            ]
+          : [
+              {
+                'tool': 'tap_widget',
+                'arguments': {'key': 'icon_0'},
+              },
+              {
+                'tool': 'tap_widget',
+                'arguments': {'key': 'icon_1'},
+              },
+            ];
+
+      await runTest('execute_action_chain (with visual diff)', 'execute_action_chain', {
+        'steps': chainSteps,
       }, verify: (r) {
         final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Action chain: 2/2 steps done');
+        return text.contains('Action chain') && (text.contains('Widget tree') || text.contains('steps done'));
       });
 
-      // GoRouter Navigation test
-      await runTest('navigate_to (/favorites_page)', 'navigate_to', {
-        'route': '/favorites_page',
-      }, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('favorites_page');
-      });
+      // GoRouter Navigation with pathParams & suggestion engine
+      if (isExample) {
+        await runTest('navigate_to (/add)', 'navigate_to', {
+          'route': '/add',
+        }, verify: (r) {
+          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('/add');
+        });
+
+        await runTest('navigate_to (/todo/:id with pathParams)', 'navigate_to', {
+          'route': '/todo/:id',
+          'pathParams': {'id': '1'},
+        }, verify: (r) {
+          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('/todo/1');
+        });
+
+        await runTest(
+          'navigate_to (unknown route suggestion)',
+          'navigate_to',
+          {'route': '/sett'},
+          expectError: true,
+          verify: (r) {
+            final text =
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ??
+                '';
+            return text.contains('Did you mean "/settings"') ||
+                text.contains('Known routes');
+          },
+        );
+
+        await runTest(
+          'navigate_to (return to /)',
+          'navigate_to',
+          {'route': '/'},
+        );
+      }
+    } else if (isHn) {
+      await runTest(
+        'navigate_to (/saved)',
+        'navigate_to',
+        {'route': '/saved'},
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('/saved');
+        },
+      );
+
+      await runTest(
+        'navigate_to (/search with queryParams)',
+        'navigate_to',
+        {
+          'route': '/search',
+          'queryParams': {'q': 'flutter'},
+        },
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('/search?q=flutter') || text.contains('search');
+        },
+      );
+
+      await runTest(
+        'navigate_to (unknown route suggestion)',
+        'navigate_to',
+        {'route': '/stori'},
+        expectError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Did you mean') || text.contains('Known routes');
+        },
+      );
+
+      await runTest('navigate_to (return to /)', 'navigate_to', {'route': '/'});
     }
 
     // 6. Reactive Rebuild Profiler

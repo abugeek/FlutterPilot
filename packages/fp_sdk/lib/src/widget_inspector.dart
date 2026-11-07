@@ -1012,6 +1012,7 @@ class PilotWidgetInspector {
     final added = <String>[];
     final removed = <String>[];
     final modified = <String>[];
+    final moved = <String>[];
 
     final oldNodes = _flattenTree(oldTree);
     final newNodes = _flattenTree(newTree);
@@ -1024,6 +1025,22 @@ class PilotWidgetInspector {
         modified.add(
           '${entry.value.label}: changed from "${oldNode.description}" to "${entry.value.description}"',
         );
+      } else if (oldNode.layout != null && entry.value.layout != null) {
+        final o = oldNode.layout!;
+        final n = entry.value.layout!;
+        final dx = n['x']! - o['x']!;
+        final dy = n['y']! - o['y']!;
+        final dw = n['w']! - o['w']!;
+        final dh = n['h']! - o['h']!;
+        if (dx != 0 || dy != 0 || dw != 0 || dh != 0) {
+          final deltas = <String>[
+            if (dx != 0) 'dx: ${dx > 0 ? '+$dx' : dx}px',
+            if (dy != 0) 'dy: ${dy > 0 ? '+$dy' : dy}px',
+            if (dw != 0) 'dw: ${dw > 0 ? '+$dw' : dw}px',
+            if (dh != 0) 'dh: ${dh > 0 ? '+$dh' : dh}px',
+          ];
+          moved.add('${entry.value.label} shifted (${deltas.join(', ')})');
+        }
       }
     }
 
@@ -1033,39 +1050,58 @@ class PilotWidgetInspector {
       }
     }
 
-    final totalChanges = added.length + removed.length + modified.length;
+    final totalChanges =
+        added.length + removed.length + modified.length + moved.length;
     final truncated =
         added.length > sampleLimit ||
         removed.length > sampleLimit ||
-        modified.length > sampleLimit;
+        modified.length > sampleLimit ||
+        moved.length > sampleLimit;
 
     return {
       'hasChanges': totalChanges > 0,
       'addedCount': added.length,
       'removedCount': removed.length,
       'modifiedCount': modified.length,
+      'movedCount': moved.length,
       'added': added.take(sampleLimit).toList(),
       'removed': removed.take(sampleLimit).toList(),
       'modified': modified.take(sampleLimit).toList(),
+      'moved': moved.take(sampleLimit).toList(),
       'truncated': truncated,
       if (truncated)
         'note':
-            '$totalChanges total node changes — likely a bulk rebuild (e.g. a list). '
+            '$totalChanges total node changes — likely a bulk rebuild or scroll. '
             'Showing up to $sampleLimit samples per category; call get_widget_tree '
             'for full detail if the samples are not enough to confirm the change.',
     };
   }
 
-  static Map<String, ({String label, String description})> _flattenTree(
-    Map<String, dynamic> node,
-  ) {
-    final result = <String, ({String label, String description})>{};
+  static Map<
+    String,
+    ({String label, String description, Map<String, int>? layout})
+  >
+  _flattenTree(Map<String, dynamic> node) {
+    final result =
+        <
+          String,
+          ({String label, String description, Map<String, int>? layout})
+        >{};
     void traverse(Map<String, dynamic> current, String path) {
       final type = current['type']?.toString() ?? 'Widget';
       final key = current['key']?.toString();
       final text = current['text']?.toString();
       final selector = current['selector']?.toString();
       final value = current['value'];
+      final rawLayout = current['layout'] as Map<String, dynamic>?;
+      final layout = rawLayout != null
+          ? {
+              'x': (rawLayout['x'] as num?)?.toInt() ?? 0,
+              'y': (rawLayout['y'] as num?)?.toInt() ?? 0,
+              'w': (rawLayout['w'] as num?)?.toInt() ?? 0,
+              'h': (rawLayout['h'] as num?)?.toInt() ?? 0,
+            }
+          : null;
 
       // Keys and semantic selectors are not guaranteed to be unique. Keep the
       // structural path in the identity so repeated list rows do not overwrite
@@ -1079,6 +1115,7 @@ class PilotWidgetInspector {
       result[nodeIdentifier] = (
         label: semanticIdentity,
         description: nodeDescription,
+        layout: layout,
       );
 
       final children = current['children'] as List?;

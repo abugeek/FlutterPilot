@@ -7,14 +7,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'navigate_to',
       description:
-          'Goes to a route directly, e.g. "/profile/123" (go_router: '
-          'router.go; otherwise Navigator.pushNamed). Back: '
-          'press_key("back").',
+          'Goes to a route or deep link directly (go_router: router.go; '
+          'otherwise Navigator.pushNamed). Back: press_key("back").',
       inputSchema: ToolInputSchema(
         properties: {
           'route': JsonSchema.string(
             description:
-                'Route or deep-link URL (e.g. "/home", "/profile/123").',
+                'Route or deep link URL (e.g. "/home", "/story/:id").',
           ),
           'action': JsonSchema.string(
             enumValues: ['go', 'push', 'replace'],
@@ -27,14 +26,45 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'waitFor': JsonSchema.string(
             description: 'Key or text to wait for on the new page.',
           ),
+          'pathParams': JsonSchema.object(
+            description: 'Dynamic params (e.g. {"id": "123"}).',
+          ),
+          'queryParams': JsonSchema.object(
+            description: 'Query params (e.g. {"tab": "all"}).',
+          ),
         },
         required: ['route'],
       ),
       callback: (p, e) async {
-        final route = p['route'].toString();
+        final rawRoute = p['route'].toString();
         final action = p['action']?.toString() ?? 'go';
+        final pathParams = p['pathParams'] as Map<String, dynamic>?;
+        final queryParams = p['queryParams'] as Map<String, dynamic>?;
+
+        var route = rawRoute;
+        if (pathParams != null && pathParams.isNotEmpty) {
+          for (final entry in pathParams.entries) {
+            final key = entry.key;
+            final val = Uri.encodeComponent('${entry.value}');
+            route = route.replaceAll(':$key', val).replaceAll('{$key}', val);
+          }
+        }
+        if (queryParams != null && queryParams.isNotEmpty) {
+          final uri = Uri.tryParse(route);
+          if (uri != null) {
+            final merged = Map<String, dynamic>.from(uri.queryParameters);
+            for (final entry in queryParams.entries) {
+              merged[entry.key] = '${entry.value}';
+            }
+            final newQuery = Uri(queryParameters: merged).query;
+            final base = route.split('?').first;
+            route = newQuery.isNotEmpty ? '$base?$newQuery' : base;
+          }
+        }
+
+        final isDeepLink = p['deepLink'] == true || route.contains('://');
         final _ExtensionResult res;
-        if (p['deepLink'] == true) {
+        if (isDeepLink) {
           res = await _callExtensionRaw('ext.flutterpilot.simulateDeepLink', {
             'url': route,
           });
@@ -49,12 +79,33 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           });
         }
         if (res.isError) {
-          // The navigation never reached the app: the compact result says so
-          // instead of leaving it to the error text alone (task 07).
+          String? suggestion;
+          try {
+            final cfg = await _callExtensionRaw(
+              'ext.flutterpilot.getGoRouterConfig',
+              {},
+            );
+            if (!cfg.isError && cfg.data != null) {
+              final known = _extractRoutePaths(cfg.data);
+              if (known.isNotEmpty) {
+                final match = _findClosestPath(rawRoute, known);
+                suggestion = match != null
+                    ? ' Did you mean "$match"? Known routes: ${known.take(5).join(', ')}.'
+                    : ' Known routes: ${known.take(5).join(', ')}.';
+              }
+            }
+          } catch (_) {}
+
+          final errText =
+              '${res.errorMessage ?? 'Navigation failed'}.${suggestion ?? ''}';
           return withVerdict(
-            res.toCallToolResult(),
+            CallToolResult(
+              isError: true,
+              content: [TextContent(text: errText)],
+            ),
             navigationVerdict(
-              requested: route,
+              requested: rawRoute,
+              resolvedUri: route,
               waitRequired: (p['waitFor']?.toString() ?? '').isNotEmpty,
               completed: false,
               uncertain: true,
@@ -108,12 +159,15 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
               ? ' But "$waitFor" did not appear within 5 s.'
               : ' "$waitFor" is on screen.';
         }
+        final routeLabel = rawRoute != route
+            ? '$route (from "$rawRoute")'
+            : route;
         return CallToolResult(
           isError: missing,
           content: [
             TextContent(
               text:
-                  'Navigated to "$route"${now != null ? '. Stack: $now' : ''}.'
+                  'Navigated to "$routeLabel"${now != null ? '. Stack: $now' : ''}.'
                   '$waited${screenFuture == null ? await _screenAfter(route: false) : await screenFuture}',
             ),
           ],
@@ -121,7 +175,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           // is, whether the wait succeeded, and whether the route is
           // confirmed (an unreadable stack leaves it uncertain).
           structuredContent: navigationVerdict(
-            requested: route,
+            requested: rawRoute,
+            resolvedUri: route,
             current: current,
             waitRequired: waitRequired,
             waitStatus: waitRequired ? (missing ? 'missing' : 'found') : null,
@@ -795,6 +850,52 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       );
     }
     return (line: '✓ $label (viewport now $after)', failed: false);
+  }
+
+  List<String> _extractRoutePaths(Object? data, [String parent = '']) {
+    final paths = <String>[];
+    if (data is List) {
+      for (final item in data) {
+        paths.addAll(_extractRoutePaths(item, parent));
+      }
+    } else if (data is Map) {
+      final rawPath = data['path']?.toString();
+      var currentPath = parent;
+      if (rawPath != null && rawPath.isNotEmpty) {
+        if (rawPath.startsWith('/')) {
+          currentPath = rawPath;
+        } else {
+          currentPath = parent.endsWith('/')
+              ? '$parent$rawPath'
+              : '$parent/$rawPath';
+        }
+        paths.add(currentPath);
+      }
+      final children = data['children'] ?? data['routes'];
+      if (children != null) {
+        paths.addAll(_extractRoutePaths(children, currentPath));
+      }
+    }
+    return paths;
+  }
+
+  String? _findClosestPath(String target, List<String> paths) {
+    if (paths.isEmpty) return null;
+    final cleanTarget = target.split('?').first.toLowerCase();
+    String? best;
+    int bestMatchLength = 0;
+    for (final p in paths) {
+      final cleanP = p.toLowerCase();
+      if (cleanP == cleanTarget) return p;
+      if (cleanP == '/') continue;
+      if (cleanP.startsWith(cleanTarget) || cleanTarget.startsWith(cleanP)) {
+        if (cleanP.length > bestMatchLength) {
+          best = p;
+          bestMatchLength = cleanP.length;
+        }
+      }
+    }
+    return best ?? paths.firstWhere((p) => p != '/', orElse: () => paths.first);
   }
 }
 

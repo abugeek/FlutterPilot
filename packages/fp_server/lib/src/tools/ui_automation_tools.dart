@@ -8,13 +8,15 @@ String _widgetDiffSummary(Map<String, dynamic>? widgetDiff) {
   final added = widgetDiff['addedCount'] ?? 0;
   final removed = widgetDiff['removedCount'] ?? 0;
   final modified = widgetDiff['modifiedCount'] ?? 0;
-  final buffer = StringBuffer(
-    ' Widget tree: +$added / -$removed / ~$modified.',
-  );
+  final moved = widgetDiff['movedCount'] ?? 0;
+  final counts =
+      '+$added / -$removed / ~$modified${moved > 0 ? ' / ↕$moved shifted' : ''}';
+  final buffer = StringBuffer(' Widget tree: $counts.');
   final samples = <String>[
     ...(widgetDiff['added'] as List? ?? const []).map((s) => '+ $s'),
     ...(widgetDiff['modified'] as List? ?? const []).map((s) => '~ $s'),
     ...(widgetDiff['removed'] as List? ?? const []).map((s) => '- $s'),
+    ...(widgetDiff['moved'] as List? ?? const []).map((s) => '↕ $s'),
   ];
   if (samples.isNotEmpty) {
     buffer.write('\n  ${samples.take(5).join('\n  ')}');
@@ -1487,10 +1489,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       'execute_action_chain',
       description:
           'Runs a known sequence of steps in one call, stopping at the first '
-          'that fails: taps, text, keys, scrolls, navigation, mocks/settings, '
-          'and wait_for / assert_widget checks between them. Returns each '
-          'step\'s outcome and the screen after the last one (route, diff, '
-          'tappable elements).',
+          'that fails. Returns each step\'s outcome and post-chain screen state '
+          '(route, visual diff, elements).',
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(

@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46865 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46916 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -227,7 +227,7 @@ _Read-only._
 
 ## `execute_action_chain`
 
-Runs a known sequence of steps in one call, stopping at the first that fails: taps, text, keys, scrolls, navigation, mocks/settings, and wait_for / assert_widget checks between them. Returns each step's outcome and the screen after the last one (route, diff, tappable elements).
+Runs a known sequence of steps in one call, stopping at the first that fails. Returns each step's outcome and post-chain screen state (route, visual diff, elements).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -300,16 +300,18 @@ Brings the connected app back to the foreground on the iOS simulator (after nati
 
 ## `navigate_to`
 
-Goes to a route directly, e.g. "/profile/123" (go_router: router.go; otherwise Navigator.pushNamed). Back: press_key("back").
+Goes to a route or deep link directly (go_router: router.go; otherwise Navigator.pushNamed). Back: press_key("back").
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `route` | string | yes | Route or deep-link URL (e.g. "/home", "/profile/123"). |
+| `route` | string | yes | Route or deep link URL (e.g. "/home", "/story/:id"). |
 | `action` | string: go \| push \| replace | no | Default "go". push/replace need the go_router plugin. |
 | `deepLink` | boolean | no | Open route as an OS deep link (myapp://product/1). |
 | `waitFor` | string | no | Key or text to wait for on the new page. |
+| `pathParams` | object | no | Dynamic params (e.g. {"id": "123"}). |
+| `queryParams` | object | no | Query params (e.g. {"tab": "all"}). |
 
-**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: string, current?: string, waitRequired: bool, waitStatus?: "found"|"missing", completed: bool, uncertain: bool, status?: "ok"|"refused"|"unavailable"}`
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: string, resolvedUri?: string, current?: string, waitRequired: bool, waitStatus?: "found"|"missing", completed: bool, uncertain: bool, status?: "ok"|"refused"|"unavailable"}`
 
 ## `get_navigation_stack`
 

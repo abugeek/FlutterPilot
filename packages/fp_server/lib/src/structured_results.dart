@@ -355,6 +355,7 @@ final structuredContracts = <String, StructuredSpec>{
   }),
   'navigate_to': StructuredSpec.object({
     'requested': _req(StructuredSpec.string()),
+    'resolvedUri': _opt(StructuredSpec.string()),
     'current': _opt(StructuredSpec.string()),
     'waitRequired': _req(StructuredSpec.boolean()),
     'waitStatus': _opt(StructuredSpec.string(oneOf: {'found', 'missing'})),
@@ -765,6 +766,7 @@ Map<String, dynamic> auditVerdict({
 /// app; it is absent on a normal navigation.
 Map<String, dynamic> navigationVerdict({
   required String requested,
+  String? resolvedUri,
   String? current,
   required bool waitRequired,
   String? waitStatus,
@@ -773,6 +775,7 @@ Map<String, dynamic> navigationVerdict({
   String? status,
 }) => {
   'requested': Redaction.text(requested),
+  'resolvedUri': ?(resolvedUri == null ? null : Redaction.text(resolvedUri)),
   'current': ?(current == null ? null : Redaction.text(current)),
   'waitRequired': waitRequired,
   'waitStatus': ?waitStatus,
