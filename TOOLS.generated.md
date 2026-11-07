@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46269 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46548 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -162,11 +162,14 @@ Drives a widget with swipe, drag, pinch, focus or slide. Reports what changed in
 
 ## `scroll_into_view`
 
-Scrolls the lists on screen until the widget (key, selector or text) is on screen, including items a lazy list has not built yet and cards in a horizontal list inside a vertical one. tap_widget already does this before tapping.
+Scrolls until widget (key, selector, or text) is visible. Pass tap: true to tap once visible.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or text of the widget. |
+| `tap` | boolean | no | Whether to tap the widget once scrolled into view. |
+| `waitFor` | string | no | Optional widget to wait for after tapping. |
+| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
 
 ## `toggle_checkbox`
 
@@ -558,13 +561,15 @@ _Read-only._
 
 ## `get_shared_preferences`
 
-SharedPreferences keys with their typed values. Values of sensitive-looking keys (token, password, secret, auth, ...) are redacted.
+Reads SharedPreferences. Filter with key or query; sensitive keys are redacted.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `showSensitive` | boolean | no | Reveal the values of sensitive-looking keys. |
+| `key` | string | no | Specific key to read. |
+| `query` | string | no | Key substring filter. |
+| `showSensitive` | boolean | no | Reveal sensitive values. |
 
 ## `set_shared_preference`
 
@@ -772,7 +777,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `verify_feature`
 
-Checks a feature against acceptance criteria and writes a pass/fail report. Start with feature + criteria. Then for each: criterion: N, drive app and check with assert_widget, wait_for or compare_screenshot. finish:true writes report.md with steps, requests, errors and screenshot.
+Verifies a feature against criteria and writes report.md. Pass feature + criteria (with optional asserts), or select criterion N then finish: true.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -780,6 +785,8 @@ Checks a feature against acceptance criteria and writes a pass/fail report. Star
 | `criteria` | array | no | Acceptance criteria, one sentence each. |
 | `scenario` | string | no | With criteria: load this scenario first. |
 | `criterion` | integer | no | The criterion (1-based) the next calls are evidence for; picking one again starts its evidence over. |
+| `assert` | object | no | Assertion map for the selected criterion. |
+| `asserts` | array | no | List of assertion maps matching criteria. |
 | `finish` | boolean | no | Close the last criterion and write the report. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{feature?: string, criteria: [{index: int, text: string, verdict: "passed"|"failed"|"not_verified", warnings: int}], report?: string, status?: "ok"|"refused"|"unavailable", reason?: string} (finish, or a refusal)`
@@ -855,13 +862,14 @@ _Read-only._
 
 ## `get_secure_storage`
 
-FlutterSecureStorage keys, values redacted unless showValues is true; key reads one. Keys like password/secret/api_key are always redacted.
+FlutterSecureStorage keys (redacted). Filter with key or query; showValues reveals non-sensitive values.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Read only this key. |
+| `query` | string | no | Key substring filter. |
 | `showValues` | boolean | no | Reveal values (except always-redacted keys). |
 
 ## `set_secure_storage_key`

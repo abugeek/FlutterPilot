@@ -19,11 +19,9 @@ mixin _VerificationToolsMixin
     _tool(
       'verify_feature',
       description:
-          'Checks a feature against acceptance criteria and writes a '
-          'pass/fail report. Start with feature + criteria. Then for each: '
-          'criterion: N, drive app and check with assert_widget, wait_for or '
-          'compare_screenshot. finish:true writes report.md with steps, '
-          'requests, errors and screenshot.',
+          'Verifies a feature against criteria and writes report.md. Pass '
+          'feature + criteria (with optional asserts), or select criterion N '
+          'then finish: true.',
       inputSchema: ToolInputSchema(
         properties: {
           'feature': JsonSchema.string(description: 'What is verified.'),
@@ -39,6 +37,13 @@ mixin _VerificationToolsMixin
                 'The criterion (1-based) the next calls are evidence for; '
                 'picking one again starts its evidence over.',
           ),
+          'assert': JsonSchema.object(
+            description: 'Assertion map for the selected criterion.',
+          ),
+          'asserts': JsonSchema.array(
+            items: JsonSchema.object(),
+            description: 'List of assertion maps matching criteria.',
+          ),
           'finish': JsonSchema.boolean(
             description: 'Close the last criterion and write the report.',
           ),
@@ -50,12 +55,29 @@ mixin _VerificationToolsMixin
             .where((c) => c.isNotEmpty)
             .toList();
         if (criteria != null) {
-          return _startVerification(
+          final startResult = await _startVerification(
             params['feature']?.toString() ?? 'Feature',
             criteria,
             params['scenario']?.toString(),
             extra,
           );
+          if (startResult.isError) return startResult;
+          final v = _verification;
+          final asserts = params['asserts'] as List?;
+          if (v != null && asserts != null && asserts.isNotEmpty) {
+            final assertTool = _toolCallbacks['assert_widget'];
+            for (var i = 0; i < asserts.length && i < v.criteria.length; i++) {
+              await _selectCriterion(v, i + 1, extra);
+              final check = asserts[i];
+              if (check is Map<String, dynamic> && assertTool != null) {
+                await assertTool(check, extra);
+              }
+            }
+            if (params['finish'] != false) {
+              return _finishVerification(v, extra);
+            }
+          }
+          return startResult;
         }
         final v = _verification;
         if (v == null) {
@@ -68,7 +90,30 @@ mixin _VerificationToolsMixin
           if (n == null || n < 1 || n > v.criteria.length) {
             return _verifyError('criterion is 1–${v.criteria.length}.');
           }
-          return _selectCriterion(v, n, extra);
+          final selectRes = await _selectCriterion(v, n, extra);
+          final singleAssert = params['assert'];
+          if (singleAssert is Map<String, dynamic>) {
+            final assertTool = _toolCallbacks['assert_widget'];
+            if (assertTool != null) {
+              final assertRes = await assertTool(singleAssert, extra);
+              final text = assertRes.content
+                  .whereType<TextContent>()
+                  .map((c) => c.text)
+                  .join('\n');
+              final selText = selectRes.content
+                  .whereType<TextContent>()
+                  .map((c) => c.text)
+                  .join('\n');
+              return CallToolResult(
+                content: [
+                  TextContent(
+                    text: '$selText\nAssert: $text',
+                  ),
+                ],
+              );
+            }
+          }
+          return selectRes;
         }
         if (params['finish'] == true) return _finishVerification(v, extra);
         return CallToolResult(

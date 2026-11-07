@@ -707,21 +707,93 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'scroll_into_view',
       description:
-          'Scrolls the lists on screen until the widget (key, selector or '
-          'text) is on screen, including items a lazy list has not built yet '
-          'and cards in a horizontal list inside a vertical one. tap_widget '
-          'already does this before tapping.',
+          'Scrolls until widget (key, selector, or text) is visible. '
+          'Pass tap: true to tap once visible.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description: 'Key, selector or text of the widget.',
           ),
+          'tap': JsonSchema.boolean(
+            description: 'Whether to tap the widget once scrolled into view.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget to wait for after tapping.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor in ms (default 5000).',
+          ),
         },
       ),
-      callback: (p, e) => _callExtensionRaw(
-        'ext.flutterpilot.scrollIntoView',
-        p,
-      ).then((res) => res.toCallToolResult()),
+      callback: (p, e) async {
+        final scrollArgs = Map<String, dynamic>.of(p)
+          ..remove('tap')
+          ..remove('waitFor')
+          ..remove('timeoutMs');
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.scrollIntoView',
+          scrollArgs,
+        );
+        if (res.isError) return res.toCallToolResult();
+        if (p['tap'] == true) {
+          final target =
+              p['key'] ?? p['target'] ?? p['identifier'] ?? p['text'] ?? '';
+          final tapRes = await _callExtensionRaw(
+            'ext.flutterpilot.tapWidget',
+            {'key': target.toString()},
+          );
+          if (tapRes.isError) return tapRes.toCallToolResult();
+          final waitFor = p['waitFor']?.toString();
+          if (waitFor != null && waitFor.isNotEmpty) {
+            final fromRoute =
+                (tapRes.data?['delta'] as Map<String, dynamic>?)?['fromRoute'];
+            final waitRes = await _callExtensionRaw(
+              'ext.flutterpilot.waitForWidget',
+              {
+                'key': waitFor,
+                'timeoutMs':
+                    ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString(),
+                'previousRoute': ?fromRoute?.toString(),
+              },
+            );
+            if (waitRes.isError) {
+              return CallToolResult(
+                isError: true,
+                content: [
+                  TextContent(
+                    text:
+                        '${_formatActionFeedback('Scrolled into view and tapped', p, tapRes)}\n'
+                        'But "$waitFor" did not appear: ${waitRes.errorMessage}',
+                  ),
+                ],
+              );
+            }
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text: _formatActionFeedback(
+                    'Scrolled into view and tapped "$target"; then appeared',
+                    const {},
+                    waitRes,
+                  ),
+                ),
+              ],
+            );
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: _formatActionFeedback(
+                  'Scrolled into view and tapped',
+                  p,
+                  tapRes,
+                ),
+              ),
+            ],
+          );
+        }
+        return res.toCallToolResult();
+      },
     );
 
     _tool(

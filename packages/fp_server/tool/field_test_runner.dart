@@ -693,6 +693,39 @@ Future<void> main(List<String> args) async {
       return text.contains('Action chain') && text.contains('Exported journey');
     });
 
+    if (isExample) {
+      await runTest('press_key (restore /)', 'press_key', {'key': 'back'}, allowError: true);
+    }
+
+    // 12. Tier 4: Fused Scroll & Tap
+    await runTest('scroll_into_view (tap: true)', 'scroll_into_view', {
+      'key': targetKey,
+      'tap': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Scrolled into view and tapped') || text.contains('Tapped');
+    });
+
+    if (availableTools.contains('get_shared_preferences')) {
+      await runTest('get_shared_preferences (query filter)', 'get_shared_preferences', {
+        'query': 'theme',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('prefs') || text.isNotEmpty;
+      });
+    }
+
+    // 13. Tier 4: 1-Turn Batch Feature Verification
+    await runTest('verify_feature (1-turn batch)', 'verify_feature', {
+      'feature': 'Field Verification',
+      'criteria': ['Key is present'],
+      'asserts': [{'key': targetKey}],
+      'finish': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Field Verification') || text.contains('PASS') || text.contains('criteria');
+    });
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

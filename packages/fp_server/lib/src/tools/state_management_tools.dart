@@ -504,17 +504,46 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       },
     );
 
-    _registerAppTool(
-      name: 'get_shared_preferences',
+    _tool(
+      'get_shared_preferences',
       description:
-          'SharedPreferences keys with their typed values. Values of '
-          'sensitive-looking keys (token, password, secret, auth, ...) '
-          'are redacted.',
-      extension: 'ext.flutterpilot.getSharedPreferences',
-      properties: {
-        'showSensitive': JsonSchema.boolean(
-          description: 'Reveal the values of sensitive-looking keys.',
-        ),
+          'Reads SharedPreferences. Filter with key or query; sensitive '
+          'keys are redacted.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(description: 'Specific key to read.'),
+          'query': JsonSchema.string(
+            description: 'Key substring filter.',
+          ),
+          'showSensitive': JsonSchema.boolean(
+            description: 'Reveal sensitive values.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getSharedPreferences',
+          {
+            if (p['key'] != null) 'key': p['key'].toString(),
+            if (p['showSensitive'] == true) 'showSensitive': 'true',
+          },
+        );
+        if (res.isError) return res.toCallToolResult();
+        var data = res.data ?? <String, dynamic>{};
+        final query = p['query']?.toString().toLowerCase();
+        if (query != null && query.isNotEmpty && data['prefs'] is Map) {
+          final rawPrefs = (data['prefs'] as Map).cast<String, dynamic>();
+          final filtered = Map.fromEntries(
+            rawPrefs.entries.where(
+              (entry) => entry.key.toLowerCase().contains(query),
+            ),
+          );
+          data = {'prefs': filtered, 'count': filtered.length};
+        }
+        final text = jsonEncode(data);
+        return CallToolResult(
+          content: [TextContent(text: FlutterPilotServer._boundToolText(text))],
+        );
       },
     );
 

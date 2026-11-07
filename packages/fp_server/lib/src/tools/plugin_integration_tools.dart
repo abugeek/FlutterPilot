@@ -312,10 +312,22 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     // Secure Storage
     // =========================================================================
 
-    String formatSecureStorage(Map<String, dynamic> json) {
-      final keys = json['keys'] as Map? ?? {};
-      if (keys.isEmpty) return 'Secure storage is empty.';
-      final count = json['count'];
+    String formatSecureStorage(Map<String, dynamic> json, {String? query}) {
+      var keys = (json['keys'] as Map? ?? {}).cast<dynamic, dynamic>();
+      if (query != null && query.isNotEmpty) {
+        final q = query.toLowerCase();
+        keys = Map.fromEntries(
+          keys.entries.where(
+            (e) => e.key.toString().toLowerCase().contains(q),
+          ),
+        );
+      }
+      if (keys.isEmpty) {
+        return query != null && query.isNotEmpty
+            ? 'No keys matching "$query" in secure storage.'
+            : 'Secure storage is empty.';
+      }
+      final count = keys.length;
       final buf = StringBuffer('$count key(s) in secure storage:\n');
       for (final entry in keys.entries) {
         final info = entry.value as Map;
@@ -331,12 +343,14 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_secure_storage',
       description:
-          'FlutterSecureStorage keys, values redacted unless showValues is '
-          'true; key reads one. Keys like password/secret/api_key are always '
-          'redacted.',
+          'FlutterSecureStorage keys (redacted). Filter with key or query; '
+          'showValues reveals non-sensitive values.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(description: 'Read only this key.'),
+          'query': JsonSchema.string(
+            description: 'Key substring filter.',
+          ),
           'showValues': JsonSchema.boolean(
             description: 'Reveal values (except always-redacted keys).',
           ),
@@ -354,8 +368,11 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           {if (p['showValues'] == true) 'showValues': 'true'},
         );
         if (res.isError) return res.toCallToolResult();
+        final query = p['query']?.toString();
         return CallToolResult(
-          content: [TextContent(text: formatSecureStorage(res.data!))],
+          content: [
+            TextContent(text: formatSecureStorage(res.data!, query: query)),
+          ],
         );
       },
     );

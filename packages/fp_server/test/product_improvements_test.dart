@@ -350,6 +350,45 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('resetBaseline'), isTrue);
     });
 
+    test('scroll_into_view advertises tap and waitFor parameters', () {
+      final tools = server.toolListJson();
+      final scrollTool = tools.firstWhere((t) => t['name'] == 'scroll_into_view');
+      final schema = scrollTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('tap'), isTrue);
+      expect(props['tap']['type'], 'boolean');
+      expect(props.containsKey('waitFor'), isTrue);
+    });
+
+    test('get_shared_preferences advertises key and query parameters', () {
+      final tools = server.toolListJson();
+      final prefsTool = tools.firstWhere((t) => t['name'] == 'get_shared_preferences');
+      final schema = prefsTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('key'), isTrue);
+      expect(props.containsKey('query'), isTrue);
+    });
+
+    test('get_secure_storage advertises query parameter', () {
+      final tools = server.toolListJson();
+      final secTool = tools.firstWhere((t) => t['name'] == 'get_secure_storage');
+      final schema = secTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('key'), isTrue);
+    });
+
+    test('verify_feature advertises asserts and assert parameters', () {
+      final tools = server.toolListJson();
+      final vfTool = tools.firstWhere((t) => t['name'] == 'verify_feature');
+      final schema = vfTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('asserts'), isTrue);
+      expect(props['asserts']['type'], 'array');
+      expect(props.containsKey('assert'), isTrue);
+      expect(props['assert']['type'], 'object');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()
