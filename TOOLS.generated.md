@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 71
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 44998 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 45190 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -89,28 +89,13 @@ _Read-only._
 
 ## `get_rebuild_stats`
 
-Inspects widget rebuild counts, identifies hot rebuilders and cascades, and reports root rebuild frequency.
+How often each of the app's own widgets rebuilt, with where it is created (debug builds). The first call starts counting; do the action, call again (reset: true starts over). For CPU time per frame use profile_action.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `filter` | string | no | Widget type or key substring to filter results. |
 | `reset` | boolean | no | Reset rebuild counts and start a new observation window. |
 | `minCount` | integer | no | Minimum rebuild count to report (default 1). |
-
-## `locate_source_ast`
-
-Resolves a widget to its exact Dart source code AST node, constructor arguments, byte offsets, and patch range.
-
-_Read-only._
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Widget key to inspect. |
-| `mark` | integer | no | Set-of-Mark label index from capture_screenshot(labeled:true). |
-| `selector` | string | no | Text, type or fuzzy selector. |
-| `file` | string | no | Dart source file path (optional if key/mark given). |
-| `line` | integer | no | 1-based line number (optional if key/mark given). |
-| `column` | integer | no | 1-based column number (optional). |
 
 ## `tap_widget`
 
@@ -162,7 +147,6 @@ Drives a widget with a gesture other than a tap: swipe (scroll a list, dismiss a
 |---|---|---:|---|
 | `gesture` | string: swipe \| drag \| pinch \| focus \| slide | yes | swipe, drag, pinch, focus, or slide. |
 | `key` | string | no | Key or selector. Omit for focus to unfocus. |
-| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
 | `direction` | string: up \| down \| left \| right | no | Direction for swipe. |
 | `distance` | number | no | Distance in logical pixels. |
 | `fromKey` | string | no | Drag source key/selector. |
@@ -233,7 +217,7 @@ Layout and accessibility check: layout overflows, tap targets under the platform
 
 ## `audit_design_tokens`
 
-Audits screen styling against active ThemeData: flags unthemed raw hex colors and off-grid corner radii (non-4/8dp).
+Colors and corner radii the app's own widgets hard-code instead of taking from the theme's ColorScheme (radii off the 4dp grid), each with file:line and the closest token. Framework widgets are not checked. Debug builds.
 
 _Read-only._
 
@@ -352,7 +336,7 @@ Changes how the app renders — theme, locale, text scale, a simulated keyboard,
 
 ## `simulate_viewport_matrix`
 
-Tests the active screen across phone, tablet, and desktop viewports in one turn. Simulates standard dimensions (phone 390x844, tablet 768x1024, desktop 1280x800), checks each for layout overflows and cramped views, then restores original dimensions.
+Resizes a macOS/Windows desktop app's window to phone 390x844, tablet 768x1024 and desktop 1280x800, checks the screen for overflows and cramped lists at each, then restores the window (macOS). Desktop apps only.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -360,13 +344,12 @@ Tests the active screen across phone, tablet, and desktop viewports in one turn.
 
 ## `crawl_app`
 
-Spiders reachable routes, maps the route graph, and identifies overflows, a11y issues, and dead-ends in one turn.
+Finds reachable screens by tapping list rows, cards, tabs and navigation destinations (never buttons, toggles or rows named like actions), one row per list; returns the route graph and each screen's overflow/tap-target counts, then goes back.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `maxDepth` | integer | no | Maximum crawl depth from current screen (default 3). |
-| `maxScreens` | integer | no | Maximum distinct screens to visit (default 8). |
-| `restore` | boolean | no | Whether to navigate back to the initial route when done (default true). |
+| `maxScreens` | integer | no | Stop after this many taps (default 15). |
+| `restore` | boolean | no | Go back to the starting route at the end (default true). |
 
 ## `capture_screenshot`
 
@@ -632,15 +615,15 @@ _Read-only._
 
 ## `export_network_mocks`
 
-Converts captured HTTP requests into mock definitions and mock_http_response steps for offline testing.
+Turns the responses the app received (Dio) into mock_http_response steps, one per URL, ready for execute_action_chain; apply: true installs them now so the app runs offline on recorded data (scenario save keeps them). Says which bodies the log cut.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `filter` | string | no | URL substring or pattern to match. |
-| `format` | string: mcp_chain \| json \| dart | no | Output format (default "mcp_chain"). |
-| `statusCode` | integer | no | Override status code in generated mocks (optional). |
+| `filter` | string | no | Only URLs containing this. |
+| `statusCode` | integer | no | Use this status instead of the recorded one. |
+| `apply` | boolean | no | Install the mocks now instead of only listing them. |
 
 ## `get_memory_details`
 
@@ -675,6 +658,19 @@ HTTP requests the app made through any dart:io client (HttpClient, package:http,
 | `url` | string | no | Only requests whose URL contains this text. |
 | `id` | integer | no | The #number of a request in the list. |
 
+## `locate_source_ast`
+
+The source of the constructor call that creates a widget: the whole call as text, its file:line, its top-level named arguments, and its start/end offset in the file (for an exact edit). Give a widget (key, selector or text) or file + line + column. Debug builds.
+
+_Read-only._
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | Key, selector or visible text of the widget. |
+| `file` | string | no | File in the app, e.g. "lib/ui/tile.dart". |
+| `line` | integer | no | 1-based line, with file. |
+| `column` | integer | no | 1-based column where the call starts, with file. |
+
 ## `generate_test`
 
 Turns what you do in the app into an integration_test. start:true hot-restarts the app and records taps, text, keys, scrolls, drags, back, assert_widget, wait_for and mock_http_response. name:"checkout" then writes integration_test/checkout_test.dart, runs it on the same device and reports whether it passed, or the step it failed at. Obscured text is passed with --dart-define, never written. Takes minutes: the test builds the app again.
@@ -688,14 +684,14 @@ Turns what you do in the app into an integration_test. start:true hot-restarts t
 
 ## `synthesize_golden_test`
 
-Generates a runnable Flutter golden test matching the active route across phone, tablet, and desktop viewports.
+Writes and runs a golden widget test for one of the app's screens at phone, tablet and desktop sizes; returns the image paths to look at (no network, test font).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `name` | string | no | File name in test/goldens/ (default "screen_golden"). |
-| `screenWidget` | string | no | Root widget class name (e.g. "HomeScreen"). |
-| `viewports` | array | no | Viewports to test: "phone", "tablet", "desktop" (default all three). |
-| `write` | boolean | no | Write file to disk (default true). |
+| `screen` | string | yes | Class ("FeedScreen") or call ("StoryScreen(id: 1)"). |
+| `name` | string | no | lower_snake_case (default from screen). |
+| `viewports` | array | no | Default all three. |
+| `run` | boolean | no | Default true. |
 
 ## `scenario`
 

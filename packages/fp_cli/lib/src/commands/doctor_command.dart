@@ -276,7 +276,16 @@ class DoctorCommand extends Command<void> {
       String? command(Object? servers) {
         final entry = servers is Map ? servers['flutterpilot'] : null;
         final command = entry is Map ? entry['command'] : null;
-        return command is String ? command : null;
+        if (command is! String) return null;
+        // `dart run <script>`: the script is what must exist.
+        final args = (entry as Map)['args'];
+        if (p.basename(command).startsWith('dart') && args is List) {
+          return args.whereType<String>().firstWhere(
+            (a) => a.endsWith('.dart'),
+            orElse: () => command,
+          );
+        }
+        return command;
       }
 
       final projects = json['projects'];

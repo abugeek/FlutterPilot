@@ -534,9 +534,6 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'Key or selector. Omit for focus to unfocus.',
           ),
-          'mark': JsonSchema.integer(
-            description: 'Mark number from capture_screenshot(labeled: true).',
-          ),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
             description: 'Direction for swipe.',
@@ -547,9 +544,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'fromKey': JsonSchema.string(
             description: 'Drag source key/selector.',
           ),
-          'toKey': JsonSchema.string(
-            description: 'Drag target key/selector.',
-          ),
+          'toKey': JsonSchema.string(description: 'Drag target key/selector.'),
           'scale': JsonSchema.number(
             description: 'Pinch scale (>1 zoom in, <1 zoom out).',
           ),
@@ -558,9 +553,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'x': JsonSchema.number(description: 'Center x for pinch, with y.'),
           'y': JsonSchema.number(),
-          'value': JsonSchema.number(
-            description: 'Slider value for slide.',
-          ),
+          'value': JsonSchema.number(description: 'Slider value for slide.'),
         },
         required: ['gesture'],
       ),
@@ -733,7 +726,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description:
                 'Optional key/selector of the button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
           ),
-          'submit': JsonSchema.boolean(description: 'Tap the one primary button.'),
+          'submit': JsonSchema.boolean(
+            description: 'Tap the one primary button.',
+          ),
         },
         required: ['fields'],
       ),
@@ -903,14 +898,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final selector = p['selector'] ?? p['target'] ?? p['key'];
         if (selector != null) {
           final t = timeoutOf(3000);
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.waitForCondition',
-            {
-              'selector': selector.toString(),
-              'timeoutMs': ?timeout,
-              if (p['gone'] == true) 'gone': 'true',
-            },
-          );
+          final res =
+              await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
+                'selector': selector.toString(),
+                'timeoutMs': ?timeout,
+                if (p['gone'] == true) 'gone': 'true',
+              });
           if (res.isError) return unmet('key', t, res);
           return waited(
             p['gone'] == true
@@ -1096,9 +1089,11 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           section('Reading order jumps', jumps, (j) => '$j');
           final gridIssues = list('spacingGridIssues');
           section(
-            'Off-grid spacing (4/8dp)',
+            'Padding off the 4dp grid, set in the app\'s code',
             gridIssues,
-            (g) => '${g['widget']}: ${g['details']}',
+            (g) =>
+                '${g['widget']} ${g['source']}: ${g['details']}'
+                '${(g['count'] ?? 1) > 1 ? ' (×${g['count']})' : ''}',
           );
           final typography = list('typographyHierarchy');
           if (typography.isNotEmpty && !sweep) {
@@ -1322,42 +1317,59 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_design_tokens',
       description:
-          'Audits screen styling against active ThemeData: flags unthemed raw hex colors and off-grid corner radii (non-4/8dp).',
+          'Colors and corner radii the app\'s own widgets hard-code instead of '
+          'taking from the theme\'s ColorScheme (radii off the 4dp grid), each '
+          'with file:line and the closest token. Framework widgets are not '
+          'checked. Debug builds.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
-        final res = await _callExtensionRaw('ext.flutterpilot.auditDesignTokens', {});
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.auditDesignTokens',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
         final data = res.data ?? const <String, dynamic>{};
-        final score = data['tokenComplianceScore'] ?? 100;
-        final unthemed = (data['unthemedColors'] as List?) ?? const [];
-        final offGrid = (data['offGridBorderRadii'] as List?) ?? const [];
-        final prescriptions = (data['prescriptions'] as List?) ?? const [];
-
-        final buf = StringBuffer('Design Token & Theme Compliance Audit:\n');
-        buf.writeln('- Compliance Score: $score/100');
-        buf.writeln('- Unthemed Colors: ${unthemed.length}');
-        buf.writeln('- Off-grid Corner Radii: ${offGrid.length}');
-
-        if (unthemed.isNotEmpty) {
-          buf.writeln('\nUnthemed Colors:');
-          for (final u in unthemed) {
-            buf.writeln('  - ${u['color']} in ${u['widget']} -> suggested token: ${u['suggestedToken']}');
+        if (data['unavailable'] != null) {
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: '${data['unavailable']}')],
+          );
+        }
+        final colors = (data['unthemedColors'] as List?) ?? const [];
+        final radii = (data['offGridRadii'] as List?) ?? const [];
+        final colorCount = data['unthemedColorCount'] ?? colors.length;
+        final radiusCount = data['offGridRadiusCount'] ?? radii.length;
+        final buf = StringBuffer(
+          'Checked ${data['checked'] ?? 0} colors and radii set in the app\'s '
+          'code on this screen.',
+        );
+        if (colors.isEmpty && radii.isEmpty) {
+          buf.write(' All come from the theme.');
+        }
+        String at(Map m) => m['location'] != null ? ' at ${m['location']}' : '';
+        if (colors.isNotEmpty) {
+          buf.write('\nNot from the ColorScheme ($colorCount):');
+          for (final c in colors.cast<Map>()) {
+            buf.write(
+              '\n  ${c['color']} in ${c['widget']}${at(c)} '
+              '(closest: ${c['closestToken']})',
+            );
+          }
+          if (colorCount is int && colorCount > colors.length) {
+            buf.write('\n  … ${colorCount - colors.length} more');
           }
         }
-        if (offGrid.isNotEmpty) {
-          buf.writeln('\nOff-grid Corner Radii:');
-          for (final r in offGrid) {
-            buf.writeln('  - ${r['radius']}dp in ${r['widget']} -> snap to ${r['suggestedRadius']}dp');
+        if (radii.isNotEmpty) {
+          buf.write('\nCorner radii off the 4dp grid ($radiusCount):');
+          for (final r in radii.cast<Map>()) {
+            buf.write(
+              '\n  ${r['radius']} in ${r['widget']}${at(r)} '
+              '(nearest: ${r['nearest']})',
+            );
           }
         }
-        if (prescriptions.isNotEmpty) {
-          buf.writeln('\nPrescriptions:');
-          for (final pr in prescriptions) {
-            buf.writeln('  • $pr');
-          }
-        }
-
         return CallToolResult(
-          content: [TextContent(text: buf.toString().trim())],
+          content: [TextContent(text: buf.toString())],
           structuredContent: data,
         );
       },

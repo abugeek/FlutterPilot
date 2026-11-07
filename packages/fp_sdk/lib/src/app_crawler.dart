@@ -2,75 +2,54 @@ import 'navigation_tracker.dart';
 import 'ui_health_auditor.dart';
 import 'widget_inspector.dart';
 
-/// Client-side app crawling and route graph discovery for FlutterPilot.
+/// What crawl_app may tap on the current screen, and the screen's health.
 ///
-/// Finds navigable elements on the active screen, filters out destructive
-/// actions, and reports candidates for route exploration.
+/// Only navigation-shaped elements: list rows, cards, tabs and navigation
+/// destinations. Buttons, chips, checkboxes and switches are never tapped —
+/// they save, send, toggle or open links (an "Open link" button leaves the
+/// app). A row whose label reads like an action is skipped too.
 class AppCrawler {
   AppCrawler._();
 
-  static const _destructivePatterns = <String>[
-    'delete',
-    'remove',
-    'logout',
-    'sign out',
-    'signout',
-    'clear',
-    'reset',
-    'exit',
-    'discard',
-    'cancel subscription',
-  ];
+  static const _navigationTypes = <String>{
+    'ListTile',
+    'Card',
+    'InkWell',
+    'NavigationDestination',
+    'NavigationRailDestination',
+    'BottomNavigationBarItem',
+    'Tab',
+  };
 
-  /// Gathers navigation candidates from the current screen.
+  static final _actionWords = RegExp(
+    r'\b(delete|remove|log ?out|sign ?out|clear|reset|exit|discard|cancel|'
+    r'save|bookmark|share|send|submit|buy|pay|order|checkout|confirm|call|'
+    r'open link|download|install|unsubscribe|archive|block|report)\b',
+    caseSensitive: false,
+  );
+
   static Map<String, dynamic> inspectScreenForCrawl() {
-    final currentRoute = NavigationTracker.currentRoute.isEmpty
-        ? '/'
-        : NavigationTracker.currentRoute;
-    final interactive = PilotWidgetInspector.getInteractiveElements();
-
-    final navigableCandidates = <Map<String, dynamic>>[];
-
-    for (final el in interactive) {
-      final label = (el['text'] ?? el['label'] ?? el['key'] ?? el['type'] ?? '').toString();
-      final lowerLabel = label.toLowerCase();
-
-      // Skip destructive buttons
-      final isDestructive = _destructivePatterns.any(
-        (pattern) => lowerLabel.contains(pattern),
-      );
-      if (isDestructive) continue;
-
-      // Identify navigation-friendly elements
+    final candidates = <Map<String, dynamic>>[];
+    for (final el in PilotWidgetInspector.getInteractiveElements()) {
       final type = (el['type'] ?? '').toString();
-      final isNavFriendly = type.contains('ListTile') ||
-          type.contains('Tab') ||
-          type.contains('BottomNavigationBar') ||
-          type.contains('NavigationDestination') ||
-          type.contains('Card') ||
-          type.contains('Button') ||
-          type.contains('InkWell');
-
-      if (isNavFriendly && label.isNotEmpty) {
-        navigableCandidates.add({
-          'label': label,
-          'type': type,
-          'key': el['key'],
-          'bounds': el['bounds'],
-        });
-      }
+      final label = (el['text'] ?? el['label'] ?? el['key'] ?? '').toString();
+      if (!_navigationTypes.contains(type) || label.isEmpty) continue;
+      if (_actionWords.hasMatch(label)) continue;
+      candidates.add({
+        'label': label,
+        'type': type,
+        'key': el['key'],
+        'bounds': el['bounds'],
+      });
     }
-
-    final health = UiHealthAuditor.audit(designQuality: true);
-
+    final health = UiHealthAuditor.audit();
     return {
-      'currentRoute': currentRoute,
-      'isHealthy': health['isHealthy'],
+      'currentRoute': NavigationTracker.currentRoute.isEmpty
+          ? '/'
+          : NavigationTracker.currentRoute,
       'overflowCount': health['overflowCount'],
       'accessibilityIssueCount': health['accessibilityIssueCount'],
-      'navigableCandidateCount': navigableCandidates.length,
-      'navigableCandidates': navigableCandidates.take(10).toList(),
-      'healthSummary': health,
+      'navigableCandidates': candidates,
     };
   }
 }

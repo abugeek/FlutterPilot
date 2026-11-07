@@ -328,76 +328,118 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
     _tool(
       'export_network_mocks',
       description:
-          'Converts captured HTTP requests into mock definitions and mock_http_response steps for offline testing.',
+          'Turns the responses the app received (Dio) into mock_http_response '
+          'steps, one per URL, ready for execute_action_chain; apply: true '
+          'installs them now so the app runs offline on recorded data '
+          '(scenario save keeps them). Says which bodies the log cut.',
       inputSchema: ToolInputSchema(
         properties: {
           'filter': JsonSchema.string(
-            description: 'URL substring or pattern to match.',
-          ),
-          'format': JsonSchema.string(
-            enumValues: ['mcp_chain', 'json', 'dart'],
-            description: 'Output format (default "mcp_chain").',
+            description: 'Only URLs containing this.',
           ),
           'statusCode': JsonSchema.integer(
-            description: 'Override status code in generated mocks (optional).',
+            description: 'Use this status instead of the recorded one.',
+          ),
+          'apply': JsonSchema.boolean(
+            description: 'Install the mocks now instead of only listing them.',
           ),
         },
       ),
       callback: (p, e) async {
-        final logsRes = await _callExtensionRaw('ext.flutterpilot.getNetworkLogs', {});
-        final requests = (logsRes.data?['requests'] as List?) ?? const [];
+        final res = await _callExtensionRaw(
+          'ext.flutterpilot.getNetworkLogs',
+          {},
+        );
+        if (res.isError) return res.toCallToolResult();
         final filter = p['filter']?.toString();
-        final format = p['format']?.toString() ?? 'mcp_chain';
-        final statusOverride = (p['statusCode'] as num?)?.toInt();
-
-        final filtered = requests.where((r) {
-          if (r is! Map<String, dynamic>) return false;
-          final uri = r['url']?.toString() ?? r['uri']?.toString() ?? '';
-          if (filter != null && !uri.contains(filter)) return false;
-          return true;
-        }).cast<Map<String, dynamic>>().toList();
-
-        final mockSteps = <Map<String, dynamic>>[];
-        for (final req in filtered) {
-          final uri = req['url']?.toString() ?? req['uri']?.toString() ?? '';
-          final status = statusOverride ?? (req['statusCode'] as num?)?.toInt() ?? 200;
-          final responseBody = req['responseBody'] ?? req['response'] ?? req['data'];
-          final bodyStr = responseBody is String ? responseBody : jsonEncode(responseBody ?? {});
-
-          final pathPart = Uri.tryParse(uri)?.path ?? uri;
-          final urlPattern = '.*${RegExp.escape(pathPart)}.*';
-          mockSteps.add({
-            'urlPattern': urlPattern,
-            'statusCode': status,
-            'body': bodyStr,
+        final status = (p['statusCode'] as num?)?.toInt();
+        // Latest real (not mocked) response per URL.
+        final byUrl = <String, Map>{};
+        for (final log
+            in (res.data?['logs'] as List? ?? const []).whereType<Map>()) {
+          final uri = log['uri']?.toString();
+          if (log['type'] != 'response' ||
+              log['mocked'] == true ||
+              uri == null) {
+            continue;
+          }
+          if (filter != null && !uri.contains(filter)) continue;
+          byUrl[uri] = log;
+        }
+        if (byUrl.isEmpty) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'No recorded responses${filter != null ? ' matching "$filter"' : ''}. '
+                    'Drive the app so it makes the requests first (get_network_logs '
+                    'lists what it made).',
+              ),
+            ],
+          );
+        }
+        final steps = <Map<String, dynamic>>[];
+        final cut = <String>[];
+        for (final MapEntry(key: uri, value: log) in byUrl.entries) {
+          final u = Uri.tryParse(uri);
+          // mock_http_response matches URLs that contain the pattern.
+          final pattern = u == null
+              ? uri
+              : '${u.host}${u.path}${u.hasQuery ? '?${u.query}' : ''}';
+          final body = log['body'];
+          if (log['bodyCut'] == true) cut.add(pattern);
+          steps.add({
+            'tool': 'mock_http_response',
+            'arguments': {
+              'urlPattern': pattern,
+              'statusCode':
+                  status ?? (log['statusCode'] as num?)?.toInt() ?? 200,
+              'body': body is String ? body : jsonEncode(body ?? ''),
+            },
           });
         }
-
-        final buf = StringBuffer('Exported Network Mocks (${mockSteps.length} endpoint(s)):\n');
-        if (format == 'mcp_chain') {
-          buf.writeln('Action chain steps ready for execute_action_chain:\n```json');
-          final chain = [
-            for (final m in mockSteps)
-              {'action': 'mock_http_response', 'params': m},
-          ];
-          buf.writeln(const JsonEncoder.withIndent('  ').convert(chain));
-          buf.writeln('```');
-        } else if (format == 'dart') {
-          buf.writeln('Dart test mocks:\n```dart');
-          for (final m in mockSteps) {
-            buf.writeln('// Mock ${m['urlPattern']}');
-            buf.writeln('dioAdapter.onGet("${m['urlPattern']}", (server) => server.reply(${m['statusCode']}, ${m['body']}));');
-          }
-          buf.writeln('```');
-        } else {
-          buf.writeln(const JsonEncoder.withIndent('  ').convert(mockSteps));
+        final buf = StringBuffer('${steps.length} URL(s) recorded.');
+        if (cut.isNotEmpty) {
+          buf.write(
+            '\n${cut.length} bodies are not the whole response (the log keeps '
+            '20 list items and 4 KB of text, and masks credential fields): '
+            '${cut.take(5).join(', ')}${cut.length > 5 ? ', …' : ''}. A mock of '
+            'those answers less than the server did.',
+          );
         }
-
+        if (p['apply'] == true) {
+          final mock = _toolCallbacks['mock_http_response']!;
+          var failed = 0;
+          for (final step in steps) {
+            final r = await mock(
+              Map<String, dynamic>.from(step['arguments'] as Map),
+              e,
+            );
+            if (r.isError == true) failed++;
+          }
+          buf.write(
+            '\nInstalled ${steps.length - failed} mock(s)'
+            '${failed > 0 ? ', $failed refused' : ''}. '
+            'mock_http_response(clear: true) removes them.',
+          );
+        } else {
+          final json = jsonEncode(steps);
+          buf.write(
+            json.length <= 6000
+                ? '\nSteps for execute_action_chain:\n$json'
+                : '\nThe steps are ${json.length} characters: apply: true '
+                      'installs them without listing them, or narrow with '
+                      'filter. URLs: ${byUrl.keys.take(10).join(', ')}'
+                      '${byUrl.length > 10 ? ', …' : ''}',
+          );
+        }
         return CallToolResult(
-          content: [TextContent(text: buf.toString().trim())],
+          content: [TextContent(text: buf.toString())],
           structuredContent: {
-            'count': mockSteps.length,
-            'mocks': mockSteps,
+            'count': steps.length,
+            'cut': cut,
+            'applied': p['apply'] == true,
           },
         );
       },

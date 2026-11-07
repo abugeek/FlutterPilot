@@ -127,12 +127,22 @@ Future<void> runFlutterPilotServer(List<String> args) async {
     advertiseOutputSchemas: results['output-schemas'] as bool,
   );
 
-  // Handle graceful shutdown
-  ProcessSignal.sigint.watch().listen((_) async {
+  // Shut down on Ctrl-C, SIGTERM, or when the client closes stdin — without
+  // the last one a client that just closes the pipe leaves the server running.
+  var shuttingDown = false;
+  Future<void> shutdown() async {
+    if (shuttingDown) return;
+    shuttingDown = true;
     logging.Logger('main').info('Shutting down FlutterPilot server...');
-    await server.stop();
+    await server.stop().timeout(const Duration(seconds: 5), onTimeout: () {});
     exit(0);
-  });
+  }
+
+  ProcessSignal.sigint.watch().listen((_) => shutdown());
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) => shutdown());
+  }
+  server.server.server.onclose = shutdown;
 
   try {
     await server.start();

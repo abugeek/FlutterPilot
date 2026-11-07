@@ -537,13 +537,15 @@ extension _WidgetExtensions on FlutterPilot {
 
       int? mark = int.tryParse(parameters['mark'] ?? '');
       int? semanticsId = int.tryParse(parameters['semanticsId'] ?? '');
-      final rawTarget =
+      var rawTarget =
           parameters['key'] ??
           parameters['target'] ??
           parameters['identifier'] ??
           parameters['text'] ??
           parameters['type'];
 
+      Map<String, dynamic>? marked;
+      int? markIndex;
       if (mark == null && rawTarget != null) {
         final markMatch = RegExp(
           r'^(?:#|mark:?)(\d+)$',
@@ -555,13 +557,22 @@ extension _WidgetExtensions on FlutterPilot {
       }
 
       if (mark != null) {
-        final marked = SetOfMark.findByIndex(mark);
-        if (marked == null) {
+        markIndex = mark;
+        final found = SetOfMark.lookup(mark);
+        if (found.mark == null) {
           return ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
-            'Mark #$mark not found. Call capture_screenshot(labeled: true) to refresh marks.',
+            found.error!,
           );
         }
+        marked = found.mark;
+      }
+      // A mark with a key taps through the key, with all its checks
+      // (disabled, ambiguous); one without taps its spot.
+      if (marked != null && marked['key'] != null) {
+        rawTarget = marked['key'].toString();
+      } else if (marked != null) {
+        final mark = markIndex;
         final center = marked['center'] as Map<String, dynamic>?;
         if (center != null) {
           final x = (center['x'] as num).toDouble();
@@ -583,7 +594,7 @@ extension _WidgetExtensions on FlutterPilot {
             json.encode({
               'status': 'success',
               'mark': mark,
-              'target': marked,
+              'target': SetOfMark.describe(marked),
               'coordinates': {'x': x, 'y': y},
               ...after,
             }),
@@ -805,19 +816,26 @@ extension _WidgetExtensions on FlutterPilot {
         }
       }
       if (mark != null) {
-        final marked = SetOfMark.findByIndex(mark);
-        if (marked != null) {
-          target = marked['key'] ?? marked['text'] ?? marked['type'];
-          final center = marked['center'] as Map<String, dynamic>?;
-          if (center != null) {
-            await InteractionManager.tapAt(
-              Offset(
-                (center['x'] as num).toDouble(),
-                (center['y'] as num).toDouble(),
-              ),
-              label: 'mark #$mark',
-            );
-          }
+        final found = SetOfMark.lookup(mark);
+        final marked = found.mark;
+        if (marked == null) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            found.error!,
+          );
+        }
+        // By key when it has one; otherwise tap it so it is the focused
+        // field, which is what no target means.
+        target = marked['key']?.toString();
+        if (target == null) {
+          final center = marked['center'] as Map<String, dynamic>;
+          await InteractionManager.tapAt(
+            Offset(
+              (center['x'] as num).toDouble(),
+              (center['y'] as num).toDouble(),
+            ),
+            label: 'mark #$mark',
+          );
         }
       }
       final text = parameters['text'] ?? parameters['value'];
@@ -2046,11 +2064,7 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       final designQuality = parameters['designQuality'] == 'true';
-      final tokenAudit = parameters['tokenAudit'] == 'true';
-      final auditReport = UiHealthAuditor.audit(
-        designQuality: designQuality,
-        tokenAudit: tokenAudit,
-      );
+      final auditReport = UiHealthAuditor.audit(designQuality: designQuality);
       final a11y = await AccessibilityAuditor.audit();
       auditReport.addAll(a11y);
       auditReport['isHealthy'] =

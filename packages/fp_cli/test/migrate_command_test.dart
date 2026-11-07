@@ -108,8 +108,9 @@ void main() {
 
       // Verify Dart imports
       final dartContent = File(p.join(tempDir.path, 'tool', 'pilot_main.dart')).readAsStringSync();
-      expect(dartContent, contains("import 'package:fp_sdk/flutterpilot_sdk.dart';"));
-      expect(dartContent, contains("import 'package:fp_supabase/flutterpilot_supabase.dart';"));
+      // The old library names are deprecated shims: migrate imports the new.
+      expect(dartContent, contains("import 'package:fp_sdk/fp_sdk.dart';"));
+      expect(dartContent, contains("import 'package:fp_supabase/fp_supabase.dart';"));
       expect(dartContent, isNot(contains('package:flutterpilot_sdk/')));
 
       // Verify .mcp.json

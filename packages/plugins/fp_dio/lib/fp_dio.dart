@@ -129,8 +129,17 @@ class DioPilotInterceptor extends Interceptor {
     }
   }
 
-  static dynamic _sanitizeData(dynamic data, {int maxLen = 2048}) {
-    if (data == null) return null;
+  /// Whether the last [_sanitizeData] dropped or masked anything, so a body
+  /// in the log is known not to be the whole response.
+  static bool _lastCut = false;
+
+  static dynamic _sanitizeData(
+    dynamic data, {
+    int maxLen = 2048,
+    bool top = true,
+  }) {
+    if (top) _lastCut = false;
+    if (data == null || data is num || data is bool) return data;
     try {
       if (data is Map) {
         final sanitized = <String, dynamic>{};
@@ -138,21 +147,30 @@ class DioPilotInterceptor extends Interceptor {
           final k = entry.key.toString();
           if (_sensitiveKeys.hasMatch(k)) {
             sanitized[k] = '[REDACTED]';
+            _lastCut = true;
           } else {
-            sanitized[k] = _sanitizeData(entry.value, maxLen: maxLen);
+            sanitized[k] = _sanitizeData(
+              entry.value,
+              maxLen: maxLen,
+              top: false,
+            );
           }
         }
         return sanitized;
       }
       if (data is List) {
+        if (data.length > 20) _lastCut = true;
         return data
             .take(20)
-            .map((e) => _sanitizeData(e, maxLen: maxLen))
+            .map((e) => _sanitizeData(e, maxLen: maxLen, top: false))
             .toList();
       }
       // Text bodies (form data, raw JSON) may carry credentials too.
-      final str = FlutterPilot.redactText(data.toString());
+      final raw = data.toString();
+      final str = FlutterPilot.redactText(raw);
+      if (str != raw) _lastCut = true;
       if (str.length > maxLen) {
+        _lastCut = true;
         return '${str.substring(0, maxLen)}... [Truncated]';
       }
       return str;
@@ -390,6 +408,7 @@ class DioPilotInterceptor extends Interceptor {
       'uri': FlutterPilot.redactText(response.requestOptions.uri.toString()),
       if (isMocked) 'mocked': true,
       if (resBody != null) 'body': resBody,
+      if (resBody != null && _lastCut) 'bodyCut': true,
       'timestamp': DateTime.now().toIso8601String(),
     });
     super.onResponse(response, handler);

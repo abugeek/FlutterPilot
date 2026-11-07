@@ -47,9 +47,15 @@ void main() {
       expect(properties['labeled']['type'], 'boolean');
     });
 
-    test('tap_widget, enter_text, gesture_widget support mark parameter', () {
+    test('tap_widget and enter_text take a mark; gesture_widget does not', () {
       final tools = server.toolListJson();
-      for (final toolName in ['tap_widget', 'enter_text', 'gesture_widget']) {
+      final gesture = tools.firstWhere((t) => t['name'] == 'gesture_widget');
+      expect(
+        (gesture['inputSchema']['properties'] as Map).containsKey('mark'),
+        isFalse,
+        reason: 'the SDK gestures do not resolve marks',
+      );
+      for (final toolName in ['tap_widget', 'enter_text']) {
         final tool = tools.firstWhere((t) => t['name'] == toolName);
         final schema = tool['inputSchema'] as Map<String, dynamic>;
         final properties = schema['properties'] as Map<String, dynamic>;
@@ -62,13 +68,12 @@ void main() {
       }
     });
 
-    test('crawl_app inputSchema defines maxScreens, maxDepth, and restore', () {
+    test('crawl_app inputSchema defines maxScreens and restore', () {
       final tools = server.toolListJson();
       final crawlTool = tools.firstWhere((t) => t['name'] == 'crawl_app');
       final schema = crawlTool['inputSchema'] as Map<String, dynamic>;
       final properties = schema['properties'] as Map<String, dynamic>;
       expect(properties.containsKey('maxScreens'), isTrue);
-      expect(properties.containsKey('maxDepth'), isTrue);
       expect(properties.containsKey('restore'), isTrue);
     });
 
@@ -82,33 +87,34 @@ void main() {
       expect(properties.containsKey('minCount'), isTrue);
     });
 
-    test('locate_source_ast inputSchema defines key, mark, and file/line', () {
+    test('locate_source_ast inputSchema defines key and file/line/column', () {
       final tools = server.toolListJson();
       final astTool = tools.firstWhere((t) => t['name'] == 'locate_source_ast');
       final schema = astTool['inputSchema'] as Map<String, dynamic>;
       final properties = schema['properties'] as Map<String, dynamic>;
       expect(properties.containsKey('key'), isTrue);
-      expect(properties.containsKey('mark'), isTrue);
       expect(properties.containsKey('file'), isTrue);
       expect(properties.containsKey('line'), isTrue);
+      expect(properties.containsKey('column'), isTrue);
     });
 
-    test('export_network_mocks inputSchema defines filter and format', () {
+    test('export_network_mocks inputSchema defines filter and apply', () {
       final tools = server.toolListJson();
       final mockTool = tools.firstWhere((t) => t['name'] == 'export_network_mocks');
       final schema = mockTool['inputSchema'] as Map<String, dynamic>;
       final properties = schema['properties'] as Map<String, dynamic>;
       expect(properties.containsKey('filter'), isTrue);
-      expect(properties.containsKey('format'), isTrue);
+      expect(properties.containsKey('apply'), isTrue);
     });
 
-    test('synthesize_golden_test inputSchema defines name, screenWidget, viewports', () {
+    test('synthesize_golden_test inputSchema defines screen, name, viewports', () {
       final tools = server.toolListJson();
       final goldenTool = tools.firstWhere((t) => t['name'] == 'synthesize_golden_test');
       final schema = goldenTool['inputSchema'] as Map<String, dynamic>;
       final properties = schema['properties'] as Map<String, dynamic>;
       expect(properties.containsKey('name'), isTrue);
-      expect(properties.containsKey('screenWidget'), isTrue);
+      expect(properties.containsKey('screen'), isTrue);
+      expect(schema['required'], ['screen']);
       expect(properties.containsKey('viewports'), isTrue);
     });
 
