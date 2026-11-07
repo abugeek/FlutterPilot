@@ -756,6 +756,43 @@ Future<void> main(List<String> args) async {
       });
     }
 
+    // 17. Tier 6: Element-Scoped Screenshot Crop
+    await runTest('capture_screenshot (element crop)', 'capture_screenshot', {
+      'key': targetKey,
+    }, verify: (r) {
+      final content = r['content'] as List?;
+      return content != null && content.any((c) => c['type'] == 'image');
+    });
+
+    // 18. Tier 6: Fused Inspection + Properties
+    await runTest('inspect_widget (properties: true)', 'inspect_widget', {
+      'key': targetKey,
+      'properties': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('widget') || text.contains('properties') || text.contains('target');
+    });
+
+    // 19. Tier 6: Targeted Semantics Query Filter
+    await runTest('get_semantics_tree (query filter)', 'get_semantics_tree', {
+      'query': 'add',
+    }, allowError: true, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.isNotEmpty;
+    });
+
+    // 20. Tier 6: Fused Gesture & Settlement
+    await runTest('gesture_widget (waitFor settlement)', 'gesture_widget', {
+      'gesture': 'swipe',
+      'key': targetKey,
+      'direction': 'down',
+      'distance': 40,
+      'waitFor': targetKey,
+    }, allowError: true, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Swipe') || text.contains('appeared') || text.contains('complete');
+    });
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

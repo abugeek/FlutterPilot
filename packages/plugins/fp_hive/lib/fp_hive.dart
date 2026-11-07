@@ -177,8 +177,25 @@ class HivePilotInspector {
       method,
       parameters,
     ) async {
+      final boxFilter = parameters['box'];
+      final query = parameters['query']?.toLowerCase();
+      var c = contents();
+      if (boxFilter != null && boxFilter.isNotEmpty) {
+        c = {if (c.containsKey(boxFilter)) boxFilter: c[boxFilter]};
+      }
+      if (query != null && query.isNotEmpty) {
+        c = {
+          for (final entry in c.entries)
+            entry.key: {
+              for (final kv in (entry.value as Map).entries)
+                if (kv.key.toString().toLowerCase().contains(query) ||
+                    kv.value.toString().toLowerCase().contains(query))
+                  kv.key: kv.value,
+            },
+        };
+      }
       return ServiceExtensionResponse.result(
-        json.encode({'contents': contents()}),
+        json.encode({'contents': c}),
       );
     });
 

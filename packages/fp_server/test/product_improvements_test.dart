@@ -431,6 +431,51 @@ class MyList extends StatelessWidget {
       expect(props['key']['type'], 'string');
     });
 
+    test('capture_screenshot advertises key parameter for element cropping', () {
+      final tools = server.toolListJson();
+      final csTool = tools.firstWhere((t) => t['name'] == 'capture_screenshot');
+      final schema = csTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('key'), isTrue);
+      expect(props['key']['type'], 'string');
+    });
+
+    test('inspect_widget advertises properties parameter', () {
+      final tools = server.toolListJson();
+      final iwTool = tools.firstWhere((t) => t['name'] == 'inspect_widget');
+      final schema = iwTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('properties'), isTrue);
+      expect(props['properties']['type'], 'boolean');
+    });
+
+    test('get_semantics_tree advertises query parameter', () {
+      final tools = server.toolListJson();
+      final stTool = tools.firstWhere((t) => t['name'] == 'get_semantics_tree');
+      final schema = stTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('gesture_widget advertises waitFor and timeoutMs parameters', () {
+      final tools = server.toolListJson();
+      final gwTool = tools.firstWhere((t) => t['name'] == 'gesture_widget');
+      final schema = gwTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('get_hive_contents advertises box and query parameters', () {
+      final tools = server.toolListJson();
+      final ghTool = tools.firstWhere((t) => t['name'] == 'get_hive_contents');
+      final schema = ghTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('box'), isTrue);
+      expect(props.containsKey('query'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

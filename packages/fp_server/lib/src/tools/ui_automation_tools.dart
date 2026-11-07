@@ -661,6 +661,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'x': JsonSchema.number(description: 'Center x for pinch, with y.'),
           'y': JsonSchema.number(),
           'value': JsonSchema.number(description: 'Slider value for slide.'),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget key to wait for after gesture.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor in ms (default 5000).',
+          ),
         },
         required: ['gesture'],
       ),
@@ -669,6 +675,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             CallToolResult(isError: true, content: [TextContent(text: text)]);
         final problem = gestureRequestError(p);
         if (problem != null) return error(problem);
+        final CallToolResult gestureResult;
         switch (p['gesture']) {
           case 'swipe':
             final res = await _callExtensionRaw(
@@ -680,7 +687,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               },
             );
             if (res.isError) return res.toCallToolResult();
-            return CallToolResult(
+            gestureResult = CallToolResult(
               content: [
                 TextContent(
                   text: _formatActionDelta(
@@ -699,7 +706,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               'toKey': p['toKey'],
             });
             if (res.isError) return res.toCallToolResult();
-            return CallToolResult(
+            gestureResult = CallToolResult(
               content: [
                 TextContent(
                   text: _formatActionDelta(
@@ -720,7 +727,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                   if (p['y'] != null) 'y': p['y'],
                 });
             if (res.isError) return res.toCallToolResult();
-            return CallToolResult(
+            gestureResult = CallToolResult(
               content: [
                 TextContent(text: _formatActionFeedback('Pinch zoom', p, res)),
               ],
@@ -755,10 +762,50 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                   'key': (p['key'] ?? p['target']).toString(),
                   'value': p['value'].toString(),
                 });
-            return res.toCallToolResult();
+            if (res.isError) return res.toCallToolResult();
+            gestureResult = res.toCallToolResult();
           default:
             return error('Unknown gesture "${p['gesture']}".');
         }
+
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': waitFor,
+              'timeoutMs':
+                  ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString(),
+            },
+          );
+          if (waitRes.isError) {
+            final text = gestureResult.content
+                .whereType<TextContent>()
+                .map((c) => c.text)
+                .join('\n');
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      '$text\nBut "$waitFor" did not appear: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
+          return CallToolResult(
+            content: [
+              TextContent(
+                text: _formatActionFeedback(
+                  'Gesture performed; then appeared',
+                  const {},
+                  waitRes,
+                ),
+              ),
+            ],
+          );
+        }
+        return gestureResult;
       },
     );
 

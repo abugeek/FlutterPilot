@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46954 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46947 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -162,6 +162,8 @@ Drives a widget with swipe, drag, pinch, focus or slide. Reports what changed in
 | `x` | number | no | Center x for pinch, with y. |
 | `y` | number | no |  |
 | `value` | number | no | Slider value for slide. |
+| `waitFor` | string | no | Optional widget key to wait for after gesture. |
+| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
 
 ## `scroll_into_view`
 
@@ -384,12 +386,13 @@ Finds reachable screens by tapping list rows, cards, tabs and navigation destina
 
 ## `capture_screenshot`
 
-Image of the app's screen, PNG at half size by default; scale 1.0 for full resolution, format "jpeg" for a smaller file. Use when you need to see layout, color or images — for text and structure get_app_summary or get_widget_tree are cheaper.
+Screenshot of the app screen (or specific widget with key). Supports scale, format, and labeled Set-of-Mark.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `key` | string | no | Optional widget key to crop screenshot to. |
 | `format` | string: png \| jpeg \| webp | no |  |
 | `scale` | number | no | 0.2–1.0 (default 0.5). |
 | `labeled` | boolean | no | Overlay numbered badges on interactive elements. |
@@ -460,7 +463,7 @@ _Read-only._
 
 ## `inspect_widget`
 
-Where a widget is in the app's code (file:line; for a framework widget, the app widget that builds it) and the app widgets above it. Pass key, or x,y from a screenshot. layout and style add the numbers a screenshot can't give. Use before editing UI code and to check a design spec; for a widget's current state get_widget_properties is cheaper.
+Where a widget is in source code (file:line), bounds, ancestors, layout constraints, styling, and semantic properties.
 
 _Read-only._
 
@@ -470,16 +473,18 @@ _Read-only._
 | `x` | number | no | X in logical pixels (top-left origin), with y. |
 | `y` | number | no | Y in logical pixels. |
 | `layout` | boolean | no | Also each box's constraints and size up the ancestors, and why it overflows or is 0 wide. |
-| `style` | boolean | no | Also text size, weight and color, paddings (left, top, right, bottom), fills, borders, radii and elevation of the widget and what it contains. |
+| `style` | boolean | no | Also text size, weight and color, paddings, fills, borders, radii and elevation of the widget. |
+| `properties` | boolean | no | Also include semantic properties (isEnabled, text, isChecked, etc.). |
 
 ## `get_semantics_tree`
 
-What a screen reader (VoiceOver/TalkBack) gets: per node id, label, value, hint, role flags, checked/enabled/focused and rect. Only what is set is listed: a missing flag is false, isChecked appears on checkable nodes, isEnabled only when false. Use to check labels for accessibility; semanticsId works in tap_widget.
+Screen reader semantics tree (VoiceOver/TalkBack): label, value, hint, role flags, and rect. Supports query filter and maxDepth.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `query` | string | no | Substring filter for node label, hint, value, or identifier. |
 | `maxDepth` | integer | no | Default 50. |
 
 ## `hot_reload`
@@ -550,12 +555,14 @@ _Read-only._
 
 ## `get_hive_contents`
 
-Keys and values of the Hive boxes the app registered with HivePilotInspector.registerBox, e.g. to check the UI saved something.
+Keys and values of registered Hive boxes. Supports box and substring query filter.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `box` | string | no | Optional Hive box name to filter. |
+| `query` | string | no | Substring filter for keys and values. |
 
 ## `exec_sql_query`
 

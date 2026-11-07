@@ -338,10 +338,17 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_hive_contents',
       description:
-          'Keys and values of the Hive boxes the app registered with '
-          'HivePilotInspector.registerBox, e.g. to check the UI saved '
-          'something.',
+          'Keys and values of registered Hive boxes. Supports box and '
+          'substring query filter.',
       extension: 'ext.flutterpilot.getHiveContents',
+      properties: {
+        'box': JsonSchema.string(
+          description: 'Optional Hive box name to filter.',
+        ),
+        'query': JsonSchema.string(
+          description: 'Substring filter for keys and values.',
+        ),
+      },
     );
 
     _tool(

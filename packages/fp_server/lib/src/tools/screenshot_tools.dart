@@ -433,12 +433,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'capture_screenshot',
       description:
-          'Image of the app\'s screen, PNG at half size by default; scale 1.0 '
-          'for full resolution, format "jpeg" for a smaller file. Use when you '
-          'need to see layout, color or images — for text and structure '
-          'get_app_summary or get_widget_tree are cheaper.',
+          'Screenshot of the app screen (or specific widget with key). '
+          'Supports scale, format, and labeled Set-of-Mark.',
       inputSchema: ToolInputSchema(
         properties: {
+          'key': JsonSchema.string(
+            description: 'Optional widget key to crop screenshot to.',
+          ),
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
           'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
           'labeled': JsonSchema.boolean(
@@ -478,7 +479,46 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         String finalBase64 = rawBase64;
         String mimeType = 'image/png';
 
-        if (format == 'jpeg') {
+        final cropKey = p['key']?.toString();
+        if (cropKey != null && cropKey.isNotEmpty) {
+          final info = await _callExtensionRaw(
+            'ext.flutterpilot.inspectWidget',
+            {'key': cropKey},
+          );
+          final b = info.data?['widget']?['bounds'] as Map?;
+          if (b != null) {
+            try {
+              final rawBytes = base64Decode(rawBase64);
+              final decoded = img.decodeImage(rawBytes);
+              if (decoded != null) {
+                final x = (((b['x'] as num).toDouble()) * scale)
+                    .round()
+                    .clamp(0, decoded.width);
+                final y = (((b['y'] as num).toDouble()) * scale)
+                    .round()
+                    .clamp(0, decoded.height);
+                final w = (((b['w'] as num).toDouble()) * scale)
+                    .round()
+                    .clamp(1, decoded.width - x);
+                final h = (((b['h'] as num).toDouble()) * scale)
+                    .round()
+                    .clamp(1, decoded.height - y);
+                final cropped = img.copyCrop(
+                  decoded,
+                  x: x,
+                  y: y,
+                  width: w,
+                  height: h,
+                );
+                final bytes = format == 'jpeg'
+                    ? img.encodeJpg(cropped, quality: quality)
+                    : img.encodePng(cropped);
+                finalBase64 = base64Encode(bytes);
+                mimeType = format == 'jpeg' ? 'image/jpeg' : 'image/png';
+              }
+            } catch (_) {}
+          }
+        } else if (format == 'jpeg') {
           try {
             final rawBytes = base64Decode(rawBase64);
             final decoded = img.decodeImage(rawBytes);
@@ -1045,12 +1085,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'inspect_widget',
       description:
-          'Where a widget is in the app\'s code (file:line; for a '
-          'framework widget, the app widget that builds it) and the app '
-          'widgets above it. Pass key, or x,y from a screenshot. layout '
-          'and style add the numbers a screenshot can\'t give. Use before '
-          'editing UI code and to check a design spec; for a widget\'s '
-          'current state get_widget_properties is cheaper.',
+          'Where a widget is in source code (file:line), bounds, ancestors, '
+          'layout constraints, styling, and semantic properties.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -1067,9 +1103,12 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           ),
           'style': JsonSchema.boolean(
             description:
-                'Also text size, weight and color, paddings (left, top, right, '
-                'bottom), fills, borders, radii and elevation of the widget and '
-                'what it contains.',
+                'Also text size, weight and color, paddings, fills, borders, '
+                'radii and elevation of the widget.',
+          ),
+          'properties': JsonSchema.boolean(
+            description:
+                'Also include semantic properties (isEnabled, text, isChecked, etc.).',
           ),
         },
       ),
@@ -1085,6 +1124,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         final data = Map<String, dynamic>.of(res.data ?? const {});
         final error = data.remove('error');
+        if (p['properties'] == true && target != null) {
+          final propRes = await _callExtensionRaw(
+            'ext.flutterpilot.getWidgetProperties',
+            {'key': target.toString()},
+          );
+          if (!propRes.isError && propRes.data != null) {
+            data['properties'] = propRes.data;
+          }
+        }
         return CallToolResult(
           content: [
             TextContent(
@@ -1101,14 +1149,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_semantics_tree',
       description:
-          'What a screen reader (VoiceOver/TalkBack) gets: per node id, '
-          'label, value, hint, role flags, checked/enabled/focused and rect. '
-          'Only what is set is listed: a missing flag is false, isChecked '
-          'appears on checkable nodes, isEnabled only when false. '
-          'Use to check labels for accessibility; semanticsId works in '
-          'tap_widget.',
+          'Screen reader semantics tree (VoiceOver/TalkBack): label, value, '
+          'hint, role flags, and rect. Supports query filter and maxDepth.',
       inputSchema: ToolInputSchema(
         properties: {
+          'query': JsonSchema.string(
+            description:
+                'Substring filter for node label, hint, value, or identifier.',
+          ),
           'maxDepth': JsonSchema.integer(description: 'Default 50.'),
         },
       ),
@@ -1119,6 +1167,35 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           {'maxDepth': maxDepth.toString()},
         );
         if (res.isError) return res.toCallToolResult();
+        final query = p['query']?.toString().toLowerCase();
+        if (query != null && query.isNotEmpty && res.data != null) {
+          Map<String, dynamic>? filterNode(Map<String, dynamic> node) {
+            final label = node['label']?.toString().toLowerCase() ?? '';
+            final hint = node['hint']?.toString().toLowerCase() ?? '';
+            final val = node['value']?.toString().toLowerCase() ?? '';
+            final ident = node['identifier']?.toString().toLowerCase() ?? '';
+            final matchedSelf = label.contains(query) ||
+                hint.contains(query) ||
+                val.contains(query) ||
+                ident.contains(query);
+            final children = (node['children'] as List?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(filterNode)
+                .whereType<Map<String, dynamic>>()
+                .toList() ?? [];
+            if (matchedSelf || children.isNotEmpty) {
+              return {
+                ...node,
+                if (children.isNotEmpty) 'children': children,
+              };
+            }
+            return null;
+          }
+          final filtered = filterNode(res.data!);
+          return CallToolResult(
+            content: [TextContent(text: jsonEncode(filtered ?? {}))],
+          );
+        }
         return CallToolResult(
           content: [TextContent(text: jsonEncode(res.data))],
         );
