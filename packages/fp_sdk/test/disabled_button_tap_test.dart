@@ -117,7 +117,7 @@ void main() {
   });
 
   testWidgets(
-    'tapping a disabled Octana-style CustomAppButton returns an error',
+    'tapping a disabled CustomAppButton returns an error',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(

@@ -286,6 +286,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         properties: {
           'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
           'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
+          'labeled': JsonSchema.boolean(
+            description: 'Overlay numbered badges on interactive elements.',
+          ),
           'quality': JsonSchema.integer(
             description:
                 'JPEG compression quality 10-100 (default: 80 for jpeg).',
@@ -296,10 +299,14 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 0.5;
         final format = p['format']?.toString().toLowerCase() ?? 'png';
         final quality = (p['quality'] as num?)?.toInt().clamp(10, 100) ?? 80;
+        final labeled = p['labeled'] == true;
 
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          {if (scale < 1.0) 'scale': scale.toString()},
+          {
+            if (scale < 1.0) 'scale': scale.toString(),
+            if (labeled) 'labeled': 'true',
+          },
         );
         if (res.isError) return res.toCallToolResult();
         final rawBase64 = res.data?['data'] as String?;
@@ -327,11 +334,25 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           }
         }
 
+        final marks = (res.data?['marks'] as List?) ?? const [];
+        final marksListStr = marks.map((m) {
+          final markId = m['mark'];
+          final type = m['type'];
+          final key = m['key'];
+          final text = m['text'];
+          final label = key ?? text ?? type;
+          return '[$markId] $type "$label"${key != null ? ' (key: "$key")' : ''}';
+        }).join('\n');
+        final marksText = marks.isEmpty
+            ? ''
+            : '\n\nSet-of-Mark (SoM) Elements (${marks.length}):\n$marksListStr\n\nInteract with: tap_widget(mark: <number>) or enter_text(mark: <number>, text: "...")';
+
         return CallToolResult(
           content: [
             ImageContent(data: finalBase64, mimeType: mimeType),
             TextContent(
-              text: 'Screenshot captured ($mimeType, scale: ${scale}x).',
+              text:
+                  'Screenshot captured ($mimeType, scale: ${scale}x).$marksText',
             ),
           ],
         );

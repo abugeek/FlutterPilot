@@ -219,6 +219,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 'Key, selector, visible text or icon name '
                 '("IconButton[\'settings\']").',
           ),
+          'mark': JsonSchema.integer(
+            description: 'Mark number from capture_screenshot(labeled: true).',
+          ),
           'identifier': JsonSchema.string(
             description: 'Semantics identifier (Flutter 3.19+).',
           ),
@@ -237,28 +240,22 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'y': JsonSchema.number(description: 'Y in logical pixels.'),
           'gesture': JsonSchema.string(
             enumValues: ['tap', 'double', 'long', 'secondary'],
-            description:
-                'Default tap. long takes durationMs; secondary is a right-click '
-                '(context menus).',
+            description: 'Default tap (or double/long/secondary).',
           ),
           'durationMs': JsonSchema.integer(
             description: 'Long-press duration (default 600).',
           ),
           'waitFor': JsonSchema.string(
-            description:
-                'A widget (key, selector or text) to wait for after the tap, in '
-                'place of a separate wait_for call.',
+            description: 'Widget to wait for after tap.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'How long to wait for waitFor (default 5000).',
+            description: 'Timeout for waitFor (default 5000).',
           ),
           'quickSettle': JsonSchema.boolean(
-            description:
-                'Settle quickly (<=400ms) without waiting for background tickers/animations.',
+            description: 'Settle in <=400ms without background tickers.',
           ),
           'settleTimeoutMs': JsonSchema.integer(
-            description:
-                'Override screen settle timeout in milliseconds (default 2000).',
+            description: 'Screen settle timeout in ms (default 2000).',
           ),
         },
       ),
@@ -389,19 +386,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(
-            description: 'The text to enter ("" clears the field).',
+            description: 'Text to enter ("" clears the field).',
           ),
           'key': JsonSchema.string(
-            description:
-                'Key, selector or label of the field. Omit for the focused '
-                'field.',
+            description: 'Key, selector or label. Omit for focused field.',
+          ),
+          'mark': JsonSchema.integer(
+            description: 'Mark number from capture_screenshot(labeled: true).',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier of the text field.',
+            description: 'Semantics identifier of the field.',
           ),
           'clearFirst': JsonSchema.boolean(
-            description:
-                'Clear the existing text before typing (default true).',
+            description: 'Clear existing text before typing (default true).',
           ),
         },
         required: ['text'],
@@ -532,41 +529,37 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         properties: {
           'gesture': JsonSchema.string(
             enumValues: ['swipe', 'drag', 'pinch', 'focus', 'slide'],
-            description: 'Which gesture to perform.',
+            description: 'swipe, drag, pinch, focus, or slide.',
           ),
           'key': JsonSchema.string(
-            description:
-                'Key or selector of the widget. Omitted for gesture: focus '
-                'to unfocus everything; for pinch, x/y or identifier may '
-                'name the target instead.',
+            description: 'Key or selector. Omit for focus to unfocus.',
+          ),
+          'mark': JsonSchema.integer(
+            description: 'Mark number from capture_screenshot(labeled: true).',
           ),
           'direction': JsonSchema.string(
             enumValues: ['up', 'down', 'left', 'right'],
-            description: 'gesture: swipe.',
+            description: 'Direction for swipe.',
           ),
           'distance': JsonSchema.number(
-            description:
-                'gesture: swipe — logical pixels; positive = down/right.',
+            description: 'Distance in logical pixels.',
           ),
           'fromKey': JsonSchema.string(
-            description: 'gesture: drag — key or selector to drag.',
+            description: 'Drag source key/selector.',
           ),
           'toKey': JsonSchema.string(
-            description: 'gesture: drag — key or selector to drop it on.',
+            description: 'Drag target key/selector.',
           ),
           'scale': JsonSchema.number(
-            description: 'gesture: pinch — above 1 zooms in, below 1 out.',
+            description: 'Pinch scale (>1 zoom in, <1 zoom out).',
           ),
           'identifier': JsonSchema.string(
-            description: 'gesture: pinch — semantics identifier of the target.',
+            description: 'Semantics identifier for pinch.',
           ),
-          'x': JsonSchema.number(
-            description: 'gesture: pinch — center x, with y.',
-          ),
+          'x': JsonSchema.number(description: 'Center x for pinch, with y.'),
           'y': JsonSchema.number(),
           'value': JsonSchema.number(
-            description:
-                'gesture: slide — the Slider value (clamped to its min/max).',
+            description: 'Slider value for slide.',
           ),
         },
         required: ['gesture'],
@@ -828,22 +821,20 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description: 'Key, selector or text that must be on screen.',
+            description: 'Key, selector or text on screen.',
           ),
-          'gone': JsonSchema.boolean(description: 'key: until gone.'),
+          'gone': JsonSchema.boolean(description: 'Until key is gone.'),
           'route': JsonSchema.string(
-            description: 'The route to be on, e.g. "/dashboard".',
+            description: 'Target route (e.g. "/dashboard").',
           ),
           'animations': JsonSchema.boolean(
-            description: 'Until animations and frame callbacks have settled.',
+            description: 'Until animations have settled.',
           ),
           'state': JsonSchema.string(
-            description:
-                'Provider or bloc name from get_state, with expectedValue '
-                '(needs the Riverpod or Bloc plugin).',
+            description: 'Provider or bloc name from get_state.',
           ),
           'expectedValue': JsonSchema.string(
-            description: 'Substring expected in the state\'s value.',
+            description: 'Substring expected in state value.',
           ),
           'frames': JsonSchema.integer(
             description: 'Pump this many frames (1–120).',
@@ -1038,6 +1029,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             items: JsonSchema.string(),
             description: 'Go to each route and check it.',
           ),
+          'designQuality': JsonSchema.boolean(
+            description: 'Audit 4/8dp spacing grid and typography hierarchy.',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -1100,6 +1094,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           }
           section('Low contrast text', contrast, (c) => '$c');
           section('Reading order jumps', jumps, (j) => '$j');
+          final gridIssues = list('spacingGridIssues');
+          section(
+            'Off-grid spacing (4/8dp)',
+            gridIssues,
+            (g) => '${g['widget']}: ${g['details']}',
+          );
+          final typography = list('typographyHierarchy');
+          if (typography.isNotEmpty && !sweep) {
+            buffer.writeln('Typography hierarchy: ${typography.join(", ")}');
+          }
           if (buffer.isEmpty) {
             buffer.writeln(
               'No layout overflows, small tap targets, unlabeled controls, '
@@ -1129,6 +1133,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             'unlabeled': n('unlabeled'),
             'lowContrast': n('lowContrast'),
             'readingOrderJumps': n('readingOrderJumps'),
+            if (data.containsKey('spacingGridIssues'))
+              'offGridSpacing': n('spacingGridIssues'),
           };
         }
 
@@ -1141,10 +1147,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final routes = [
           for (final r in (p['routes'] as List?) ?? const []) '$r',
         ];
+        final auditParams = {
+          if (p['designQuality'] == true) 'designQuality': 'true',
+        };
         if (routes.isEmpty) {
           final res = await _callExtensionRaw(
             'ext.flutterpilot.auditScreenHealth',
-            {},
+            auditParams,
           );
           if (res.isError) {
             // The current screen could not be read: one audit failed, nothing
@@ -1235,7 +1244,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           final errors = (post?['newErrorCount'] as num?)?.toInt() ?? 0;
           final res = await _callExtensionRaw(
             'ext.flutterpilot.auditScreenHealth',
-            {},
+            auditParams,
           );
           if (res.isError) {
             out.writeln('Audit failed: ${res.errorMessage}');

@@ -71,29 +71,23 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'channel': JsonSchema.string(
-            description:
-                'Channel name, e.g. "dev.fluttercommunity.plus/battery".',
+            description: 'Channel name, e.g. "plus/battery".',
           ),
           'method': JsonSchema.string(
-            description: 'The method the app invokes, e.g. "getBatteryLevel".',
+            description: 'Method name, e.g. "getBatteryLevel".',
           ),
           'result': JsonSchema.fromJson({
-            'description':
-                'What the call returns: any JSON (null for a void method; '
-                '{"\$bytes": "<base64>"} is a byte array).',
+            'description': 'Result JSON (null for void; {"\$bytes": "<b64>"}).',
           }),
           'error': JsonSchema.string(
-            description:
-                'Fail the call with a PlatformException of this code, e.g. '
-                '"PERMISSION_DENIED".',
+            description: 'Fail with PlatformException code.',
           ),
           'errorMessage': JsonSchema.string(description: 'With error.'),
           'event': JsonSchema.fromJson({
-            'description': 'The event to deliver on an EventChannel: any JSON.',
+            'description': 'Event to deliver on EventChannel: any JSON.',
           }),
           'clear': JsonSchema.boolean(
-            description:
-                'Remove the mocks of channel (and method), or all of them.',
+            description: 'Remove mocks of channel or all.',
           ),
         },
       ),

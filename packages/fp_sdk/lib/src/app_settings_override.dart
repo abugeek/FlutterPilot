@@ -27,8 +27,10 @@ class AppSettingsOverride with WidgetsBindingObserver {
   ui.Locale? _locale;
   double? _textScale;
   double? _keyboardInset;
+  Size? _windowSize;
 
-  bool get _overridesMedia => _textScale != null || _keyboardInset != null;
+  bool get _overridesMedia =>
+      _textScale != null || _keyboardInset != null || _windowSize != null;
 
   /// The locale the app resolved after the last override, re-read after
   /// FlutterPilot re-dispatches it (null until then).
@@ -69,6 +71,7 @@ class AppSettingsOverride with WidgetsBindingObserver {
     _locale = null;
     _textScale = null;
     _keyboardInset = null;
+    _windowSize = null;
     _appLocale = null;
     _localizations = null;
     WidgetsBinding.instance.removeObserver(this);
@@ -134,6 +137,23 @@ class AppSettingsOverride with WidgetsBindingObserver {
     final probe = _find<Navigator>() ?? _find<MediaQuery>();
     final media = probe?.getInheritedWidgetOfExactType<MediaQuery>();
     return {'inset': media?.data.viewInsets.bottom, 'height': height};
+  }
+
+  /// The overriding window size, or null for the device's.
+  Size? get windowSize => _windowSize;
+
+  /// Lays the app out as if the viewport had logical size [width] x [height];
+  /// null restores the device's viewport.
+  Future<Map<String, Object?>> setWindowSize(
+    double? width,
+    double? height,
+  ) async {
+    _windowSize =
+        (width != null && height != null) ? Size(width, height) : null;
+    _hook();
+    _applyMediaOverrides(changed: true);
+    await _nextFrame();
+    return {'width': width, 'height': height};
   }
 
   /// The text scale the app's screens get: the one at the root [Navigator].
@@ -206,6 +226,9 @@ class AppSettingsOverride with WidgetsBindingObserver {
             viewInsets: data.viewInsets.copyWith(bottom: inset),
             padding: data.padding.copyWith(bottom: 0),
           );
+        }
+        if (_windowSize != null) {
+          data = data.copyWith(size: _windowSize);
         }
         final patched = MediaQuery(
           key: current.key,

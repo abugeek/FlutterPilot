@@ -41,6 +41,114 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) => _launchApp(p, e),
     );
+
+    _tool(
+      'apply_and_verify',
+      description:
+          'Hot-reloads or restarts the app, awaits frame settle, and verifies '
+          'error-free state in one turn. Returns uncaught exceptions and '
+          'prescriptive RenderFlex overflow diagnostics (pixel delta, culprit flex, '
+          'and layout fix). Use after editing Dart code.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'restart': JsonSchema.boolean(
+            description: 'Hot restart instead of reload.',
+          ),
+          'quickSettle': JsonSchema.boolean(
+            description: 'Settle in <=400ms.',
+          ),
+          'settleTimeoutMs': JsonSchema.integer(
+            description: 'Screen settle timeout in ms (default 2000).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final restart = p['restart'] == true;
+        final reload = _toolCallbacks['hot_reload'];
+        if (reload == null) {
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(text: 'No active connection for hot_reload.'),
+            ],
+          );
+        }
+        final reloadRes = await reload({'restart': restart}, e);
+        if (reloadRes.isError == true) {
+          return reloadRes;
+        }
+
+        final timeoutMs = (p['settleTimeoutMs'] as num?)?.toInt() ?? 2000;
+        await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+          'timeoutMs': timeoutMs.toString(),
+        });
+
+        final errorRes = await _callExtensionRaw(
+          'ext.flutterpilot.getErrors',
+          {},
+        );
+        final data = errorRes.data ?? const <String, dynamic>{};
+        final split = errorsByReload(
+          ((data['errors'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+          _activeContext?.lastReload,
+        );
+
+        final stackRes = await _callExtensionRaw(
+          'ext.flutterpilot.getNavigationStack',
+          {},
+        );
+        final route = stackRes.data?['current'] ?? 'unknown';
+
+        if (split.since.isNotEmpty) {
+          final errText = split.since
+              .map(
+                (err) =>
+                    '--- Error ---\n${err['exception']}\n'
+                    '${err['widget'] != null ? 'Widget: ${err['widget']}\n' : ''}'
+                    '${err['stackTrace'] ?? ''}',
+              )
+              .join('\n\n');
+          final isOverflow = split.since.any(
+            (err) =>
+                err['exception']?.toString().contains(
+                  'RenderFlex overflowed',
+                ) ==
+                true,
+          );
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'Applied ${restart ? 'hot restart' : 'hot reload'} on route "$route" — '
+                    '${isOverflow ? 'LAYOUT OVERFLOW DETECTED' : 'ERRORS DETECTED'}:\n\n$errText',
+              ),
+            ],
+            structuredContent: {
+              'status': isOverflow ? 'overflow' : 'error',
+              'route': route,
+              'errorCount': split.since.length,
+            },
+          );
+        }
+
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Applied ${restart ? 'hot restart' : 'hot reload'} cleanly on route "$route" — 0 errors, UI settled.',
+            ),
+          ],
+          structuredContent: {
+            'status': 'clean',
+            'route': route,
+            'errorCount': 0,
+          },
+        );
+      },
+    );
   }
 
   CallToolResult _launchResult(String text, {bool isError = false}) =>

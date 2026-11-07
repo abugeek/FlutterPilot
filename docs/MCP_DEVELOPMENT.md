@@ -196,29 +196,7 @@ See `packages/fp_server/tool/inspector/README.md` for install, the probe list
 and the connected-fixture run. It is a protocol/negotiation/refusal check; a
 network failure is a setup failure, never a server pass.
 
-## 9. Authoring an evaluation
-
-The eval runner lives in `packages/fp_server/tool/eval/` (see its `README.md`).
-
-- **Fixtures** are declared in `tool/eval/fixtures/manifest.json` with app id,
-  source location, exact git revision, license, required plugins, build mode and
-  scenario checksums. `tool/eval/check_fixtures.dart` is a read-only preflight;
-  rewire or re-pin a fixture only as an explicitly approved change, and update
-  the manifest in the same commit.
-- **Workflow tasks** and the **inspection questions**
-  (`tool/eval/inspection_tasks.yaml`) are separate suites. An inspection
-  question must carry an `answer`, `verified: true` and `evidence`; a proposed
-  answer can never be scored.
-- A **run identity** (`tool/eval/src/identity.dart`) records model, device,
-  platform, build mode, SDK versions, task-suite hash, per-fixture hashes,
-  runner policy and pricing version. `compareReports` refuses mismatched or v1
-  reports.
-- Read-only suites use `ReadOnlyPolicyClient`; never run a mutating tool in an
-  inspection suite.
-- Paid runs need an explicit price in `tool/eval/pricing.json` and separate
-  spend approval. A spend guard cannot undo an in-flight charge.
-
-## 10. Budgets
+## 9. Budgets
 
 `test/tool_registration_test.dart` holds the per-profile `tools/list` size
 budgets and `test/tool_list_report_test.dart` holds tighter ceilings. A round
@@ -227,7 +205,7 @@ redundant example over raising a number, and keep the legacy character measure
 (`toolListChars`) so a baseline stays comparable — see
 `lib/src/tool_list_bytes.dart`.
 
-## 11. Security and privacy
+## 10. Security and privacy
 
 - All logging goes to **stderr**, never `stdout` (stdout is JSON-RPC only).
 - Credentials are masked in every tool response (`Redaction`). Redact new string
@@ -240,7 +218,7 @@ redundant example over raising a number, and keep the legacy character measure
 - Bound every response (item caps and a byte cap) so one large app screen cannot
   blow up a session.
 
-## 12. Compatibility
+## 11. Compatibility
 
 - Additive is safe: a new optional field, a new enum value, a new tool.
 - Renaming or removing a tool/scheme needs migration: a retired-name translation
@@ -248,10 +226,10 @@ redundant example over raising a number, and keep the legacy character measure
   version bump and a client test. Do it only when evidence demands it, and as a
   separately reviewed change.
 - Consumers read structured values, not prose (the fleet-comparison consumer,
-  the eval adapter, the shell bridge). Keep new machine data in
+  the shell bridge). Keep new machine data in
   `structuredContent`.
 
-## 13. Required evidence
+## 12. Required evidence
 
 An accepted change carries:
 

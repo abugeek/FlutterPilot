@@ -31,11 +31,13 @@ class UiHealthAuditor {
     }
   }
 
-  static Map<String, dynamic> audit() {
+  static Map<String, dynamic> audit({bool designQuality = false}) {
     final root = WidgetsBinding.instance.rootElement;
     final overflows = <Map<String, dynamic>>[];
     final cramped = <Map<String, dynamic>>[];
     final clipped = <Map<String, dynamic>>[];
+    final spacingGridIssues = <Map<String, dynamic>>[];
+    final seenFontSizes = <double>{};
     final seenFlexes = <RenderFlex>{};
     final seenViewports = <RenderViewportBase>{};
     final seenParagraphs = <RenderParagraph>{};
@@ -102,6 +104,37 @@ class UiHealthAuditor {
           });
         }
       }
+      // Design Quality: 4/8dp spacing grid adherence & typography audit
+      if (designQuality) {
+        if (ro is RenderPadding && ro.attached) {
+          final insets = ro.padding.resolve(TextDirection.ltr);
+          final offValues = [
+            insets.left,
+            insets.top,
+            insets.right,
+            insets.bottom,
+          ].where((v) => v > 0 && v % 4 != 0).toList();
+          if (offValues.isNotEmpty && spacingGridIssues.length < 15) {
+            final bad = offValues.first;
+            final rec = ((bad / 4).round() * 4).clamp(0, 999);
+            spacingGridIssues.add({
+              'widget': element.widget.runtimeType.toString(),
+              'padding':
+                  '${insets.left.round()}, ${insets.top.round()}, '
+                  '${insets.right.round()}, ${insets.bottom.round()}',
+              'details':
+                  'Padding ${bad.round()}dp off standard 4/8dp grid. Suggestion: ${rec.round()}dp.',
+              'source': _source(element),
+            });
+          }
+        }
+        if (ro is RenderParagraph && ro.attached) {
+          final style = ro.text.style;
+          if (style?.fontSize != null) {
+            seenFontSizes.add(style!.fontSize!);
+          }
+        }
+      }
       element.debugVisitOnstageChildren(visit);
     }
 
@@ -124,7 +157,7 @@ class UiHealthAuditor {
     // Deliberately not part of isHealthy: an ellipsized identifier (a UUID in
     // a table cell) is sometimes the right answer, so clippedText is a list to
     // read, not a pass/fail gate.
-    return {
+    final result = <String, dynamic>{
       'isHealthy':
           overflows.isEmpty && cramped.isEmpty && accessibilityIssues.isEmpty,
       'route': NavigationTracker.currentRoute,
@@ -138,6 +171,15 @@ class UiHealthAuditor {
       'crampedScrollables': cramped,
       'clippedText': clipped,
     };
+    if (designQuality) {
+      final sortedSizes = seenFontSizes.toList()..sort();
+      result['spacingGridIssues'] = spacingGridIssues;
+      result['spacingGridIssueCount'] = spacingGridIssues.length;
+      result['typographyHierarchy'] = [
+        for (final s in sortedSizes) '${s.round()}sp',
+      ];
+    }
+    return result;
   }
 
   /// The window the findings belong to: a landscape phone at 1.3x and a

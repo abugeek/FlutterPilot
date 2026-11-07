@@ -19,10 +19,13 @@ void main() {
     'diagnose_exception',
     'create_integration_test',
     'audit_screen_health',
+    'apply_and_verify',
+    'design_polish',
+    'responsive_matrix',
   ];
 
   group('prompts/list', () {
-    test('lists the guide and the four workflow prompts', () {
+    test('lists the guide and the workflow prompts', () {
       expect(server.promptListJson().map((p) => p['name']), [
         'flutterpilot_guide',
         ...workflowNames,
@@ -44,6 +47,8 @@ void main() {
         'diagnose_exception': 'errorIndex',
         'create_integration_test': 'name',
         'audit_screen_health': 'route',
+        'apply_and_verify': 'targetFile',
+        'design_polish': 'route',
       };
       for (final entry in expected.entries) {
         final arguments = byName[entry.key]!['arguments'] as List;
@@ -53,6 +58,7 @@ void main() {
         expect(argument['required'], isFalse, reason: entry.key);
         expect(argument['description'], isNotEmpty);
       }
+      expect(byName['responsive_matrix']!['arguments'], isEmpty);
       expect(byName['flutterpilot_guide']!['arguments'], isEmpty);
     });
   });
@@ -71,6 +77,9 @@ void main() {
         'diagnose_exception': 'get_errors',
         'create_integration_test': 'generate_test',
         'audit_screen_health': 'audit_screen_health',
+        'apply_and_verify': 'apply_and_verify',
+        'design_polish': 'audit_screen_health',
+        'responsive_matrix': 'simulate_viewport_matrix',
       };
       for (final entry in primaryTool.entries) {
         final result = server.getPromptForTest(entry.key);

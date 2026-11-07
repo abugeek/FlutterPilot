@@ -201,11 +201,11 @@ void main() {
       },
     );
 
-    test('prompts/list offers the guide plus four workflow prompts', () async {
+    test('prompts/list offers the guide plus workflow prompts', () async {
       final response = await inspector.request('prompts/list');
       expect(response['error'], isNull, reason: '$response');
       final prompts = (response['result'] as Map)['prompts'] as List;
-      expect(prompts, hasLength(5));
+      expect(prompts, hasLength(8));
       final byName = <String, Map>{
         for (final prompt in prompts)
           (prompt as Map)['name'].toString(): prompt,
@@ -218,6 +218,9 @@ void main() {
           'diagnose_exception',
           'create_integration_test',
           'audit_screen_health',
+          'apply_and_verify',
+          'design_polish',
+          'responsive_matrix',
         ]),
       );
       for (final prompt in prompts) {
@@ -227,11 +230,14 @@ void main() {
           reason: '$prompt',
         );
       }
-      // The four workflows each declare their optional argument.
+      // Workflows declare their optional arguments.
       expect(_argumentNames(byName['debug_layout_overflow']!), ['widgetKey']);
       expect(_argumentNames(byName['diagnose_exception']!), ['errorIndex']);
       expect(_argumentNames(byName['create_integration_test']!), ['name']);
       expect(_argumentNames(byName['audit_screen_health']!), ['route']);
+      expect(_argumentNames(byName['apply_and_verify']!), ['targetFile']);
+      expect(_argumentNames(byName['design_polish']!), ['route']);
+      expect(_argumentNames(byName['responsive_matrix']!), isEmpty);
       // The guide takes no arguments.
       expect(_argumentNames(byName['flutterpilot_guide']!), isEmpty);
     });

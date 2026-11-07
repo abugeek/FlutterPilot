@@ -15,8 +15,10 @@
 
 ### Option A: The 1-Command CLI Workflow (Recommended)
 ```bash
-# 1. Install CLI (from checkout; `dart pub global activate fp_cli` once on pub.dev)
-dart pub global activate --source path ./packages/fp_cli
+# 1. Install CLI globally:
+dart pub global activate fp_cli
+# Or from local checkout during development:
+# dart pub global activate --source path ./packages/fp_cli
 
 # 2. In your Flutter project root, add the SDK + matching plugins (fp_* deps)
 #    and FlutterPilot.initialize() to main.dart. It prints the one wiring line
@@ -168,7 +170,7 @@ Use absolute paths; `-p` is your Flutter app's root:
 
 The full, always-current list with every parameter is
 **[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 63 tools, of which an app sees only the ones that can work
+registrations): 65 tools, of which an app sees only the ones that can work
 for it — plugin tools once it registers that plugin (a Dio-only app sees 43).
 Families are one tool with a parameter, not one tool per variant. The ones
 you'll use most:

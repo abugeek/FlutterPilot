@@ -395,8 +395,7 @@ const outputSchemaPilotFamilies = {'audit_screen_health', 'navigate_to'};
 /// a schema commits every *non-error* result of that tool to matching it at the
 /// protocol layer and grows the client `tools/list` (measured: 822 B +
 /// 402 B = 1,256 B; the model-facing projection the budgets measure does not
-/// move). Decision and measurements: `docs/tasks/mcp-quality-next/PROGRESS.md`
-/// (task 07 §11–12).
+/// move). See ROADMAP.md for background.
 final structuredOutputSchemas = <String, Map<String, dynamic>>{
   for (final name in outputSchemaPilotFamilies)
     if (structuredContracts[name] case final contract?)

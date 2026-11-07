@@ -1,6 +1,7 @@
 import 'ring_buffer.dart';
 import 'package:flutter/widgets.dart';
 import 'redaction.dart';
+import 'test_recorder.dart';
 
 /// Intercepts Flutter framework and platform errors and maintains a
 /// fixed-size circular buffer of recent error details.
@@ -110,18 +111,61 @@ class ErrorInspector {
   /// comparing two reads tells how many an action caused.
   static int capturedCount = 0;
 
+  /// Generates prescriptive layout guidance when a RenderFlex overflow occurs.
+  static Map<String, dynamic>? _diagnoseOverflow(String exception) {
+    if (!exception.contains('RenderFlex overflowed')) return null;
+    final match = RegExp(
+      r'overflowed by ([\d.]+) pixels on the (bottom|right|top|left)',
+    ).firstMatch(exception);
+    final pixels = match != null ? double.tryParse(match.group(1)!) : null;
+    final side = match?.group(2) ?? 'edge';
+    final isVertical = side == 'bottom' || side == 'top';
+    final isHorizontal = side == 'right' || side == 'left';
+
+    final advice = <String>[];
+    if (isVertical) {
+      advice.add(
+        'Wrap expanding flex children in Expanded or Flexible if inside a bounded Column.',
+      );
+      advice.add(
+        'Wrap the Column in SingleChildScrollView (or use ListView) if content is scrollable.',
+      );
+      advice.add(
+        'Set mainAxisSize: MainAxisSize.min if the Column should fit its children.',
+      );
+    } else if (isHorizontal) {
+      advice.add(
+        'Wrap overflowing widgets (like Text) in Expanded or Flexible.',
+      );
+      advice.add(
+        'Replace Row with Wrap to allow children to flow onto multiple lines.',
+      );
+    }
+
+    return {
+      'overflowPixels': ?pixels,
+      'side': side,
+      'axis': isVertical ? 'vertical' : 'horizontal',
+      'prescription': advice,
+    };
+  }
+
   static void _captureError(FlutterErrorDetails details) {
     capturedCount++;
     final rawStack = details.stack?.toString();
+    final exceptionText = Redaction.text(details.exceptionAsString());
+    final overflowDiagnosis = _diagnoseOverflow(exceptionText);
     _errorBuffer.add({
       // An exception message may quote a URL or body with credentials.
-      'exception': Redaction.text(details.exceptionAsString()),
+      'exception': exceptionText,
+      'overflowDiagnosis': ?overflowDiagnosis,
       'stackTrace': compactStackTrace(rawStack),
       'rawStackTrace': rawStack,
       'library': details.library,
       'context': details.context?.toString(),
       'widget': _culpritWidget(details),
       'timestamp': DateTime.now().toIso8601String(),
+      'recentInteractions': TestRecorder.recentInteractionsSnapshot(),
     });
   }
 

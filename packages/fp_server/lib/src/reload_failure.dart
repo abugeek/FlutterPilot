@@ -236,7 +236,7 @@ String _hintFor(String message) {
           message.contains('Permission denied') ||
           message.contains('FileSystemException'))) {
     // The old hint ended "relaunch after each edit", and agents did: 224
-    // launch_app calls at ~38 s each against 111 hot reloads (Octana log).
+    // launch_app calls at ~38 s each against 111 hot reloads (field-test log).
     return 'HINT: not a compile error. macOS stopped `flutter run` from '
         'writing into this sandboxed app\'s container. Fix it once: in '
         'macos/Runner/DebugProfile.entitlements set '

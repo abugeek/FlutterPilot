@@ -2107,7 +2107,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// [base], or longer when the call itself waits up to `timeoutMs`: a
   /// `wait_for(timeoutMs: 20000)` was cut off at 15 s, retried, and reported
   /// "No answer from the app" instead of what it waited for (16 times in
-  /// the Octana call log).
+  /// the field-test call log).
   @visibleForTesting
   static Duration allowingWait(Duration base, Map<String, dynamic> parameters) {
     final ms = int.tryParse('${parameters['timeoutMs'] ?? ''}');

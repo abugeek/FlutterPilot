@@ -46,6 +46,7 @@ import 'src/keyboard_simulator.dart';
 import 'src/layout_explorer.dart';
 import 'src/screen_capture.dart';
 import 'src/scroll_simulator.dart';
+import 'src/set_of_mark.dart';
 import 'src/settle_tracker.dart';
 import 'src/soft_keyboard.dart';
 import 'src/form_inspector.dart';
@@ -67,6 +68,7 @@ export 'src/network_simulation.dart';
 export 'src/platform_channel_mocks.dart';
 export 'src/ring_buffer.dart';
 export 'src/scroll_simulator.dart';
+export 'src/set_of_mark.dart';
 export 'src/settle_tracker.dart';
 export 'src/soft_keyboard.dart';
 export 'src/sql_snapshot.dart';
@@ -453,7 +455,7 @@ class FlutterPilot {
       'focusedElement': focusedKey,
       'interactiveElementsCount': interactive.length,
       // 25, not 10: with 10, agents called get_interactive_elements after
-      // 233 of 1794 taps (Octana log) to see the rest of a busy screen. The
+      // 233 of 1794 taps (field-test log) to see the rest of a busy screen. The
       // server sends a repeat as a difference, so the cost stays low.
       'visibleInteractiveElements': [
         for (final e in interactive.take(25))
@@ -1081,7 +1083,8 @@ class FlutterPilot {
     }
   }
 
-  static Future<Uint8List?> _captureScreenshot({double scale = 1.0}) async {
+  static Future<({Uint8List bytes, List<Map<String, dynamic>> marks})?>
+  _captureScreenshotData({double scale = 1.0, bool labeled = false}) async {
     try {
       final basePixelRatio =
           WidgetsBinding
@@ -1094,11 +1097,26 @@ class FlutterPilot {
         0.2,
         basePixelRatio,
       );
-      final image = await ScreenCapture.image(pixelRatio: targetPixelRatio);
+      var image = await ScreenCapture.image(pixelRatio: targetPixelRatio);
+      var marks = <Map<String, dynamic>>[];
+      if (image != null && labeled) {
+        final interactive = PilotWidgetInspector.getInteractiveElements();
+        final markedImage = await SetOfMark.overlayMarks(
+          image,
+          interactive,
+          pixelRatio: targetPixelRatio,
+        );
+        image.dispose();
+        image = markedImage;
+        marks = List.of(SetOfMark.activeMarks);
+      }
       if (image != null) {
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         image.dispose();
-        return byteData?.buffer.asUint8List();
+        final bytes = byteData?.buffer.asUint8List();
+        if (bytes != null) {
+          return (bytes: bytes, marks: marks);
+        }
       }
     } catch (e) {
       debugPrint('Screenshot error: $e');

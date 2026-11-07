@@ -186,6 +186,7 @@ const mutatingExtensions = <String>{
   'ext.flutterpilot.setSliderValue',
   'ext.flutterpilot.setState',
   'ext.flutterpilot.setTextScaleFactor',
+  'ext.flutterpilot.setWindowSize',
   'ext.flutterpilot.simulateDeepLink',
   'ext.flutterpilot.simulateNetwork',
   'ext.flutterpilot.supabaseRefreshSession',

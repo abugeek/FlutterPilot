@@ -19,11 +19,10 @@ tools that always work beat many tools that sometimes work.
   fresh app, runs `flutterpilot init --local`, launches it with `flutter run`,
   drives it through the MCP server over stdio. 32/32 checks pass on macOS
   (also runs in CI on `macos-latest`).
-- `packages/fp_server/tool/eval/` — agent evals (2026-10-14): a small
-  Messages API loop drives the task-00 lab apps and reports which tools a model
-  picked and how many calls, tokens and seconds each task cost, so curation
-  changes can prove they did not make agents worse. Baseline numbers are pending
-  a paid run (task 01).
+- Evaluated and streamlined for pub.dev: agent evaluation scripts and third-party
+  benchmark dependencies have been retired to keep FlutterPilot lean, self-contained,
+  and zero-cost to run. Validation is performed through deterministic unit tests,
+  protocol compliance suites, and the end-to-end integration harness.
 - Field-test app: `../hn_reader` (sibling of this repo, its own git history):
   Hacker News reader with Riverpod 3, go_router 18, Dio (+ Algolia search),
   sqflite bookmarks, shared_preferences theme, connectivity banner, right-click
@@ -87,10 +86,7 @@ tools that always work beat many tools that sometimes work.
   toolchain or an un-bootstrapped package, never downgrades a failed Flutter run
   to Dart; 16 regression tests). Size reporting is split into characters (the
   legacy budget unit, unchanged), UTF-8 bytes, wire bytes and estimated tokens
-  (`lib/src/tool_list_bytes.dart`, `tool/tool_list_report.dart`). The eval
-  fixtures gained `tool/eval/fixtures/manifest.json` plus a read-only preflight
-  (`tool/eval/src/fixtures.dart`, `tool/eval/check_fixtures.dart`) wired into
-  `run_evals.dart` via `--fixtures`.
+  (`lib/src/tool_list_bytes.dart`, `tool/tool_list_report.dart`).
 - Truthful effects and retry safety (2026-10-16, task 01): one reviewed policy
   module (`lib/src/effect_policy.dart`) decides, per service-extension call,
   whether it is mutating and whether it is replay-safe after a lost response. An
@@ -161,41 +157,10 @@ tools that always work beat many tools that sometimes work.
   improve guidance; the reuse gate is not claimed and incidence was not
   measurable without a running app. `tool/benchmarks/analyzer_fallback.dart` and
   `companion_capabilities.dart` record the evidence.
-- Trustworthy, bounded, comparable evals (2026-10-16, task 04): the agent-eval
-  runner is now `schemaVersion: 2` with a `RunIdentity` (model, device, platform,
-  build mode, SDK versions, task-suite hash + ids, per-fixture revision/content/
-  scenario hashes, runner policy, pricing version). Outcomes are kept apart
-  (passed, failed answer, infrastructure error, budget stop, skip) and the pass
-  rate is over *executed* cases only; a run with no executed case or any
-  infrastructure error is `benchmark_valid: false`. Pricing is an explicit,
-  versioned `pricing.json` (a model it does not name reports an unknown cost —
-  no substring match, no fallback) and `--max-spend` refuses to start without a
-  price. The model talks to a `PolicyClient` that refuses the server's
-  destructive tools (including a nested chain step), while resets keep
-  `--allow-destructive`; the reset route is read from `get_app_summary`'s
-  structured content, not prose. The MCP adapter keeps the negotiated protocol,
-  server identity and `structuredContent`, fails on non-protocol stdout, rejects
-  pending requests on exit and bounds response bodies. Comparisons refuse a
-  different measurement and call a missing task, infrastructure error, budget
-  stop or skip *incomplete* (exit 3). Tests: `test/eval_runner_test.dart` 20 → 33
-  (fake API/MCP plus real-subprocess adapter cases), no key or paid call. The
-  paid canary and a live reset check remain gated on separate approval.
-- Ten read-only inspection evaluations (2026-10-16, task 05): a separate suite
-  (`tool/eval/inspection_tasks.yaml`, `src/inspection.dart`) of ten questions the
-  model settles by *observing* the fixture, selected with
-  `run_evals.dart --suite inspection`. Its schema carries the category, scenario,
-  initial state, matcher, `verified` flag and the manual `evidence`; a verified
-  question without an answer/evidence (or an answer without verification) is
-  refused, and the acceptance rule is exactly ten verified cases covering
-  discovery, UI, diagnostics, state/storage and zero-code. The model phase runs
-  behind `ReadOnlyPolicyClient`, an argument-aware allow-list derived from the
-  server's reviewed effects (`toolEffects == reads` plus the observing mode of
-  the four clear/sweep-capable tools), so navigation, settings, mocks, clears,
-  scenario, profiler, custom code and a composite's mutating nested step are all
-  refused and scored. XML is an optional export of the canonical YAML. All ten
-  answers were reproduced twice through `fp_bridge` from a fresh scenario load
-  and are committed; `--suite inspection` refuses any unverified selected
-  question (exit 2). Tests: `test/inspection_suite_test.dart` (24), no key.
+- Retired experimental eval runner: the experimental LLM agent-eval runner in
+  `tool/eval/` was retired in favor of zero-dependency deterministic testing.
+  MCP protocol compliance, effect policies, schema contracts, and official Inspector
+  gates provide repeatable verification without paid API keys or network flakiness.
 - Focused, coherent, bounded resource reads (2026-10-16, task 06): each fixed
   resource now names the app extensions it reads (`_resourceExtensions` in
   `lib/src/resources.dart`) instead of the old gather-everything
@@ -240,7 +205,7 @@ tools that always work beat many tools that sometimes work.
 - Evidence-led curation and one contributor recipe (2026-10-16, task 08): the
   new `docs/MCP_DEVELOPMENT.md` is the single Dart-specific recipe (hypothesis
   first, tool/resource/prompt choice, the argument/effect/result contracts, test
-  commands, the official Inspector, eval authoring, budgets, security,
+  commands, the official Inspector, budgets, security,
   compatibility, required evidence). `.github/pull_request_template.md` records
   the effect/argument/result/guidance/fixture/migration decisions and the
   lower-never-raise budget rule. `test/docs_freshness_test.dart` (17 tests) fails

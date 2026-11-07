@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
-  // Octana's home: a full-screen GestureDetector (tap to dismiss the
+  // A page with a full-screen GestureDetector (tap to dismiss the
   // keyboard) around a page with a NavigationBar. The tappable list names a
   // destination "Inventory Tab 3 of 5"; tapping by that name hit the centre
   // of the screen, where the End Shift button is.

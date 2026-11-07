@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ring_buffer.dart';
 import 'source_locator.dart';
 
 /// Records what the agent did and checked as steps for a generated
@@ -9,6 +10,26 @@ import 'source_locator.dart';
 class TestRecorder {
   static bool active = false;
   static final List<Map<String, dynamic>> steps = [];
+
+  /// Rolling buffer of recent interactions for crash-to-test reproduction.
+  static final RingBuffer<Map<String, dynamic>> _recentInteractions =
+      RingBuffer(20);
+
+  /// Returns recent interaction history for automated crash reproduction tests.
+  static List<Map<String, dynamic>> recentInteractionsSnapshot() =>
+      _recentInteractions.toList();
+
+  /// Records an interaction into the rolling crash-repro ring buffer.
+  static void recordInteraction(
+    String type, {
+    Map<String, dynamic> data = const {},
+  }) {
+    _recentInteractions.add({
+      'type': type,
+      'timestamp': DateTime.now().toIso8601String(),
+      ...data,
+    });
+  }
 
   /// Obscured text is kept here, not in [steps]: the generated test reads
   /// it from a `--dart-define` so passwords never land in a file.
@@ -26,18 +47,19 @@ class TestRecorder {
     bool field = false,
     Map<String, dynamic> data = const {},
   }) {
-    if (!active) return;
-    steps.add({
+    final entry = {
       'type': type,
       if (element != null) ...TestFinder.of(element, field: field),
       ...data,
-    });
+    };
+    recordInteraction(type, data: entry);
+    if (!active) return;
+    steps.add(entry);
   }
 
   /// [shown] was scrolled into view: the test scrolls the same list until
   /// it is built and visible.
   static void addScroll(Element shown) {
-    if (!active) return;
     Element? scrollable;
     shown.visitAncestorElements((a) {
       if (a.widget is Scrollable) scrollable = a;
@@ -56,7 +78,6 @@ class TestRecorder {
   /// A tap at a point, as a tap on the control drawn there (a point on
   /// the screen is not stable between runs); the point only if none is.
   static void addTapAt(Offset position) {
-    if (!active) return;
     final hit = SourceLocator.elementAt(position);
     Element? control;
     var depth = 0;

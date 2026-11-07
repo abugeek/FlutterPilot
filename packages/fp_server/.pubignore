@@ -1,0 +1,2 @@
+# Files and directories to exclude from the pub.dev published package
+tool/

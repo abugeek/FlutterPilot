@@ -310,5 +310,23 @@ extension _StateExtensions on FlutterPilot {
         json.encode({'status': status, 'inset': shown, 'note': ?note}),
       );
     });
+
+    // -- ext.flutterpilot.setWindowSize ---------------------------------------
+    registerExtension('ext.flutterpilot.setWindowSize', (
+      method,
+      parameters,
+    ) async {
+      final widthStr = parameters['width'];
+      final heightStr = parameters['height'];
+      final width = widthStr != null ? double.tryParse(widthStr) : null;
+      final height = heightStr != null ? double.tryParse(heightStr) : null;
+      final result = await AppSettingsOverride.instance.setWindowSize(
+        width,
+        height,
+      );
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', ...result}),
+      );
+    });
   }
 }

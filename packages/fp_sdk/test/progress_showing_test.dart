@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fp_sdk/fp_sdk.dart';
 
 void main() {
-  // Octana's tank card draws its fill level with a LinearProgressIndicator:
+  // A status card draws its fill level with a LinearProgressIndicator:
   // every action on that screen was answered with "still loading".
   testWidgets('a progress bar with a value is a gauge, not loading', (
     tester,

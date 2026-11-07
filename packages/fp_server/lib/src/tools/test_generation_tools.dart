@@ -19,6 +19,9 @@ mixin _TestGenerationToolsMixin
       inputSchema: ToolInputSchema(
         properties: {
           'start': JsonSchema.boolean(),
+          'fromCrash': JsonSchema.boolean(
+            description: 'Write repro test from recent crash.',
+          ),
           'name': JsonSchema.string(description: 'Letters, digits and _.'),
           'run': JsonSchema.boolean(
             description: 'Run the written test (default true).',
@@ -32,10 +35,14 @@ mixin _TestGenerationToolsMixin
         );
         if (params['start'] == true) return _startTestRecording(extra);
         final name = params['name']?.toString() ?? '';
+        if (params['fromCrash'] == true) {
+          final testName = name.isEmpty ? 'repro_crash' : name;
+          return _generateCrashReproTest(testName);
+        }
         if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(name)) {
           return text(
-            'Pass start:true to begin recording, or name: a test name in '
-            'lower_snake_case (e.g. "login_flow") to write and run it.',
+            'Pass start:true to begin recording, fromCrash:true to repro crash, '
+            'or name: in lower_snake_case (e.g. "login_flow") to write and run it.',
             error: true,
           );
         }
@@ -83,6 +90,67 @@ mixin _TestGenerationToolsMixin
               'mock_http_response…); then generate_test(name: "…") writes '
               'and runs the test. A hot restart before then loses the '
               'recording.',
+        ),
+      ],
+    );
+  }
+
+  Future<CallToolResult> _generateCrashReproTest(String name) async {
+    CallToolResult fail(String s) =>
+        CallToolResult(isError: true, content: [TextContent(text: s)]);
+    final res = await _callExtensionRaw('ext.flutterpilot.getErrors', {});
+    final data = res.data ?? const <String, dynamic>{};
+    final errors = (data['errors'] as List?)?.whereType<Map>().toList() ?? [];
+    if (errors.isEmpty) {
+      return fail('No recent crash or errors found to reproduce.');
+    }
+    final lastError = errors.last;
+    final recent =
+        (lastError['recentInteractions'] as List?)?.whereType<Map>().toList() ??
+        [];
+    if (recent.isEmpty) {
+      return fail('No recent interactions captured before the crash.');
+    }
+
+    final context = await _deviceContextForParameters(const {});
+    final vm = context?.service;
+    if (vm == null) return fail('No running app.');
+    final isolateId = await _uiIsolateId(vm, null);
+    if (isolateId == null) return fail('No UI isolate.');
+    final app = await _appEntrypoint(vm, isolateId);
+    if (app == null) return fail("Could not locate app root.");
+
+    final steps = <Map<String, dynamic>>[];
+    for (final action in recent) {
+      final type = action['type']?.toString();
+      if (type == null) continue;
+      steps.add({
+        'type': type,
+        'target': action['target'] ?? action['key'],
+        if (action['finder'] != null) 'finder': action['finder'],
+        if (action['text'] != null) 'text': action['text'],
+        if (action['x'] != null) 'x': action['x'],
+        if (action['y'] != null) 'y': action['y'],
+      });
+    }
+
+    final test = writeIntegrationTest(
+      name: name,
+      mainImport: app.mainImport,
+      steps: steps,
+    );
+    final file = File('${app.root}/integration_test/${name}_test.dart');
+    file.parent.createSync(recursive: true);
+    file.writeAsStringSync(test.source);
+    await runProgram(['dart', 'format', file.path]);
+    final relative = 'integration_test/${name}_test.dart';
+
+    return CallToolResult(
+      content: [
+        TextContent(
+          text:
+              'Generated crash reproduction test ($relative, ${steps.length} steps):\n\n'
+              '${test.source.length > 500 ? "${test.source.substring(0, 500)}...\n[truncated]" : test.source}',
         ),
       ],
     );

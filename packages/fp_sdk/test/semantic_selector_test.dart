@@ -220,7 +220,7 @@ void main() {
       );
     });
 
-    // Field test (Octana fuel sale): the tappable list shows an empty field
+    // Field test: the tappable list shows an empty field
     // as "<hint> <label>". Typed back as a target it matched the page-wide
     // GestureDetector by substring, and the text went into the first field
     // on the page.
@@ -264,7 +264,7 @@ void main() {
       expect(PilotWidgetInspector.fieldsUnder(page), hasLength(2));
     });
 
-    // Octana's field passes its label as a widget, so labelText is null.
+    // A field passes its label as a widget, so labelText is null.
     testWidgets('a field whose label is a widget is found by the text it '
         'shows', (tester) async {
       await tester.pumpWidget(
@@ -295,7 +295,7 @@ void main() {
       expect((element.widget as TextField).decoration!.hintText, '0.00');
     });
 
-    // Octana's login: the password field holds a "Show password" button,
+    // Field test: the password field holds a "Show password" button,
     // and its TextField is material_ui's class, not Flutter's.
     testWidgets('a field of another widget library is found by its label, '
         'though other labels contain the word', (tester) async {

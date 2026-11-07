@@ -224,23 +224,33 @@ extension _DiagnosticsExtensions on FlutterPilot {
     ) async {
       try {
         final scale = double.tryParse(parameters['scale'] ?? '') ?? 1.0;
-        var bytes = await FlutterPilot._captureScreenshot(scale: scale);
+        final labeled = parameters['labeled'] == 'true';
+        var shot = await FlutterPilot._captureScreenshotData(
+          scale: scale,
+          labeled: labeled,
+        );
         // A screenshot asked for right after launch or a hot restart: give
         // the app up to 3 s to draw before saying why there is none.
-        for (var i = 0; i < 30 && bytes == null; i++) {
+        for (var i = 0; i < 30 && shot == null; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 100));
           if (FlutterPilot.notOnScreenYet() == null) {
-            bytes = await FlutterPilot._captureScreenshot(scale: scale);
+            shot = await FlutterPilot._captureScreenshotData(
+              scale: scale,
+              labeled: labeled,
+            );
           }
         }
-        if (bytes == null) {
+        if (shot == null) {
           return ServiceExtensionResponse.error(
             ServiceExtensionResponse.extensionError,
             'No screenshot: ${FlutterPilot.notOnScreenYet() ?? 'the app has no view to draw into (window closed?).'}',
           );
         }
         return ServiceExtensionResponse.result(
-          json.encode({'data': base64Encode(bytes)}),
+          json.encode({
+            'data': base64Encode(shot.bytes),
+            if (labeled) 'marks': shot.marks,
+          }),
         );
       } catch (e) {
         return ServiceExtensionResponse.error(

@@ -57,23 +57,20 @@ void main() {
         toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // Measured 2026-10-17, after adding quickSettle and settleTimeoutMs to
-      // tap_widget; each limit is that profile's measurement plus 300
-      // (task 09 C, from `tool/tool_list_report.dart`).
-      // Every tool (--static-tools): 63 tools, 41 073 chars.
-      expect(listChars((_) => true), lessThanOrEqualTo(41373));
-      // An app with the SDK and no plugin, not on an iOS simulator:
-      // 29 317 chars on 2026-10-17, plus 300; simulate_network joined it (no
-      // longer Dio-only) on 2026-10-31, at 29 655.
+      // Measured after adding apply_and_verify and simulate_viewport_matrix;
+      // each limit is that profile's measurement plus 300 (from tool/tool_list_report.dart).
+      // Every tool (--static-tools): 65 tools, 41 972 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(42300));
+      // An app with the SDK and no plugin, not on an iOS simulator: 30 526 chars plus 300.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(29800),
+        lessThanOrEqualTo(30850),
       );
-      // An app without the SDK: 9 674 chars.
+      // An app without the SDK: 9 592 chars.
       expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));
     });
 

@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 63
+Tool count: 65
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41239 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 41972 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -94,18 +94,19 @@ Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']") or visibl
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector, visible text or icon name ("IconButton['settings']"). |
+| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
 | `identifier` | string | no | Semantics identifier (Flutter 3.19+). |
 | `semanticsId` | integer | no | SemanticsNode id from get_semantics_tree. |
 | `text` | string | no | Visible text inside the widget. |
 | `type` | string | no | Widget type, e.g. "IconButton". |
 | `x` | number | no | X in logical pixels (top-left origin), with y. |
 | `y` | number | no | Y in logical pixels. |
-| `gesture` | string: tap \| double \| long \| secondary | no | Default tap. long takes durationMs; secondary is a right-click (context menus). |
+| `gesture` | string: tap \| double \| long \| secondary | no | Default tap (or double/long/secondary). |
 | `durationMs` | integer | no | Long-press duration (default 600). |
-| `waitFor` | string | no | A widget (key, selector or text) to wait for after the tap, in place of a separate wait_for call. |
-| `timeoutMs` | integer | no | How long to wait for waitFor (default 5000). |
-| `quickSettle` | boolean | no | Settle quickly (<=400ms) without waiting for background tickers/animations. |
-| `settleTimeoutMs` | integer | no | Override screen settle timeout in milliseconds (default 2000). |
+| `waitFor` | string | no | Widget to wait for after tap. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
+| `quickSettle` | boolean | no | Settle in <=400ms without background tickers. |
+| `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
 
 ## `enter_text`
 
@@ -113,10 +114,11 @@ Types text into a text field found by key, selector (e.g. "TextField['Email']") 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `text` | string | yes | The text to enter ("" clears the field). |
-| `key` | string | no | Key, selector or label of the field. Omit for the focused field. |
-| `identifier` | string | no | Semantics identifier of the text field. |
-| `clearFirst` | boolean | no | Clear the existing text before typing (default true). |
+| `text` | string | yes | Text to enter ("" clears the field). |
+| `key` | string | no | Key, selector or label. Omit for focused field. |
+| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
+| `identifier` | string | no | Semantics identifier of the field. |
+| `clearFirst` | boolean | no | Clear existing text before typing (default true). |
 
 ## `press_key`
 
@@ -133,17 +135,18 @@ Drives a widget with a gesture other than a tap: swipe (scroll a list, dismiss a
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `gesture` | string: swipe \| drag \| pinch \| focus \| slide | yes | Which gesture to perform. |
-| `key` | string | no | Key or selector of the widget. Omitted for gesture: focus to unfocus everything; for pinch, x/y or identifier may name the target instead. |
-| `direction` | string: up \| down \| left \| right | no | gesture: swipe. |
-| `distance` | number | no | gesture: swipe — logical pixels; positive = down/right. |
-| `fromKey` | string | no | gesture: drag — key or selector to drag. |
-| `toKey` | string | no | gesture: drag — key or selector to drop it on. |
-| `scale` | number | no | gesture: pinch — above 1 zooms in, below 1 out. |
-| `identifier` | string | no | gesture: pinch — semantics identifier of the target. |
-| `x` | number | no | gesture: pinch — center x, with y. |
+| `gesture` | string: swipe \| drag \| pinch \| focus \| slide | yes | swipe, drag, pinch, focus, or slide. |
+| `key` | string | no | Key or selector. Omit for focus to unfocus. |
+| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
+| `direction` | string: up \| down \| left \| right | no | Direction for swipe. |
+| `distance` | number | no | Distance in logical pixels. |
+| `fromKey` | string | no | Drag source key/selector. |
+| `toKey` | string | no | Drag target key/selector. |
+| `scale` | number | no | Pinch scale (>1 zoom in, <1 zoom out). |
+| `identifier` | string | no | Semantics identifier for pinch. |
+| `x` | number | no | Center x for pinch, with y. |
 | `y` | number | no |  |
-| `value` | number | no | gesture: slide — the Slider value (clamped to its min/max). |
+| `value` | number | no | Slider value for slide. |
 
 ## `scroll_into_view`
 
@@ -181,12 +184,12 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or text that must be on screen. |
-| `gone` | boolean | no | key: until gone. |
-| `route` | string | no | The route to be on, e.g. "/dashboard". |
-| `animations` | boolean | no | Until animations and frame callbacks have settled. |
-| `state` | string | no | Provider or bloc name from get_state, with expectedValue (needs the Riverpod or Bloc plugin). |
-| `expectedValue` | string | no | Substring expected in the state's value. |
+| `key` | string | no | Key, selector or text on screen. |
+| `gone` | boolean | no | Until key is gone. |
+| `route` | string | no | Target route (e.g. "/dashboard"). |
+| `animations` | boolean | no | Until animations have settled. |
+| `state` | string | no | Provider or bloc name from get_state. |
+| `expectedValue` | string | no | Substring expected in state value. |
 | `frames` | integer | no | Pump this many frames (1–120). |
 | `timeoutMs` | integer | no | Default 5000 (3000 for key). |
 
@@ -199,6 +202,7 @@ Layout and accessibility check: layout overflows, tap targets under the platform
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `routes` | array | no | Go to each route and check it. |
+| `designQuality` | boolean | no | Audit 4/8dp spacing grid and typography hierarchy. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: int, visited: int, audited: int, failed: int, skipped: int, findings: {overflows: int, tapTargets: int, unlabeled: int, lowContrast: int, readingOrderJumps: int}, restored: bool, incomplete: bool, loading: bool, status?: "ok"|"partial"|"unavailable", reason?: string}`
 
@@ -303,14 +307,22 @@ Changes how the app renders — theme, locale, text scale, a simulated keyboard,
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `theme` | string: light \| dark | no |  |
-| `locale` | string | no | BCP-47 tag ("fr", "ar", "zh-Hans-CN"); "system" restores the device's. |
-| `textScale` | number | no | 1.0 is normal, 2.0 tests large text; 0 restores the system value. |
-| `keyboardInset` | number | no | Lay out as with an on-screen keyboard this tall open (a phone's is 300–350 logical pixels); 0 removes it. |
+| `locale` | string | no | BCP-47 tag (e.g. "fr", "ar", "zh") or "system". |
+| `textScale` | number | no | Scale factor (1.0 default, 0 restores system). |
+| `keyboardInset` | number | no | Height in logical pixels (e.g. 300; 0 removes). |
 | `orientation` | string: portrait \| landscape \| all \| auto | no | Phones. |
-| `windowSize` | string | no | "WIDTHxHEIGHT" in logical pixels, e.g. "390x844" for a phone width (macOS and Windows desktop; on macOS the title bar is included). |
+| `windowSize` | string | no | "WIDTHxHEIGHT" in logical pixels (e.g. "390x844"). |
 | `debugPaint` | boolean | no |  |
 | `repaintRainbow` | boolean | no |  |
 | `slowAnimations` | boolean | no |  |
+
+## `simulate_viewport_matrix`
+
+Tests the active screen across phone, tablet, and desktop viewports in one turn. Simulates standard dimensions (phone 390x844, tablet 768x1024, desktop 1280x800), checks each for layout overflows and cramped views, then restores original dimensions.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `restore` | boolean | no | Restore initial window size afterwards (default true). |
 
 ## `capture_screenshot`
 
@@ -322,6 +334,7 @@ _Read-only._
 |---|---|---:|---|
 | `format` | string: png \| jpeg \| webp | no |  |
 | `scale` | number | no | 0.2–1.0 (default 0.5). |
+| `labeled` | boolean | no | Overlay numbered badges on interactive elements. |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
 
 ## `compare_screenshot`
@@ -423,6 +436,16 @@ Builds and starts the app (flutter run, or flutterpilot/launch.json's command) o
 | `project` | string | no | App folder, if several. |
 | `relaunch` | boolean | no | Stop the running app and rebuild. |
 | `waitSeconds` | integer | no | Return early if still building (default 600). |
+
+## `apply_and_verify`
+
+Hot-reloads or restarts the app, awaits frame settle, and verifies error-free state in one turn. Returns uncaught exceptions and prescriptive RenderFlex overflow diagnostics (pixel delta, culprit flex, and layout fix). Use after editing Dart code.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `restart` | boolean | no | Hot restart instead of reload. |
+| `quickSettle` | boolean | no | Settle in <=400ms. |
+| `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
 
 ## `get_state`
 
@@ -538,13 +561,13 @@ Stands in for the native side of a plugin (camera, scanner, location, permission
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `channel` | string | no | Channel name, e.g. "dev.fluttercommunity.plus/battery". |
-| `method` | string | no | The method the app invokes, e.g. "getBatteryLevel". |
-| `result` | any | no | What the call returns: any JSON (null for a void method; {"$bytes": "<base64>"} is a byte array). |
-| `error` | string | no | Fail the call with a PlatformException of this code, e.g. "PERMISSION_DENIED". |
+| `channel` | string | no | Channel name, e.g. "plus/battery". |
+| `method` | string | no | Method name, e.g. "getBatteryLevel". |
+| `result` | any | no | Result JSON (null for void; {"$bytes": "<b64>"}). |
+| `error` | string | no | Fail with PlatformException code. |
 | `errorMessage` | string | no | With error. |
-| `event` | any | no | The event to deliver on an EventChannel: any JSON. |
-| `clear` | boolean | no | Remove the mocks of channel (and method), or all of them. |
+| `event` | any | no | Event to deliver on EventChannel: any JSON. |
+| `clear` | boolean | no | Remove mocks of channel or all. |
 
 ## `assert_widget`
 
@@ -603,6 +626,7 @@ Turns what you do in the app into an integration_test. start:true hot-restarts t
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `start` | boolean | no |  |
+| `fromCrash` | boolean | no | Write repro test from recent crash. |
 | `name` | string | no | Letters, digits and _. |
 | `run` | boolean | no | Run the written test (default true). |
 

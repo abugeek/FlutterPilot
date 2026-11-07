@@ -2,7 +2,7 @@ import 'package:fp_server/src/reload_failure.dart';
 import 'package:test/test.dart';
 
 void main() {
-  // Field test (Octana, macOS 27): flutter_tools could not copy the kernel
+  // Field test (sandboxed app, macOS 27): flutter_tools could not copy the kernel
   // into the sandboxed app's container, and the reply was 20 stack frames
   // plus "usually a compile error".
   test('a blocked write into a sandboxed macOS app is named as that', () {
@@ -35,7 +35,7 @@ void main() {
     expect(text, contains('App Management'));
   });
 
-  // Field test (Octana): carousel SVGs deleted while the app ran.
+  // Field test: carousel SVGs deleted while the app ran.
   test('a missing asset is named as that', () {
     final text = reloadFailureText(
       'hotRestart',

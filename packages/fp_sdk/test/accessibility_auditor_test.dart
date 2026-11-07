@@ -111,7 +111,7 @@ void main() {
     expect(low.single, contains('needs 4.5:1 for body text'));
   });
 
-  // Field test (Octana): a disabled "Next" button was reported at 3.18:1.
+  // Field test: a disabled "Next" button was reported at 3.18:1.
   testWidgets('a disabled control is exempt from contrast', (tester) async {
     const faint = TextStyle(color: Color(0xFFBBBBBB));
     final result = await audit(
@@ -180,7 +180,7 @@ void main() {
     },
   );
 
-  // Octana, a sheet open over the home page: the page's own button label was
+  // Field test: a sheet open over the home page: the page's own button label was
   // reported at 1.18:1, through the barrier that dims it.
   testWidgets('text under an open dialog is not checked, the dialog is', (
     tester,
@@ -255,7 +255,7 @@ void main() {
     ]);
   });
 
-  // Field test (Octana, 1280 dp): a two-column dashboard was reported as a
+  // Field test (1280 dp): a two-column dashboard was reported as a
   // jump although left column then right column is the order to read it in.
   test('moving up into the next column is not a jump', () {
     const leftBottom = ('"Ledger"', Rect.fromLTWH(289, 324, 450, 60));

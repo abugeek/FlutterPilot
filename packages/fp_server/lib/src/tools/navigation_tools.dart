@@ -211,29 +211,20 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
           'locale': JsonSchema.string(
-            description:
-                'BCP-47 tag ("fr", "ar", "zh-Hans-CN"); "system" restores the '
-                'device\'s.',
+            description: 'BCP-47 tag (e.g. "fr", "ar", "zh") or "system".',
           ),
           'textScale': JsonSchema.number(
-            description:
-                '1.0 is normal, 2.0 tests large text; 0 restores the system '
-                'value.',
+            description: 'Scale factor (1.0 default, 0 restores system).',
           ),
           'keyboardInset': JsonSchema.number(
-            description:
-                'Lay out as with an on-screen keyboard this tall open (a '
-                'phone\'s is 300–350 logical pixels); 0 removes it.',
+            description: 'Height in logical pixels (e.g. 300; 0 removes).',
           ),
           'orientation': JsonSchema.string(
             enumValues: ['portrait', 'landscape', 'all', 'auto'],
             description: 'Phones.',
           ),
           'windowSize': JsonSchema.string(
-            description:
-                '"WIDTHxHEIGHT" in logical pixels, e.g. "390x844" for a phone '
-                'width (macOS and Windows desktop; on macOS the title bar is '
-                'included).',
+            description: '"WIDTHxHEIGHT" in logical pixels (e.g. "390x844").',
           ),
           'debugPaint': JsonSchema.boolean(),
           'repaintRainbow': JsonSchema.boolean(),
@@ -343,6 +334,108 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         return CallToolResult(
           isError: failed,
           content: [TextContent(text: lines.join('\n'))],
+        );
+      },
+    );
+
+    _tool(
+      'simulate_viewport_matrix',
+      description:
+          'Tests the active screen across phone, tablet, and desktop viewports '
+          'in one turn. Simulates standard dimensions (phone 390x844, tablet '
+          '768x1024, desktop 1280x800), checks each for layout overflows and '
+          'cramped views, then restores original dimensions.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'restore': JsonSchema.boolean(
+            description: 'Restore initial window size afterwards (default true).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final matrix = const [
+          ('Phone', 390, 844),
+          ('Tablet', 768, 1024),
+          ('Desktop', 1280, 800),
+        ];
+
+        final initialInfo =
+            await _callExtensionRaw('ext.flutterpilot.getAppSnapshot', {});
+        final initialWindow = initialInfo.data?['window']?.toString();
+
+        final results = <Map<String, dynamic>>[];
+        var anyFail = false;
+
+        for (final (label, width, height) in matrix) {
+          await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
+            'width': width.toString(),
+            'height': height.toString(),
+          });
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+
+          final audit = await _callExtensionRaw(
+            'ext.flutterpilot.auditScreenHealth',
+            {},
+          );
+          final auditData = audit.data ?? const <String, dynamic>{};
+          final overflows = (auditData['overflows'] as List?) ?? const [];
+          final cramped =
+              (auditData['crampedScrollables'] as List?) ?? const [];
+          final pass = overflows.isEmpty && cramped.isEmpty;
+          if (!pass) anyFail = true;
+
+          results.add({
+            'device': label,
+            'viewport': '${width}x$height',
+            'pass': pass,
+            'overflows':
+                overflows.map((o) => o['details'] ?? o['type']).toList(),
+            'cramped': cramped.map((c) => c['details'] ?? c['type']).toList(),
+          });
+        }
+
+        if (p['restore'] != false &&
+            initialWindow != null &&
+            initialWindow.contains('x')) {
+          final parts = initialWindow.split(RegExp(r'[x\s@]'));
+          if (parts.length >= 2) {
+            final w = int.tryParse(parts[0]);
+            final h = int.tryParse(parts[1]);
+            if (w != null && h != null) {
+              await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
+                'width': w.toString(),
+                'height': h.toString(),
+              });
+            }
+          }
+        }
+
+        final buf = StringBuffer('Viewport Matrix Audit Results:\n');
+        for (final r in results) {
+          final pass = r['pass'] == true;
+          buf.writeln(
+            '${pass ? "[PASS]" : "[FAIL]"} ${r['device']} (${r['viewport']})',
+          );
+          if (!pass) {
+            for (final o in (r['overflows'] as List)) {
+              buf.writeln('  - Overflow: $o');
+            }
+            for (final c in (r['cramped'] as List)) {
+              buf.writeln('  - Cramped: $c');
+            }
+          }
+        }
+        buf.writeln(
+          '\nMatrix Verdict: ${anyFail ? "FAIL — responsive layout issues detected" : "PASS — all viewports clean"}',
+        );
+
+        return CallToolResult(
+          isError: anyFail,
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'verdict': anyFail ? 'fail' : 'pass',
+            'matrix': results,
+          },
         );
       },
     );

@@ -107,7 +107,41 @@ String _auditScreenHealthPrompt(Map<String, dynamic> args) {
       '${_focusLine(route, 'the route "$route"')}';
 }
 
-/// The four curated workflow prompts (task 17), in `prompts/list` order.
+String _applyAndVerifyPrompt(Map<String, dynamic> args) {
+  final file = args['targetFile']?.toString();
+  return 'Apply Dart code edits and verify the result in 1 turn.\n'
+      '\n'
+      'Workflow:\n'
+      '1. Edit Dart source files.\n'
+      '2. Call `apply_and_verify` to hot reload, wait for settle, and verify error-free state.\n'
+      '3. If a RenderFlex overflow is reported, apply the prescriptive fix returned.\n'
+      '4. If no errors occur, proceed directly to the next task.'
+      '${_focusLine(file, 'the file "$file"')}';
+}
+
+String _designPolishPrompt(Map<String, dynamic> args) {
+  final route = args['route']?.toString();
+  return 'Polish UI design quality, spacing grid, and typography consistency.\n'
+      '\n'
+      'Workflow:\n'
+      '1. Call `audit_screen_health(designQuality: true)` to identify off-grid padding (not 4/8dp) and typography issues.\n'
+      '2. Call `capture_screenshot(labeled: true)` to visually inspect element alignment with Set-of-Mark numbers.\n'
+      '3. Align off-grid paddings to 4dp/8dp multiples in Dart code.\n'
+      '4. Call `apply_and_verify` to confirm design polish.'
+      '${_focusLine(route, 'the route "$route"')}';
+}
+
+String _responsiveMatrixPrompt(Map<String, dynamic> args) {
+  return 'Test screen responsiveness across multiple devices in 1 turn.\n'
+      '\n'
+      'Workflow:\n'
+      '1. Call `simulate_viewport_matrix` to test phone (390x844), tablet (768x1024), and desktop (1280x800) in sequence.\n'
+      '2. Inspect any failed viewports for RenderFlex overflows or cramped scrollable views.\n'
+      '3. Use `Expanded`, `Flexible`, `Wrap` or `SingleChildScrollView` to fix responsive constraints.\n'
+      '4. Call `simulate_viewport_matrix` again to confirm all breakpoints pass.';
+}
+
+/// The curated workflow prompts, in `prompts/list` order.
 const _workflowPrompts = <_PromptSpec>[
   _PromptSpec(
     name: 'debug_layout_overflow',
@@ -161,6 +195,38 @@ const _workflowPrompts = <_PromptSpec>[
       ),
     },
     build: _auditScreenHealthPrompt,
+  ),
+  _PromptSpec(
+    name: 'apply_and_verify',
+    title: 'Apply and Verify',
+    description:
+        '1-turn workflow: apply code edits, hot reload, and verify layout overflows with prescriptive fixes.',
+    arguments: {
+      'targetFile': PromptArgumentDefinition(
+        description: 'Dart source file edited (optional).',
+      ),
+    },
+    build: _applyAndVerifyPrompt,
+  ),
+  _PromptSpec(
+    name: 'design_polish',
+    title: 'Design Polish & Quality',
+    description:
+        'Audit design quality: 4/8dp spacing grid adherence, typography hierarchy, and theme tokens.',
+    arguments: {
+      'route': PromptArgumentDefinition(
+        description: 'Route to polish instead of current screen (optional).',
+      ),
+    },
+    build: _designPolishPrompt,
+  ),
+  _PromptSpec(
+    name: 'responsive_matrix',
+    title: 'Responsive Viewport Matrix',
+    description:
+        'Test screen layout across phone, tablet, and desktop viewports in one turn.',
+    arguments: {},
+    build: _responsiveMatrixPrompt,
   ),
 ];
 

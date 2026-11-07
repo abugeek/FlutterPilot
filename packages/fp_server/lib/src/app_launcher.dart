@@ -482,7 +482,7 @@ Future<void> startSupervised(
 /// whatever started the chain. `flutter run` starts the app as its own child,
 /// so an app launched from the MCP server answered to the agent's command-line
 /// server, which cannot show a prompt, and every camera request was denied
-/// without one (Octana, "Scan customer card"). Opened through LaunchServices,
+/// without one (e.g. camera prompts like "Scan customer card"). Opened through LaunchServices,
 /// this bundle is the responsible process of `flutter run` and of the app
 /// under it: macOS asks once for "FlutterPilot", like it would for Terminal,
 /// and the user can allow it under App Management for hot reload into a

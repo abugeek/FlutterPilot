@@ -78,6 +78,8 @@ const toolEffects = <String, ToolEffect>{
   'native_button': ToolEffect.acts,
   'native_open_app': ToolEffect.acts,
   'hot_reload': ToolEffect.acts,
+  'apply_and_verify': ToolEffect.acts,
+  'simulate_viewport_matrix': ToolEffect.acts,
 
   // State, storage and network
   'set_state': ToolEffect.acts,

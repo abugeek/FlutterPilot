@@ -116,7 +116,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         'app': ?_activeContext?.sdkProtocol,
         'note': ?switch (_activeContext?.sdkProtocol) {
           final int app => protocolNote(app),
-          null => null,
+          _ => null,
         },
       },
       'vm': ?vmInfo,
@@ -522,13 +522,41 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         }
       }
 
+      String? prescribeOverflow(String exception) {
+        if (!exception.contains('RenderFlex overflowed')) return null;
+        final match = RegExp(
+          r'overflowed by ([\d.]+) pixels on the (bottom|right|top|left)',
+        ).firstMatch(exception);
+        final pixels = match?.group(1);
+        final side = match?.group(2) ?? 'edge';
+        final isVertical = side == 'bottom' || side == 'top';
+        final isHorizontal = side == 'right' || side == 'left';
+        final buf = StringBuffer(
+          'Prescription for $side overflow (${pixels ?? '?'}px):\n',
+        );
+        if (isVertical) {
+          buf.writeln(
+            '  - Wrap flex child in Expanded/Flexible (if bounded Column)',
+          );
+          buf.writeln('  - Or wrap Column in SingleChildScrollView/ListView');
+          buf.writeln('  - Or set mainAxisSize: MainAxisSize.min');
+        } else if (isHorizontal) {
+          buf.writeln(
+            '  - Wrap expanding child (e.g. Text) in Expanded/Flexible',
+          );
+          buf.writeln('  - Or replace Row with Wrap');
+        }
+        return buf.toString().trim();
+      }
+
       return deduped.values
-          .map(
-            (e) =>
-                '--- Error (x${e['count']}) ---\n${e['exception']}\n'
+          .map((e) {
+            final prescription = prescribeOverflow(e['exception'] as String);
+            return '--- Error (x${e['count']}) ---\n${e['exception']}\n'
                 '${e['widget'] != null ? 'Widget: ${e['widget']}\n' : ''}'
-                'Latest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}',
-          )
+                '${prescription != null ? 'Prescription:\n$prescription\n' : ''}'
+                'Latest: ${e['timestamp']}\n${e['stackTrace'] ?? ''}';
+          })
           .join('\n\n');
     }
 

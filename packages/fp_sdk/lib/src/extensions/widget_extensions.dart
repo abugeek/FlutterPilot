@@ -535,6 +535,7 @@ extension _WidgetExtensions on FlutterPilot {
         );
       }
 
+      int? mark = int.tryParse(parameters['mark'] ?? '');
       int? semanticsId = int.tryParse(parameters['semanticsId'] ?? '');
       final rawTarget =
           parameters['key'] ??
@@ -542,6 +543,53 @@ extension _WidgetExtensions on FlutterPilot {
           parameters['identifier'] ??
           parameters['text'] ??
           parameters['type'];
+
+      if (mark == null && rawTarget != null) {
+        final markMatch = RegExp(
+          r'^(?:#|mark:?)(\d+)$',
+          caseSensitive: false,
+        ).firstMatch(rawTarget.toString().trim());
+        if (markMatch != null) {
+          mark = int.tryParse(markMatch.group(1)!);
+        }
+      }
+
+      if (mark != null) {
+        final marked = SetOfMark.findByIndex(mark);
+        if (marked == null) {
+          return ServiceExtensionResponse.error(
+            ServiceExtensionResponse.extensionError,
+            'Mark #$mark not found. Call capture_screenshot(labeled: true) to refresh marks.',
+          );
+        }
+        final center = marked['center'] as Map<String, dynamic>?;
+        if (center != null) {
+          final x = (center['x'] as num).toDouble();
+          final y = (center['y'] as num).toDouble();
+          final routeBefore = NavigationTracker.currentRoute;
+          final treeBefore = PilotWidgetInspector.captureWidgetTree();
+          TestRecorder.addTapAt(Offset(x, y));
+          await InteractionManager.tapAt(
+            Offset(x, y),
+            label: 'mark #$mark (${marked['type']})',
+          );
+          final after = await _afterAction(
+            routeBefore: routeBefore,
+            treeBefore: treeBefore,
+            settleTimeout: settleTimeout,
+            quickSettle: quickSettle,
+          );
+          return ServiceExtensionResponse.result(
+            json.encode({
+              'status': 'success',
+              'mark': mark,
+              'target': marked,
+              'coordinates': {'x': x, 'y': y},
+              ...after,
+            }),
+          );
+        }
+      }
 
       if (semanticsId == null && rawTarget != null) {
         final semMatch = RegExp(
@@ -744,8 +792,34 @@ extension _WidgetExtensions on FlutterPilot {
     // -- ext.flutterpilot.enterText -------------------------------------------
     registerExtension('ext.flutterpilot.enterText', (method, parameters) async {
       // No target means the focused field (never "search for the text").
-      final target =
+      int? mark = int.tryParse(parameters['mark'] ?? '');
+      var target =
           parameters['key'] ?? parameters['target'] ?? parameters['identifier'];
+      if (mark == null && target != null) {
+        final markMatch = RegExp(
+          r'^(?:#|mark:?)(\d+)$',
+          caseSensitive: false,
+        ).firstMatch(target.toString().trim());
+        if (markMatch != null) {
+          mark = int.tryParse(markMatch.group(1)!);
+        }
+      }
+      if (mark != null) {
+        final marked = SetOfMark.findByIndex(mark);
+        if (marked != null) {
+          target = marked['key'] ?? marked['text'] ?? marked['type'];
+          final center = marked['center'] as Map<String, dynamic>?;
+          if (center != null) {
+            await InteractionManager.tapAt(
+              Offset(
+                (center['x'] as num).toDouble(),
+                (center['y'] as num).toDouble(),
+              ),
+              label: 'mark #$mark',
+            );
+          }
+        }
+      }
       final text = parameters['text'] ?? parameters['value'];
       if (text == null) {
         return ServiceExtensionResponse.error(
@@ -1971,7 +2045,8 @@ extension _WidgetExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
-      final auditReport = UiHealthAuditor.audit();
+      final designQuality = parameters['designQuality'] == 'true';
+      final auditReport = UiHealthAuditor.audit(designQuality: designQuality);
       final a11y = await AccessibilityAuditor.audit();
       auditReport.addAll(a11y);
       auditReport['isHealthy'] =

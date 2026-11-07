@@ -16,8 +16,7 @@ Brief description of changes.
 
 ## MCP surface changes
 Skip this section if nothing under `packages/fp_server/lib/src/tools/`,
-`packages/fp_server/guidance/`, `packages/fp_server/tool/eval/` or the tool
-profiles changed. The recipe is `docs/MCP_DEVELOPMENT.md`; automated gates live
+`packages/fp_server/guidance/` or the tool profiles changed. The recipe is `docs/MCP_DEVELOPMENT.md`; automated gates live
 in `packages/fp_server/test/` (registration, tool-list report, effect policy,
 structured results, action-chain preflight, resources, generated-doc freshness)
 and the official Inspector wrapper.

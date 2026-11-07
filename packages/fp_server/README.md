@@ -70,11 +70,11 @@ Add to `.cursor/settings.json`:
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--uri <uri>` | ✅ Yes | — | VM Service URI of your running app |
-| `--project-root <path>` | ❌ No | `cwd` | The Flutter app's folder, to find the app `flutter run` started there |
+| `--uri <uri>` | ❌ No | auto | VM Service URI of your running app (auto-discovered via DTD or `.dart_tool/` if omitted) |
+| `--project-root <path>`, `-p` | ❌ No | `cwd` | The Flutter app's folder, to find the app `flutter run` started there |
 | `--allow-destructive` | ❌ No | false | Allow tools that change app data or call real services (secure storage writes, Supabase sign-out, Firebase events). SQL stays read-only. |
 | `--timeout <ms>` | ❌ No | 10000 | Tool call timeout in milliseconds |
-| `--tools core\|all` | No | `all` | Which tools to list. `core`: a short set (29 names) for a client that counts tools across every server it runs; `all` (default): every tool that works for the app. Always a subset: a zero-code app sees fewer. |
+| `--tools core\|all` | ❌ No | `all` | Which tools to list. `core`: a short set (29 names) for a client that counts tools across every server it runs; `all` (default): every tool that works for the app. Always a subset: a zero-code app sees fewer. |
 
 ### Examples
 
@@ -101,7 +101,7 @@ melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
 
 ## MCP Tools Reference
 
-63 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
+65 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
 (generated from the running server). An app is shown only the tools that can
 work for it: plugin tools once the app registers that plugin, `native_*` on
 iOS simulators (with idb) and Android (over adb), 15 tools for apps without
