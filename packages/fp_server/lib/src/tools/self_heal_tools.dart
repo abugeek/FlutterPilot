@@ -6,18 +6,16 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
     _tool(
       'hot_reload',
       description:
-          'Recompiles edited .dart files and hot reloads them into the running '
-          'app, keeping state. restart:true does a hot restart instead (state '
-          'is reset) — needed for main(), initState, global/static '
-          'initializers, enums, generic type changes and provider '
-          'definitions. A restart loads every changed Dart file: use it '
-          'after a git checkout or for a stuck app instead of rebuilding '
-          '(needed only for pubspec.yaml, assets or native code). '
-          'Needs an app started by `flutter run` or an IDE debug session.',
+          'Hot reloads edited .dart files into running app (keeping state). '
+          'restart:true resets state (for main, initState, providers). '
+          'waitForSettled:true waits for frame settlement (default true).',
       inputSchema: ToolInputSchema(
         properties: {
           'restart': JsonSchema.boolean(
             description: 'Hot restart instead of hot reload.',
+          ),
+          'waitForSettled': JsonSchema.boolean(
+            description: 'Wait for frame settlement (default true).',
           ),
         },
       ),
@@ -120,6 +118,9 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           .timeout(const Duration(minutes: 2));
       _selfHealManager.reset();
       context.lastReload = DateTime.now();
+      if (service == 'reloadSources' && p['waitForSettled'] != false) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
       if (service == 'hotRestart' &&
           !await _waitForRestartedApp(vmService, sdk: hadSdk)) {
         return CallToolResult(

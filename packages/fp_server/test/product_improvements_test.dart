@@ -323,6 +323,33 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('limit'), isTrue);
     });
 
+    test('get_http_profile advertises query, method, and errorsOnly parameters', () {
+      final tools = server.toolListJson();
+      final httpTool = tools.firstWhere((t) => t['name'] == 'get_http_profile');
+      final schema = httpTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('method'), isTrue);
+      expect(props.containsKey('errorsOnly'), isTrue);
+    });
+
+    test('hot_reload advertises waitForSettled parameter', () {
+      final tools = server.toolListJson();
+      final reloadTool = tools.firstWhere((t) => t['name'] == 'hot_reload');
+      final schema = reloadTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitForSettled'), isTrue);
+    });
+
+    test('get_memory_details advertises diffBaseline and resetBaseline parameters', () {
+      final tools = server.toolListJson();
+      final memTool = tools.firstWhere((t) => t['name'] == 'get_memory_details');
+      final schema = memTool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('diffBaseline'), isTrue);
+      expect(props.containsKey('resetBaseline'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

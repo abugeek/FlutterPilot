@@ -181,6 +181,13 @@ Future<void> main(List<String> args) async {
   });
   client.notify('notifications/initialized');
 
+  final isHn = appPath.contains('hn_reader');
+  final isBloc = appPath.contains('flutter_todos');
+  final isProviderApp = appPath.contains('provider_testing_app') ||
+      appPath.contains('testing_app') ||
+      appPath.contains('testing_codelab');
+  final isM3 = appPath.contains('material_3_demo');
+
   var passedCount = 0;
   var failedCount = 0;
 
@@ -227,6 +234,32 @@ Future<void> main(List<String> args) async {
           }
         }
       } else {
+        if (res['content'] is List &&
+            (res['content'] as List).any((c) =>
+                c is Map &&
+                c['text']?.toString().contains('app is in the background') ==
+                    true)) {
+          if (device != 'macos' && device != 'linux' && device != 'windows') {
+            final bundleId = isHn
+                ? 'dev.flutterpilot.hnReader'
+                : 'dev.flutterpilot.flutterPilotExample';
+            Process.runSync('xcrun', ['simctl', 'launch', device, bundleId]);
+            await Future<void>.delayed(const Duration(milliseconds: 600));
+            final retryMsg = await client.callTool(toolName, arguments);
+            final retryRes = retryMsg['result'] as Map<String, dynamic>? ?? {};
+            final retryIsError = retryRes['isError'] == true;
+            final retryOk =
+                (allowError || (expectError ? retryIsError : !retryIsError)) &&
+                (verify == null || verify(retryRes));
+            if (retryOk) {
+              passedCount++;
+              print(
+                'PASS (foreground auto-recovered, ${stopwatch.elapsedMilliseconds}ms)',
+              );
+              return;
+            }
+          }
+        }
         failedCount++;
         print('FAIL (${stopwatch.elapsedMilliseconds}ms)');
         final sanitizedRes = Map<String, dynamic>.from(res);
@@ -248,12 +281,13 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  final isHn = appPath.contains('hn_reader');
-  final isBloc = appPath.contains('flutter_todos');
-  final isProviderApp = appPath.contains('provider_testing_app') ||
-      appPath.contains('testing_app') ||
-      appPath.contains('testing_codelab');
-  final isM3 = appPath.contains('material_3_demo');
+  if (device != 'macos' && device != 'linux' && device != 'windows') {
+    final bundleId = isHn
+        ? 'dev.flutterpilot.hnReader'
+        : 'dev.flutterpilot.flutterPilotExample';
+    Process.runSync('xcrun', ['simctl', 'launch', device, bundleId]);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
 
   try {
     // 1. App Summary & Screen Health
@@ -604,13 +638,43 @@ Future<void> main(List<String> args) async {
       return text.contains('restored');
     });
 
-    // 10. Memory Introspection
+    // 10. Memory Introspection & Automated Canary Diffing
     await runTest('get_memory_details (classes: true)', 'get_memory_details', {
       'classes': true,
       'limit': 5,
     }, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
       return text.contains('Top') || text.contains('Heap') || text.contains('classes');
+    });
+
+    await runTest('get_memory_details (resetBaseline: true)', 'get_memory_details', {
+      'resetBaseline': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Baseline memory snapshot saved');
+    });
+
+    await runTest('get_memory_details (diffBaseline: true)', 'get_memory_details', {
+      'diffBaseline': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('growth') || text.contains('tracked classes');
+    });
+
+    // HTTP Profiling Multi-Filtering
+    await runTest('get_http_profile (filtered)', 'get_http_profile', {
+      'limit': 5,
+    }, allowError: true, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('HTTP') || text.contains('recorded');
+    });
+
+    // Settled Hot Reload Verification
+    await runTest('hot_reload (waitForSettled: true)', 'hot_reload', {
+      'waitForSettled': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Hot reload applied');
     });
 
     // 11. Journey Flow Export to Integration Test

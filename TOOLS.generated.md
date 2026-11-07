@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46537 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46269 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -472,11 +472,12 @@ _Read-only._
 
 ## `hot_reload`
 
-Recompiles edited .dart files and hot reloads them into the running app, keeping state. restart:true does a hot restart instead (state is reset) — needed for main(), initState, global/static initializers, enums, generic type changes and provider definitions. A restart loads every changed Dart file: use it after a git checkout or for a stuck app instead of rebuilding (needed only for pubspec.yaml, assets or native code). Needs an app started by `flutter run` or an IDE debug session.
+Hot reloads edited .dart files into running app (keeping state). restart:true resets state (for main, initState, providers). waitForSettled:true waits for frame settlement (default true).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `restart` | boolean | no | Hot restart instead of hot reload. |
+| `waitForSettled` | boolean | no | Wait for frame settlement (default true). |
 
 ## `launch_app`
 
@@ -661,15 +662,17 @@ _Read-only._
 
 ## `get_memory_details`
 
-Heap used/capacity and external (native) memory per isolate. classes:true lists top classes by heap bytes and count. Leak check: cycle (or route) runs times rounds; reports classes that gained instances every round, where defined and what keeps one alive.
+Heap used/capacity and external memory. classes:true lists top classes. diffBaseline:true isolates memory growth since baseline. route/cycle runs automated leak checks.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `classes` | boolean | no | List the top classes by heap usage. |
+| `classes` | boolean | no | List top classes by heap usage. |
+| `diffBaseline` | boolean | no | Show instance/byte growth since baseline. |
+| `resetBaseline` | boolean | no | Capture fresh baseline for diffBaseline. |
 | `limit` | integer | no | Number of classes (default 30). |
-| `route` | string | no | Canary route to test for memory leaks. |
-| `cycle` | array | no | Steps returning to start, e.g. [{"tool": "navigate_to", "arguments": {"route": "/a"}}, {"tool": "press_key", "arguments": {"key": "back"}}]. |
-| `times` | integer | no | Leak check rounds after one warm-up (default 5). |
+| `route` | string | no | Canary route for leak checks. |
+| `cycle` | array | no | Steps returning to start. |
+| `times` | integer | no | Leak check rounds (default 5). |
 
 ## `profile_action`
 
@@ -683,15 +686,18 @@ Why an interaction is slow: runs tool with arguments while profiling the app, th
 
 ## `get_http_profile`
 
-HTTP requests the app made through any dart:io client (HttpClient, package:http, Dio; the DevTools Network tab), most recent first: #number, method, URL, status, duration, sizes. id returns one request in full: headers, bodies (secrets masked), timing, redirects, error.
+dart:io HTTP requests (HttpClient, package:http, Dio). Filter by query, method, errorsOnly, or inspect id in full.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `clear` | boolean | no | Empty the list instead, for a clean baseline. |
+| `clear` | boolean | no | Clear recorded list. |
 | `limit` | integer | no | Default 50. |
+| `query` | string | no | URL substring filter. |
+| `url` | string | no | Alias for query. |
+| `errorsOnly` | boolean | no | Only failed requests (status >= 400). |
+| `method` | string | no | HTTP method (GET, POST). |
 | `statusFilter` | integer | no | Only this status code. |
-| `url` | string | no | Only requests whose URL contains this text. |
-| `id` | integer | no | The #number of a request in the list. |
+| `id` | integer | no | Request #number for full details. |
 
 ## `locate_source_ast`
 

@@ -16,6 +16,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     'hot_reload',
   };
 
+  static Map<String, ({int bytes, int instances})>? _heapBaseline;
+
   /// get_memory_details(cycle, times): runs the cycle once to warm up, then
   /// [times] rounds with a GC'd allocation profile after each; reports the
   /// classes that grew every round, where they are defined and, for the
@@ -427,6 +429,20 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           ],
         );
       }
+      final context = await _deviceContextForParameters(params);
+      if (context?.lifecycle == 'paused' && context?.operatingSystem == 'ios') {
+        return CallToolResult(
+          isError: true,
+          content: [
+            TextContent(
+              text:
+                  'The app is in the background, and iOS suspends it: nothing can '
+                  'reach it until it is in the foreground again. On the simulator call '
+                  'native_open_app; on a phone, open the app.',
+            ),
+          ],
+        );
+      }
       final vmService = await _vmServiceForParameters(params);
       if (vmService == null) {
         return CallToolResult(
@@ -444,6 +460,99 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         }
         final profile = await vmService.getAllocationProfile(isolateId);
         final members = profile.members ?? [];
+        if (params['resetBaseline'] == true) {
+          _heapBaseline = {
+            for (final c in members)
+              c.classRef?.name ?? '?': (
+                bytes: c.bytesCurrent ?? 0,
+                instances: c.instancesCurrent ?? 0,
+              ),
+          };
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Baseline memory snapshot saved (${_heapBaseline!.length} classes). '
+                    'Call get_memory_details(diffBaseline: true) after navigating or interacting.',
+              ),
+            ],
+          );
+        }
+        if (params['diffBaseline'] == true) {
+          if (_heapBaseline == null) {
+            _heapBaseline = {
+              for (final c in members)
+                c.classRef?.name ?? '?': (
+                  bytes: c.bytesCurrent ?? 0,
+                  instances: c.instancesCurrent ?? 0,
+                ),
+            };
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text:
+                      'Initial baseline snapshot saved (${_heapBaseline!.length} classes). '
+                      'Repeat action or navigate, then call get_memory_details(diffBaseline: true) to see growth.',
+                ),
+              ],
+            );
+          }
+          final growths =
+              <({
+                String name,
+                int deltaBytes,
+                int deltaInstances,
+                int currentBytes,
+                int currentInstances,
+              })>[];
+          for (final c in members) {
+            final name = c.classRef?.name ?? '?';
+            final base = _heapBaseline![name];
+            final curBytes = c.bytesCurrent ?? 0;
+            final curInst = c.instancesCurrent ?? 0;
+            final baseBytes = base?.bytes ?? 0;
+            final baseInst = base?.instances ?? 0;
+            final deltaB = curBytes - baseBytes;
+            final deltaI = curInst - baseInst;
+            if (deltaB > 0 || deltaI > 0) {
+              growths.add((
+                name: name,
+                deltaBytes: deltaB,
+                deltaInstances: deltaI,
+                currentBytes: curBytes,
+                currentInstances: curInst,
+              ));
+            }
+          }
+          growths.sort((a, b) => b.deltaBytes.compareTo(a.deltaBytes));
+          if (growths.isEmpty) {
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text:
+                      'No memory growth detected across ${_heapBaseline!.length} tracked classes.',
+                ),
+              ],
+            );
+          }
+          final topGrowths = growths.take(limit).toList();
+          final buf = StringBuffer(
+            'Memory growth since baseline (${growths.length} classes grew, top ${topGrowths.length} shown):\n'
+            '${'Class'.padRight(36)} ${'ΔBytes'.padLeft(12)} ${'ΔInstances'.padLeft(12)} ${'Current'.padLeft(14)}\n'
+            '${'-' * 76}\n',
+          );
+          for (final g in topGrowths) {
+            final name = g.name.padRight(36);
+            final deltaBytesText =
+                '+${(g.deltaBytes / 1024).toStringAsFixed(1)}KB'.padLeft(12);
+            final deltaInstText = '+${g.deltaInstances}'.padLeft(12);
+            final curText =
+                '${g.currentInstances} (${(g.currentBytes / 1024).toStringAsFixed(1)}KB)'
+                    .padLeft(14);
+            buf.writeln('$name $deltaBytesText $deltaInstText $curText');
+          }
+          return CallToolResult(content: [TextContent(text: buf.toString())]);
+        }
         members.sort(
           (a, b) => (b.bytesCurrent ?? 0).compareTo(a.bytesCurrent ?? 0),
         );
@@ -483,31 +592,32 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_memory_details',
       description:
-          'Heap used/capacity and external (native) memory per isolate. '
-          'classes:true lists top classes by heap bytes and count. Leak '
-          'check: cycle (or route) runs times rounds; reports classes '
-          'that gained instances every round, where defined and what keeps '
-          'one alive.',
+          'Heap used/capacity and external memory. classes:true lists top '
+          'classes. diffBaseline:true isolates memory growth since baseline. '
+          'route/cycle runs automated leak checks.',
       inputSchema: ToolInputSchema(
         properties: {
           'classes': JsonSchema.boolean(
-            description: 'List the top classes by heap usage.',
+            description: 'List top classes by heap usage.',
+          ),
+          'diffBaseline': JsonSchema.boolean(
+            description: 'Show instance/byte growth since baseline.',
+          ),
+          'resetBaseline': JsonSchema.boolean(
+            description: 'Capture fresh baseline for diffBaseline.',
           ),
           'limit': JsonSchema.integer(
             description: 'Number of classes (default 30).',
           ),
           'route': JsonSchema.string(
-            description: 'Canary route to test for memory leaks.',
+            description: 'Canary route for leak checks.',
           ),
           'cycle': JsonSchema.array(
             items: compositeStepSchema(),
-            description:
-                'Steps returning to start, e.g. [{"tool": "navigate_to", '
-                '"arguments": {"route": "/a"}}, {"tool": "press_key", '
-                '"arguments": {"key": "back"}}].',
+            description: 'Steps returning to start.',
           ),
           'times': JsonSchema.integer(
-            description: 'Leak check rounds after one warm-up (default 5).',
+            description: 'Leak check rounds (default 5).',
           ),
         },
       ),
@@ -515,7 +625,11 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         if (params['cycle'] != null || params['route'] != null) {
           return _leakCheck(params, extra);
         }
-        if (params['classes'] == true) return allocationProfile(params);
+        if (params['classes'] == true ||
+            params['diffBaseline'] == true ||
+            params['resetBaseline'] == true) {
+          return allocationProfile(params);
+        }
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {
           return CallToolResult(
@@ -835,25 +949,23 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_http_profile',
       description:
-          'HTTP requests the app made through any dart:io client '
-          '(HttpClient, package:http, Dio; the DevTools Network tab), '
-          'most recent first: #number, method, URL, status, duration, '
-          'sizes. id returns one request in full: headers, bodies '
-          '(secrets masked), timing, redirects, error.',
+          'dart:io HTTP requests (HttpClient, package:http, Dio). '
+          'Filter by query, method, errorsOnly, or inspect id in full.',
       inputSchema: ToolInputSchema(
         properties: {
-          'clear': JsonSchema.boolean(
-            description: 'Empty the list instead, for a clean baseline.',
-          ),
+          'clear': JsonSchema.boolean(description: 'Clear recorded list.'),
           'limit': JsonSchema.integer(description: 'Default 50.'),
+          'query': JsonSchema.string(description: 'URL substring filter.'),
+          'url': JsonSchema.string(description: 'Alias for query.'),
+          'errorsOnly': JsonSchema.boolean(
+            description: 'Only failed requests (status >= 400).',
+          ),
+          'method': JsonSchema.string(description: 'HTTP method (GET, POST).'),
           'statusFilter': JsonSchema.integer(
             description: 'Only this status code.',
           ),
-          'url': JsonSchema.string(
-            description: 'Only requests whose URL contains this text.',
-          ),
           'id': JsonSchema.integer(
-            description: 'The #number of a request in the list.',
+            description: 'Request #number for full details.',
           ),
         },
       ),
@@ -889,7 +1001,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           );
         }
         final limit = ((params['limit'] as int?) ?? 50).clamp(1, 500);
-        final statusFilter = params['status_filter'] as int?;
+        final statusFilter =
+            (params['statusFilter'] ?? params['status_filter']) as int?;
         // The VM records nothing until profiling is on; it resets on restart.
         final wasOff = await _enableHttpProfiling(params);
         final res = await _callExtensionRaw('ext.dart.io.getHttpProfile', {});
@@ -951,10 +1064,17 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           );
         }
         var filtered = requests;
-        final urlFilter = params['url'] as String?;
+        final urlFilter = ((params['query'] ?? params['url']) as String?)
+            ?.toLowerCase();
         if (urlFilter != null && urlFilter.isNotEmpty) {
           filtered = filtered
-              .where((r) => '${r['uri']}'.contains(urlFilter))
+              .where((r) => '${r['uri']}'.toLowerCase().contains(urlFilter))
+              .toList();
+        }
+        final methodFilter = (params['method'] as String?)?.toUpperCase();
+        if (methodFilter != null && methodFilter.isNotEmpty) {
+          filtered = filtered
+              .where((r) => '${r['method']}'.toUpperCase() == methodFilter)
               .toList();
         }
         if (statusFilter != null) {
@@ -964,6 +1084,15 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
               )
               .toList();
         }
+        if (params['errorsOnly'] == true) {
+          filtered = filtered.where((r) {
+            final code = (r['response'] as Map?)?['statusCode'] as num?;
+            final hasErr =
+                (r['request'] as Map?)?['error'] != null ||
+                (r['response'] as Map?)?['error'] != null;
+            return hasErr || (code != null && code >= 400);
+          }).toList();
+        }
         if (filtered.isEmpty) {
           return CallToolResult(
             content: [
@@ -972,8 +1101,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
                     ? 'HTTP profiling was off and is now enabled. Repeat the action, then call this again.'
                     : requests.isEmpty
                     ? 'No HTTP requests recorded yet.'
-                    : 'None of the ${requests.length} recorded requests match '
-                          '${[if (urlFilter != null) 'url "$urlFilter"', if (statusFilter != null) 'status $statusFilter'].join(' and ')}.',
+                    : 'None of the ${requests.length} recorded requests match the applied filters.',
               ),
             ],
           );
