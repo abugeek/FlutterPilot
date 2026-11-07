@@ -167,6 +167,7 @@ void main() {
       expect(props.containsKey('wrapWith'), isTrue);
       expect(props.containsKey('unwrap'), isTrue);
       expect(props.containsKey('replaceCall'), isTrue);
+      expect(props.containsKey('patches'), isTrue);
     });
 
     test('replay_flow inputSchema defines delayMs and assertRoute', () {
@@ -215,6 +216,45 @@ class MyList extends StatelessWidget {
       } finally {
         tempDir.deleteSync(recursive: true);
       }
+    });
+
+    test('get_memory_details advertises route canary parameter', () {
+      final tools = server.toolListJson();
+      final mem = tools.firstWhere((t) => t['name'] == 'get_memory_details');
+      final schema = mem['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('route'), isTrue);
+      expect(props.containsKey('cycle'), isTrue);
+      expect(props.containsKey('times'), isTrue);
+    });
+
+    test('simulate_network advertises chaos parameters (errorRate, statusCode, restore)', () {
+      final tools = server.toolListJson();
+      final net = tools.firstWhere((t) => t['name'] == 'simulate_network');
+      final schema = net['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('errorRate'), isTrue);
+      expect(props.containsKey('statusCode'), isTrue);
+      expect(props.containsKey('restore'), isTrue);
+      expect(props.containsKey('condition'), isTrue);
+    });
+
+    test('audit_screen_health advertises viewports parameter for responsive matrix', () {
+      final tools = server.toolListJson();
+      final health = tools.firstWhere((t) => t['name'] == 'audit_screen_health');
+      final schema = health['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('viewports'), isTrue);
+    });
+
+    test('execute_action_chain advertises exportAsTest parameters', () {
+      final tools = server.toolListJson();
+      final chain = tools.firstWhere((t) => t['name'] == 'execute_action_chain');
+      final schema = chain['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('exportAsTest'), isTrue);
+      expect(props.containsKey('testName'), isTrue);
+      expect(props.containsKey('testFilePath'), isTrue);
     });
 
     test('curated workflow prompts include 1-turn and design workflows', () {

@@ -75,11 +75,23 @@ extension _DiagnosticsExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
+      if (parameters['restore'] == 'true' || parameters['condition'] == 'normal') {
+        NetworkSimulation.reset();
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'condition': 'normal',
+            'restored': true,
+          }),
+        );
+      }
       final delayMs = int.tryParse(parameters['delayMs'] ?? '');
+      final errorRate = double.tryParse(parameters['errorRate'] ?? '') ?? 0.0;
+      final statusCode = int.tryParse(parameters['statusCode'] ?? '');
       final condition =
-          parameters['condition'] ?? (delayMs == null ? null : 'normal');
+          parameters['condition'] ?? (delayMs == null && errorRate == 0.0 ? null : 'normal');
       final preset = NetworkSimulation.presets[condition];
-      if (condition != 'normal' && condition != 'offline' && preset == null) {
+      if (condition != null && condition != 'normal' && condition != 'offline' && preset == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'condition must be: normal | slow_3g | fast_4g | offline',
@@ -89,12 +101,16 @@ extension _DiagnosticsExtensions on FlutterPilot {
       NetworkSimulation.set(
         offline: condition == 'offline',
         latency: ms == null ? null : Duration(milliseconds: ms),
+        errorRate: errorRate,
+        statusCode: statusCode,
       );
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
-          'condition': condition,
+          'condition': condition ?? 'chaos',
           'latencyMs': ?ms,
+          if (errorRate > 0) 'errorRate': errorRate,
+          'statusCode': ?statusCode,
           'covers': NetworkSimulation.intercepting
               ? 'package:http, dart:io, Dio'
               : 'Dio only (dart:io clients are not wrapped on this platform)',

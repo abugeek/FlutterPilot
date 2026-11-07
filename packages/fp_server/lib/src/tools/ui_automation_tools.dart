@@ -215,15 +215,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
-            description:
-                'Key, selector, visible text or icon name '
-                '("IconButton[\'settings\']").',
+            description: 'Key, selector, visible text or icon name.',
           ),
           'mark': JsonSchema.integer(
-            description: 'Mark number from capture_screenshot(labeled: true).',
+            description: 'Mark number from capture_screenshot.',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier (Flutter 3.19+).',
+            description: 'Semantics identifier.',
           ),
           'semanticsId': JsonSchema.integer(
             description: 'SemanticsNode id from get_semantics_tree.',
@@ -392,10 +390,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             description: 'Key, selector or label. Omit for focused field.',
           ),
           'mark': JsonSchema.integer(
-            description: 'Mark number from capture_screenshot(labeled: true).',
+            description: 'Mark number from capture_screenshot.',
           ),
           'identifier': JsonSchema.string(
-            description: 'Semantics identifier of the field.',
+            description: 'Semantics identifier.',
           ),
           'clearFirst': JsonSchema.boolean(
             description: 'Clear existing text before typing (default true).',
@@ -1008,14 +1006,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Layout and accessibility check: layout overflows, tap targets '
-          'under the platform minimum (48dp phones, 24px desktop/web), controls '
-          'a screen reader can\'t name (no label/tooltip), text below WCAG '
-          'contrast (4.5:1, large 3:1, from the rendered pixels), and where the '
-          'screen reader order jumps back up. Each with position and source '
-          'file:line. With routes it navigates to each and audits it (a sweep, '
-          'not a reading), then best-effort returns to where it started. Use '
-          'after set_app_settings(textScale/locale/theme) or a UI change.',
+          'Audits screen health: layout overflows, tap targets under minimum '
+          '(48dp mobile, 24px desktop), unlabeled controls, low contrast text '
+          'and reading order jumps. routes sweeps multiple routes; viewports '
+          'audits responsive breakpoints.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.array(
@@ -1024,6 +1018,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           ),
           'designQuality': JsonSchema.boolean(
             description: 'Audit 4/8dp spacing grid and typography hierarchy.',
+          ),
+          'viewports': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Audit viewports (e.g. ["mobile_portrait", "tablet"]).',
           ),
         },
       ),
@@ -1167,6 +1165,94 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final auditParams = {
           if (p['designQuality'] == true) 'designQuality': 'true',
         };
+        final viewports = [
+          for (final v in (p['viewports'] as List?) ?? const []) '$v',
+        ];
+        if (viewports.isNotEmpty) {
+          final snapshot =
+              await _callExtensionRaw('ext.flutterpilot.getAppSnapshot', {});
+          final initialViewport = snapshot.data?['viewport'];
+
+          const presets = <String, ({int width, int height})>{
+            'mobile_portrait': (width: 390, height: 844),
+            'mobile_landscape': (width: 844, height: 390),
+            'tablet': (width: 768, height: 1024),
+            'desktop': (width: 1280, height: 800),
+          };
+
+          final matrixBuffer = StringBuffer(
+            'Responsive Viewport Matrix (${viewports.length} viewport${viewports.length == 1 ? '' : 's'}):\n',
+          );
+          var totalOverflows = 0;
+          final matrixResults = <String, dynamic>{};
+
+          for (final vp in viewports) {
+            final sz = presets[vp] ?? parseWindowSize(vp);
+            if (sz == null) {
+              matrixBuffer.writeln('• $vp: Skipped (unknown dimensions)');
+              continue;
+            }
+            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
+              'width': '${sz.width}',
+              'height': '${sz.height}',
+            });
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.auditScreenHealth',
+              auditParams,
+            );
+            final data = res.data ?? const <String, dynamic>{};
+            final ov = (data['overflows'] as List?) ?? const [];
+            totalOverflows += ov.length;
+            matrixResults[vp] = {
+              'width': sz.width,
+              'height': sz.height,
+              'overflows': ov.length,
+              'findings': screenFindings(data),
+            };
+
+            if (ov.isEmpty) {
+              matrixBuffer.writeln('• $vp (${sz.width}x${sz.height}): PASS (0 overflows)');
+            } else {
+              matrixBuffer.writeln(
+                '• $vp (${sz.width}x${sz.height}): FAIL (${ov.length} layout overflow${ov.length == 1 ? '' : 's'})',
+              );
+              for (final o in ov) {
+                final src = o['source'] != null ? ' at ${o['source']}' : '';
+                matrixBuffer.writeln('    - ${o['type']}$src: ${o['details']}');
+                if (o['source'] != null) {
+                  matrixBuffer.writeln(
+                    '      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded")',
+                  );
+                }
+              }
+            }
+          }
+
+          if (initialViewport is Map &&
+              initialViewport['width'] != null &&
+              initialViewport['height'] != null) {
+            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
+              'width': '${initialViewport['width']}',
+              'height': '${initialViewport['height']}',
+            });
+          } else {
+            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {});
+          }
+          matrixBuffer.writeln('✓ Restored initial viewport.');
+
+          return CallToolResult(
+            content: [TextContent(text: matrixBuffer.toString().trim())],
+            structuredContent: {
+              'totalViewports': viewports.length,
+              'totalOverflows': totalOverflows,
+              'matrix': matrixResults,
+              'restored': true,
+            },
+          );
+        }
+
         if (routes.isEmpty) {
           final res = await _callExtensionRaw(
             'ext.flutterpilot.auditScreenHealth',
@@ -1410,11 +1496,14 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'steps': JsonSchema.array(
             items: compositeStepSchema(),
             description:
-                'Tool calls run in order, e.g. [{"tool": "tap_widget", '
-                '"arguments": {"key": "New note"}}, {"tool": "assert_widget", '
-                '"arguments": {"text": "Saved"}}]. '
-                'Tools: ${(_chainStepTools.toList()..sort()).join(', ')}.',
+                'Sequence of steps, e.g. [{"tool": "tap_widget", "arguments": {"key": "Save"}}].',
           ),
+          'exportAsTest': JsonSchema.boolean(
+            description:
+                'Export the executed journey as a runnable integration test file.',
+          ),
+          'testName': JsonSchema.string(description: 'Name of the generated test.'),
+          'testFilePath': JsonSchema.string(description: 'Target test file path.'),
         },
         required: ['steps'],
       ),
@@ -1446,6 +1535,74 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final steps = preflight.steps;
 
         // Taps and text entries alone run inside the app, in one round trip.
+        Future<String?> exportJourney({required bool passed}) async {
+          if (p['exportAsTest'] != true || !passed) return null;
+          try {
+            final vm = (await _deviceContextForParameters(const {}))?.service;
+            final isolateId =
+                vm == null ? null : await _uiIsolateId(vm, null);
+            final entry = isolateId == null
+                ? null
+                : await _appEntrypoint(vm!, isolateId);
+            final root = entry?.root ?? Directory.current.path;
+            final mainImport = entry?.mainImport ?? 'package:app/main.dart';
+            final testName =
+                p['testName']?.toString() ?? 'Action Chain Journey';
+            final sanitizedName =
+                testName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+            final relPath = p['testFilePath']?.toString() ??
+                path_pkg.join('integration_test', '${sanitizedName}_test.dart');
+            final fullPath = path_pkg.isAbsolute(relPath)
+                ? relPath
+                : path_pkg.join(root, relPath);
+
+            final recorded = <Map<String, dynamic>>[];
+            for (final step in steps) {
+              final a = step.arguments;
+              String? finder;
+              if (a['key'] != null) {
+                finder = "find.byKey(const Key('${a['key']}'))";
+              } else if (a['text'] != null) {
+                finder = "find.text('${a['text']}')";
+              }
+              if (step.tool == 'tap_widget' && finder != null) {
+                recorded.add({'type': 'tap', 'finder': finder, 'stable': true});
+              } else if (step.tool == 'enter_text' && finder != null) {
+                recorded.add({
+                  'type': 'enterText',
+                  'finder': finder,
+                  'text': a['text']?.toString() ?? '',
+                  'stable': true,
+                });
+              } else if (step.tool == 'press_key') {
+                recorded.add({
+                  'type': 'pressKey',
+                  'key': a['key']?.toString() ?? '',
+                  'modifiers': a['modifiers'] as List? ?? const [],
+                });
+              } else if (step.tool == 'assert_widget' && finder != null) {
+                recorded.add({'type': 'tap', 'finder': finder, 'stable': true});
+              }
+            }
+
+            final test = writeIntegrationTest(
+              name: testName,
+              mainImport: mainImport,
+              steps: recorded,
+            );
+
+            final targetFile = File(fullPath);
+            targetFile.parent.createSync(recursive: true);
+            targetFile.writeAsStringSync(test.source);
+            try {
+              await Process.run('dart', ['format', fullPath]);
+            } catch (_) {}
+            return relPath;
+          } catch (_) {
+            return null;
+          }
+        }
+
         final inApp = [for (final step in steps) ?inAppChainAction(step)];
         if (inApp.length == steps.length) {
           final res = await _callExtensionRaw(
@@ -1497,6 +1654,10 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             }
           }
           buffer.write(_formatActionFeedback('Chain finished', const {}, res));
+          final exported = await exportJourney(passed: failure == null);
+          if (exported != null) {
+            buffer.writeln('\n✓ Exported journey to runnable integration test: $exported');
+          }
           return withVerdict(
             CallToolResult(
               isError: failure != null,
@@ -1554,16 +1715,21 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           }
           completed++;
         }
+        final chainDesc = describeChain(
+          [for (final step in steps) step.tool],
+          outcomes,
+          failed: failed,
+        );
+        final exported = await exportJourney(passed: !failed);
+        final fullText = exported != null
+            ? '$chainDesc\n\n✓ Exported journey to runnable integration test: $exported'
+            : chainDesc;
         return withVerdict(
           CallToolResult(
             isError: failed,
             content: [
               TextContent(
-                text: describeChain(
-                  [for (final step in steps) step.tool],
-                  outcomes,
-                  failed: failed,
-                ),
+                text: fullText,
               ),
             ],
           ),

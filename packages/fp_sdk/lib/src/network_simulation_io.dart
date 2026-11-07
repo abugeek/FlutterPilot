@@ -38,13 +38,26 @@ class _SimulatedClient implements HttpClient {
   /// Waits the simulated latency, or fails as a phone with no network does.
   Future<T> _through<T>(Uri url, Future<T> Function() send) async {
     if (NetworkSimulation.offline) {
-      throw SocketException(
+      throw const SocketException(
         '[FlutterPilot] Network simulated offline',
         osError: OSError('Network is unreachable', 101),
       );
     }
     final latency = NetworkSimulation.latency;
     if (latency != null) await Future<void>.delayed(latency);
+    if (NetworkSimulation.shouldFail()) {
+      final code = NetworkSimulation.statusCode;
+      if (code != null && code >= 400) {
+        throw HttpException(
+          '[FlutterPilot] Simulated HTTP error $code',
+          uri: url,
+        );
+      }
+      throw const SocketException(
+        '[FlutterPilot] Simulated network chaos error',
+        osError: OSError('Connection reset by peer', 104),
+      );
+    }
     return send();
   }
 

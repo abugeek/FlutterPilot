@@ -167,168 +167,234 @@ mixin _TestGenerationToolsMixin
           'replaceCall': JsonSchema.string(
             description: 'Direct replacement snippet for the constructor call.',
           ),
+          'patches': JsonSchema.array(
+            description:
+                'Batch of patch objects to apply atomically in 1 reload.',
+          ),
         },
       ),
       callback: (p, e) async {
         CallToolResult fail(String s) =>
             CallToolResult(isError: true, content: [TextContent(text: s)]);
 
-        var file = p['file']?.toString();
-        var line = (p['line'] as num?)?.toInt();
-        var column = (p['column'] as num?)?.toInt();
-        String? type;
+        Future<({_ResolvedPatch? patch, String? error})> resolveOne(
+          Map<String, dynamic> item,
+        ) async {
+          var file = item['file']?.toString();
+          var line = (item['line'] as num?)?.toInt();
+          var column = (item['column'] as num?)?.toInt();
+          String? type;
+          var isStaticFallback = false;
 
-        var isStaticFallback = false;
-        if (file == null) {
-          if (p['key'] == null) return fail('Give key, or file and line.');
-          final keyStr = p['key'].toString();
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.inspectWidget',
-            {'key': keyStr},
-          );
-          final source = !res.isError && res.data?['source'] is Map
-              ? res.data!['source'] as Map
-              : null;
-          final loc = source?['loc']?.toString();
-          final m = loc == null
-              ? null
-              : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
-          if (m != null) {
-            type = source?['type']?.toString();
-            file = m[1]!;
-            line = int.parse(m[2]!);
-            column = int.parse(m[3]!);
-          } else {
-            // Live widget not mounted in current viewport / tree:
-            // Fall back to scanning the app's lib/ directory statically.
+          if (file == null) {
+            if (item['key'] == null) {
+              return (patch: null, error: 'Give key, or file and line.');
+            }
+            final keyStr = item['key'].toString();
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.inspectWidget',
+              {'key': keyStr},
+            );
+            final source = !res.isError && res.data?['source'] is Map
+                ? res.data!['source'] as Map
+                : null;
+            final loc = source?['loc']?.toString();
+            final m = loc == null
+                ? null
+                : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
+            if (m != null) {
+              type = source?['type']?.toString();
+              file = m[1]!;
+              line = int.parse(m[2]!);
+              column = int.parse(m[3]!);
+            } else {
+              final vm = (await _deviceContextForParameters(const {}))?.service;
+              final isolateId =
+                  vm == null ? null : await _uiIsolateId(vm, null);
+              final root = isolateId == null
+                  ? null
+                  : (await _appEntrypoint(vm!, isolateId))?.root;
+              final appRoot = root ?? Directory.current.path;
+              final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
+              final match =
+                  await findWidgetConstructorInProject(searchDir, keyStr);
+              if (match != null) {
+                file = path_pkg.relative(match.file, from: appRoot);
+                line = match.line;
+                column = match.column;
+                type = match.type;
+                isStaticFallback = true;
+              } else {
+                if (res.isError) {
+                  return (patch: null, error: res.data?['error']?.toString() ?? 'Widget inspection failed');
+                }
+                return (
+                  patch: null,
+                  error: 'No source location for "$keyStr": not found in live tree or offline AST.',
+                );
+              }
+            }
+          }
+          if (line == null) {
+            return (patch: null, error: 'Give line with file ($file).');
+          }
+
+          var path = file;
+          if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
+          if (!path_pkg.isAbsolute(path)) {
             final vm = (await _deviceContextForParameters(const {}))?.service;
             final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
             final root = isolateId == null
                 ? null
                 : (await _appEntrypoint(vm!, isolateId))?.root;
-            final appRoot = root ?? Directory.current.path;
-            final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
-            final match =
-                await findWidgetConstructorInProject(searchDir, keyStr);
-            if (match != null) {
-              file = path_pkg.relative(match.file, from: appRoot);
-              line = match.line;
-              column = match.column;
-              type = match.type;
-              isStaticFallback = true;
-            } else {
-              if (res.isError) return res.toCallToolResult();
-              return fail(
-                'No source location for "$keyStr": it is not created by '
-                "the app's code, or this is not a debug build.",
-              );
-            }
+            path = path_pkg.join(root ?? Directory.current.path, path);
           }
-        }
-        if (line == null) return fail('Give line with file.');
+          final f = File(path);
+          if (!f.existsSync()) {
+            return (patch: null, error: 'Not found on disk: $path');
+          }
+          final text = f.readAsStringSync();
+          final span = constructorSpanAt(text, line, column ?? 1);
+          if (span == null) {
+            return (
+              patch: null,
+              error: 'No widget constructor call starts at $file:$line:${column ?? 1}.',
+            );
+          }
 
-        var path = file;
-        if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
-        if (!path_pkg.isAbsolute(path)) {
-          final vm = (await _deviceContextForParameters(const {}))?.service;
-          final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
-          final root = isolateId == null
-              ? null
-              : (await _appEntrypoint(vm!, isolateId))?.root;
-          path = path_pkg.join(root ?? Directory.current.path, path);
-        }
-        final f = File(path);
-        if (!f.existsSync()) return fail('Not found on disk: $path');
-        final text = f.readAsStringSync();
-        final span = constructorSpanAt(text, line, column ?? 1);
-        if (span == null) {
-          return fail(
-            'No widget constructor call starts at $file:$line:${column ?? 1}.',
-          );
-        }
+          final originalCall = text.substring(span.offset, span.end);
+          String newCall;
+          int patchOffset = span.offset;
+          int patchEnd = span.end;
 
-        final originalCall = text.substring(span.offset, span.end);
-        String newCall;
-        int patchOffset = span.offset;
-        int patchEnd = span.end;
-
-        if (p['replaceCall'] != null) {
-          newCall = p['replaceCall'].toString();
-        } else if (p['unwrap'] == true) {
-          // Check if this widget is enclosed by a wrapper widget (Center, Padding, etc.)
-          final parent = enclosingConstructorSpan(
-            text,
-            span.offset,
-            span.end,
-            hintLine: line,
-          );
-          if (parent != null &&
-              text
-                  .substring(parent.offset, span.offset)
-                  .contains(RegExp(r'\bchild\s*:'))) {
-            patchOffset = parent.offset;
-            patchEnd = parent.end;
-            newCall = originalCall;
-          } else {
-            final childMatch =
-                RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
-            if (childMatch != null) {
-              var depth = 0;
-              var startIdx = childMatch.end;
-              var endIdx = originalCall.length - 1;
-              for (var i = startIdx; i < originalCall.length; i++) {
-                final c = originalCall[i];
-                if (c == '(' || c == '[' || c == '{') {
-                  depth++;
-                } else if (c == ')' || c == ']' || c == '}') {
-                  if (depth == 0) {
+          if (item['replaceCall'] != null) {
+            newCall = item['replaceCall'].toString();
+          } else if (item['unwrap'] == true) {
+            final parent = enclosingConstructorSpan(
+              text,
+              span.offset,
+              span.end,
+              hintLine: line,
+            );
+            if (parent != null &&
+                text
+                    .substring(parent.offset, span.offset)
+                    .contains(RegExp(r'\bchild\s*:'))) {
+              patchOffset = parent.offset;
+              patchEnd = parent.end;
+              newCall = originalCall;
+            } else {
+              final childMatch =
+                  RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
+              if (childMatch != null) {
+                var depth = 0;
+                var startIdx = childMatch.end;
+                var endIdx = originalCall.length - 1;
+                for (var i = startIdx; i < originalCall.length; i++) {
+                  final c = originalCall[i];
+                  if (c == '(' || c == '[' || c == '{') {
+                    depth++;
+                  } else if (c == ')' || c == ']' || c == '}') {
+                    if (depth == 0) {
+                      endIdx = i;
+                      break;
+                    }
+                    depth--;
+                  } else if (depth == 0 && c == ',') {
                     endIdx = i;
                     break;
                   }
-                  depth--;
-                } else if (depth == 0 && c == ',') {
-                  endIdx = i;
-                  break;
                 }
+                newCall = originalCall.substring(startIdx, endIdx).trim();
+              } else {
+                return (
+                  patch: null,
+                  error: 'Cannot unwrap ${type ?? 'widget'}: no child parameter found.',
+                );
               }
-              newCall = originalCall.substring(startIdx, endIdx).trim();
-            } else {
-              return fail(
-                'Cannot unwrap ${type ?? 'widget'}: no "child:" parameter found, '
-                'and no enclosing wrapper widget with "child:".',
-              );
             }
-          }
-        } else if (p['wrapWith'] != null) {
-          final wrapper = p['wrapWith'].toString().trim();
-          if (wrapper == 'Padding') {
-            newCall =
-                'Padding(\n  padding: const EdgeInsets.all(16.0),\n  child: $originalCall,\n)';
-          } else if (wrapper.contains('(')) {
-            final lastParen = wrapper.lastIndexOf(')');
-            if (lastParen > 0) {
-              final prefix = wrapper.substring(0, lastParen).trim();
-              final hasArgs = prefix.contains(RegExp(r'\(\s*\S'));
-              final separator = hasArgs ? ', ' : '';
-              newCall = '$prefix$separator child: $originalCall\n)';
+          } else if (item['wrapWith'] != null) {
+            final wrapper = item['wrapWith'].toString().trim();
+            if (wrapper == 'Padding') {
+              newCall =
+                  'Padding(\n  padding: const EdgeInsets.all(16.0),\n  child: $originalCall,\n)';
+            } else if (wrapper.contains('(')) {
+              final lastParen = wrapper.lastIndexOf(')');
+              if (lastParen > 0) {
+                final prefix = wrapper.substring(0, lastParen).trim();
+                final hasArgs = prefix.contains(RegExp(r'\(\s*\S'));
+                final separator = hasArgs ? ', ' : '';
+                newCall = '$prefix$separator child: $originalCall\n)';
+              } else {
+                newCall = '$wrapper(\n  child: $originalCall,\n)';
+              }
             } else {
               newCall = '$wrapper(\n  child: $originalCall,\n)';
             }
           } else {
-            newCall = '$wrapper(\n  child: $originalCall,\n)';
+            return (
+              patch: null,
+              error: 'Specify wrapWith, unwrap, or replaceCall.',
+            );
           }
-        } else {
-          return fail('Specify wrapWith, unwrap, or replaceCall.');
+
+          return (
+            patch: _ResolvedPatch(
+              file: file,
+              filePath: path,
+              line: line,
+              column: column ?? 1,
+              originalCall: originalCall,
+              newCall: newCall,
+              patchOffset: patchOffset,
+              patchEnd: patchEnd,
+              isStaticFallback: isStaticFallback,
+            ),
+            error: null,
+          );
         }
 
-        final originalText = text;
-        final newText =
-            text.substring(0, patchOffset) + newCall + text.substring(patchEnd);
+        final List<Map<String, dynamic>> patchList = p['patches'] is List
+            ? (p['patches'] as List)
+                .whereType<Map>()
+                .map((m) => m.cast<String, dynamic>())
+                .toList()
+            : [p];
+        if (patchList.isEmpty) return fail('No patches specified.');
 
-        f.writeAsStringSync(newText);
-        try {
-          await Process.run('dart', ['format', f.path]);
-        } catch (_) {}
+        final resolved = <_ResolvedPatch>[];
+        for (final item in patchList) {
+          final res = await resolveOne(item);
+          if (res.error != null) return fail(res.error!);
+          resolved.add(res.patch!);
+        }
+
+        final filePatches = <String, List<_ResolvedPatch>>{};
+        for (final r in resolved) {
+          filePatches.putIfAbsent(r.filePath, () => []).add(r);
+        }
+
+        final originalFiles = <String, String>{};
+        for (final path in filePatches.keys) {
+          originalFiles[path] = File(path).readAsStringSync();
+        }
+
+        for (final entry in filePatches.entries) {
+          final path = entry.key;
+          final patches = entry.value;
+          patches.sort((a, b) => b.patchOffset.compareTo(a.patchOffset));
+
+          var content = originalFiles[path]!;
+          for (final patch in patches) {
+            content = content.substring(0, patch.patchOffset) +
+                patch.newCall +
+                content.substring(patch.patchEnd);
+          }
+          File(path).writeAsStringSync(content);
+          try {
+            await Process.run('dart', ['format', path]);
+          } catch (_) {}
+        }
 
         final reload = _toolCallbacks['hot_reload'];
         final reloadRes = reload != null
@@ -337,10 +403,12 @@ mixin _TestGenerationToolsMixin
         final reloadFailed = reloadRes.isError == true;
 
         if (reloadFailed) {
-          f.writeAsStringSync(originalText);
-          try {
-            await Process.run('dart', ['format', f.path]);
-          } catch (_) {}
+          for (final entry in originalFiles.entries) {
+            File(entry.key).writeAsStringSync(entry.value);
+            try {
+              await Process.run('dart', ['format', entry.key]);
+            } catch (_) {}
+          }
           if (reload != null) await reload(const {}, e);
           final err = reloadRes.content
               .whereType<TextContent>()
@@ -348,7 +416,7 @@ mixin _TestGenerationToolsMixin
               .join('\n');
           return fail(
             'Hot reload failed after applying patch:\n$err\n'
-            'Rolled back changes to $file.',
+            'Rolled back changes across ${originalFiles.length} file(s).',
           );
         }
 
@@ -359,13 +427,25 @@ mixin _TestGenerationToolsMixin
         final overflows = (auditData['overflows'] as List?) ?? const [];
         final a11y = (auditData['accessibilityIssues'] as List?) ?? const [];
 
-        final buf = StringBuffer(
-          '✓ Patched $file:$line via hot reload'
-          '${isStaticFallback ? ' (resolved via offline AST)' : ''}:\n',
-        );
-        buf.writeln(
-          '```dart\n// Replaced:\n$originalCall\n\n// With:\n$newCall\n```',
-        );
+        final buf = StringBuffer();
+        if (resolved.length == 1) {
+          final single = resolved.first;
+          buf.writeln(
+            '✓ Patched ${single.file}:${single.line} via hot reload'
+            '${single.isStaticFallback ? ' (resolved via offline AST)' : ''}:',
+          );
+          buf.writeln(
+            '```dart\n// Replaced:\n${single.originalCall}\n\n// With:\n${single.newCall}\n```',
+          );
+        } else {
+          buf.writeln(
+            '✓ Applied ${resolved.length} patches atomically across ${originalFiles.length} file(s) via 1 hot reload:',
+          );
+          for (var i = 0; i < resolved.length; i++) {
+            final r = resolved[i];
+            buf.writeln('  ${i + 1}. ${r.file}:${r.line} (${r.newCall.split('\n').first})');
+          }
+        }
         buf.writeln('Post-reload screen health:');
         buf.writeln('  • Overflows: ${overflows.length}');
         buf.writeln('  • Accessibility issues: ${a11y.length}');
@@ -373,10 +453,8 @@ mixin _TestGenerationToolsMixin
         return CallToolResult(
           content: [TextContent(text: buf.toString().trim())],
           structuredContent: {
-            'file': file,
-            'line': line,
-            'original': originalCall,
-            'replacement': newCall,
+            'patchCount': resolved.length,
+            'fileCount': originalFiles.length,
             'reloaded': true,
             'overflowCount': overflows.length,
             'accessibilityIssueCount': a11y.length,
@@ -984,37 +1062,6 @@ mixin _TestGenerationToolsMixin
     );
   }
 
-  /// The app's folder and its entrypoint as a package import.
-  Future<({String root, String mainImport})?> _appEntrypoint(
-    VmService vm,
-    String isolateId,
-  ) async {
-    var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
-    if (uri == null) return null;
-    if (uri.startsWith('package:')) {
-      final resolved = (await vm.lookupResolvedPackageUris(isolateId, [
-        uri,
-      ])).uris?.first;
-      final path = resolved == null ? null : Uri.parse(resolved).path;
-      final lib = path?.lastIndexOf('/lib/') ?? -1;
-      if (path == null || lib < 0) return null;
-      return (root: fileSystemPath(path.substring(0, lib)), mainImport: uri);
-    }
-    if (!uri.startsWith('file:')) return null;
-    final path = Uri.parse(uri).path;
-    final lib = path.lastIndexOf('/lib/');
-    if (lib < 0) return null;
-    final root = fileSystemPath(path.substring(0, lib));
-    final pubspec = File('$root/pubspec.yaml');
-    if (!pubspec.existsSync()) return null;
-    final name = RegExp(
-      r'^name:\s*([A-Za-z0-9_]+)',
-      multiLine: true,
-    ).firstMatch(pubspec.readAsStringSync())?.group(1);
-    if (name == null) return null;
-    return (root: root, mainImport: 'package:$name/${path.substring(lib + 5)}');
-  }
-
   /// Adds `integration_test` to dev_dependencies when missing; says so.
   Future<String?> _ensureIntegrationTestDependency(String root) async {
     final pubspec = File('$root/pubspec.yaml').readAsStringSync();
@@ -1059,4 +1106,28 @@ mixin _TestGenerationToolsMixin
     }
     return null;
   }
+}
+
+class _ResolvedPatch {
+  _ResolvedPatch({
+    required this.file,
+    required this.filePath,
+    required this.line,
+    required this.column,
+    required this.originalCall,
+    required this.newCall,
+    required this.patchOffset,
+    required this.patchEnd,
+    required this.isStaticFallback,
+  });
+
+  final String file;
+  final String filePath;
+  final int line;
+  final int column;
+  final String originalCall;
+  final String newCall;
+  final int patchOffset;
+  final int patchEnd;
+  final bool isStaticFallback;
 }

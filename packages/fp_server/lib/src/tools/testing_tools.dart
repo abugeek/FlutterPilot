@@ -61,13 +61,9 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
       'mock_platform_channel',
       description:
           'Stands in for the native side of a plugin (camera, scanner, '
-          'location, permissions, Bluetooth), which a simulator or CI '
-          'lacks. No argument: the mocks and the calls the app made '
-          '(channel, method, arguments, whether a plugin answered) — '
-          'where the names come from. channel + method + result (or '
-          'error) answers that call; channel + event delivers an event to '
-          'EventChannel listeners, e.g. a scanned barcode. Pigeon APIs: '
-          'the whole channel name, no method.',
+          'permissions, Bluetooth). No argument: lists mocks and recent calls. '
+          'channel + method + result (or error) answers a MethodChannel call; '
+          'channel + event delivers to an EventChannel. clear:true resets.',
       inputSchema: ToolInputSchema(
         properties: {
           'channel': JsonSchema.string(

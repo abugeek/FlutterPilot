@@ -364,6 +364,55 @@ Future<void> main(List<String> args) async {
       });
     }
 
+    // 8. Responsive Viewport Matrix Validation
+    await runTest('audit_screen_health (viewports matrix)', 'audit_screen_health', {
+      'viewports': ['mobile_portrait', 'mobile_landscape'],
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Responsive Viewport Matrix');
+    });
+
+    // 9. Network Chaos & Fuzzing
+    await runTest('simulate_network (chaos)', 'simulate_network', {
+      'errorRate': 0.5,
+      'statusCode': 503,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('success');
+    });
+
+    await runTest('simulate_network (restore)', 'simulate_network', {
+      'restore': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('restored');
+    });
+
+    // 10. Memory Introspection
+    await runTest('get_memory_details (classes: true)', 'get_memory_details', {
+      'classes': true,
+      'limit': 5,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Top') || text.contains('Heap') || text.contains('classes');
+    });
+
+    // 11. Journey Flow Export to Integration Test
+    final chainKey = isHn ? 'Stories Tab 1 of 3' : targetKey;
+    await runTest('execute_action_chain (exportAsTest)', 'execute_action_chain', {
+      'steps': [
+        {
+          'tool': 'tap_widget',
+          'arguments': {'key': chainKey},
+        },
+      ],
+      'exportAsTest': true,
+      'testName': 'field_journey',
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Action chain') && text.contains('Exported journey');
+    });
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

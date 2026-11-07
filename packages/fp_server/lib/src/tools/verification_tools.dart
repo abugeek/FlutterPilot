@@ -20,15 +20,10 @@ mixin _VerificationToolsMixin
       'verify_feature',
       description:
           'Checks a feature against acceptance criteria and writes a '
-          'pass/fail report with evidence. Start with feature + criteria. '
-          'Then for each: criterion: N, drive the app and check it with '
-          'assert_widget, wait_for or compare_screenshot. A criterion '
-          'passes only if a check passed, none failed and the app threw '
-          'no error; driven but unchecked is "not verified". finish:true '
-          'returns the verdicts and writes '
-          'flutterpilot/reports/<feature>-<time>/report.md in the app, '
-          'with each criterion\'s steps, HTTP requests, errors and a '
-          'screenshot.',
+          'pass/fail report. Start with feature + criteria. Then for each: '
+          'criterion: N, drive app and check with assert_widget, wait_for or '
+          'compare_screenshot. finish:true writes report.md with steps, '
+          'requests, errors and screenshot.',
       inputSchema: ToolInputSchema(
         properties: {
           'feature': JsonSchema.string(description: 'What is verified.'),

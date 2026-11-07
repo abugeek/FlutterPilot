@@ -248,6 +248,51 @@ abstract class _FlutterPilotServerBase {
     return stale;
   }
 
+  /// The app's folder and its entrypoint as a package import.
+  Future<({String root, String mainImport})?> _appEntrypoint(
+    VmService vm,
+    String isolateId,
+  ) async {
+    var uri = (await vm.getIsolate(isolateId)).rootLib?.uri;
+    if (uri == null) return null;
+    if (uri.startsWith('package:')) {
+      final resolved = (await vm.lookupResolvedPackageUris(isolateId, [
+        uri,
+      ])).uris?.first;
+      final path = resolved == null ? null : Uri.parse(resolved).path;
+      final lib = path?.lastIndexOf('/lib/') ?? -1;
+      if (path == null || lib < 0) return null;
+      return (root: fileSystemPath(path.substring(0, lib)), mainImport: uri);
+    }
+    if (!uri.startsWith('file:')) return null;
+    final path = Uri.parse(uri).path;
+    final lib = path.lastIndexOf('/lib/');
+    if (lib < 0) return null;
+    final root = fileSystemPath(path.substring(0, lib));
+    final pubspec = File('$root/pubspec.yaml');
+    if (!pubspec.existsSync()) return null;
+    final name = RegExp(
+      r'^name:\s*([A-Za-z0-9_]+)',
+      multiLine: true,
+    ).firstMatch(pubspec.readAsStringSync())?.group(1);
+    if (name == null) return null;
+    return (root: root, mainImport: 'package:$name/${path.substring(lib + 5)}');
+  }
+
+  /// The isolate running the Flutter UI: the one with `ext.flutter.*`.
+  Future<String?> _uiIsolateId(VmService vm, String? cached) async {
+    if (cached != null) return cached;
+    String? first;
+    for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
+      final id = ref.id;
+      if (id == null) continue;
+      first ??= id;
+      final rpcs = (await vm.getIsolate(id)).extensionRPCs ?? const [];
+      if (rpcs.any((r) => r.startsWith('ext.flutter.'))) return id;
+    }
+    return first;
+  }
+
   /// [_notLoaded]'s verdict per file: its modification time and the reload
   /// it was judged against.
   final _staleVerdicts = <String, ({int mtime, int stamp, bool stale})>{};

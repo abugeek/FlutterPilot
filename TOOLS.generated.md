@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 47150 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 46865 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -103,9 +103,9 @@ Taps a widget found by key, selector (e.g. "ElevatedButton['Log In']") or visibl
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector, visible text or icon name ("IconButton['settings']"). |
-| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
-| `identifier` | string | no | Semantics identifier (Flutter 3.19+). |
+| `key` | string | no | Key, selector, visible text or icon name. |
+| `mark` | integer | no | Mark number from capture_screenshot. |
+| `identifier` | string | no | Semantics identifier. |
 | `semanticsId` | integer | no | SemanticsNode id from get_semantics_tree. |
 | `text` | string | no | Visible text inside the widget. |
 | `type` | string | no | Widget type, e.g. "IconButton". |
@@ -126,8 +126,8 @@ Types text into a text field found by key, selector (e.g. "TextField['Email']") 
 |---|---|---:|---|
 | `text` | string | yes | Text to enter ("" clears the field). |
 | `key` | string | no | Key, selector or label. Omit for focused field. |
-| `mark` | integer | no | Mark number from capture_screenshot(labeled: true). |
-| `identifier` | string | no | Semantics identifier of the field. |
+| `mark` | integer | no | Mark number from capture_screenshot. |
+| `identifier` | string | no | Semantics identifier. |
 | `clearFirst` | boolean | no | Clear existing text before typing (default true). |
 
 ## `press_key`
@@ -206,12 +206,13 @@ _Read-only._
 
 ## `audit_screen_health`
 
-Layout and accessibility check: layout overflows, tap targets under the platform minimum (48dp phones, 24px desktop/web), controls a screen reader can't name (no label/tooltip), text below WCAG contrast (4.5:1, large 3:1, from the rendered pixels), and where the screen reader order jumps back up. Each with position and source file:line. With routes it navigates to each and audits it (a sweep, not a reading), then best-effort returns to where it started. Use after set_app_settings(textScale/locale/theme) or a UI change.
+Audits screen health: layout overflows, tap targets under minimum (48dp mobile, 24px desktop), unlabeled controls, low contrast text and reading order jumps. routes sweeps multiple routes; viewports audits responsive breakpoints.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `routes` | array | no | Go to each route and check it. |
 | `designQuality` | boolean | no | Audit 4/8dp spacing grid and typography hierarchy. |
+| `viewports` | array | no | Audit viewports (e.g. ["mobile_portrait", "tablet"]). |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: int, visited: int, audited: int, failed: int, skipped: int, findings: {overflows: int, tapTargets: int, unlabeled: int, lowContrast: int, readingOrderJumps: int}, restored: bool, incomplete: bool, loading: bool, status?: "ok"|"partial"|"unavailable", reason?: string}`
 
@@ -230,7 +231,10 @@ Runs a known sequence of steps in one call, stopping at the first that fails: ta
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Tool calls run in order, e.g. [{"tool": "tap_widget", "arguments": {"key": "New note"}}, {"tool": "assert_widget", "arguments": {"text": "Saved"}}]. Tools: assert_widget, enter_text, fill_form, gesture_widget, mock_http_response, mock_platform_channel, navigate_to, press_key, scroll_into_view, set_app_settings, simulate_network, tap_widget, toggle_checkbox, wait_for. |
+| `steps` | array | yes | Sequence of steps, e.g. [{"tool": "tap_widget", "arguments": {"key": "Save"}}]. |
+| `exportAsTest` | boolean | no | Export the executed journey as a runnable integration test file. |
+| `testName` | string | no | Name of the generated test. |
+| `testFilePath` | string | no | Target test file path. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string, status?: "ok"|"refused"|"unavailable"}`
 
@@ -564,12 +568,15 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `simulate_network`
 
-Makes every HTTP request (http, dart:io, Dio) slow, fail (offline) or normal again. delayMs holds each one that long, to act mid-request.
+Makes every HTTP request (http, dart:io, Dio) slow, fail (offline/chaos) or normal again. errorRate (0.0-1.0) and statusCode (e.g. 500) inject network chaos; delayMs holds each one that long. restore:true clears.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `condition` | string: normal \| slow_3g \| fast_4g \| offline | no |  |
 | `delayMs` | integer | no | Up to 60000. |
+| `errorRate` | number | no | Chaos failure rate 0.0-1.0 (e.g. 0.5 for 50% drops). |
+| `statusCode` | integer | no | HTTP status code on failure, e.g. 500, 503, 404. |
+| `restore` | boolean | no | Restore normal network conditions. |
 
 ## `mock_http_response`
 
@@ -597,7 +604,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `mock_platform_channel`
 
-Stands in for the native side of a plugin (camera, scanner, location, permissions, Bluetooth), which a simulator or CI lacks. No argument: the mocks and the calls the app made (channel, method, arguments, whether a plugin answered) — where the names come from. channel + method + result (or error) answers that call; channel + event delivers an event to EventChannel listeners, e.g. a scanned barcode. Pigeon APIs: the whole channel name, no method.
+Stands in for the native side of a plugin (camera, scanner, permissions, Bluetooth). No argument: lists mocks and recent calls. channel + method + result (or error) answers a MethodChannel call; channel + event delivers to an EventChannel. clear:true resets.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -640,13 +647,14 @@ _Read-only._
 
 ## `get_memory_details`
 
-Heap used/capacity and external (native) memory per isolate. classes:true lists top classes by heap bytes and count. Leak check: cycle (tool calls that return to where they started, e.g. open a screen then press back) runs times rounds; reports classes that gained instances every round, where defined and what keeps one alive.
+Heap used/capacity and external (native) memory per isolate. classes:true lists top classes by heap bytes and count. Leak check: cycle (or route) runs times rounds; reports classes that gained instances every round, where defined and what keeps one alive.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `classes` | boolean | no | List the top classes by heap usage. |
 | `limit` | integer | no | Number of classes (default 30). |
-| `cycle` | array | no | Steps that return to where they started, e.g. [{"tool": "tap_widget", "arguments": {"key": "Open"}}, {"tool": "press_key", "arguments": {"key": "back"}}]. |
+| `route` | string | no | Canary route to test for memory leaks. |
+| `cycle` | array | no | Steps returning to start, e.g. [{"tool": "navigate_to", "arguments": {"route": "/a"}}, {"tool": "press_key", "arguments": {"key": "back"}}]. |
 | `times` | integer | no | Leak check rounds after one warm-up (default 5). |
 
 ## `profile_action`
@@ -697,6 +705,7 @@ Surgically patches a widget in source code (wrap with widget, unwrap, or replace
 | `wrapWith` | string | no | Widget to wrap target in (e.g. "Expanded", "SingleChildScrollView", "SafeArea", "Padding"). |
 | `unwrap` | boolean | no | Remove this widget, replacing it with its child argument. |
 | `replaceCall` | string | no | Direct replacement snippet for the constructor call. |
+| `patches` | array | no | Batch of patch objects to apply atomically in 1 reload. |
 
 ## `replay_flow`
 
@@ -743,7 +752,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `verify_feature`
 
-Checks a feature against acceptance criteria and writes a pass/fail report with evidence. Start with feature + criteria. Then for each: criterion: N, drive the app and check it with assert_widget, wait_for or compare_screenshot. A criterion passes only if a check passed, none failed and the app threw no error; driven but unchecked is "not verified". finish:true returns the verdicts and writes flutterpilot/reports/<feature>-<time>/report.md in the app, with each criterion's steps, HTTP requests, errors and a screenshot.
+Checks a feature against acceptance criteria and writes a pass/fail report. Start with feature + criteria. Then for each: criterion: N, drive app and check with assert_widget, wait_for or compare_screenshot. finish:true writes report.md with steps, requests, errors and screenshot.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

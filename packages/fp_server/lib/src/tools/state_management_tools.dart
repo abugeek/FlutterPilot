@@ -535,14 +535,24 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
       'simulate_network',
       description:
           'Makes every HTTP request (http, dart:io, Dio) slow, fail '
-          '(offline) or normal again. delayMs holds each one that long, to '
-          'act mid-request.',
+          '(offline/chaos) or normal again. errorRate (0.0-1.0) and '
+          'statusCode (e.g. 500) inject network chaos; delayMs holds '
+          'each one that long. restore:true clears.',
       inputSchema: ToolInputSchema(
         properties: {
           'condition': JsonSchema.string(
             enumValues: ['normal', 'slow_3g', 'fast_4g', 'offline'],
           ),
           'delayMs': JsonSchema.integer(description: 'Up to 60000.'),
+          'errorRate': JsonSchema.number(
+            description: 'Chaos failure rate 0.0-1.0 (e.g. 0.5 for 50% drops).',
+          ),
+          'statusCode': JsonSchema.integer(
+            description: 'HTTP status code on failure, e.g. 500, 503, 404.',
+          ),
+          'restore': JsonSchema.boolean(
+            description: 'Restore normal network conditions.',
+          ),
         },
       ),
       callback: (p, e) => _callExtensionRaw(

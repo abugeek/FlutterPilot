@@ -95,7 +95,12 @@ class DioPilotInterceptor extends Interceptor {
   /// [latencyMs] replaces the condition's built-in delay with your own (up to
   /// 60 s), to hold every request open long enough to act while it is in
   /// flight (leave the screen mid-save).
-  static void simulate(NetworkCondition condition, {int? latencyMs}) {
+  static void simulate(
+    NetworkCondition condition, {
+    int? latencyMs,
+    double errorRate = 0.0,
+    int? statusCode,
+  }) {
     final preset = switch (condition) {
       NetworkCondition.slow3g => NetworkSimulation.presets['slow_3g'],
       NetworkCondition.fast4g => NetworkSimulation.presets['fast_4g'],
@@ -105,6 +110,8 @@ class DioPilotInterceptor extends Interceptor {
     NetworkSimulation.set(
       offline: condition == NetworkCondition.offline,
       latency: ms == null ? null : Duration(milliseconds: ms),
+      errorRate: errorRate,
+      statusCode: statusCode,
     );
   }
 
@@ -313,6 +320,26 @@ class DioPilotInterceptor extends Interceptor {
           requestOptions: options,
           type: DioExceptionType.connectionError,
           message: '[FlutterPilot] Network simulated offline',
+        ),
+        true,
+      );
+      return;
+    }
+
+    if (NetworkSimulation.shouldFail()) {
+      final code = NetworkSimulation.statusCode ?? 500;
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          response: Response(
+            requestOptions: options,
+            statusCode: code,
+            statusMessage: 'Simulated Network Chaos ($code)',
+          ),
+          type: code >= 500
+              ? DioExceptionType.badResponse
+              : DioExceptionType.connectionError,
+          message: '[FlutterPilot] Simulated network chaos error ($code)',
         ),
         true,
       );

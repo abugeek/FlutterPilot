@@ -9,6 +9,9 @@ import 'network_simulation_stub.dart'
 class NetworkSimulation {
   static bool offline = false;
   static Duration? latency;
+  static double errorRate = 0.0;
+  static int? statusCode;
+  static int _counter = 0;
 
   /// The preset latencies: `slow_3g`, `fast_4g`.
   static const presets = {'slow_3g': 1500, 'fast_4g': 100};
@@ -19,10 +22,30 @@ class NetworkSimulation {
 
   static void install() => io.installHttpOverrides();
 
-  /// Sets the condition: [offline], and [latency] to wait before a request
-  /// goes out (null: none).
-  static void set({required bool offline, Duration? latency}) {
+  /// Determines whether a simulated chaos failure should be triggered.
+  static bool shouldFail() {
+    if (errorRate <= 0.0) return false;
+    if (errorRate >= 1.0) return true;
+    _counter++;
+    return ((_counter % 100) / 100.0) < errorRate;
+  }
+
+  /// Sets the condition: [offline], [latency] to wait before a request
+  /// goes out, and chaos [errorRate] / [statusCode].
+  static void set({
+    required bool offline,
+    Duration? latency,
+    double errorRate = 0.0,
+    int? statusCode,
+  }) {
     NetworkSimulation.offline = offline;
     NetworkSimulation.latency = latency;
+    NetworkSimulation.errorRate = errorRate.clamp(0.0, 1.0);
+    NetworkSimulation.statusCode = statusCode;
+  }
+
+  /// Resets all network simulation conditions to normal.
+  static void reset() {
+    set(offline: false, latency: null, errorRate: 0.0, statusCode: null);
   }
 }

@@ -26,21 +26,35 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
   ) async {
     CallToolResult fail(String text) =>
         CallToolResult(isError: true, content: [TextContent(text: text)]);
+    final route = params['route'] as String?;
+    final cycleArg = params['cycle'] ??
+        (route != null
+            ? [
+                {
+                  'tool': 'navigate_to',
+                  'arguments': {'route': route},
+                },
+                {
+                  'tool': 'press_key',
+                  'arguments': {'key': 'back'},
+                },
+              ]
+            : null);
     // Every step is validated before anything else runs (task 02): a malformed
     // step N means nothing was tapped, typed or scrolled, and no app is even
     // contacted. Done before the web check so an invalid plan is refused on its
     // own terms, not as "not on web".
     final preflight = preflightChain(
-      params['cycle'],
+      cycleArg,
       allowedTools: _profilableTools,
       isAvailable: _toolCallbacks.containsKey,
       profileRefusal: stepProfileRefusal,
       gate: (tool, args) => _toolArgGates[tool]!(args),
       what: 'run in a leak-check cycle',
-      field: 'cycle',
+      field: route != null ? 'route' : 'cycle',
       emptyProblem:
           'cycle is empty: give the steps that open something and return, '
-          'e.g. a tap then press_key back.',
+          'e.g. a tap then press_key back, or specify route.',
     );
     if (!preflight.ok) return fail(preflight.problem!);
     final steps = preflight.steps;
@@ -99,9 +113,9 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     Future<double> heapMb() async =>
         ((await vm.getMemoryUsage(isolateId)).heapUsage ?? 0) / (1024 * 1024);
 
-    final label = steps
-        .map((s) => '${s.tool}(${jsonEncode(s.arguments)})')
-        .join(' → ');
+    final label = route != null
+        ? 'Canary route "$route"'
+        : steps.map((s) => '${s.tool}(${jsonEncode(s.arguments)})').join(' → ');
     // Warm-up: first visits fill caches (images, fonts, lazy singletons).
     final warm = await round('Warm-up');
     if (warm != null) {
@@ -330,20 +344,6 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     }
   }
 
-  /// The isolate running the Flutter UI: the one with `ext.flutter.*`.
-  Future<String?> _uiIsolateId(VmService vm, String? cached) async {
-    if (cached != null) return cached;
-    String? first;
-    for (final ref in (await vm.getVM()).isolates ?? const <IsolateRef>[]) {
-      final id = ref.id;
-      if (id == null) continue;
-      first ??= id;
-      final rpcs = (await vm.getIsolate(id)).extensionRPCs ?? const [];
-      if (rpcs.any((r) => r.startsWith('ext.flutter.'))) return id;
-    }
-    return first;
-  }
-
   /// App code = the root library's package (and its directory).
   Future<CodeClassifier> _codeClassifier(VmService vm, String isolateId) async {
     final packages = <String>{};
@@ -485,8 +485,7 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
       description:
           'Heap used/capacity and external (native) memory per isolate. '
           'classes:true lists top classes by heap bytes and count. Leak '
-          'check: cycle (tool calls that return to where they started, e.g. '
-          'open a screen then press back) runs times rounds; reports classes '
+          'check: cycle (or route) runs times rounds; reports classes '
           'that gained instances every round, where defined and what keeps '
           'one alive.',
       inputSchema: ToolInputSchema(
@@ -497,12 +496,15 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
           'limit': JsonSchema.integer(
             description: 'Number of classes (default 30).',
           ),
+          'route': JsonSchema.string(
+            description: 'Canary route to test for memory leaks.',
+          ),
           'cycle': JsonSchema.array(
             items: compositeStepSchema(),
             description:
-                'Steps that return to where they started, e.g. [{"tool": '
-                '"tap_widget", "arguments": {"key": "Open"}}, {"tool": '
-                '"press_key", "arguments": {"key": "back"}}].',
+                'Steps returning to start, e.g. [{"tool": "navigate_to", '
+                '"arguments": {"route": "/a"}}, {"tool": "press_key", '
+                '"arguments": {"key": "back"}}].',
           ),
           'times': JsonSchema.integer(
             description: 'Leak check rounds after one warm-up (default 5).',
@@ -510,7 +512,9 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (params, extra) async {
-        if (params['cycle'] != null) return _leakCheck(params, extra);
+        if (params['cycle'] != null || params['route'] != null) {
+          return _leakCheck(params, extra);
+        }
         if (params['classes'] == true) return allocationProfile(params);
         final vmService = await _vmServiceForParameters(params);
         if (vmService == null) {
