@@ -96,6 +96,17 @@ void main() {
           builder: (_, _, child) => child,
           routes: [GoRoute(path: '/', builder: (_, _) => const SizedBox())],
         ),
+        StatefulShellRoute.indexedStack(
+          builder: (_, _, shell) => shell,
+          branches: [
+            StatefulShellBranch(
+              routes: [GoRoute(path: '/feed', builder: (_, _) => const SizedBox())],
+            ),
+            StatefulShellBranch(
+              routes: [GoRoute(path: '/saved', builder: (_, _) => const SizedBox())],
+            ),
+          ],
+        ),
         GoRoute(
           path: '/story/:id',
           builder: (_, _) => const SizedBox(),
@@ -106,6 +117,8 @@ void main() {
       ];
       expect(GoRouterPilotInspector.routePaths(routes), [
         '/',
+        '/feed',
+        '/saved',
         '/story/:id',
         '/story/:id/comments',
       ]);

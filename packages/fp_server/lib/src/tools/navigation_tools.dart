@@ -440,6 +440,122 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
+      'simulate_keyboard',
+      description:
+          'Simulates an on-screen keyboard (viewInsets.bottom, e.g. 320dp), '
+          'checks the screen for RenderFlex overflows and whether focused '
+          'inputs are obscured, then restores the inset (by default).',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'height': JsonSchema.number(
+            description:
+                'Keyboard height in logical pixels (default: 320; 0 closes).',
+          ),
+          'restore': JsonSchema.boolean(
+            description:
+                'Remove the simulated keyboard afterwards (default true).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final height = (p['height'] as num?)?.toDouble() ?? 320.0;
+        final restore = p['restore'] != false;
+
+        final setRes = await _callExtensionRaw(
+          'ext.flutterpilot.setKeyboardInset',
+          {'inset': height.toString()},
+        );
+        if (setRes.isError) return setRes.toCallToolResult();
+
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+
+        final audit = await _callExtensionRaw(
+          'ext.flutterpilot.auditScreenHealth',
+          {},
+        );
+        final auditData = audit.data ?? const <String, dynamic>{};
+        final overflows = (auditData['overflows'] as List?) ?? const [];
+
+        final interactive = await _callExtensionRaw(
+          'ext.flutterpilot.getInteractiveElements',
+          {},
+        );
+        final elements = (interactive.data?['elements'] as List?) ?? const [];
+        final focusedInput = elements.firstWhere(
+          (el) => el is Map && el['isFocused'] == true,
+          orElse: () => null,
+        );
+
+        var focusedObscured = false;
+        if (focusedInput is Map && focusedInput['bounds'] is Map) {
+          final bounds = focusedInput['bounds'] as Map;
+          final bottomY =
+              (bounds['y'] as num? ?? 0) + (bounds['height'] as num? ?? 0);
+          final viewHeight =
+              (setRes.data?['height'] as num?)?.toDouble() ?? 844.0;
+          final availableHeight = viewHeight - height;
+          if (bottomY > availableHeight) {
+            focusedObscured = true;
+          }
+        }
+
+        if (restore && height > 0) {
+          await _callExtensionRaw(
+            'ext.flutterpilot.setKeyboardInset',
+            {'inset': '0'},
+          );
+        }
+
+        final hasOverflow = overflows.isNotEmpty;
+        final pass = !hasOverflow && !focusedObscured;
+
+        final buf = StringBuffer(
+          'Simulated on-screen keyboard (${height.toInt()}dp)'
+          '${restore ? ' (restored)' : ''}:\n',
+        );
+        if (pass) {
+          buf.write('✓ Screen layout is clean with keyboard open. No overflows.');
+        } else {
+          buf.write('✗ Layout defects detected with keyboard open:');
+          if (hasOverflow) {
+            buf.write(
+              '\n  • RenderFlex bottom overflow (${overflows.length} issue(s)):',
+            );
+            for (final o in overflows) {
+              buf.write('\n    - ${o['details'] ?? o['type']}');
+            }
+            buf.write(
+              '\n  Prescription: Wrap the screen body in SingleChildScrollView or set Scaffold.resizeToAvoidBottomInset: false.',
+            );
+          }
+          if (focusedObscured) {
+            final name =
+                focusedInput['label'] ?? focusedInput['key'] ?? 'input';
+            buf.write(
+              '\n  • Focused text field "$name" is obscured behind the keyboard.',
+            );
+            buf.write(
+              '\n  Prescription: Ensure the input is within a Scrollable or call Scrollable.ensureVisible.',
+            );
+          }
+        }
+
+        return CallToolResult(
+          isError: !pass,
+          content: [TextContent(text: buf.toString())],
+          structuredContent: {
+            'pass': pass,
+            'height': height,
+            'overflowCount': overflows.length,
+            'overflows': overflows,
+            'focusedObscured': focusedObscured,
+            'restored': restore,
+          },
+        );
+      },
+    );
+
+    _tool(
       'crawl_app',
       description:
           'Finds reachable screens by tapping list rows, cards, tabs and '

@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 71
+Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 45190 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 47159 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -342,6 +342,15 @@ Resizes a macOS/Windows desktop app's window to phone 390x844, tablet 768x1024 a
 |---|---|---:|---|
 | `restore` | boolean | no | Restore initial window size afterwards (default true). |
 
+## `simulate_keyboard`
+
+Simulates an on-screen keyboard (viewInsets.bottom, e.g. 320dp), checks the screen for RenderFlex overflows and whether focused inputs are obscured, then restores the inset (by default).
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `height` | number | no | Keyboard height in logical pixels (default: 320; 0 closes). |
+| `restore` | boolean | no | Remove the simulated keyboard afterwards (default true). |
+
 ## `crawl_app`
 
 Finds reachable screens by tapping list rows, cards, tabs and navigation destinations (never buttons, toggles or rows named like actions), one row per list; returns the route graph and each screen's overflow/tap-target counts, then goes back.
@@ -366,13 +375,15 @@ _Read-only._
 
 ## `compare_screenshot`
 
-Visual regression: save:true stores the current screen as the named baseline (per device); without it, compares the screen with that baseline pixel by pixel and returns the changed %, plus a diff image (changes in magenta) when over threshold.
+Visual diff: save:true stores baseline; else compares against baseline (or prior frame if comparePrevious: true), returning diff %, changed bounds, and diff image.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `name` | string | yes | Baseline name, e.g. "home_screen", "login_dark". |
-| `save` | boolean | no | Save (or replace) the baseline instead of comparing. |
-| `threshold` | number | no | Allowed diff % before test fails (default 1.0 = 1%) |
+| `name` | string | no | Baseline name (e.g. "home"). Omit for comparePrevious. |
+| `comparePrevious` | boolean | no | Compare against previous frame without a named baseline. |
+| `save` | boolean | no | Save current screen as baseline. |
+| `threshold` | number | no | Allowed diff % before failing (default 1.0). |
+| `scale` | number | no | 0.2–1.0 (default 0.5, matching capture_screenshot). |
 
 ## `get_widget_tree`
 
@@ -670,6 +681,29 @@ _Read-only._
 | `file` | string | no | File in the app, e.g. "lib/ui/tile.dart". |
 | `line` | integer | no | 1-based line, with file. |
 | `column` | integer | no | 1-based column where the call starts, with file. |
+
+## `apply_patch_and_verify`
+
+Surgically patches a widget in source code (wrap with widget, unwrap, or replace constructor call), hot-reloads the app, audits screen health post-reload, and automatically rolls back if reload fails.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | Key, selector or visible text of the widget. |
+| `file` | string | no | File in the app, e.g. "lib/main.dart". |
+| `line` | integer | no | 1-based line of the widget. |
+| `column` | integer | no | 1-based column where the call starts. |
+| `wrapWith` | string | no | Widget to wrap target in (e.g. "Expanded", "SingleChildScrollView", "SafeArea", "Padding"). |
+| `unwrap` | boolean | no | Remove this widget, replacing it with its child argument. |
+| `replaceCall` | string | no | Direct replacement snippet for the constructor call. |
+
+## `replay_flow`
+
+Replays recently recorded user interactions live on the connected app without writing or compiling a test binary, verifying that the flow completes and reaches the expected route.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `delayMs` | integer | no | Delay between steps in ms (default: 300). |
+| `assertRoute` | string | no | Assert that the flow ends on this route. |
 
 ## `generate_test`
 

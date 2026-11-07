@@ -57,21 +57,21 @@ void main() {
         toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // Measured after adding autonomous superpowers (71 tools);
+      // Measured after adding autonomous superpowers (74 tools);
       // each limit is that profile's measurement plus margin (from tool/tool_list_report.dart).
-      // Every tool (--static-tools): 71 tools, 45 024 chars.
-      expect(listChars((_) => true), lessThanOrEqualTo(45400));
-      // An app with the SDK and no plugin, not on an iOS simulator: 33 578 chars plus margin.
+      // Every tool (--static-tools): 74 tools, 47 098 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(47500));
+      // An app with the SDK and no plugin, not on an iOS simulator: 35 652 chars plus margin.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(33900),
+        lessThanOrEqualTo(36000),
       );
-      // An app without the SDK: 9 592 chars.
-      expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));
+      // An app without the SDK: 9 612 chars.
+      expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9700));
     });
 
     test('the core profile fits a client with a tool limit', () {

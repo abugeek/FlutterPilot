@@ -3,6 +3,8 @@ part of '../../fp_server.dart';
 /// Tools for capturing screenshots, comparing baselines, and inspecting
 /// the widget tree, widget properties, and semantics tree.
 mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
+  static Uint8List? _lastScreenshotBytes;
+
   String _baselineKey(String name) =>
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
@@ -29,6 +31,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     final Uint8List decoded;
     try {
       decoded = base64Decode(base64Str);
+      _lastScreenshotBytes = decoded;
     } on FormatException {
       return CallToolResult(
         content: [TextContent(text: 'Invalid base64 screenshot data')],
@@ -316,6 +319,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
+        try {
+          _lastScreenshotBytes = base64Decode(rawBase64);
+        } catch (_) {}
 
         String finalBase64 = rawBase64;
         String mimeType = 'image/png';
@@ -362,49 +368,88 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'compare_screenshot',
       description:
-          'Visual regression: save:true stores the current screen as the '
-          'named baseline (per device); without it, compares the screen with '
-          'that baseline pixel by pixel and returns the changed %, plus a diff '
-          'image (changes in magenta) when over threshold.',
+          'Visual diff: save:true stores baseline; else compares against '
+          'baseline (or prior frame if comparePrevious: true), returning '
+          'diff %, changed bounds, and diff image.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
-            description: 'Baseline name, e.g. "home_screen", "login_dark".',
+            description: 'Baseline name (e.g. "home"). Omit for comparePrevious.',
+          ),
+          'comparePrevious': JsonSchema.boolean(
+            description: 'Compare against previous frame without a named baseline.',
           ),
           'save': JsonSchema.boolean(
-            description: 'Save (or replace) the baseline instead of comparing.',
+            description: 'Save current screen as baseline.',
           ),
           'threshold': JsonSchema.number(
-            description: 'Allowed diff % before test fails (default 1.0 = 1%)',
+            description: 'Allowed diff % before failing (default 1.0).',
+          ),
+          'scale': JsonSchema.number(
+            description: '0.2–1.0 (default 0.5, matching capture_screenshot).',
           ),
         },
-        required: ['name'],
       ),
       callback: (p, e) async {
+        final comparePrevious = p['comparePrevious'] == true;
         final name = p['name']?.toString();
-        if (name == null || name.isEmpty) {
-          return CallToolResult(
-            content: [TextContent(text: 'name is required')],
-            isError: true,
-          );
+        if (p['save'] == true) {
+          if (name == null || name.isEmpty) {
+            return CallToolResult(
+              content: [
+                TextContent(text: 'name is required to save a baseline'),
+              ],
+              isError: true,
+            );
+          }
+          return _saveBaseline(p);
         }
-        if (p['save'] == true) return _saveBaseline(p);
-        final baseline = _screenshotBaselines[_baselineKey(name)];
-        if (baseline == null) {
-          return CallToolResult(
-            content: [
-              TextContent(
-                text:
-                    'No baseline named "$name". '
-                    'Save one first with compare_screenshot(name, save: true).',
-              ),
-            ],
-            isError: true,
-          );
+        final Uint8List? baseline;
+        if (comparePrevious) {
+          baseline = _lastScreenshotBytes;
+          if (baseline == null) {
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text:
+                      'No previous screenshot found. Call capture_screenshot or an action first.',
+                ),
+              ],
+              isError: true,
+            );
+          }
+        } else {
+          if (name == null || name.isEmpty) {
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text: 'name is required unless comparePrevious: true',
+                ),
+              ],
+              isError: true,
+            );
+          }
+          baseline = _screenshotBaselines[_baselineKey(name)];
+          if (baseline == null) {
+            return CallToolResult(
+              content: [
+                TextContent(
+                  text:
+                      'No baseline named "$name". '
+                      'Save one first with compare_screenshot(name: "$name", save: true).',
+                ),
+              ],
+              isError: true,
+            );
+          }
         }
+
+        final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 0.5;
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          {},
+          {
+            if (scale < 1.0) 'scale': scale.toString(),
+          },
         );
         if (res.isError) return res.toCallToolResult();
         final base64Str = res.data?['data'] as String?;
@@ -429,7 +474,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
 
         // Decode both images format-agnostically (PNG, JPEG, etc.) and compare pixel-by-pixel.
-        final baselineImg = img.decodeImage(baseline);
+        var baselineImg = img.decodeImage(baseline);
         final currentImg = img.decodeImage(currentBytes);
 
         if (baselineImg == null || currentImg == null) {
@@ -443,26 +488,36 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        double diffPercent = 0.0;
-        img.Image? diffImg;
         if (baselineImg.width != currentImg.width ||
             baselineImg.height != currentImg.height) {
-          diffPercent = 100.0;
-        } else {
-          int diffPixels = 0;
-          final total = baselineImg.width * baselineImg.height;
-          diffImg = currentImg.convert(
-            format: img.Format.uint8,
-            numChannels: 4,
+          baselineImg = img.copyResize(
+            baselineImg,
+            width: currentImg.width,
+            height: currentImg.height,
           );
+        }
 
-          // PNGs may decode as RGB/RGBA and 8- or 16-bit; compare as 8-bit RGBA.
-          final baseBytes = baselineImg
-              .convert(format: img.Format.uint8, numChannels: 4)
-              .toUint8List();
-          final currBytes = currentImg
-              .convert(format: img.Format.uint8, numChannels: 4)
-              .toUint8List();
+        double diffPercent = 0.0;
+        int diffPixels = 0;
+        img.Image? diffImg;
+        int minX = currentImg.width;
+        int maxX = 0;
+        int minY = currentImg.height;
+        int maxY = 0;
+
+        final total = currentImg.width * currentImg.height;
+        diffImg = currentImg.convert(
+          format: img.Format.uint8,
+          numChannels: 4,
+        );
+
+        // PNGs may decode as RGB/RGBA and 8- or 16-bit; compare as 8-bit RGBA.
+        final baseBytes = baselineImg
+            .convert(format: img.Format.uint8, numChannels: 4)
+            .toUint8List();
+        final currBytes = currentImg
+            .convert(format: img.Format.uint8, numChannels: 4)
+            .toUint8List();
           for (
             var i = 0;
             i + 3 < baseBytes.length && i + 3 < currBytes.length;
@@ -473,10 +528,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
                 baseBytes[i + 2] != currBytes[i + 2] ||
                 baseBytes[i + 3] != currBytes[i + 3]) {
               diffPixels++;
-              final px = i ~/ 4;
+              final px = (i ~/ 4) % currentImg.width;
+              final py = (i ~/ 4) ~/ currentImg.width;
+              if (px < minX) minX = px;
+              if (px > maxX) maxX = px;
+              if (py < minY) minY = py;
+              if (py > maxY) maxY = py;
+
               diffImg.setPixelRgba(
-                px % currentImg.width,
-                px ~/ currentImg.width,
+                px,
+                py,
                 255,
                 0,
                 128,
@@ -485,19 +546,49 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             }
           }
           diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
-        }
+
+        _lastScreenshotBytes = currentBytes;
 
         final passed = diffPercent <= threshold;
         final diffStr = diffPercent.toStringAsFixed(2);
-        final contentList = <Content>[
-          TextContent(
-            text: passed
-                ? 'Visual regression PASSED — diff: $diffStr% (threshold: $threshold%)'
-                : 'Visual regression FAILED — diff: $diffStr% exceeds threshold $threshold%',
-          ),
-        ];
 
-        if (!passed && diffImg != null) {
+        Map<String, dynamic>? changedBounds;
+        String? region;
+        if (diffPixels > 0 && maxX >= minX && maxY >= minY) {
+          final w = maxX - minX + 1;
+          final h = maxY - minY + 1;
+          final midX = (minX + maxX) ~/ 2;
+          final midY = (minY + maxY) ~/ 2;
+          final vert = midY < currentImg.height * 0.33
+              ? 'top'
+              : (midY > currentImg.height * 0.66 ? 'bottom' : 'middle');
+          final horiz = midX < currentImg.width * 0.33
+              ? 'left'
+              : (midX > currentImg.width * 0.66 ? 'right' : 'center');
+          region = '$vert-$horiz';
+          changedBounds = {'x': minX, 'y': minY, 'width': w, 'height': h};
+        }
+
+        final buf = StringBuffer();
+        if (passed) {
+          buf.write(
+            'Visual comparison PASSED — diff: $diffStr% (threshold: $threshold%)',
+          );
+        } else {
+          buf.write(
+            'Visual comparison FAILED — diff: $diffStr% exceeds threshold $threshold%',
+          );
+        }
+        if (changedBounds != null) {
+          buf.write(
+            '\nChanged region: ${changedBounds['width']}x${changedBounds['height']} '
+            'at (${changedBounds['x']}, ${changedBounds['y']}) ($region of screen).',
+          );
+        }
+
+        final contentList = <Content>[TextContent(text: buf.toString())];
+
+        if (!passed) {
           final diffPngBytes = Uint8List.fromList(img.encodePng(diffImg));
           contentList.insert(
             0,
@@ -508,7 +599,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        return CallToolResult(content: contentList, isError: !passed);
+        return CallToolResult(
+          content: contentList,
+          isError: !passed,
+          structuredContent: {
+            'passed': passed,
+            'diffPercent': diffPercent,
+            'diffPixels': diffPixels,
+            'changedBounds': ?changedBounds,
+            'region': ?region,
+          },
+        );
       },
     );
 

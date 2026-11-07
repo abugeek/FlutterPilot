@@ -165,6 +165,9 @@ class GoRouterPilotInspector {
         if (route is GoRoute) ...[
           join(route.path),
           ...routePaths(route.routes, join(route.path)),
+        ] else if (route is StatefulShellRoute) ...[
+          for (final branch in route.branches)
+            ...routePaths(branch.routes, parent),
         ] else
           ...routePaths(route.routes, parent),
     ];
@@ -249,6 +252,15 @@ class GoRouterPilotInspector {
             data['type'] = 'ShellRoute';
             if (route.routes.isNotEmpty) {
               data['children'] = extractRoutes(route.routes);
+            }
+          } else if (route is StatefulShellRoute) {
+            data['type'] = 'StatefulShellRoute';
+            final branchChildren = <Map<String, dynamic>>[];
+            for (final branch in route.branches) {
+              branchChildren.addAll(extractRoutes(branch.routes));
+            }
+            if (branchChildren.isNotEmpty) {
+              data['children'] = branchChildren;
             }
           }
           return data;

@@ -41,4 +41,82 @@ Widget build() {
     expect(constructorSpanAt('Foo(a: 1', 1, 1), isNull);
     expect(constructorSpanAt('Foo()', 9, 1), isNull);
   });
+
+  test('rewinds when column is inside identifier or line starts with spaces', () {
+    const src = '  runApp(const MyApp());';
+    // Column 5 is 'n' in runApp: rewinds to start of runApp
+    final spanMid = constructorSpanAt(src, 1, 5)!;
+    expect(src.substring(spanMid.offset, spanMid.end), 'runApp(const MyApp())');
+
+    // Column 1 is leading space: advances to runApp
+    final spanLead = constructorSpanAt(src, 1, 1)!;
+    expect(src.substring(spanLead.offset, spanLead.end), 'runApp(const MyApp())');
+  });
+
+  test('named constructor when column points to constructor name', () {
+    const src = '  floatingActionButton: FloatingActionButton.extended(\n'
+        '    key: const Key("add_todo"),\n'
+        '    label: const Text("Add"),\n'
+        '  );';
+    // Column 46 is 'e' of extended
+    final spanNamed = constructorSpanAt(src, 1, 46);
+    expect(spanNamed, isNotNull);
+    expect(src.substring(spanNamed!.offset, spanNamed.end), startsWith('FloatingActionButton.extended('));
+
+    // Column 1 advances past 'floatingActionButton: '
+    final spanCol1 = constructorSpanAt(src, 1, 1);
+    expect(spanCol1, isNotNull);
+    expect(src.substring(spanCol1!.offset, spanCol1.end), startsWith('FloatingActionButton.extended('));
+  });
+
+  test('type arguments and library prefixes with named constructors', () {
+    const src = '  final x = material.List<String>.filled(5, "a");';
+    // Inside filled
+    final spanFilled = constructorSpanAt(src, 1, 37);
+    expect(spanFilled, isNotNull);
+    expect(src.substring(spanFilled!.offset, spanFilled.end), 'material.List<String>.filled(5, "a")');
+  });
+
+  test('locating parent span enclosing a child widget', () {
+    const src = '''
+Widget build() {
+  return Center(
+    child: FloatingActionButton.extended(
+      key: const Key("add_todo"),
+      label: const Text("Add"),
+    ),
+  );
+}
+''';
+    final childSpan = constructorSpanAt(src, 3, 12)!;
+    expect(src.substring(childSpan.offset, childSpan.end), startsWith('FloatingActionButton.extended('));
+
+    final parentSpan = constructorSpanAt(src, 2, 10)!;
+    expect(src.substring(parentSpan.offset, parentSpan.end), startsWith('Center('));
+    expect(parentSpan.offset < childSpan.offset, isTrue);
+    expect(parentSpan.end > childSpan.end, isTrue);
+
+    final foundParent = enclosingConstructorSpan(src, childSpan.offset, childSpan.end, hintLine: 3);
+    expect(foundParent, isNotNull);
+    expect(foundParent!.offset, parentSpan.offset);
+    expect(foundParent.end, parentSpan.end);
+  });
+
+  test('innermost enclosing constructor on same line with outer wrapper', () {
+    const src = '''
+Widget build() {
+  return Scaffold(
+    appBar: AppBar(title: Center(
+      child: const Text('Hacker News'),
+    )),
+  );
+}
+''';
+    final textSpan = constructorSpanAt(src, 4, 14)!;
+    expect(src.substring(textSpan.offset, textSpan.end), "const Text('Hacker News')");
+
+    final innermost = enclosingConstructorSpan(src, textSpan.offset, textSpan.end, hintLine: 4);
+    expect(innermost, isNotNull);
+    expect(src.substring(innermost!.offset, innermost.end), startsWith('Center('));
+  });
 }

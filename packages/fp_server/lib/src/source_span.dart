@@ -18,10 +18,72 @@ ConstructorSpan? constructorSpanAt(String source, int line, int column) {
     if (next < 0) return null;
     offset = next + 1;
   }
+  final lineStart = offset;
   offset += column - 1;
   if (offset < 0 || offset >= source.length) return null;
+
+  // If column == 1, skip leading whitespace on the line
+  if (column == 1) {
+    while (offset < source.length &&
+        (source[offset] == ' ' || source[offset] == '\t')) {
+      offset++;
+    }
+    // If the line starts with 'return ', 'yield ', a declaration, or a named argument,
+    // advance past it to the constructor call.
+    final prefixMatch = RegExp(
+      r'(?:(?:return|yield)\s+|(?:(?:final|const|var)\s+)?[A-Za-z_$][\w$]*\s*[:=]\s*)',
+    ).matchAsPrefix(source, offset);
+    if (prefixMatch != null) {
+      offset = prefixMatch.end;
+    }
+  } else {
+    // If offset is inside an identifier, rewind to its start
+    while (offset > lineStart && _identChar(source, offset - 1)) {
+      offset--;
+    }
+  }
+
+  // If offset is preceded by a dot (e.g. named constructor or library prefix),
+  // rewind across the dot and the preceding identifier / type arguments.
+  while (offset > lineStart && (source[offset - 1] == '.' || (offset >= lineStart + 1 && source[offset] == '.'))) {
+    if (source[offset] == '.') {
+      offset--;
+    }
+    var prev = offset;
+    if (prev > lineStart && source[prev - 1] == '.') prev--;
+    while (prev > lineStart && _isSpace(source[prev - 1])) {
+      prev--;
+    }
+    // Skip type arguments: e.g. List<T>.filled
+    if (prev > lineStart && source[prev - 1] == '>') {
+      var depth = 1;
+      prev--;
+      while (prev > lineStart && depth > 0) {
+        if (source[prev - 1] == '>') depth++;
+        if (source[prev - 1] == '<') depth--;
+        prev--;
+      }
+    }
+    if (prev > lineStart && _identChar(source, prev - 1)) {
+      while (prev > lineStart && _identChar(source, prev - 1)) {
+        prev--;
+      }
+      offset = prev;
+    } else {
+      break;
+    }
+  }
+
+  // If preceded by 'const ' or 'new ', include it
+  final before = source.substring(lineStart, offset);
+  if (before.endsWith('const ')) {
+    offset -= 6;
+  } else if (before.endsWith('new ')) {
+    offset -= 4;
+  }
+
   final head = RegExp(
-    r'(?:const\s+|new\s+)?[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?(?:<[^()]*?>)?\s*\(',
+    r'(?:const\s+|new\s+)?(?:[A-Za-z_$][\w$]*\.)*[A-Za-z_$][\w$]*(?:<[^()]*?>)?(?:\.[A-Za-z_$][\w$]*)?(?:<[^()]*?>)?\s*\(',
   ).matchAsPrefix(source, offset);
   if (head == null) return null;
 
@@ -76,6 +138,39 @@ ConstructorSpan? constructorSpanAt(String source, int line, int column) {
       argStart = false;
     }
     i++;
+  }
+  return null;
+}
+
+/// Finds the innermost constructor call that strictly encloses [targetOffset]..[targetEnd].
+ConstructorSpan? enclosingConstructorSpan(
+  String source,
+  int targetOffset,
+  int targetEnd, {
+  int? hintLine,
+}) {
+  var currentLine = hintLine ?? 1;
+  if (hintLine == null) {
+    for (var j = 0; j < targetOffset && j < source.length; j++) {
+      if (source[j] == '\n') currentLine++;
+    }
+  }
+
+  // Walk backwards from targetOffset to find the closest constructor call
+  // that encloses targetOffset..targetEnd.
+  var i = targetOffset - 1;
+  while (i >= 0) {
+    if (source[i] == '\n') {
+      currentLine--;
+    } else if (source[i] == '(') {
+      final lineStart = source.lastIndexOf('\n', i) + 1;
+      final col = (i - lineStart) + 1;
+      final span = constructorSpanAt(source, currentLine, col);
+      if (span != null && span.offset < targetOffset && span.end >= targetEnd) {
+        return span;
+      }
+    }
+    i--;
   }
   return null;
 }

@@ -674,6 +674,30 @@ Future<void> main(List<String> args) async {
         {},
         ["set in the app's code"],
       );
+      await check(
+        'simulate_keyboard checks layout under keyboard',
+        'simulate_keyboard',
+        {'height': 300, 'restore': true},
+        ['Simulated on-screen keyboard', '300dp'],
+      );
+      await check(
+        'compare_screenshot compares against previous frame',
+        'compare_screenshot',
+        {'comparePrevious': true},
+        ['Visual comparison'],
+      );
+      await check(
+        'apply_patch_and_verify wraps widget and reloads',
+        'apply_patch_and_verify',
+        {'key': 'Send', 'wrapWith': 'Padding'},
+        ['Patched lib/main.dart', 'Post-reload screen health'],
+      );
+      await check(
+        'apply_patch_and_verify unwraps the widget to restore',
+        'apply_patch_and_verify',
+        {'key': 'Send', 'unwrap': true},
+        ['Patched lib/main.dart', 'Post-reload screen health'],
+      );
       // ROADMAP §5.7: the audit reads the semantics tree (labels, order).
       await check(
         'audit_screen_health lists the screen reader order',

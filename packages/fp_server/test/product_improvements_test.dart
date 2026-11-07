@@ -9,7 +9,7 @@ void main() {
       server = FlutterPilotServer(vmServiceUri: 'ws://localhost:8888');
     });
 
-    test('registers 71 tools including the 6 new autonomous superpowers', () {
+    test('registers 74 tools including the new autonomous capabilities', () {
       final names = server.registeredToolNames.toSet();
       expect(names, contains('apply_and_verify'));
       expect(names, contains('simulate_viewport_matrix'));
@@ -19,7 +19,10 @@ void main() {
       expect(names, contains('export_network_mocks'));
       expect(names, contains('synthesize_golden_test'));
       expect(names, contains('audit_design_tokens'));
-      expect(names.length, 71);
+      expect(names, contains('simulate_keyboard'));
+      expect(names, contains('apply_patch_and_verify'));
+      expect(names, contains('replay_flow'));
+      expect(names.length, 74);
     });
 
     test('prescriptive RenderFlex overflow diagnostics are attached', () {
@@ -141,6 +144,43 @@ void main() {
       final properties = schema['properties'] as Map<String, dynamic>;
       expect(properties.containsKey('designQuality'), isTrue);
       expect(properties['designQuality']['type'], 'boolean');
+    });
+
+    test('simulate_keyboard inputSchema defines height and restore', () {
+      final tools = server.toolListJson();
+      final kbd = tools.firstWhere((t) => t['name'] == 'simulate_keyboard');
+      final props = kbd['inputSchema']['properties'] as Map;
+      expect(props.containsKey('height'), isTrue);
+      expect(props.containsKey('restore'), isTrue);
+    });
+
+    test('apply_patch_and_verify inputSchema defines surgical patch targets', () {
+      final tools = server.toolListJson();
+      final patch = tools.firstWhere(
+        (t) => t['name'] == 'apply_patch_and_verify',
+      );
+      final props = patch['inputSchema']['properties'] as Map;
+      expect(props.containsKey('key'), isTrue);
+      expect(props.containsKey('wrapWith'), isTrue);
+      expect(props.containsKey('unwrap'), isTrue);
+      expect(props.containsKey('replaceCall'), isTrue);
+    });
+
+    test('replay_flow inputSchema defines delayMs and assertRoute', () {
+      final tools = server.toolListJson();
+      final replay = tools.firstWhere((t) => t['name'] == 'replay_flow');
+      final props = replay['inputSchema']['properties'] as Map;
+      expect(props.containsKey('delayMs'), isTrue);
+      expect(props.containsKey('assertRoute'), isTrue);
+    });
+
+    test('compare_screenshot supports comparePrevious without requiring name', () {
+      final tools = server.toolListJson();
+      final cmp = tools.firstWhere((t) => t['name'] == 'compare_screenshot');
+      final schema = cmp['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('comparePrevious'), isTrue);
+      expect(schema.containsKey('required'), isFalse);
     });
 
     test('curated workflow prompts include 1-turn and design workflows', () {

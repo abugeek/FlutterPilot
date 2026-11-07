@@ -117,6 +117,9 @@ const toolEffects = <String, ToolEffect>{
   'export_network_mocks': ToolEffect.reads,
   'synthesize_golden_test': ToolEffect.acts,
   'audit_design_tokens': ToolEffect.reads,
+  'simulate_keyboard': ToolEffect.acts,
+  'apply_patch_and_verify': ToolEffect.acts,
+  'replay_flow': ToolEffect.acts,
 };
 
 /// Tools that leave the app as it is when called again with the same
@@ -172,6 +175,8 @@ const openWorldTools = <String>{
   'verify_feature',
   'generate_test',
   'scenario',
+  'apply_patch_and_verify',
+  'replay_flow',
 };
 
 /// The MCP annotations of the tool called [name].

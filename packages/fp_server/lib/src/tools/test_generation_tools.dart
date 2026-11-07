@@ -112,6 +112,348 @@ mixin _TestGenerationToolsMixin
     );
 
     _tool(
+      'apply_patch_and_verify',
+      description:
+          'Surgically patches a widget in source code (wrap with widget, '
+          'unwrap, or replace constructor call), hot-reloads the app, audits '
+          'screen health post-reload, and automatically rolls back if reload fails.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(
+            description: 'Key, selector or visible text of the widget.',
+          ),
+          'file': JsonSchema.string(
+            description: 'File in the app, e.g. "lib/main.dart".',
+          ),
+          'line': JsonSchema.integer(
+            description: '1-based line of the widget.',
+          ),
+          'column': JsonSchema.integer(
+            description: '1-based column where the call starts.',
+          ),
+          'wrapWith': JsonSchema.string(
+            description:
+                'Widget to wrap target in (e.g. "Expanded", "SingleChildScrollView", "SafeArea", "Padding").',
+          ),
+          'unwrap': JsonSchema.boolean(
+            description:
+                'Remove this widget, replacing it with its child argument.',
+          ),
+          'replaceCall': JsonSchema.string(
+            description: 'Direct replacement snippet for the constructor call.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        CallToolResult fail(String s) =>
+            CallToolResult(isError: true, content: [TextContent(text: s)]);
+
+        var file = p['file']?.toString();
+        var line = (p['line'] as num?)?.toInt();
+        var column = (p['column'] as num?)?.toInt();
+        String? type;
+
+        if (file == null) {
+          if (p['key'] == null) return fail('Give key, or file and line.');
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.inspectWidget',
+            {'key': p['key'].toString()},
+          );
+          if (res.isError) return res.toCallToolResult();
+          final source = res.data?['source'];
+          final loc = source is Map ? source['loc']?.toString() : null;
+          final m = loc == null
+              ? null
+              : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
+          if (m == null) {
+            return fail(
+              'No source location for "${p['key']}": it is not created by '
+              "the app's code, or this is not a debug build.",
+            );
+          }
+          type = source is Map ? source['type']?.toString() : null;
+          file = m[1]!;
+          line = int.parse(m[2]!);
+          column = int.parse(m[3]!);
+        }
+        if (line == null) return fail('Give line with file.');
+
+        var path = file;
+        if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
+        if (!path_pkg.isAbsolute(path)) {
+          final vm = (await _deviceContextForParameters(const {}))?.service;
+          final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+          final root = isolateId == null
+              ? null
+              : (await _appEntrypoint(vm!, isolateId))?.root;
+          path = path_pkg.join(root ?? Directory.current.path, path);
+        }
+        final f = File(path);
+        if (!f.existsSync()) return fail('Not found on disk: $path');
+        final text = f.readAsStringSync();
+        final span = constructorSpanAt(text, line, column ?? 1);
+        if (span == null) {
+          return fail(
+            'No widget constructor call starts at $file:$line:${column ?? 1}.',
+          );
+        }
+
+        final originalCall = text.substring(span.offset, span.end);
+        String newCall;
+        int patchOffset = span.offset;
+        int patchEnd = span.end;
+
+        if (p['replaceCall'] != null) {
+          newCall = p['replaceCall'].toString();
+        } else if (p['unwrap'] == true) {
+          final childMatch = RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
+          if (childMatch != null) {
+            var depth = 0;
+            var startIdx = childMatch.end;
+            var endIdx = originalCall.length - 1;
+            for (var i = startIdx; i < originalCall.length; i++) {
+              final c = originalCall[i];
+              if (c == '(' || c == '[' || c == '{') {
+                depth++;
+              } else if (c == ')' || c == ']' || c == '}') {
+                if (depth == 0) {
+                  endIdx = i;
+                  break;
+                }
+                depth--;
+              } else if (depth == 0 && c == ',') {
+                endIdx = i;
+                break;
+              }
+            }
+            newCall = originalCall.substring(startIdx, endIdx).trim();
+          } else {
+            // Widget has no child: argument. Check if it is wrapped by an enclosing widget.
+            final parent = enclosingConstructorSpan(
+              text,
+              span.offset,
+              span.end,
+              hintLine: line,
+            );
+            if (parent != null &&
+                text
+                    .substring(parent.offset, span.offset)
+                    .contains(RegExp(r'\bchild\s*:'))) {
+              patchOffset = parent.offset;
+              patchEnd = parent.end;
+              newCall = originalCall;
+            } else {
+              return fail(
+                'Cannot unwrap ${type ?? 'widget'}: no "child:" parameter found, '
+                'and no enclosing wrapper widget with "child:".',
+              );
+            }
+          }
+        } else if (p['wrapWith'] != null) {
+          final wrapper = p['wrapWith'].toString();
+          if (wrapper == 'Padding') {
+            newCall =
+                'Padding(\n  padding: const EdgeInsets.all(16.0),\n  child: $originalCall,\n)';
+          } else {
+            newCall = '$wrapper(\n  child: $originalCall,\n)';
+          }
+        } else {
+          return fail('Specify wrapWith, unwrap, or replaceCall.');
+        }
+
+        final originalText = text;
+        final newText =
+            text.substring(0, patchOffset) + newCall + text.substring(patchEnd);
+
+        f.writeAsStringSync(newText);
+
+        final reload = _toolCallbacks['hot_reload'];
+        final reloadRes = reload != null
+            ? await reload(const {}, e)
+            : CallToolResult(content: [TextContent(text: 'Reload skipped')]);
+        final reloadFailed = reloadRes.isError == true;
+
+        if (reloadFailed) {
+          f.writeAsStringSync(originalText);
+          if (reload != null) await reload(const {}, e);
+          final err = reloadRes.content
+              .whereType<TextContent>()
+              .map((c) => c.text)
+              .join('\n');
+          return fail(
+            'Hot reload failed after applying patch:\n$err\n'
+            'Rolled back changes to $file.',
+          );
+        }
+
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        final audit =
+            await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final auditData = audit.data ?? const <String, dynamic>{};
+        final overflows = (auditData['overflows'] as List?) ?? const [];
+        final a11y = (auditData['accessibilityIssues'] as List?) ?? const [];
+
+        final buf = StringBuffer('✓ Patched $file:$line via hot reload:\n');
+        buf.writeln(
+          '```dart\n// Replaced:\n$originalCall\n\n// With:\n$newCall\n```',
+        );
+        buf.writeln('Post-reload screen health:');
+        buf.writeln('  • Overflows: ${overflows.length}');
+        buf.writeln('  • Accessibility issues: ${a11y.length}');
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'file': file,
+            'line': line,
+            'original': originalCall,
+            'replacement': newCall,
+            'reloaded': true,
+            'overflowCount': overflows.length,
+            'accessibilityIssueCount': a11y.length,
+            'health': auditData,
+          },
+        );
+      },
+    );
+
+    _tool(
+      'replay_flow',
+      description:
+          'Replays recently recorded user interactions live on the connected '
+          'app without writing or compiling a test binary, verifying that '
+          'the flow completes and reaches the expected route.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'delayMs': JsonSchema.integer(
+            description: 'Delay between steps in ms (default: 300).',
+          ),
+          'assertRoute': JsonSchema.string(
+            description: 'Assert that the flow ends on this route.',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        CallToolResult fail(String s) =>
+            CallToolResult(isError: true, content: [TextContent(text: s)]);
+
+        final recRes = await _callExtensionRaw(
+          'ext.flutterpilot.testRecording',
+          {'action': 'read'},
+        );
+        if (recRes.isError) return recRes.toCallToolResult();
+        final rawSteps = (recRes.data?['steps'] as List? ?? const []);
+        final steps = [
+          for (final s in rawSteps)
+            if (s is Map) s.cast<String, dynamic>(),
+        ];
+
+        if (steps.isEmpty) {
+          return fail(
+            'No recorded steps to replay. Call generate_test(start: true) and '
+            'interact with the app first.',
+          );
+        }
+
+        final delay = (p['delayMs'] as num?)?.toInt() ?? 300;
+        final assertRoute = p['assertRoute']?.toString();
+
+        var replayedCount = 0;
+        for (final step in steps) {
+          final type = step['type']?.toString();
+          if (type == 'tap' || type == 'tapAt') {
+            final key = step['key']?.toString();
+            final text = step['text']?.toString();
+            if (key != null) {
+              await _callExtensionRaw(
+                'ext.flutterpilot.tapWidget',
+                {'key': key},
+              );
+            } else if (text != null) {
+              await _callExtensionRaw(
+                'ext.flutterpilot.tapWidget',
+                {'text': text},
+              );
+            } else if (step['x'] != null && step['y'] != null) {
+              await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+                'x': step['x'].toString(),
+                'y': step['y'].toString(),
+              });
+            }
+          } else if (type == 'enterText') {
+            final key = step['key']?.toString();
+            final input = step['text']?.toString() ?? '';
+            await _callExtensionRaw('ext.flutterpilot.enterText', {
+              'key': ?key,
+              'text': input,
+            });
+          } else if (type == 'scrollTo') {
+            final key = step['key']?.toString();
+            if (key != null) {
+              await _callExtensionRaw(
+                'ext.flutterpilot.scrollIntoView',
+                {'key': key},
+              );
+            }
+          }
+          replayedCount++;
+          if (delay > 0) {
+            await Future<void>.delayed(Duration(milliseconds: delay));
+          }
+        }
+
+        await _callExtensionRaw(
+          'ext.flutterpilot.waitForAnimation',
+          {'timeoutMs': '1000'},
+        );
+
+        final navRes =
+            await _callExtensionRaw('ext.flutterpilot.getNavigationStack', {});
+        final currentRoute = navRes.data?['current']?.toString() ??
+            (navRes.data?['stack'] as List?)?.lastOrNull?.toString() ??
+            '/';
+
+        final healthRes =
+            await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final health = healthRes.data ?? const <String, dynamic>{};
+        final overflows = (health['overflowCount'] as num?)?.toInt() ?? 0;
+
+        final routeMatches = assertRoute == null || currentRoute == assertRoute;
+        final isClean = overflows == 0 && routeMatches;
+
+        final buf =
+            StringBuffer('Replayed $replayedCount step(s) in active app:\n');
+        buf.writeln(
+          '- Final Route: $currentRoute${assertRoute != null ? ' (expected: $assertRoute)' : ''}',
+        );
+        buf.writeln('- Overflows: $overflows');
+        if (!routeMatches) {
+          buf.writeln(
+            '✗ Route mismatch: expected "$assertRoute" but ended on "$currentRoute".',
+          );
+        }
+        if (overflows > 0) {
+          buf.writeln('✗ Screen has $overflows layout overflow(s).');
+        }
+        if (isClean) {
+          buf.writeln('✓ Flow completed successfully with clean screen health.');
+        }
+
+        return CallToolResult(
+          isError: !isClean,
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'replayedSteps': replayedCount,
+            'finalRoute': currentRoute,
+            'overflowCount': overflows,
+            'routeMatches': routeMatches,
+            'isClean': isClean,
+          },
+        );
+      },
+    );
+
+    _tool(
       'generate_test',
       description:
           'Turns what you do in the app into an integration_test. '
