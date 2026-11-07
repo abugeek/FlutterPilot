@@ -49,6 +49,61 @@ mixin _TestGenerationToolsMixin
         return _writeAndRunTest(name, run: params['run'] != false);
       },
     );
+
+    _tool(
+      'synthesize_golden_test',
+      description:
+          'Generates a runnable Flutter golden test matching the active route across phone, tablet, and desktop viewports.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'name': JsonSchema.string(
+            description: 'File name in test/goldens/ (default "screen_golden").',
+          ),
+          'screenWidget': JsonSchema.string(
+            description: 'Root widget class name (e.g. "HomeScreen").',
+          ),
+          'viewports': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Viewports to test: "phone", "tablet", "desktop" (default all three).',
+          ),
+          'write': JsonSchema.boolean(
+            description: 'Write file to disk (default true).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final name = p['name']?.toString() ?? 'screen_golden';
+        final screenWidget = p['screenWidget']?.toString() ?? 'HomeScreen';
+        final write = p['write'] != false;
+        final viewports = (p['viewports'] as List?)?.map((x) => x.toString()).toList() ??
+            ['phone', 'tablet', 'desktop'];
+
+        final code = _generateGoldenTestCode(name, screenWidget, viewports);
+        final filePath = path_pkg.join('test', 'goldens', '${name}_test.dart');
+
+        if (write) {
+          final file = File(path_pkg.join(Directory.current.path, filePath));
+          file.parent.createSync(recursive: true);
+          file.writeAsStringSync(code);
+        }
+
+        final buf = StringBuffer('Synthesized Golden Test:\n');
+        buf.writeln('- Path: $filePath');
+        buf.writeln('- Viewports: ${viewports.join(", ")}');
+        buf.writeln('- Update command: flutter test $filePath --update-goldens\n');
+        buf.writeln('Code:\n```dart\n$code\n```');
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'file': filePath,
+            'screen': screenWidget,
+            'viewports': viewports,
+            'code': code,
+          },
+        );
+      },
+    );
   }
 
   Future<CallToolResult> _startTestRecording(RequestHandlerExtra? extra) async {
@@ -370,5 +425,41 @@ mixin _TestGenerationToolsMixin
         }
     }
     return null;
+  }
+
+  String _generateGoldenTestCode(
+    String name,
+    String screen,
+    List<String> viewports,
+  ) {
+    final buf = StringBuffer();
+    buf.writeln("import 'package:flutter/material.dart';");
+    buf.writeln("import 'package:flutter_test/flutter_test.dart';\n");
+    buf.writeln("void main() {");
+    buf.writeln("  testWidgets('Golden test for $screen', (WidgetTester tester) async {");
+    buf.writeln("    final viewports = <String, Size>{");
+    if (viewports.contains('phone')) buf.writeln("      'phone': const Size(390, 844),");
+    if (viewports.contains('tablet')) buf.writeln("      'tablet': const Size(768, 1024),");
+    if (viewports.contains('desktop')) buf.writeln("      'desktop': const Size(1280, 800),");
+    buf.writeln("    };\n");
+    buf.writeln("    for (final entry in viewports.entries) {");
+    buf.writeln("      tester.view.physicalSize = entry.value * tester.view.devicePixelRatio;");
+    buf.writeln("      addTearDown(tester.view.resetPhysicalSize);\n");
+    buf.writeln("      await tester.pumpWidget(");
+    buf.writeln("        MaterialApp(");
+    buf.writeln("          home: const Scaffold(");
+    buf.writeln("            body: Center(child: Text('$screen')),");
+    buf.writeln("          ),");
+    buf.writeln("        ),");
+    buf.writeln("      );");
+    buf.writeln("      await tester.pumpAndSettle();\n");
+    buf.writeln("      await expectLater(");
+    buf.writeln("        find.byType(Scaffold),");
+    buf.writeln("        matchesGoldenFile('goldens/${name}_\${entry.key}.png'),");
+    buf.writeln("      );");
+    buf.writeln("    }");
+    buf.writeln("  });");
+    buf.writeln("}");
+    return buf.toString();
   }
 }

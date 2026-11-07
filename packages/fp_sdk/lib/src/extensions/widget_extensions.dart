@@ -2046,7 +2046,11 @@ extension _WidgetExtensions on FlutterPilot {
       parameters,
     ) async {
       final designQuality = parameters['designQuality'] == 'true';
-      final auditReport = UiHealthAuditor.audit(designQuality: designQuality);
+      final tokenAudit = parameters['tokenAudit'] == 'true';
+      final auditReport = UiHealthAuditor.audit(
+        designQuality: designQuality,
+        tokenAudit: tokenAudit,
+      );
       final a11y = await AccessibilityAuditor.audit();
       auditReport.addAll(a11y);
       auditReport['isHealthy'] =
@@ -2055,6 +2059,24 @@ extension _WidgetExtensions on FlutterPilot {
           (a11y['lowContrast'] as List).isEmpty &&
           (a11y['readingOrderJumps'] as List).isEmpty;
       return ServiceExtensionResponse.result(json.encode(auditReport));
+    });
+
+    // -- ext.flutterpilot.auditDesignTokens -----------------------------------
+    registerExtension('ext.flutterpilot.auditDesignTokens', (
+      method,
+      parameters,
+    ) async {
+      final result = DesignTokenAuditor.audit();
+      return ServiceExtensionResponse.result(json.encode(result));
+    });
+
+    // -- ext.flutterpilot.crawlScreen -----------------------------------------
+    registerExtension('ext.flutterpilot.crawlScreen', (
+      method,
+      parameters,
+    ) async {
+      final result = AppCrawler.inspectScreenForCrawl();
+      return ServiceExtensionResponse.result(json.encode(result));
     });
 
     // -- ext.flutterpilot.executeActionChain ----------------------------------

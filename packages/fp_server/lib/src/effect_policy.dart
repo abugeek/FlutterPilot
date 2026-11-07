@@ -71,8 +71,10 @@ const _unknown = ExtensionPolicy(
 /// send again after a lost response.
 const readOnlyExtensions = <String>{
   // FlutterPilot inspection.
+  'ext.flutterpilot.auditDesignTokens',
   'ext.flutterpilot.auditScreenHealth',
   'ext.flutterpilot.captureScreenshot',
+  'ext.flutterpilot.crawlScreen',
   'ext.flutterpilot.getAppSnapshot',
   'ext.flutterpilot.getBlocStates',
   'ext.flutterpilot.getCapabilities',
@@ -89,6 +91,7 @@ const readOnlyExtensions = <String>{
   'ext.flutterpilot.getInteractiveElements',
   'ext.flutterpilot.getNavigationStack',
   'ext.flutterpilot.getNetworkLogs',
+  'ext.flutterpilot.getRebuildStats',
   'ext.flutterpilot.getRiverpodStates',
   'ext.flutterpilot.getSecureStorageKeys',
   'ext.flutterpilot.getSemanticsTree',

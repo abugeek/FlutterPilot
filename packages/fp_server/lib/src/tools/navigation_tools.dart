@@ -439,6 +439,138 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    _tool(
+      'crawl_app',
+      description:
+          'Spiders reachable routes, maps the route graph, and identifies overflows, a11y issues, and dead-ends in one turn.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'maxDepth': JsonSchema.integer(
+            description: 'Maximum crawl depth from current screen (default 3).',
+          ),
+          'maxScreens': JsonSchema.integer(
+            description: 'Maximum distinct screens to visit (default 8).',
+          ),
+          'restore': JsonSchema.boolean(
+            description: 'Whether to navigate back to the initial route when done (default true).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final maxScreens = (p['maxScreens'] as num?)?.toInt() ?? 8;
+        final restore = p['restore'] != false;
+
+        final initialStackRes = await _callExtensionRaw('ext.flutterpilot.getNavigationStack', {});
+        final initialRoute = initialStackRes.data?['current']?.toString() ?? '/';
+
+        final visitedRoutes = <String>{initialRoute};
+        final routeGraph = <Map<String, dynamic>>[];
+        final healthMatrix = <String, Map<String, dynamic>>{};
+        final issuesFound = <String>[];
+
+        String currentRoute = initialRoute;
+
+        for (var step = 0; step < maxScreens; step++) {
+          final crawlRes = await _callExtensionRaw('ext.flutterpilot.crawlScreen', {});
+          final crawlData = crawlRes.data ?? const <String, dynamic>{};
+          currentRoute = crawlData['currentRoute']?.toString() ?? currentRoute;
+          visitedRoutes.add(currentRoute);
+
+          final overflows = (crawlData['overflowCount'] as num?)?.toInt() ?? 0;
+          final a11y = (crawlData['accessibilityIssueCount'] as num?)?.toInt() ?? 0;
+          final isHealthy = crawlData['isHealthy'] == true;
+
+          healthMatrix[currentRoute] = {
+            'isHealthy': isHealthy,
+            'overflowCount': overflows,
+            'accessibilityIssueCount': a11y,
+          };
+
+          if (!isHealthy) {
+            issuesFound.add('Screen "$currentRoute": $overflows overflows, $a11y a11y issues');
+          }
+
+          final candidates = (crawlData['navigableCandidates'] as List?) ?? const [];
+          Map<String, dynamic>? nextCandidate;
+          for (final c in candidates) {
+            if (c is Map<String, dynamic>) {
+              final label = c['label']?.toString() ?? '';
+              final alreadyExplored = routeGraph.any(
+                (edge) => edge['from'] == currentRoute && edge['trigger'] == label,
+              );
+              if (!alreadyExplored) {
+                nextCandidate = c;
+                break;
+              }
+            }
+          }
+
+          if (nextCandidate != null) {
+            final triggerLabel = nextCandidate['label']?.toString() ?? '';
+            final candidateKey = nextCandidate['key']?.toString();
+
+            if (candidateKey != null) {
+              await _callExtensionRaw('ext.flutterpilot.tapWidget', {'key': candidateKey});
+            } else {
+              final bounds = nextCandidate['bounds'] as Map<String, dynamic>?;
+              if (bounds != null) {
+                final cx = (bounds['x'] as num) + (bounds['width'] as num) / 2;
+                final cy = (bounds['y'] as num) + (bounds['height'] as num) / 2;
+                await _callExtensionRaw('ext.flutterpilot.tapWidget', {'x': cx.toString(), 'y': cy.toString()});
+              }
+            }
+
+            await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {'timeoutMs': '1000'});
+            final nextStackRes = await _callExtensionRaw('ext.flutterpilot.getNavigationStack', {});
+            final newRoute = nextStackRes.data?['current']?.toString() ?? currentRoute;
+
+            routeGraph.add({
+              'from': currentRoute,
+              'to': newRoute,
+              'trigger': triggerLabel,
+            });
+
+            currentRoute = newRoute;
+          } else {
+            if (currentRoute != initialRoute) {
+              await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+              await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {'timeoutMs': '800'});
+              final backStackRes = await _callExtensionRaw('ext.flutterpilot.getNavigationStack', {});
+              currentRoute = backStackRes.data?['current']?.toString() ?? initialRoute;
+            } else {
+              break;
+            }
+          }
+        }
+
+        if (restore && currentRoute != initialRoute) {
+          await _callExtensionRaw('ext.flutterpilot.navigateTo', {'route': initialRoute});
+          await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {'timeoutMs': '800'});
+        }
+
+        final buf = StringBuffer('Autonomous App Crawl Report:\n');
+        buf.writeln('- Visited ${visitedRoutes.length} screen(s): ${visitedRoutes.join(", ")}');
+        buf.writeln('- Discovered ${routeGraph.length} transition(s)');
+        buf.writeln('\nScreen Health Matrix:');
+        for (final entry in healthMatrix.entries) {
+          final h = entry.value;
+          final status = h['isHealthy'] == true ? '[HEALTHY]' : '[DEFECTS]';
+          buf.writeln('  $status ${entry.key}: ${h['overflowCount']} overflows, ${h['accessibilityIssueCount']} a11y issues');
+        }
+
+        return CallToolResult(
+          isError: issuesFound.isNotEmpty,
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'visitedRoutes': visitedRoutes.toList(),
+            'routeGraph': routeGraph,
+            'healthMatrix': healthMatrix,
+            'issuesFound': issuesFound,
+          },
+        );
+      },
+    );
   }
 
   /// set_app_settings(windowSize): resizes the window on the host, then

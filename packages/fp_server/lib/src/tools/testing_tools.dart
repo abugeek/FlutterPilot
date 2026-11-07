@@ -324,5 +324,83 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    _tool(
+      'export_network_mocks',
+      description:
+          'Converts captured HTTP requests into mock definitions and mock_http_response steps for offline testing.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'filter': JsonSchema.string(
+            description: 'URL substring or pattern to match.',
+          ),
+          'format': JsonSchema.string(
+            enumValues: ['mcp_chain', 'json', 'dart'],
+            description: 'Output format (default "mcp_chain").',
+          ),
+          'statusCode': JsonSchema.integer(
+            description: 'Override status code in generated mocks (optional).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final logsRes = await _callExtensionRaw('ext.flutterpilot.getNetworkLogs', {});
+        final requests = (logsRes.data?['requests'] as List?) ?? const [];
+        final filter = p['filter']?.toString();
+        final format = p['format']?.toString() ?? 'mcp_chain';
+        final statusOverride = (p['statusCode'] as num?)?.toInt();
+
+        final filtered = requests.where((r) {
+          if (r is! Map<String, dynamic>) return false;
+          final uri = r['url']?.toString() ?? r['uri']?.toString() ?? '';
+          if (filter != null && !uri.contains(filter)) return false;
+          return true;
+        }).cast<Map<String, dynamic>>().toList();
+
+        final mockSteps = <Map<String, dynamic>>[];
+        for (final req in filtered) {
+          final uri = req['url']?.toString() ?? req['uri']?.toString() ?? '';
+          final status = statusOverride ?? (req['statusCode'] as num?)?.toInt() ?? 200;
+          final responseBody = req['responseBody'] ?? req['response'] ?? req['data'];
+          final bodyStr = responseBody is String ? responseBody : jsonEncode(responseBody ?? {});
+
+          final pathPart = Uri.tryParse(uri)?.path ?? uri;
+          final urlPattern = '.*${RegExp.escape(pathPart)}.*';
+          mockSteps.add({
+            'urlPattern': urlPattern,
+            'statusCode': status,
+            'body': bodyStr,
+          });
+        }
+
+        final buf = StringBuffer('Exported Network Mocks (${mockSteps.length} endpoint(s)):\n');
+        if (format == 'mcp_chain') {
+          buf.writeln('Action chain steps ready for execute_action_chain:\n```json');
+          final chain = [
+            for (final m in mockSteps)
+              {'action': 'mock_http_response', 'params': m},
+          ];
+          buf.writeln(const JsonEncoder.withIndent('  ').convert(chain));
+          buf.writeln('```');
+        } else if (format == 'dart') {
+          buf.writeln('Dart test mocks:\n```dart');
+          for (final m in mockSteps) {
+            buf.writeln('// Mock ${m['urlPattern']}');
+            buf.writeln('dioAdapter.onGet("${m['urlPattern']}", (server) => server.reply(${m['statusCode']}, ${m['body']}));');
+          }
+          buf.writeln('```');
+        } else {
+          buf.writeln(const JsonEncoder.withIndent('  ').convert(mockSteps));
+        }
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'count': mockSteps.length,
+            'mocks': mockSteps,
+          },
+        );
+      },
+    );
   }
 }

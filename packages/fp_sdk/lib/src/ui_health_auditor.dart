@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+import 'design_token_auditor.dart';
 import 'navigation_tracker.dart';
 import 'source_locator.dart';
 import 'widget_inspector.dart';
@@ -31,7 +32,10 @@ class UiHealthAuditor {
     }
   }
 
-  static Map<String, dynamic> audit({bool designQuality = false}) {
+  static Map<String, dynamic> audit({
+    bool designQuality = false,
+    bool tokenAudit = false,
+  }) {
     final root = WidgetsBinding.instance.rootElement;
     final overflows = <Map<String, dynamic>>[];
     final cramped = <Map<String, dynamic>>[];
@@ -178,6 +182,9 @@ class UiHealthAuditor {
       result['typographyHierarchy'] = [
         for (final s in sortedSizes) '${s.round()}sp',
       ];
+    }
+    if (tokenAudit) {
+      result['tokenAudit'] = DesignTokenAuditor.audit();
     }
     return result;
   }

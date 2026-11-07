@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 65
+Tool count: 71
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 41972 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 44998 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -86,6 +86,31 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+
+## `get_rebuild_stats`
+
+Inspects widget rebuild counts, identifies hot rebuilders and cascades, and reports root rebuild frequency.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `filter` | string | no | Widget type or key substring to filter results. |
+| `reset` | boolean | no | Reset rebuild counts and start a new observation window. |
+| `minCount` | integer | no | Minimum rebuild count to report (default 1). |
+
+## `locate_source_ast`
+
+Resolves a widget to its exact Dart source code AST node, constructor arguments, byte offsets, and patch range.
+
+_Read-only._
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `key` | string | no | Widget key to inspect. |
+| `mark` | integer | no | Set-of-Mark label index from capture_screenshot(labeled:true). |
+| `selector` | string | no | Text, type or fuzzy selector. |
+| `file` | string | no | Dart source file path (optional if key/mark given). |
+| `line` | integer | no | 1-based line number (optional if key/mark given). |
+| `column` | integer | no | 1-based column number (optional). |
 
 ## `tap_widget`
 
@@ -206,6 +231,15 @@ Layout and accessibility check: layout overflows, tap targets under the platform
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: int, visited: int, audited: int, failed: int, skipped: int, findings: {overflows: int, tapTargets: int, unlabeled: int, lowContrast: int, readingOrderJumps: int}, restored: bool, incomplete: bool, loading: bool, status?: "ok"|"partial"|"unavailable", reason?: string}`
 
+## `audit_design_tokens`
+
+Audits screen styling against active ThemeData: flags unthemed raw hex colors and off-grid corner radii (non-4/8dp).
+
+_Read-only._
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+
 ## `execute_action_chain`
 
 Runs a known sequence of steps in one call, stopping at the first that fails: taps, text, keys, scrolls, navigation, mocks/settings, and wait_for / assert_widget checks between them. Returns each step's outcome and the screen after the last one (route, diff, tappable elements).
@@ -323,6 +357,16 @@ Tests the active screen across phone, tablet, and desktop viewports in one turn.
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `restore` | boolean | no | Restore initial window size afterwards (default true). |
+
+## `crawl_app`
+
+Spiders reachable routes, maps the route graph, and identifies overflows, a11y issues, and dead-ends in one turn.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `maxDepth` | integer | no | Maximum crawl depth from current screen (default 3). |
+| `maxScreens` | integer | no | Maximum distinct screens to visit (default 8). |
+| `restore` | boolean | no | Whether to navigate back to the initial route when done (default true). |
 
 ## `capture_screenshot`
 
@@ -586,6 +630,18 @@ _Read-only._
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none", expected?: string, found?: int, reason?: string}`
 
+## `export_network_mocks`
+
+Converts captured HTTP requests into mock definitions and mock_http_response steps for offline testing.
+
+_Read-only._
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `filter` | string | no | URL substring or pattern to match. |
+| `format` | string: mcp_chain \| json \| dart | no | Output format (default "mcp_chain"). |
+| `statusCode` | integer | no | Override status code in generated mocks (optional). |
+
 ## `get_memory_details`
 
 Heap used/capacity and external (native) memory per isolate. classes:true lists top classes by heap bytes and count. Leak check: cycle (tool calls that return to where they started, e.g. open a screen then press back) runs times rounds; reports classes that gained instances every round, where defined and what keeps one alive.
@@ -629,6 +685,17 @@ Turns what you do in the app into an integration_test. start:true hot-restarts t
 | `fromCrash` | boolean | no | Write repro test from recent crash. |
 | `name` | string | no | Letters, digits and _. |
 | `run` | boolean | no | Run the written test (default true). |
+
+## `synthesize_golden_test`
+
+Generates a runnable Flutter golden test matching the active route across phone, tablet, and desktop viewports.
+
+| Parameter | Type | Required | Description |
+|---|---|---:|---|
+| `name` | string | no | File name in test/goldens/ (default "screen_golden"). |
+| `screenWidget` | string | no | Root widget class name (e.g. "HomeScreen"). |
+| `viewports` | array | no | Viewports to test: "phone", "tablet", "desktop" (default all three). |
+| `write` | boolean | no | Write file to disk (default true). |
 
 ## `scenario`
 

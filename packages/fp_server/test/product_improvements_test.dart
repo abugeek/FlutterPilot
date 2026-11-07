@@ -9,11 +9,17 @@ void main() {
       server = FlutterPilotServer(vmServiceUri: 'ws://localhost:8888');
     });
 
-    test('registers apply_and_verify and simulate_viewport_matrix', () {
+    test('registers 71 tools including the 6 new autonomous superpowers', () {
       final names = server.registeredToolNames.toSet();
       expect(names, contains('apply_and_verify'));
       expect(names, contains('simulate_viewport_matrix'));
-      expect(names.length, 65);
+      expect(names, contains('crawl_app'));
+      expect(names, contains('get_rebuild_stats'));
+      expect(names, contains('locate_source_ast'));
+      expect(names, contains('export_network_mocks'));
+      expect(names, contains('synthesize_golden_test'));
+      expect(names, contains('audit_design_tokens'));
+      expect(names.length, 71);
     });
 
     test('prescriptive RenderFlex overflow diagnostics are attached', () {
@@ -54,6 +60,61 @@ void main() {
         );
         expect(properties['mark']['type'], 'integer');
       }
+    });
+
+    test('crawl_app inputSchema defines maxScreens, maxDepth, and restore', () {
+      final tools = server.toolListJson();
+      final crawlTool = tools.firstWhere((t) => t['name'] == 'crawl_app');
+      final schema = crawlTool['inputSchema'] as Map<String, dynamic>;
+      final properties = schema['properties'] as Map<String, dynamic>;
+      expect(properties.containsKey('maxScreens'), isTrue);
+      expect(properties.containsKey('maxDepth'), isTrue);
+      expect(properties.containsKey('restore'), isTrue);
+    });
+
+    test('get_rebuild_stats inputSchema defines filter, reset, and minCount', () {
+      final tools = server.toolListJson();
+      final rebuildTool = tools.firstWhere((t) => t['name'] == 'get_rebuild_stats');
+      final schema = rebuildTool['inputSchema'] as Map<String, dynamic>;
+      final properties = schema['properties'] as Map<String, dynamic>;
+      expect(properties.containsKey('filter'), isTrue);
+      expect(properties.containsKey('reset'), isTrue);
+      expect(properties.containsKey('minCount'), isTrue);
+    });
+
+    test('locate_source_ast inputSchema defines key, mark, and file/line', () {
+      final tools = server.toolListJson();
+      final astTool = tools.firstWhere((t) => t['name'] == 'locate_source_ast');
+      final schema = astTool['inputSchema'] as Map<String, dynamic>;
+      final properties = schema['properties'] as Map<String, dynamic>;
+      expect(properties.containsKey('key'), isTrue);
+      expect(properties.containsKey('mark'), isTrue);
+      expect(properties.containsKey('file'), isTrue);
+      expect(properties.containsKey('line'), isTrue);
+    });
+
+    test('export_network_mocks inputSchema defines filter and format', () {
+      final tools = server.toolListJson();
+      final mockTool = tools.firstWhere((t) => t['name'] == 'export_network_mocks');
+      final schema = mockTool['inputSchema'] as Map<String, dynamic>;
+      final properties = schema['properties'] as Map<String, dynamic>;
+      expect(properties.containsKey('filter'), isTrue);
+      expect(properties.containsKey('format'), isTrue);
+    });
+
+    test('synthesize_golden_test inputSchema defines name, screenWidget, viewports', () {
+      final tools = server.toolListJson();
+      final goldenTool = tools.firstWhere((t) => t['name'] == 'synthesize_golden_test');
+      final schema = goldenTool['inputSchema'] as Map<String, dynamic>;
+      final properties = schema['properties'] as Map<String, dynamic>;
+      expect(properties.containsKey('name'), isTrue);
+      expect(properties.containsKey('screenWidget'), isTrue);
+      expect(properties.containsKey('viewports'), isTrue);
+    });
+
+    test('audit_design_tokens is registered and callable', () {
+      final names = server.registeredToolNames.toSet();
+      expect(names, contains('audit_design_tokens'));
     });
 
     test('generate_test supports fromCrash parameter', () {

@@ -885,5 +885,219 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         );
       },
     );
+
+    _tool(
+      'get_rebuild_stats',
+      description:
+          'Inspects widget rebuild counts, identifies hot rebuilders and cascades, and reports root rebuild frequency.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'filter': JsonSchema.string(
+            description: 'Widget type or key substring to filter results.',
+          ),
+          'reset': JsonSchema.boolean(
+            description: 'Reset rebuild counts and start a new observation window.',
+          ),
+          'minCount': JsonSchema.integer(
+            description: 'Minimum rebuild count to report (default 1).',
+          ),
+        },
+      ),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.getRebuildStats', {
+          if (p['filter'] != null) 'filter': p['filter'].toString(),
+          if (p['reset'] != null) 'reset': p['reset'].toString(),
+          if (p['minCount'] != null) 'minCount': p['minCount'].toString(),
+        });
+        if (res.isError) return res.toCallToolResult();
+        final data = res.data ?? const <String, dynamic>{};
+        final total = data['totalRebuilds'] ?? 0;
+        final hot = (data['hotRebuilders'] as List?) ?? const [];
+        final root = data['rootAppRebuilds'] ?? 0;
+        final prescriptions = (data['prescriptions'] as List?) ?? const [];
+
+        final buf = StringBuffer('Widget Rebuild Profile:\n');
+        buf.writeln('- Total Rebuilds: $total (across ${data['distinctWidgetCount'] ?? 0} widget types)');
+        buf.writeln('- Hot Rebuilders (>= 4 rebuilds): ${hot.length}');
+        buf.writeln('- Root App Rebuilds: $root');
+
+        if (hot.isNotEmpty) {
+          buf.writeln('\nTop Rebuilders:');
+          for (final h in hot.take(10)) {
+            buf.writeln('  - ${h['widget']}: ${h['rebuilds']} rebuilds');
+          }
+        }
+        if (prescriptions.isNotEmpty) {
+          buf.writeln('\nPrescriptions:');
+          for (final pr in prescriptions) {
+            buf.writeln('  • $pr');
+          }
+        }
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: data,
+        );
+      },
+    );
+
+    _tool(
+      'locate_source_ast',
+      description:
+          'Resolves a widget to its exact Dart source code AST node, constructor arguments, byte offsets, and patch range.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'key': JsonSchema.string(description: 'Widget key to inspect.'),
+          'mark': JsonSchema.integer(description: 'Set-of-Mark label index from capture_screenshot(labeled:true).'),
+          'selector': JsonSchema.string(description: 'Text, type or fuzzy selector.'),
+          'file': JsonSchema.string(description: 'Dart source file path (optional if key/mark given).'),
+          'line': JsonSchema.integer(description: '1-based line number (optional if key/mark given).'),
+          'column': JsonSchema.integer(description: '1-based column number (optional).'),
+        },
+      ),
+      callback: (p, e) async {
+        String? targetFile = p['file']?.toString();
+        int? targetLine = (p['line'] as num?)?.toInt();
+        int? targetCol = (p['column'] as num?)?.toInt();
+
+        if (targetFile == null || targetLine == null) {
+          final inspectParams = <String, dynamic>{
+            if (p['key'] != null) 'key': p['key'],
+            if (p['mark'] != null) 'mark': p['mark'],
+            if (p['selector'] != null) 'selector': p['selector'],
+          };
+          final res = await _callExtensionRaw('ext.flutterpilot.inspectWidget', inspectParams);
+          final loc = res.data?['source']?.toString();
+          if (loc == null || !loc.contains(':')) {
+            return CallToolResult(
+              isError: true,
+              content: [TextContent(text: 'Could not resolve source location for widget. Provide file and line explicitly.')],
+            );
+          }
+          final parts = loc.split(':');
+          if (parts.length >= 2) {
+            targetFile = parts[0];
+            targetLine = int.tryParse(parts[1]);
+            if (parts.length >= 3) targetCol = int.tryParse(parts[2]);
+          }
+        }
+
+        if (targetFile == null || targetLine == null) {
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: 'Missing target file and line.')],
+          );
+        }
+
+        if (targetFile.startsWith('file://')) {
+          targetFile = Uri.parse(targetFile).toFilePath();
+        }
+
+        final fileObj = File(targetFile);
+        if (!fileObj.existsSync()) {
+          final relative = File(path_pkg.join(Directory.current.path, targetFile.replaceFirst(RegExp(r'^package:[^/]+/'), 'lib/')));
+          if (!relative.existsSync()) {
+            return CallToolResult(
+              isError: true,
+              content: [TextContent(text: 'Source file not found on disk: $targetFile')],
+            );
+          }
+          targetFile = relative.path;
+        }
+
+        final content = File(targetFile).readAsStringSync();
+        final lines = content.split('\n');
+        if (targetLine < 1 || targetLine > lines.length) {
+          return CallToolResult(
+            isError: true,
+            content: [TextContent(text: 'Line $targetLine out of bounds (file has ${lines.length} lines).')],
+          );
+        }
+
+        var lineStartOffset = 0;
+        for (var i = 0; i < targetLine - 1; i++) {
+          lineStartOffset += lines[i].length + 1;
+        }
+        final colOffset = (targetCol != null && targetCol > 0) ? targetCol - 1 : 0;
+        final startOffset = (lineStartOffset + colOffset).clamp(0, content.length);
+
+        final match = RegExp(r'[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?\s*\(').matchAsPrefix(content, startOffset) ??
+            RegExp(r'[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?\s*\(').firstMatch(content.substring(lineStartOffset));
+
+        int constructOffset = startOffset;
+        if (match != null) {
+          constructOffset = lineStartOffset + (match.start);
+        }
+
+        int parenDepth = 0;
+        int endOffset = constructOffset;
+        bool inString = false;
+        String? stringDelimiter;
+        bool inComment = false;
+
+        for (var i = constructOffset; i < content.length; i++) {
+          final c = content[i];
+          final next = i + 1 < content.length ? content[i + 1] : '';
+
+          if (inComment) {
+            if (c == '\n') inComment = false;
+            continue;
+          }
+          if (inString) {
+            if (c == '\\') {
+              i++;
+              continue;
+            }
+            if (c == stringDelimiter) {
+              inString = false;
+              stringDelimiter = null;
+            }
+            continue;
+          }
+
+          if (c == '/' && next == '/') {
+            inComment = true;
+            continue;
+          }
+          if (c == "'" || c == '"') {
+            inString = true;
+            stringDelimiter = c;
+            continue;
+          }
+
+          if (c == '(') {
+            parenDepth++;
+          } else if (c == ')') {
+            parenDepth--;
+            if (parenDepth == 0) {
+              endOffset = i + 1;
+              break;
+            }
+          }
+        }
+
+        final snippet = content.substring(constructOffset, endOffset);
+        final argMatches = RegExp(r'([a-zA-Z0-9_]+)\s*:').allMatches(snippet).map((m) => m.group(1)!).toSet().toList();
+
+        final buf = StringBuffer('Widget Source AST Definition:\n');
+        buf.writeln('- File: $targetFile:$targetLine');
+        buf.writeln('- Range: byte offset $constructOffset to $endOffset (${endOffset - constructOffset} chars)');
+        buf.writeln('- Arguments passed: ${argMatches.join(", ")}');
+        buf.writeln('\nAST Snippet:\n```dart\n$snippet\n```');
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: {
+            'file': targetFile,
+            'line': targetLine,
+            'offset': constructOffset,
+            'end': endOffset,
+            'length': endOffset - constructOffset,
+            'arguments': argMatches,
+            'snippet': snippet,
+          },
+        );
+      },
+    );
   }
 }

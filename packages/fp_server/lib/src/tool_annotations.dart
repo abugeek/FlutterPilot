@@ -111,6 +111,12 @@ const toolEffects = <String, ToolEffect>{
   'generate_test': ToolEffect.acts,
   'verify_feature': ToolEffect.acts,
   'scenario': ToolEffect.destructive,
+  'crawl_app': ToolEffect.acts,
+  'get_rebuild_stats': ToolEffect.acts,
+  'locate_source_ast': ToolEffect.reads,
+  'export_network_mocks': ToolEffect.reads,
+  'synthesize_golden_test': ToolEffect.acts,
+  'audit_design_tokens': ToolEffect.reads,
 };
 
 /// Tools that leave the app as it is when called again with the same

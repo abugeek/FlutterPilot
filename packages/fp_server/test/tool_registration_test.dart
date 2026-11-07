@@ -20,9 +20,9 @@ void main() {
     });
 
     test('stays within the tool budget (ROADMAP §4.2: 60–80)', () {
-      // 63 after task 04 merged the five gesture tools into `gesture_widget`.
+      // 71 tools across autonomous capabilities.
       // The limit is the current count + 5.
-      expect(names.length, lessThanOrEqualTo(68));
+      expect(names.length, lessThanOrEqualTo(76));
     });
 
     test('plugin-gated and zero-code tools name registered tools', () {
@@ -57,18 +57,18 @@ void main() {
         toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // Measured after adding apply_and_verify and simulate_viewport_matrix;
-      // each limit is that profile's measurement plus 300 (from tool/tool_list_report.dart).
-      // Every tool (--static-tools): 65 tools, 41 972 chars.
-      expect(listChars((_) => true), lessThanOrEqualTo(42300));
-      // An app with the SDK and no plugin, not on an iOS simulator: 30 526 chars plus 300.
+      // Measured after adding autonomous superpowers (71 tools);
+      // each limit is that profile's measurement plus margin (from tool/tool_list_report.dart).
+      // Every tool (--static-tools): 71 tools, 45 024 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(45400));
+      // An app with the SDK and no plugin, not on an iOS simulator: 33 578 chars plus margin.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(30850),
+        lessThanOrEqualTo(33900),
       );
       // An app without the SDK: 9 592 chars.
       expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9974));

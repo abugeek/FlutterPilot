@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import 'package:logging/logging.dart' as logging;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:meta/meta.dart';
+import 'package:path/path.dart' as path_pkg;
 import 'package:vm_service/vm_service.dart';
 
 import 'src/action_chain.dart';

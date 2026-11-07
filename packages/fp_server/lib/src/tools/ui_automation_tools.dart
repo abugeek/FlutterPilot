@@ -1320,6 +1320,50 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
+      'audit_design_tokens',
+      description:
+          'Audits screen styling against active ThemeData: flags unthemed raw hex colors and off-grid corner radii (non-4/8dp).',
+      inputSchema: ToolInputSchema(properties: {}),
+      callback: (p, e) async {
+        final res = await _callExtensionRaw('ext.flutterpilot.auditDesignTokens', {});
+        final data = res.data ?? const <String, dynamic>{};
+        final score = data['tokenComplianceScore'] ?? 100;
+        final unthemed = (data['unthemedColors'] as List?) ?? const [];
+        final offGrid = (data['offGridBorderRadii'] as List?) ?? const [];
+        final prescriptions = (data['prescriptions'] as List?) ?? const [];
+
+        final buf = StringBuffer('Design Token & Theme Compliance Audit:\n');
+        buf.writeln('- Compliance Score: $score/100');
+        buf.writeln('- Unthemed Colors: ${unthemed.length}');
+        buf.writeln('- Off-grid Corner Radii: ${offGrid.length}');
+
+        if (unthemed.isNotEmpty) {
+          buf.writeln('\nUnthemed Colors:');
+          for (final u in unthemed) {
+            buf.writeln('  - ${u['color']} in ${u['widget']} -> suggested token: ${u['suggestedToken']}');
+          }
+        }
+        if (offGrid.isNotEmpty) {
+          buf.writeln('\nOff-grid Corner Radii:');
+          for (final r in offGrid) {
+            buf.writeln('  - ${r['radius']}dp in ${r['widget']} -> snap to ${r['suggestedRadius']}dp');
+          }
+        }
+        if (prescriptions.isNotEmpty) {
+          buf.writeln('\nPrescriptions:');
+          for (final pr in prescriptions) {
+            buf.writeln('  • $pr');
+          }
+        }
+
+        return CallToolResult(
+          content: [TextContent(text: buf.toString().trim())],
+          structuredContent: data,
+        );
+      },
+    );
+
+    _tool(
       'execute_action_chain',
       description:
           'Runs a known sequence of steps in one call, stopping at the first '

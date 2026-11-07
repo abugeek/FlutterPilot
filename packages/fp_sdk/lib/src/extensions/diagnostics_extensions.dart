@@ -312,5 +312,20 @@ extension _DiagnosticsExtensions on FlutterPilot {
         }),
       );
     });
+
+    // -- ext.flutterpilot.getRebuildStats -------------------------------------
+    registerExtension('ext.flutterpilot.getRebuildStats', (
+      method,
+      parameters,
+    ) async {
+      final reset = parameters['reset'] == 'true';
+      if (reset) {
+        RebuildProfiler.reset();
+      }
+      final filter = parameters['filter'];
+      final minCount = int.tryParse(parameters['minCount'] ?? '') ?? 1;
+      final stats = RebuildProfiler.getStats(filter: filter, minCount: minCount);
+      return ServiceExtensionResponse.result(json.encode(stats));
+    });
   }
 }
