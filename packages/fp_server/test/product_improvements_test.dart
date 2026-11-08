@@ -748,5 +748,52 @@ class MyList extends StatelessWidget {
       expect(promptNames, contains('design_polish'));
       expect(promptNames, contains('responsive_matrix'));
     });
+
+    test('UI automation tools advertise failureKey and anyOf for post-action awaits', () {
+      final tools = server.toolListJson();
+      for (final toolName in [
+        'tap_widget',
+        'enter_text',
+        'press_key',
+        'scroll_into_view',
+        'toggle_checkbox',
+        'gesture_widget',
+        'fill_form',
+      ]) {
+        final tool = tools.firstWhere((t) => t['name'] == toolName);
+        final schema = tool['inputSchema'] as Map;
+        final props = schema['properties'] as Map;
+        expect(props.containsKey('failureKey'), isTrue, reason: '$toolName should have failureKey');
+        expect(props.containsKey('anyOf'), isTrue, reason: '$toolName should have anyOf');
+      }
+    });
+
+    test('navigate_to advertises failureKey, anyOf, and timeoutMs', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'navigate_to');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('failureKey'), isTrue);
+      expect(props.containsKey('anyOf'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+      expect(props['timeoutMs']['type'], 'integer');
+    });
+
+    test('apply_patch_and_verify advertises timeoutMs', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'apply_patch_and_verify');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('timeoutMs'), isTrue);
+      expect(props['timeoutMs']['type'], 'integer');
+    });
+
+    test('sanitizeTestName sanitizes user input safely to snake_case', () {
+      expect(sanitizeTestName('Login Flow'), 'login_flow');
+      expect(sanitizeTestName('my-checkout-flow'), 'my_checkout_flow');
+      expect(sanitizeTestName('123_test'), 'test_123_test');
+      expect(sanitizeTestName('  valid_name_123  '), 'valid_name_123');
+      expect(sanitizeTestName(''), '');
+    });
   });
 }

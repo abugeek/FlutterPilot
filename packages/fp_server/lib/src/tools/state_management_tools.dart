@@ -192,10 +192,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_state',
       description:
-          'Sets a Riverpod provider or Bloc/Cubit state in memory: name + '
-          'value, or several at once with states. Names come from get_state; '
-          'type is inferred. Works for bool/number/String/List/Map states; '
-          'for enum or class states it explains why not — drive the UI instead.',
+          'Sets Riverpod provider or Bloc/Cubit state in memory: name + '
+          'value, or several via states. Names come from get_state; type is '
+          'inferred for bool/number/String/List/Map.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(
@@ -555,7 +554,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         properties: {
           'key': JsonSchema.string(description: 'Specific key to read.'),
           'query': JsonSchema.string(
-            description: 'Key substring filter.',
+            description: 'Key or value substring filter.',
           ),
           'showSensitive': JsonSchema.boolean(
             description: 'Reveal sensitive values.',
@@ -577,7 +576,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           final rawPrefs = (data['prefs'] as Map).cast<String, dynamic>();
           final filtered = Map.fromEntries(
             rawPrefs.entries.where(
-              (entry) => entry.key.toLowerCase().contains(query),
+              (entry) =>
+                  entry.key.toLowerCase().contains(query) ||
+                  '${entry.value}'.toLowerCase().contains(query),
             ),
           );
           data = {'prefs': filtered, 'count': filtered.length};

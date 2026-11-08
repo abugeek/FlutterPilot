@@ -364,9 +364,15 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
       if (query != null && query.isNotEmpty) {
         final q = query.toLowerCase();
         keys = Map.fromEntries(
-          keys.entries.where(
-            (e) => e.key.toString().toLowerCase().contains(q),
-          ),
+          keys.entries.where((e) {
+            final k = e.key.toString().toLowerCase();
+            if (k.contains(q)) return true;
+            final v = e.value;
+            if (v is Map && v['value'] != null) {
+              return v['value'].toString().toLowerCase().contains(q);
+            }
+            return false;
+          }),
         );
       }
       if (keys.isEmpty) {
@@ -396,7 +402,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         properties: {
           'key': JsonSchema.string(description: 'Read only this key.'),
           'query': JsonSchema.string(
-            description: 'Key substring filter.',
+            description: 'Key or value substring filter.',
           ),
           'showValues': JsonSchema.boolean(
             description: 'Reveal values (except always-redacted keys).',

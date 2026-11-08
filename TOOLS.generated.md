@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 44037 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 45509 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -120,6 +120,8 @@ Taps a widget by key, selector or text (scrolling first) or at x/y. Reports rout
 | `gesture` | string: tap \| double \| long \| secondary | no | Default tap (or double/long/secondary). |
 | `durationMs` | integer | no | Long-press duration (default 600). |
 | `waitFor` | string | no | Widget to wait for after tap. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
 | `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 | `quickSettle` | boolean | no | Settle in <=400ms. |
 | `settleTimeoutMs` | integer | no | Screen settle timeout in ms. |
@@ -137,23 +139,27 @@ Types text into a field by key, selector or label (or focused field). Fires onCh
 | `clearFirst` | boolean | no | Clear existing text first (default true). |
 | `submit` | boolean | no | Press Enter to submit. |
 | `waitFor` | string | no | Widget or text to wait for. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
 | `timeoutMs` | integer | no | Timeout in ms (default 5000). |
 
 ## `press_key`
 
-Presses a key on focused widget (enter, tab, escape, arrows, or "back" to pop). Use count to repeat; pass waitFor to await a widget.
+Presses key on focused widget (enter, tab, escape, arrows, or "back" to pop). Supports count, waitFor, failureKey, and anyOf.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | E.g. "enter", "tab", "escape", "back", "arrowDown", "space", "backspace", or a single character. |
-| `modifiers` | array | no | Optional modifier keys: "shift", "ctrl", "alt", "meta". |
-| `count` | integer | no | Number of times to press the key (1–20, default 1). |
-| `waitFor` | string | no | Optional widget key/selector to wait for. |
-| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
+| `key` | string | yes | E.g. "enter", "tab", "escape", "back", "arrowDown", "space", "backspace", or character. |
+| `modifiers` | array | no | Modifier keys: "shift", "ctrl", "alt", "meta". |
+| `count` | integer | no | Number of times to press key (1–20, default 1). |
+| `waitFor` | string | no | Widget key/selector to wait for. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
 ## `gesture_widget`
 
-Drives a widget with swipe, drag, pinch, focus or slide. Reports what changed in route and tree.
+Drives widget with swipe, drag, pinch, focus or slide. Reports screen and route changes; supports waitFor, failureKey, and anyOf.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -168,19 +174,23 @@ Drives a widget with swipe, drag, pinch, focus or slide. Reports what changed in
 | `x` | number | no | Center x for pinch, with y. |
 | `y` | number | no |  |
 | `value` | number | no | Slider value for slide. |
-| `waitFor` | string | no | Optional widget key to wait for after gesture. |
-| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
+| `waitFor` | string | no | Widget key/selector to wait for. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
 ## `scroll_into_view`
 
-Scrolls until widget (key, selector, or text) is visible. Pass tap: true to tap once visible.
+Scrolls until widget (key, selector, or text) is visible. Pass tap: true to tap once visible; supports waitFor and failureKey.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or text of the widget. |
-| `tap` | boolean | no | Whether to tap the widget once scrolled into view. |
-| `waitFor` | string | no | Optional widget to wait for after tapping. |
-| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
+| `key` | string | no | Key, selector or text of widget. |
+| `tap` | boolean | no | Whether to tap widget once scrolled into view. |
+| `waitFor` | string | no | Widget key/selector to wait for. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
 ## `toggle_checkbox`
 
@@ -188,10 +198,12 @@ Toggles Checkbox, Switch or Radio. Pass value to set idempotently or waitFor to 
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or label of the toggle, or of the row that holds it. |
+| `key` | string | no | Key, selector or label of toggle or row holding it. |
 | `value` | boolean | no | Target state (true/false). If already set, does not toggle. |
-| `waitFor` | string | no | Optional widget key to wait for. |
-| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 5000). |
+| `waitFor` | string | no | Widget key/selector to wait for. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
+| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
 ## `fill_form`
 
@@ -203,6 +215,8 @@ Fills multiple fields and optionally submits (or pass waitFor). Reports route ch
 | `submitWith` | string | no | Optional button to tap after filling (e.g. "ElevatedButton['Log In']"). |
 | `submit` | boolean | no | Tap the one primary button. |
 | `waitFor` | string | no | Widget or text to wait for after submitting. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await. |
 | `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, validationErrors?: [string], status?: "ok"|"unavailable"}`
@@ -328,7 +342,7 @@ Brings app back to foreground on simulator/device, resuming state and execution.
 
 ## `navigate_to`
 
-Goes to a route or deep link directly (go_router: router.go; otherwise Navigator.pushNamed). Back: press_key("back").
+Goes to route or deep link directly (go_router: router.go; otherwise Navigator.pushNamed). Supports waitFor, failureKey, anyOf.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -336,6 +350,9 @@ Goes to a route or deep link directly (go_router: router.go; otherwise Navigator
 | `action` | string: go \| push \| replace | no | Default "go". push/replace need the go_router plugin. |
 | `deepLink` | boolean | no | Open route as an OS deep link (myapp://product/1). |
 | `waitFor` | string | no | Key or text to wait for on the new page. |
+| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
+| `anyOf` | array | no | Candidate keys to await on the new page. |
+| `timeoutMs` | integer | no | Timeout for wait in ms (default 5000). |
 | `pathParams` | object | no | Dynamic params (e.g. {"id": "123"}). |
 | `queryParams` | object | no | Query params (e.g. {"tab": "all"}). |
 
@@ -554,7 +571,7 @@ Values of Riverpod providers and Blocs/Cubits. Filter with name or query; histor
 
 ## `set_state`
 
-Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several at once with states. Names come from get_state; type is inferred. Works for bool/number/String/List/Map states; for enum or class states it explains why not — drive the UI instead.
+Sets Riverpod provider or Bloc/Cubit state in memory: name + value, or several via states. Names come from get_state; type is inferred for bool/number/String/List/Map.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -610,7 +627,7 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Specific key to read. |
-| `query` | string | no | Key substring filter. |
+| `query` | string | no | Key or value substring filter. |
 | `showSensitive` | boolean | no | Reveal sensitive values. |
 
 ## `set_shared_preference`
@@ -774,6 +791,7 @@ Surgically patches widget in source (wrap, unwrap, replaceCall), hot-reloads, au
 | `unwrap` | boolean | no | Remove this widget, replacing it with its child argument. |
 | `replaceCall` | string | no | Direct replacement snippet for the constructor call. |
 | `waitFor` | string | no | Optional widget key to wait for on screen after reload. |
+| `timeoutMs` | integer | no | Timeout for waitFor in ms (default 3000). |
 | `patches` | array | no | Batch of patch objects to apply atomically in 1 reload. |
 
 ## `replay_flow`
@@ -920,7 +938,7 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Read only this key. |
-| `query` | string | no | Key substring filter. |
+| `query` | string | no | Key or value substring filter. |
 | `showValues` | boolean | no | Reveal values (except always-redacted keys). |
 
 ## `set_secure_storage_key`

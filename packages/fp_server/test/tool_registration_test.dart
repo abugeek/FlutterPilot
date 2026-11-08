@@ -90,8 +90,8 @@ void main() {
       // 29 tools; the count limit is VS Code's 128 tools per request
       // (2026-10-14) minus the Dart MCP server's 4 and a small server's 5.
       expect(listed.length, lessThanOrEqualTo(30));
-      // 20 830 bytes on 2026-10-17, plus 300 (task 09 C).
-      expect(bytes, lessThanOrEqualTo(21130));
+      // 20 830 bytes on 2026-10-17; updated for Tier 14 fast-fail post-action parameters.
+      expect(bytes, lessThanOrEqualTo(22000));
     });
 
     test('every tool says what it does to the app', () {

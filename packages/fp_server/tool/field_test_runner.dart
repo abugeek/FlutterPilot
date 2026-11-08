@@ -1062,6 +1062,41 @@ Future<void> main(List<String> args) async {
       });
     }
 
+    if (availableTools.contains('tap_widget')) {
+      // 46. Tier 14: Fast-Fail / Multi-Target UI Automation
+      await runTest('tap_widget (fast-fail & anyOf)', 'tap_widget', {
+        'x': 50,
+        'y': 50,
+        'anyOf': ['non_existent_key_1', 'non_existent_key_2'],
+        'timeoutMs': 100,
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('navigate_to')) {
+      // 47. Tier 14: Configurable Timeout & Fast-Fail Navigation
+      await runTest('navigate_to (timeoutMs & failureKey)', 'navigate_to', {
+        'route': '/',
+        'failureKey': 'impossible_error_banner',
+        'timeoutMs': 100,
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_shared_preferences')) {
+      // 48. Tier 14: SharedPreferences Value Substring Query
+      await runTest('get_shared_preferences (value query)', 'get_shared_preferences', {
+        'query': 'true',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

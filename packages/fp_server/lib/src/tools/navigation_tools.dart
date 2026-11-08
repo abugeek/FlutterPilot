@@ -7,8 +7,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'navigate_to',
       description:
-          'Goes to a route or deep link directly (go_router: router.go; '
-          'otherwise Navigator.pushNamed). Back: press_key("back").',
+          'Goes to route or deep link directly (go_router: router.go; '
+          'otherwise Navigator.pushNamed). Supports waitFor, failureKey, anyOf.',
       inputSchema: ToolInputSchema(
         properties: {
           'route': JsonSchema.string(
@@ -25,6 +25,16 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           ),
           'waitFor': JsonSchema.string(
             description: 'Key or text to wait for on the new page.',
+          ),
+          'failureKey': JsonSchema.string(
+            description: 'Fast-fail key (e.g. error banner).',
+          ),
+          'anyOf': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Candidate keys to await on the new page.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for wait in ms (default 5000).',
           ),
           'pathParams': JsonSchema.object(
             description: 'Dynamic params (e.g. {"id": "123"}).',
@@ -129,11 +139,22 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         // The stack and the screen after it are independent reads (the
         // screen is read after the wait when there is one).
         final waitFor = p['waitFor']?.toString();
+        final failureKey = p['failureKey']?.toString();
+        final rawAnyOf = p['anyOf'];
+        final anyOfStr = rawAnyOf is List
+            ? rawAnyOf.map((s) => s.toString()).join(',')
+            : rawAnyOf?.toString();
+        final timeoutMs = (p['timeoutMs'] as num?)?.toInt() ?? 5000;
+        final timeoutSec = (timeoutMs / 1000).toStringAsFixed(timeoutMs % 1000 == 0 ? 0 : 1);
+        final waitRequired =
+            (waitFor != null && waitFor.isNotEmpty) ||
+            failureKey != null ||
+            anyOfStr != null;
         final stackFuture = _callExtensionRaw(
           'ext.flutterpilot.getNavigationStack',
           {},
         );
-        final screenFuture = waitFor == null || waitFor.isEmpty
+        final screenFuture = !waitRequired
             ? _screenAfter(route: false)
             : null;
         final stack = await stackFuture;
@@ -148,16 +169,21 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         // of navigate_to then wait_for (52 such pairs in field sessions).
         var waited = '';
         var missing = false;
-        final waitRequired = waitFor != null && waitFor.isNotEmpty;
         if (waitRequired) {
           final found = await _callExtensionRaw(
             'ext.flutterpilot.waitForCondition',
-            {'selector': waitFor, 'timeoutMs': '5000'},
+            {
+              if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
+              'anyOf': ?anyOfStr,
+              'failureKey': ?failureKey,
+              'timeoutMs': '$timeoutMs',
+            },
           );
           missing = found.isError;
+          final targetDesc = waitFor ?? anyOfStr ?? 'target';
           waited = missing
-              ? ' But "$waitFor" did not appear within 5 s.'
-              : ' "$waitFor" is on screen.';
+              ? ' But "$targetDesc" did not appear within $timeoutSec s${found.errorMessage != null ? ': ${found.errorMessage}' : '.'}'
+              : ' "$targetDesc" is on screen.';
         }
         final routeLabel = rawRoute != route
             ? '$route (from "$rawRoute")'

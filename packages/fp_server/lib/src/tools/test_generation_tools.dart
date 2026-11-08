@@ -167,6 +167,9 @@ mixin _TestGenerationToolsMixin
             description:
                 'Optional widget key to wait for on screen after reload.',
           ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout for waitFor in ms (default 3000).',
+          ),
           'patches': JsonSchema.array(
             description:
                 'Batch of patch objects to apply atomically in 1 reload.',
@@ -452,11 +455,13 @@ mixin _TestGenerationToolsMixin
 
         final waitFor = p['waitFor']?.toString();
         if (waitFor != null && waitFor.isNotEmpty) {
+          final timeout =
+              ((p['timeoutMs'] as num?)?.toInt() ?? 3000).toString();
           final waitRes = await _callExtensionRaw(
-            'ext.flutterpilot.waitForWidget',
+            'ext.flutterpilot.waitForCondition',
             {
-              'key': waitFor,
-              'timeoutMs': '3000',
+              'selector': waitFor,
+              'timeoutMs': timeout,
             },
           );
           if (waitRes.isError) {
@@ -632,7 +637,10 @@ mixin _TestGenerationToolsMixin
 
         String? exportedFile;
         if (p['exportAsTest'] == true) {
-          final testName = p['testName']?.toString() ?? 'replayed_flow';
+          final rawTestName = p['testName']?.toString();
+          final testName = (rawTestName != null && rawTestName.isNotEmpty)
+              ? sanitizeTestName(rawTestName)
+              : 'replayed_flow';
           final writeRes = await _writeAndRunSteps(
             testName,
             steps,
@@ -685,12 +693,14 @@ mixin _TestGenerationToolsMixin
           content: [TextContent(text: s)],
         );
         if (params['start'] == true) return _startTestRecording(extra);
-        final name = params['name']?.toString() ?? '';
+        final rawName = params['name']?.toString() ?? '';
         if (params['fromCrash'] == true) {
-          final testName = name.isEmpty ? 'repro_crash' : name;
+          final testName =
+              rawName.isEmpty ? 'repro_crash' : sanitizeTestName(rawName);
           return _generateCrashReproTest(testName);
         }
-        if (!RegExp(r'^[a-z][a-z0-9_]*$').hasMatch(name)) {
+        final name = sanitizeTestName(rawName);
+        if (name.isEmpty) {
           return text(
             'Pass start:true to begin recording, fromCrash:true to repro crash, '
             'or name: in lower_snake_case (e.g. "login_flow") to write and run it.',
@@ -1160,6 +1170,17 @@ mixin _TestGenerationToolsMixin
     }
     return null;
   }
+}
+
+String sanitizeTestName(String input) {
+  final clean = input
+      .trim()
+      .replaceAll(RegExp(r'[\s\-]+'), '_')
+      .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '')
+      .toLowerCase();
+  final sanitized = clean.replaceAll(RegExp(r'^_+|__+'), '_');
+  if (sanitized.isEmpty) return '';
+  return RegExp(r'^[a-z]').hasMatch(sanitized) ? sanitized : 'test_$sanitized';
 }
 
 class _ResolvedPatch {
