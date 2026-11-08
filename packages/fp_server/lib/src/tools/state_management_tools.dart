@@ -85,12 +85,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_state',
       description:
-          'Current values of the app\'s Riverpod providers and '
-          'Blocs/Cubits (name: value (type)). history:true lists the '
-          'recent changes instead, oldest first with times: each value '
-          'with the one it replaced, providers created and disposed, and '
-          'the route changes between them — how the state got to where it '
-          'is.',
+          'Values of Riverpod providers and Blocs/Cubits. Filter with name or '
+          'query; history:true lists state and route changes with timestamps.',
       inputSchema: ToolInputSchema(
         properties: {
           'type': JsonSchema.string(
@@ -98,6 +94,9 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             description: 'Only this kind.',
           ),
           'name': JsonSchema.string(description: 'Only names containing this.'),
+          'query': JsonSchema.string(
+            description: 'Substring search across state values and names.',
+          ),
           'history': JsonSchema.boolean(),
           'clear': JsonSchema.boolean(
             description:
@@ -144,18 +143,18 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             continue;
           }
           var states = res.data?['states'] as Map?;
-          // One provider is what is usually wanted: in field sessions agents
-          // passed a name the tool did not take, and got nothing.
-          final wanted = p['name']?.toString().toLowerCase();
+          final wanted = (p['query'] ?? p['name'])?.toString().toLowerCase();
           if (states != null && wanted != null && wanted.isNotEmpty) {
             final all = states;
             states = {
               for (final e in all.entries)
-                if ('${e.key}'.toLowerCase().contains(wanted)) e.key: e.value,
+                if ('${e.key}'.toLowerCase().contains(wanted) ||
+                    '${e.value[valueKey]}'.toLowerCase().contains(wanted))
+                  e.key: e.value,
             };
             if (states.isEmpty && all.isNotEmpty) {
               sections.add(
-                '$type: no state named like "${p['name']}". There are: '
+                '$type: no state matching "$wanted". There are: '
                 '${all.keys.take(40).join(', ')}'
                 '${all.length > 40 ? ', …' : ''}.',
               );
@@ -581,10 +580,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_shared_preference',
       description:
-          'Writes a SharedPreferences key (type: string (default), int, '
-          'double, bool, stringList as a JSON array). remove:true deletes the '
-          'key; no key with confirm "CLEAR_ALL" clears every preference. '
-          'Needs --allow-destructive.',
+          'Writes a SharedPreferences key (string, int, double, bool, stringList). '
+          'remove:true deletes key; confirm "CLEAR_ALL" clears all.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -635,10 +632,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_network',
       description:
-          'Makes every HTTP request (http, dart:io, Dio) slow, fail '
-          '(offline/chaos) or normal again. errorRate (0.0-1.0) and '
-          'statusCode (e.g. 500) inject network chaos; delayMs holds '
-          'each one that long. restore:true clears.',
+          'Simulates network conditions (slow_3g, offline, chaos errorRate/'
+          'statusCode, delayMs) across http, dart:io and Dio; restore:true clears.',
       inputSchema: ToolInputSchema(
         properties: {
           'condition': JsonSchema.string(

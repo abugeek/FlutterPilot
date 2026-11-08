@@ -111,6 +111,48 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     return result;
   }
 
+  static Map<String, dynamic>? _filterWidgetTreeNode(
+    Map<String, dynamic> node,
+    String query,
+  ) {
+    final q = query.toLowerCase();
+    final type =
+        (node['type'] ?? node['widget'] ?? '').toString().toLowerCase();
+    final key = (node['key'] ?? '').toString().toLowerCase();
+    final text = (node['text'] ?? '').toString().toLowerCase();
+    final selector = (node['selector'] ?? '').toString().toLowerCase();
+    final isMatch =
+        type.contains(q) ||
+        key.contains(q) ||
+        text.contains(q) ||
+        selector.contains(q);
+
+    final rawChildren = node['children'];
+    final filteredChildren = <dynamic>[];
+    if (rawChildren is List) {
+      for (final child in rawChildren) {
+        if (child is Map) {
+          final filteredChild = _filterWidgetTreeNode(
+            Map<String, dynamic>.from(child),
+            q,
+          );
+          if (filteredChild != null) {
+            filteredChildren.add(filteredChild);
+          }
+        }
+      }
+    }
+
+    if (isMatch || filteredChildren.isNotEmpty) {
+      final copy = Map<String, dynamic>.from(node);
+      if (rawChildren is List) {
+        copy['children'] = filteredChildren;
+      }
+      return copy;
+    }
+    return null;
+  }
+
   String _baselineKey(String name) =>
       '${_fleetManager.activeDeviceId ?? 'default'}::$name';
 
@@ -560,8 +602,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'compare_screenshot',
       description:
-          'Visual diff against baseline or previous frame. Supports '
-          'key cropping, diff %, changed bounds, and diff image.',
+          'Visual diff vs baseline or previous frame. Supports key cropping '
+          'and changed bounds.',
       inputSchema: ToolInputSchema(
         properties: {
           'name': JsonSchema.string(description: 'Baseline name.'),
@@ -909,6 +951,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             description: 'Subtree key or selector.',
           ),
           'subtree': JsonSchema.string(description: 'Subtree root key.'),
+          'query': JsonSchema.string(
+            description: 'Filter tree nodes matching key, type, or text.',
+          ),
           'maxDepth': JsonSchema.integer(description: 'Default 50.'),
           'compact': JsonSchema.boolean(
             description: 'false keeps unkeyed layout wrappers (default true).',
@@ -950,6 +995,18 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
         if (res.isError) return res.toCallToolResult();
         var data = res.data != null ? Map<String, dynamic>.from(res.data!) : null;
+        final query = p['query']?.toString();
+        if (query != null && query.isNotEmpty && data != null) {
+          if (data['tree'] is Map) {
+            final filtered = _filterWidgetTreeNode(
+              Map<String, dynamic>.from(data['tree'] as Map),
+              query,
+            );
+            data['tree'] = filtered ?? <String, dynamic>{'type': 'Empty', 'note': 'No nodes matching "$query"'};
+          } else if (data['children'] is List) {
+            data = _filterWidgetTreeNode(data, query) ?? <String, dynamic>{'type': 'Empty', 'note': 'No nodes matching "$query"'};
+          }
+        }
         if (shouldCollapse && data != null) {
           if (data['tree'] is Map) {
             data['tree'] = _collapseWidgetTreeNode(

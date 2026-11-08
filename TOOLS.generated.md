@@ -4,13 +4,13 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 44285 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 43732 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
 ## `connect_app`
 
-Connects to a running Flutter app: the VM service URI flutter run prints, or without uri the one found in the project or the client's workspace folders. Needed only when the app was not found automatically or was restarted.
+Connects to running app via VM service URI, or auto-discovers from workspace if omitted.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -27,7 +27,7 @@ _Read-only._
 
 ## `register_device`
 
-Adds a running Flutter app to the fleet under a name, e.g. the same app on an iPhone simulator next to the one on Android. Pass the VM service URI that flutter run prints ("A Dart VM Service on ... is available at: http://127.0.0.1:PORT/TOKEN=/"). Registering an existing name again updates its URI after the app restarted.
+Registers a running app in the fleet by id and VM service URI from flutter run. Re-registering updates its URI after restart.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -55,13 +55,14 @@ Makes a registered device the active one: every tool call after this targets it.
 
 ## `get_errors`
 
-Recent uncaught exceptions with source file:line and layout culprits. report:true returns crash report; clear:true empties buffer.
+Recent uncaught exceptions with source file:line and layout culprits. report:true returns crash report; clear:true empties buffer; query filters errors.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `report` | boolean | no | Return the latest crash report instead of the list. |
+| `query` | string | no | Substring filter for error message or stack frames. |
 | `clear` | boolean | no | Clear the recorded error buffer. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", message: string, location?: string, beforeReload: bool}], status?: "ok"|"unavailable", reason?: string}`
@@ -357,13 +358,13 @@ Configure theme, locale, text scale, orientation, window size, or overlays witho
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `reset` | boolean | no | Restore system theme, locale, text scale, and clear debug overlays. |
+| `reset` | boolean | no | Restore defaults and clear debug overlays. |
 | `theme` | string: light \| dark | no |  |
 | `locale` | string | no | BCP-47 tag (e.g. "fr", "ar", "zh") or "system". |
-| `textScale` | number | no | Scale factor (1.0 default, 0 restores system). |
-| `keyboardInset` | number | no | Height in logical pixels (e.g. 300; 0 removes). |
+| `textScale` | number | no | Scale factor (1.0 default). |
+| `keyboardInset` | number | no | Logical pixel height (0 removes). |
 | `orientation` | string: portrait \| landscape \| all \| auto | no | Phones. |
-| `windowSize` | string | no | "WIDTHxHEIGHT" in logical pixels (e.g. "390x844"). |
+| `windowSize` | string | no | WIDTHxHEIGHT (e.g. "390x844"). |
 | `debugPaint` | boolean | no |  |
 | `repaintRainbow` | boolean | no |  |
 | `slowAnimations` | boolean | no |  |
@@ -412,7 +413,7 @@ _Read-only._
 
 ## `compare_screenshot`
 
-Visual diff against baseline or previous frame. Supports key cropping, diff %, changed bounds, and diff image.
+Visual diff vs baseline or previous frame. Supports key cropping and changed bounds.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -436,6 +437,7 @@ _Read-only._
 | `diff` | boolean | no |  |
 | `rootKey` | string | no | Subtree key or selector. |
 | `subtree` | string | no | Subtree root key. |
+| `query` | string | no | Filter tree nodes matching key, type, or text. |
 | `maxDepth` | integer | no | Default 50. |
 | `compact` | boolean | no | false keeps unkeyed layout wrappers (default true). |
 | `collapse` | boolean | no | Collapse repeated sibling widgets. |
@@ -536,12 +538,13 @@ Hot-reloads/restarts app, awaits frame settle, verifies zero errors, and optiona
 
 ## `get_state`
 
-Current values of the app's Riverpod providers and Blocs/Cubits (name: value (type)). history:true lists the recent changes instead, oldest first with times: each value with the one it replaced, providers created and disposed, and the route changes between them — how the state got to where it is.
+Values of Riverpod providers and Blocs/Cubits. Filter with name or query; history:true lists state and route changes with timestamps.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `type` | string: riverpod \| bloc | no | Only this kind. |
 | `name` | string | no | Only names containing this. |
+| `query` | string | no | Substring search across state values and names. |
 | `history` | boolean | no |  |
 | `clear` | boolean | no | Empty the history after returning it: do that before an action to see only its effects. |
 
@@ -606,7 +609,7 @@ _Read-only._
 
 ## `set_shared_preference`
 
-Writes a SharedPreferences key (type: string (default), int, double, bool, stringList as a JSON array). remove:true deletes the key; no key with confirm "CLEAR_ALL" clears every preference. Needs --allow-destructive.
+Writes a SharedPreferences key (string, int, double, bool, stringList). remove:true deletes key; confirm "CLEAR_ALL" clears all.
 
 _Destructive: replaces stored data (needs `--allow-destructive`) or runs app code._
 
@@ -620,7 +623,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `simulate_network`
 
-Makes every HTTP request (http, dart:io, Dio) slow, fail (offline/chaos) or normal again. errorRate (0.0-1.0) and statusCode (e.g. 500) inject network chaos; delayMs holds each one that long. restore:true clears.
+Simulates network conditions (slow_3g, offline, chaos errorRate/statusCode, delayMs) across http, dart:io and Dio; restore:true clears.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -689,7 +692,7 @@ _Read-only._
 
 ## `export_network_mocks`
 
-Exports recorded Dio HTTP responses as mock_http_response steps; apply:true installs mocks for offline replay.
+Exports recorded Dio responses as mock_http_response steps; apply:true installs them.
 
 _Read-only._
 
@@ -701,7 +704,7 @@ _Read-only._
 
 ## `get_memory_details`
 
-Heap used/capacity and external memory. classes:true lists top classes. diffBaseline:true isolates memory growth since baseline. route/cycle runs automated leak checks.
+Heap usage and allocation profiles. classes:true lists top classes; diffBaseline:true isolates growth; route/cycle checks leaks.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -792,7 +795,7 @@ Records user interactions and writes executable integration_test files (start:tr
 
 ## `synthesize_golden_test`
 
-Writes and runs golden widget tests for a screen across phone, tablet, and desktop viewports.
+Writes and runs golden widget tests across phone, tablet, and desktop viewports.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

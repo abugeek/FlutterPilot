@@ -148,10 +148,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'connect_app',
       description:
-          'Connects to a running Flutter app: the VM service URI flutter run '
-          'prints, or without uri the one found in the project or the '
-          "client's workspace folders. Needed only when the app was not found "
-          'automatically or was restarted.',
+          'Connects to running app via VM service URI, or auto-discovers '
+          'from workspace if omitted.',
       inputSchema: ToolInputSchema(
         properties: {
           'uri': JsonSchema.string(
@@ -227,11 +225,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'register_device',
       description:
-          'Adds a running Flutter app to the fleet under a name, e.g. the same '
-          'app on an iPhone simulator next to the one on Android. Pass the VM '
-          'service URI that flutter run prints ("A Dart VM Service on ... is '
-          'available at: http://127.0.0.1:PORT/TOKEN=/"). Registering an '
-          'existing name again updates its URI after the app restarted.',
+          'Registers a running app in the fleet by id and VM service URI '
+          'from flutter run. Re-registering updates its URI after restart.',
       inputSchema: ToolInputSchema(
         properties: {
           'id': JsonSchema.string(
@@ -566,11 +561,15 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       'get_errors',
       description:
           'Recent uncaught exceptions with source file:line and layout '
-          'culprits. report:true returns crash report; clear:true empties buffer.',
+          'culprits. report:true returns crash report; clear:true empties buffer; '
+          'query filters errors.',
       inputSchema: ToolInputSchema(
         properties: {
           'report': JsonSchema.boolean(
             description: 'Return the latest crash report instead of the list.',
+          ),
+          'query': JsonSchema.string(
+            description: 'Substring filter for error message or stack frames.',
           ),
           'clear': JsonSchema.boolean(
             description: 'Clear the recorded error buffer.',
@@ -613,15 +612,20 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           );
         }
         final data = res.data ?? const <String, dynamic>{};
-        // An error from before the last reload is not an uncaught exception of
-        // the code now running: get_errors(report: true) already refuses to
-        // treat it as one (field test #334). Show it, marked, rather than drop
-        // the app's only copy — the report is built on demand and may never
-        // have been.
+        final query = p['query']?.toString().toLowerCase();
+        var rawErrors = ((data['errors'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        if (query != null && query.isNotEmpty) {
+          rawErrors = rawErrors.where((err) {
+            final msg = (err['message'] ?? err['error'] ?? '').toString().toLowerCase();
+            final stack = (err['stackTrace'] ?? err['stack'] ?? '').toString().toLowerCase();
+            final culprit = (err['culprit'] ?? '').toString().toLowerCase();
+            return msg.contains(query) || stack.contains(query) || culprit.contains(query);
+          }).toList();
+        }
         final split = errorsByReload(
-          ((data['errors'] as List?) ?? const [])
-              .whereType<Map<String, dynamic>>()
-              .toList(),
+          rawErrors,
           _activeContext?.lastReload,
         );
         final sinceText = split.since.isEmpty && split.before.isNotEmpty

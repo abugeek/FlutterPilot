@@ -592,9 +592,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_memory_details',
       description:
-          'Heap used/capacity and external memory. classes:true lists top '
-          'classes. diffBaseline:true isolates memory growth since baseline. '
-          'route/cycle runs automated leak checks.',
+          'Heap usage and allocation profiles. classes:true lists top classes; '
+          'diffBaseline:true isolates growth; route/cycle checks leaks.',
       inputSchema: ToolInputSchema(
         properties: {
           'classes': JsonSchema.boolean(

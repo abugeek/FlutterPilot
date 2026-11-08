@@ -988,6 +988,36 @@ Future<void> main(List<String> args) async {
       });
     }
 
+    if (availableTools.contains('get_state')) {
+      // 39. Tier 12: State Value Substring Search
+      await runTest('get_state (query search)', 'get_state', {
+        'query': 'theme',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_widget_tree')) {
+      // 40. Tier 12: Widget Tree Subtree & Node Query Pruning
+      await runTest('get_widget_tree (query filter)', 'get_widget_tree', {
+        'query': 'todo',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_errors')) {
+      // 41. Tier 12: Error Message Substring Search
+      await runTest('get_errors (query search)', 'get_errors', {
+        'query': 'overflow',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

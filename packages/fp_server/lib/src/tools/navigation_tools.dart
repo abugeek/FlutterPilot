@@ -295,25 +295,24 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
       inputSchema: ToolInputSchema(
         properties: {
           'reset': JsonSchema.boolean(
-            description:
-                'Restore system theme, locale, text scale, and clear debug overlays.',
+            description: 'Restore defaults and clear debug overlays.',
           ),
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
           'locale': JsonSchema.string(
             description: 'BCP-47 tag (e.g. "fr", "ar", "zh") or "system".',
           ),
           'textScale': JsonSchema.number(
-            description: 'Scale factor (1.0 default, 0 restores system).',
+            description: 'Scale factor (1.0 default).',
           ),
           'keyboardInset': JsonSchema.number(
-            description: 'Height in logical pixels (e.g. 300; 0 removes).',
+            description: 'Logical pixel height (0 removes).',
           ),
           'orientation': JsonSchema.string(
             enumValues: ['portrait', 'landscape', 'all', 'auto'],
             description: 'Phones.',
           ),
           'windowSize': JsonSchema.string(
-            description: '"WIDTHxHEIGHT" in logical pixels (e.g. "390x844").',
+            description: 'WIDTHxHEIGHT (e.g. "390x844").',
           ),
           'debugPaint': JsonSchema.boolean(),
           'repaintRainbow': JsonSchema.boolean(),

@@ -704,8 +704,7 @@ mixin _TestGenerationToolsMixin
     _tool(
       'synthesize_golden_test',
       description:
-          'Writes and runs golden widget tests for a screen across phone, '
-          'tablet, and desktop viewports.',
+          'Writes and runs golden widget tests across phone, tablet, and desktop viewports.',
       inputSchema: ToolInputSchema(
         properties: {
           'screen': JsonSchema.string(
