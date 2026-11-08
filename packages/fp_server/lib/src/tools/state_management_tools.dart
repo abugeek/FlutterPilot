@@ -354,11 +354,8 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'exec_sql_query',
       description:
-          'Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the '
-          'app\'s local database — Drift or sqflite, whichever is wired. Rows '
-          'come back as JSON. Without sql: the tables and their columns. If '
-          'the app registers several databases, a call without database '
-          'names them.',
+          'Run read-only SQL (SELECT, PRAGMA, EXPLAIN) or inspect schema '
+          '(omit sql). query filters tables or rows.',
       inputSchema: ToolInputSchema(
         properties: {
           'sql': JsonSchema.string(
@@ -367,6 +364,13 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'database': JsonSchema.string(
             description:
                 'Database name, only needed when the app registers several.',
+          ),
+          'query': JsonSchema.string(
+            description:
+                'Substring filter for table names or row content.',
+          ),
+          'limit': JsonSchema.integer(
+            description: 'Max rows or tables to return (default 50, max 200).',
           ),
         },
       ),
@@ -449,11 +453,20 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         }
         final rows = res.data?['results'] as List? ?? const [];
         final shown = _activeContext?.sqlTablesShown ?? <String>{};
+        final query = p['query']?.toString().toLowerCase();
+        final rawLimit = (p['limit'] as num?)?.toInt();
+        final limit = rawLimit != null ? rawLimit.clamp(1, 200) : 50;
+
         if (schemaOnly) {
           final lines = <String>[];
-          for (final row in rows.take(80)) {
+          for (final row in rows) {
             final table = row is Map ? '${row['name']}' : '';
             if (!_sqlName.hasMatch(table)) continue;
+            if (query != null &&
+                query.isNotEmpty &&
+                !table.toLowerCase().contains(query)) {
+              continue;
+            }
             final columns = await _sqlNames(
               answeredBy,
               db,
@@ -461,29 +474,40 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             );
             shown.add('$db/$table');
             lines.add('$table(${columns.take(40).join(', ')})');
+            if (lines.length >= limit) break;
           }
           return CallToolResult(
             content: [
               TextContent(
                 text: FlutterPilotServer._boundToolText(
-                  '$origin: ${rows.length} tables'
-                  '${rows.length > 80 ? ' (80 shown)' : ''}:\n'
+                  '$origin: ${lines.length} tables'
+                  '${rows.length > lines.length ? ' (${lines.length} shown)' : ''}:\n'
                   '${lines.join('\n')}',
                 ),
               ),
             ],
           );
         }
+        var filteredRows = rows;
+        if (query != null && query.isNotEmpty) {
+          filteredRows = rows
+              .where((row) => jsonEncode(row).toLowerCase().contains(query))
+              .toList();
+        }
+        final displayRows = filteredRows.take(limit).toList();
         final pluginTotal = (res.data?['total'] as num?)?.toInt();
         final note = truncationNote(
-          shown: rows.length > 50 ? 50 : rows.length,
-          total: res.data?['truncated'] == true ? pluginTotal : rows.length,
+          shown: displayRows.length,
+          total: res.data?['truncated'] == true
+              ? pluginTotal
+              : filteredRows.length,
           what: 'rows (first kept)',
-          how: 'Page with LIMIT/OFFSET in the SQL, or narrow with WHERE.',
+          how:
+              'Page with LIMIT/OFFSET in the SQL, or narrow with query/WHERE.',
         );
-        final buf = StringBuffer('$origin: ${rows.length} row(s)');
+        final buf = StringBuffer('$origin: ${displayRows.length} row(s)');
         if (note != null) buf.write('\n$note');
-        for (final row in rows.take(50)) {
+        for (final row in displayRows) {
           buf.write('\n${jsonEncode(row)}');
         }
         // The first time a table is read, its columns: the next query on it

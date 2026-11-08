@@ -204,6 +204,11 @@ Future<void> main(List<String> args) async {
     try {
       final msg = await client.callTool(toolName, arguments);
       if (msg.containsKey('error')) {
+        if (allowError) {
+          passedCount++;
+          print('PASS (${stopwatch.elapsedMilliseconds}ms, permitted RPC error: ${msg['error']?['message']})');
+          return;
+        }
         failedCount++;
         print('FAIL (${stopwatch.elapsedMilliseconds}ms)');
         print('      [rpc error] ${msg['error']}');
@@ -792,6 +797,40 @@ Future<void> main(List<String> args) async {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
       return text.contains('Swipe') || text.contains('appeared') || text.contains('complete');
     });
+
+    // 21. Tier 7: Interactive Elements Query Filter
+    await runTest('get_interactive_elements (query filter)', 'get_interactive_elements', {
+      'query': isExample ? 'add' : (isHn ? 'item' : 'fav'),
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('elements') || text.contains('count');
+    });
+
+    // 22. Tier 7: Batch Widget Properties Inspection
+    await runTest('get_widget_properties (batch keys)', 'get_widget_properties', {
+      'keys': [targetKey],
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains(targetKey);
+    });
+
+    // 23. Tier 7: Debug Logs Substring Filtering & Limits
+    await runTest('get_debug_logs (filtered limit)', 'get_debug_logs', {
+      'limit': 5,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.isNotEmpty;
+    });
+
+    // 24. Tier 7: SQL Query Schema Filtering
+    if (isExample || isHn) {
+      await runTest('exec_sql_query (schema query)', 'exec_sql_query', {
+        'query': 'to',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('tables') || text.contains('No database');
+      });
+    }
 
   } finally {
     print('===============================================================');

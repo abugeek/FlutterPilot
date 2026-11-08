@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 46947 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 45821 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -67,12 +67,14 @@ _Read-only._
 
 ## `get_debug_logs`
 
-What the app printed: print(), debugPrint() and dart:developer log(), plus what the SDK buffered before connecting. clear:true empties the captured logs instead, for a clean baseline before a test.
+Captured logs (print, debugPrint, log). Filter by query/level, or wait with waitFor; clear:true empties buffer.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `level` | string: debug \| info \| warning \| warn \| error | no |  |
 | `query` | string | no | Only messages containing this. |
+| `waitFor` | string | no | Poll until a log message containing this appears. |
+| `timeoutMs` | integer | no | Timeout in ms for waitFor (default 3000). |
 | `sinceSeconds` | integer | no | Only the last N seconds. |
 | `limit` | integer | no | Default 100. |
 | `logger` | string | no | Only this logger (partial match), e.g. "debugPrint", "stdout". |
@@ -89,7 +91,7 @@ _Read-only._
 
 ## `get_rebuild_stats`
 
-How often each of the app's own widgets rebuilt, with where it is created (debug builds). The first call starts counting; do the action, call again (reset: true starts over). For CPU time per frame use profile_action.
+Rebuild counts of the app's widgets with source location. First call starts counting; second call reports counts.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -333,7 +335,7 @@ Goes to a route or deep link directly (go_router: router.go; otherwise Navigator
 
 ## `get_navigation_stack`
 
-The route stack, bottom to top. With go_router also the location, path/query parameters and matched routes; routes:true adds the router's route table, history:true the recent route changes.
+Navigation stack. With go_router includes location and params; routes/history flags add router table/history.
 
 _Read-only._
 
@@ -344,7 +346,7 @@ _Read-only._
 
 ## `set_app_settings`
 
-Changes how the app renders — theme, locale, text scale, a simulated keyboard, orientation, window size, the debug overlays — as the device would (no app code), and says what the app shows back. Orientation pins: "portrait"/"landscape" outlive the call; "auto" releases. Pair with audit_screen_health to catch overflows.
+Configures theme, locale, text scale, orientation, window size, or debug overlays without modifying app code.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -360,7 +362,7 @@ Changes how the app renders — theme, locale, text scale, a simulated keyboard,
 
 ## `simulate_viewport_matrix`
 
-Resizes a macOS/Windows desktop app's window to phone 390x844, tablet 768x1024 and desktop 1280x800, checks the screen for overflows and cramped lists at each, then restores the window (macOS). Desktop apps only.
+Sweeps desktop app window across phone, tablet, and desktop breakpoints to check for layout overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -368,7 +370,7 @@ Resizes a macOS/Windows desktop app's window to phone 390x844, tablet 768x1024 a
 
 ## `simulate_keyboard`
 
-Simulates an on-screen keyboard (viewInsets.bottom, e.g. 320dp), checks the screen for RenderFlex overflows and whether focused inputs are obscured, then restores the inset (by default).
+Simulates on-screen keyboard inset, checks for layout overflows or obscured inputs, and restores inset.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -430,13 +432,14 @@ _Read-only._
 
 ## `get_interactive_elements`
 
-Every widget the user can tap or type into right now (buttons, fields, checkboxes, switches, sliders, tappable tiles) with type, label, key and bounds, and fieldError for a field showing a validation error; covered or off-screen ones are left out. get_app_summary shows the first 15.
+Interactive controls currently on screen with type, label, key, and bounds. query filters by key/label.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `types` | array | no | Optional filter for widget types (e.g. ["ElevatedButton"]). |
+| `query` | string | no | Optional filter matching key, label, or text. |
 | `collapse` | boolean | no | Collapse repeated list items to save tokens (default true). |
 
 ## `get_app_summary`
@@ -453,13 +456,14 @@ _Read-only._
 
 ## `get_widget_properties`
 
-One widget's current state in a few fields: type, text, isEnabled, isChecked, a slider's value/min/max, isFocused, bounds, and for a form field fieldError (the validation error it shows) or invalid (what its validator says about the current value, not shown yet). inspect_widget gives its source, layout and style.
+Widget state: type, text, isEnabled, isChecked, isFocused, bounds, slider values, and validation errors.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key or selector of the widget. |
+| `keys` | array | no | Batch of keys or selectors to inspect together. |
 
 ## `inspect_widget`
 
@@ -566,7 +570,7 @@ _Read-only._
 
 ## `exec_sql_query`
 
-Run a read-only SQL query (SELECT, WITH, PRAGMA, EXPLAIN) on the app's local database — Drift or sqflite, whichever is wired. Rows come back as JSON. Without sql: the tables and their columns. If the app registers several databases, a call without database names them.
+Run read-only SQL (SELECT, PRAGMA, EXPLAIN) or inspect schema (omit sql). query filters tables or rows.
 
 _Read-only._
 
@@ -574,6 +578,8 @@ _Read-only._
 |---|---|---:|---|
 | `sql` | string | no | SQL statement; omit for the schema. |
 | `database` | string | no | Database name, only needed when the app registers several. |
+| `query` | string | no | Substring filter for table names or row content. |
+| `limit` | integer | no | Max rows or tables to return (default 50, max 200). |
 
 ## `get_shared_preferences`
 
@@ -722,7 +728,7 @@ dart:io HTTP requests (HttpClient, package:http, Dio). Filter by query, method, 
 
 ## `locate_source_ast`
 
-The source of the constructor call that creates a widget: the whole call as text, its file:line, its top-level named arguments, and its start/end offset in the file (for an exact edit). Give a widget (key, selector or text) or file + line + column. Debug builds.
+Locates widget constructor call in source code (file:line, code snippet, named arguments, start/end file offsets).
 
 _Read-only._
 
@@ -759,7 +765,7 @@ Replays recently recorded user interactions live on the connected app without wr
 
 ## `generate_test`
 
-Turns what you do in the app into an integration_test. start:true hot-restarts the app and records taps, text, keys, scrolls, drags, back, assert_widget, wait_for and mock_http_response. name:"checkout" then writes integration_test/checkout_test.dart, runs it on the same device and reports whether it passed, or the step it failed at. Obscured text is passed with --dart-define, never written. Takes minutes: the test builds the app again.
+Records user interactions and writes executable integration_test files (start:true begins recording; name writes and runs test).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|

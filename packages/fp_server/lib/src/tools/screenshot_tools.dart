@@ -974,17 +974,17 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_interactive_elements',
       description:
-          'Every widget the user can tap or type into right now (buttons, '
-          'fields, checkboxes, switches, sliders, tappable tiles) with type, '
-          'label, key and bounds, and fieldError for a field showing a '
-          'validation error; covered or off-screen ones are left out. '
-          'get_app_summary shows the first 15.',
+          'Interactive controls currently on screen with type, label, key, '
+          'and bounds. query filters by key/label.',
       inputSchema: ToolInputSchema(
         properties: {
           'types': JsonSchema.array(
             items: JsonSchema.string(),
             description:
                 'Optional filter for widget types (e.g. ["ElevatedButton"]).',
+          ),
+          'query': JsonSchema.string(
+            description: 'Optional filter matching key, label, or text.',
           ),
           'collapse': JsonSchema.boolean(
             description:
@@ -1003,9 +1003,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         if (res.isError) return res.toCallToolResult();
         final rawElements = (res.data?['elements'] as List?) ?? const [];
         final shouldCollapse = p['collapse'] != false;
-        final elements = shouldCollapse
+        var elements = shouldCollapse
             ? _collapseRepeatedElements(rawElements)
             : rawElements;
+        final query = p['query']?.toString().toLowerCase();
+        if (query != null && query.isNotEmpty) {
+          elements = elements.where((el) {
+            if (el is! Map) return false;
+            final key = el['key']?.toString().toLowerCase() ?? '';
+            final text = el['text']?.toString().toLowerCase() ?? '';
+            final label = el['label']?.toString().toLowerCase() ?? '';
+            final type = el['type']?.toString().toLowerCase() ?? '';
+            return key.contains(query) ||
+                text.contains(query) ||
+                label.contains(query) ||
+                type.contains(query);
+          }).toList();
+        }
         return CallToolResult(
           content: [
             TextContent(
@@ -1060,20 +1074,38 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_widget_properties',
       description:
-          'One widget\'s current state in a few fields: type, text, '
-          'isEnabled, isChecked, a slider\'s value/min/max, isFocused, '
-          'bounds, and for a form field fieldError (the validation error '
-          'it shows) or invalid (what its validator says about the '
-          'current value, not shown yet). inspect_widget gives its '
-          'source, layout and style.',
+          'Widget state: type, text, isEnabled, isChecked, isFocused, '
+          'bounds, slider values, and validation errors.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description: 'Key or selector of the widget.',
           ),
+          'keys': JsonSchema.array(
+            items: JsonSchema.string(),
+            description: 'Batch of keys or selectors to inspect together.',
+          ),
         },
       ),
       callback: (p, e) async {
+        final rawKeys = p['keys'];
+        if (rawKeys is List && rawKeys.isNotEmpty) {
+          final results = <String, dynamic>{};
+          for (final k in rawKeys) {
+            final keyStr = k.toString();
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.getWidgetProperties',
+              {'key': keyStr},
+            );
+            results[keyStr] = res.isError
+                ? {'error': res.errorMessage ?? 'Widget not found'}
+                : res.data;
+          }
+          return CallToolResult(
+            content: [TextContent(text: jsonEncode(results))],
+            structuredContent: results,
+          );
+        }
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getWidgetProperties',
           {'key': (p['key'] ?? p['target']).toString()},

@@ -675,9 +675,25 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       final query = (params['query'] ?? params['search'])
           ?.toString()
           .toLowerCase();
+      final waitFor = params['waitFor']?.toString().toLowerCase();
+      final timeoutMs = (params['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
       final sinceSeconds = (params['since_seconds'] as num?)?.toInt();
       final rawLimit = (params['limit'] as int?) ?? 100;
       final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
+
+      if (waitFor != null && waitFor.isNotEmpty) {
+        final stopwatch = Stopwatch()..start();
+        while (stopwatch.elapsedMilliseconds < timeoutMs) {
+          final serverEntries = _activeDebugLogs;
+          final preConnection = await preConnectionLogsFromApp(serverEntries);
+          final allEntries = [...preConnection, ...serverEntries];
+          final found = allEntries.any((e) =>
+              (e['message']?.toString().toLowerCase().contains(waitFor) ?? false) ||
+              (e['logger']?.toString().toLowerCase().contains(waitFor) ?? false));
+          if (found) break;
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
 
       final serverEntries = _activeDebugLogs;
       final preConnection = await preConnectionLogsFromApp(serverEntries);
@@ -834,10 +850,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_debug_logs',
       description:
-          'What the app printed: print(), debugPrint() and dart:developer '
-          'log(), plus what the SDK buffered before connecting. clear:true '
-          'empties the captured logs instead, for a clean baseline before a '
-          'test.',
+          'Captured logs (print, debugPrint, log). Filter by query/level, '
+          'or wait with waitFor; clear:true empties buffer.',
       inputSchema: ToolInputSchema(
         properties: {
           'level': JsonSchema.string(
@@ -845,6 +859,12 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           ),
           'query': JsonSchema.string(
             description: 'Only messages containing this.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Poll until a log message containing this appears.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout in ms for waitFor (default 3000).',
           ),
           'sinceSeconds': JsonSchema.integer(
             description: 'Only the last N seconds.',
@@ -894,7 +914,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_rebuild_stats',
       description:
-          "How often each of the app's own widgets rebuilt, with where it is created (debug builds). The first call starts counting; do the action, call again (reset: true starts over). For CPU time per frame use profile_action.",
+          "Rebuild counts of the app's widgets with source location. First "
+          "call starts counting; second call reports counts.",
       inputSchema: ToolInputSchema(
         properties: {
           'filter': JsonSchema.string(

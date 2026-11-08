@@ -8,11 +8,8 @@ mixin _TestGenerationToolsMixin
     _tool(
       'locate_source_ast',
       description:
-          'The source of the constructor call that creates a widget: the '
-          'whole call as text, its file:line, its top-level named arguments, '
-          'and its start/end offset in the file (for an exact edit). Give a '
-          'widget (key, selector or text) or file + line + column. Debug '
-          'builds.',
+          'Locates widget constructor call in source code (file:line, code '
+          'snippet, named arguments, start/end file offsets).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -603,14 +600,8 @@ mixin _TestGenerationToolsMixin
     _tool(
       'generate_test',
       description:
-          'Turns what you do in the app into an integration_test. '
-          'start:true hot-restarts the app and records taps, text, keys, '
-          'scrolls, drags, back, assert_widget, wait_for and '
-          'mock_http_response. name:"checkout" then writes '
-          'integration_test/checkout_test.dart, runs it on the same '
-          'device and reports whether it passed, or the step it failed '
-          'at. Obscured text is passed with --dart-define, never written. '
-          'Takes minutes: the test builds the app again.',
+          'Records user interactions and writes executable integration_test '
+          'files (start:true begins recording; name writes and runs test).',
       inputSchema: ToolInputSchema(
         properties: {
           'start': JsonSchema.boolean(),

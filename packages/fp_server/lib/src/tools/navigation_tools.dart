@@ -190,9 +190,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_navigation_stack',
       description:
-          'The route stack, bottom to top. With go_router also the location, '
-          'path/query parameters and matched routes; routes:true adds the '
-          'router\'s route table, history:true the recent route changes.',
+          'Navigation stack. With go_router includes location and params; '
+          'routes/history flags add router table/history.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.boolean(
@@ -256,12 +255,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_app_settings',
       description:
-          'Changes how the app renders — theme, locale, text scale, a '
-          'simulated keyboard, orientation, window size, the debug overlays — '
-          'as the device would (no app code), and says what the app shows '
-          'back. Orientation pins: "portrait"/"landscape" outlive the call; '
-          '"auto" releases. Pair with audit_screen_health to catch '
-          'overflows.',
+          'Configures theme, locale, text scale, orientation, window size, '
+          'or debug overlays without modifying app code.',
       inputSchema: ToolInputSchema(
         properties: {
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
@@ -396,10 +391,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_viewport_matrix',
       description:
-          'Resizes a macOS/Windows desktop app\'s window to phone 390x844, '
-          'tablet 768x1024 and desktop 1280x800, checks the screen for '
-          'overflows and cramped lists at each, then restores the window '
-          '(macOS). Desktop apps only.',
+          'Sweeps desktop app window across phone, tablet, and desktop '
+          'breakpoints to check for layout overflows.',
       inputSchema: ToolInputSchema(
         properties: {
           'restore': JsonSchema.boolean(
@@ -497,9 +490,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_keyboard',
       description:
-          'Simulates an on-screen keyboard (viewInsets.bottom, e.g. 320dp), '
-          'checks the screen for RenderFlex overflows and whether focused '
-          'inputs are obscured, then restores the inset (by default).',
+          'Simulates on-screen keyboard inset, checks for layout overflows '
+          'or obscured inputs, and restores inset.',
       inputSchema: ToolInputSchema(
         properties: {
           'height': JsonSchema.number(

@@ -476,6 +476,42 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('query'), isTrue);
     });
 
+    test('get_interactive_elements advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_interactive_elements');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('get_widget_properties advertises keys parameter for batching', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_widget_properties');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('keys'), isTrue);
+      expect(props['keys']['type'], 'array');
+    });
+
+    test('get_debug_logs advertises waitFor and timeoutMs parameters', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_debug_logs');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props.containsKey('timeoutMs'), isTrue);
+    });
+
+    test('exec_sql_query advertises query and limit parameters', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'exec_sql_query');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('limit'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()
