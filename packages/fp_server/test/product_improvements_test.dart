@@ -599,6 +599,33 @@ class MyList extends StatelessWidget {
       expect(props['waitForStatus']['type'], 'string');
     });
 
+    test('mock_http_response advertises mocks batch parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'mock_http_response');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('mocks'), isTrue);
+      expect(props['mocks']['type'], 'array');
+    });
+
+    test('simulate_viewport_matrix advertises viewports parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'simulate_viewport_matrix');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('viewports'), isTrue);
+      expect(props['viewports']['type'], 'array');
+    });
+
+    test('native_describe_screen advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'native_describe_screen');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

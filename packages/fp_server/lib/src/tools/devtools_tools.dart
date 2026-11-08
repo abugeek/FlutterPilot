@@ -681,13 +681,8 @@ mixin _DevtoolsToolsMixin on _FlutterPilotServerBase {
     _tool(
       'profile_action',
       description:
-          'Why an interaction is slow: runs tool with arguments while '
-          'profiling the app, then returns the app\'s functions by '
-          'self/total CPU time with file:line, the hottest framework '
-          'functions with the app code that called them, and for frames '
-          'over budget their build/layout/paint/raster times and which '
-          'app widgets rebuilt. Without tool it profiles whatever the app '
-          'does for durationMs.',
+          'CPU and frame profiler for an action or duration: reports hot '
+          'functions, timings, and janky frame widget rebuilds.',
       inputSchema: ToolInputSchema(
         properties: {
           'tool': JsonSchema.string(

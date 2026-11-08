@@ -36,9 +36,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_supabase_auth',
       description:
-          'Supabase auth state: user, session and JWT expiry, recent auth '
-          'events; realtime:true adds the Realtime channels (topic, joined, '
-          'closed). Email/phone are redacted unless showSensitive is true.',
+          'Supabase session and user state; realtime:true adds channels, '
+          'showSensitive:true reveals email/phone.',
       inputSchema: ToolInputSchema(
         properties: {
           'showSensitive': JsonSchema.boolean(
@@ -237,11 +236,8 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _registerAppTool(
       name: 'get_firebase_auth',
       description:
-          'Who is signed in to Firebase Auth in the app: uid (for Firestore '
-          'paths like users/{uid}/...), providers, anonymous/verified, token '
-          'expiry and custom claims, recent sign-in/out events, and the '
-          'Firebase project. Email/name/phone are redacted unless '
-          'showSensitive=true.',
+          'Firebase Auth user, token, claims, and project id; '
+          'showSensitive:true reveals email/name/phone.',
       extension: 'ext.flutterpilot.getFirebaseAuth',
       properties: {
         'showSensitive': JsonSchema.boolean(

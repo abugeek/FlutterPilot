@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 45699 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 44975 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -306,18 +306,19 @@ Presses a simulator hardware button. HOME backgrounds the app (iOS then suspends
 
 ## `native_describe_screen`
 
-What iOS shows on the simulator right now, one line per element with its role, label and tap point (points), including system alerts the Flutter tree does not have. Use before native_tap.
+Describes native OS elements (system dialogs, permissions). Filter elements by query substring.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `query` | string | no | Filter native elements by label or role substring. |
 | `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
 ## `native_open_app`
 
-Brings the connected app back to the foreground on the iOS simulator (after native_button HOME, or when another app is in front), keeping its state. iOS suspends a backgrounded app, so every other tool fails until then.
+Brings app back to foreground on simulator/device, resuming state and execution.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -369,10 +370,11 @@ Configure theme, locale, text scale, orientation, window size, or overlays witho
 
 ## `simulate_viewport_matrix`
 
-Sweeps desktop app window across phone, tablet, and desktop breakpoints to check for layout overflows.
+Sweeps app window across phone, tablet, or desktop breakpoints to detect layout overflows.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `viewports` | array | no | Optional subset of breakpoints to sweep. |
 | `restore` | boolean | no | Restore initial window size afterwards (default true). |
 
 ## `simulate_keyboard`
@@ -629,7 +631,7 @@ Makes every HTTP request (http, dart:io, Dio) slow, fail (offline/chaos) or norm
 
 ## `mock_http_response`
 
-Makes Dio requests whose URL contains urlPattern get a made-up response (statusCode, body) or fail without one (error), to test error, empty and edge-case states without a backend. Two patterns with different delayMs reproduce responses arriving out of order. clear:true when done.
+Canned Dio responses or errors (timeout/connection). Single endpoint or batch via mocks:[...]; clear:true resets.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -639,6 +641,7 @@ Makes Dio requests whose URL contains urlPattern get a made-up response (statusC
 | `body` | string | no | Response body as a JSON string, e.g. '{"error":"not found"}'. |
 | `delayMs` | integer | no | Delay before the response or failure (default 0). |
 | `error` | string: timeout \| connection | no | In place of statusCode: the server never answers (timeout) or can't be reached (connection). |
+| `mocks` | array | no | Batch of mocks: [{urlPattern, statusCode, body, delayMs, error}]. |
 
 ## `call_custom_tool`
 
@@ -685,7 +688,7 @@ _Read-only._
 
 ## `export_network_mocks`
 
-Turns the responses the app received (Dio) into mock_http_response steps, one per URL, ready for execute_action_chain; apply: true installs them now so the app runs offline on recorded data (scenario save keeps them). Says which bodies the log cut.
+Exports recorded Dio HTTP responses as mock_http_response steps; apply:true installs mocks for offline replay.
 
 _Read-only._
 
@@ -711,7 +714,7 @@ Heap used/capacity and external memory. classes:true lists top classes. diffBase
 
 ## `profile_action`
 
-Why an interaction is slow: runs tool with arguments while profiling the app, then returns the app's functions by self/total CPU time with file:line, the hottest framework functions with the app code that called them, and for frames over budget their build/layout/paint/raster times and which app widgets rebuilt. Without tool it profiles whatever the app does for durationMs.
+CPU and frame profiler for an action or duration: reports hot functions, timings, and janky frame widget rebuilds.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -825,7 +828,7 @@ Verifies a feature against criteria and writes report.md. Pass feature + criteri
 
 ## `get_supabase_auth`
 
-Supabase auth state: user, session and JWT expiry, recent auth events; realtime:true adds the Realtime channels (topic, joined, closed). Email/phone are redacted unless showSensitive is true.
+Supabase session and user state; realtime:true adds channels, showSensitive:true reveals email/phone.
 
 _Read-only._
 
@@ -872,7 +875,7 @@ _Read-only._
 
 ## `get_firebase_auth`
 
-Who is signed in to Firebase Auth in the app: uid (for Firestore paths like users/{uid}/...), providers, anonymous/verified, token expiry and custom claims, recent sign-in/out events, and the Firebase project. Email/name/phone are redacted unless showSensitive=true.
+Firebase Auth user, token, claims, and project id; showSensitive:true reveals email/name/phone.
 
 _Read-only._
 

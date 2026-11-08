@@ -431,10 +431,16 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'simulate_viewport_matrix',
       description:
-          'Sweeps desktop app window across phone, tablet, and desktop '
-          'breakpoints to check for layout overflows.',
+          'Sweeps app window across phone, tablet, or desktop breakpoints '
+          'to detect layout overflows.',
       inputSchema: ToolInputSchema(
         properties: {
+          'viewports': JsonSchema.array(
+            items: JsonSchema.string(
+              enumValues: ['phone', 'tablet', 'desktop'],
+            ),
+            description: 'Optional subset of breakpoints to sweep.',
+          ),
           'restore': JsonSchema.boolean(
             description:
                 'Restore initial window size afterwards (default true).',
@@ -447,6 +453,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           ('Tablet', 768, 1024),
           ('Desktop', 1280, 800),
         ];
+        final requested = (p['viewports'] as List?)
+            ?.map((e) => e.toString().toLowerCase())
+            .toSet();
+        final selectedMatrix = matrix.where((m) {
+          if (requested == null || requested.isEmpty) return true;
+          return requested.contains(m.$1.toLowerCase());
+        }).toList();
         // The real window, as set_app_settings(windowSize) resizes it: a
         // MediaQuery override alone leaves the layout constraints as they
         // were, so a Row never overflows under it.
@@ -459,7 +472,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
 
         final results = <Map<String, dynamic>>[];
         var anyFail = false;
-        for (final (label, width, height) in matrix) {
+        for (final (label, width, height) in selectedMatrix) {
           final resized = await _setWindowSize(p, '${width}x$height');
           if (resized.failed) {
             if (initial != null) await _setWindowSize(p, initial);

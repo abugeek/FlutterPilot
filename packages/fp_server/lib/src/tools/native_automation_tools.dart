@@ -527,11 +527,13 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_describe_screen'] = _tool(
       'native_describe_screen',
       description:
-          'What iOS shows on the simulator right now, one line per element '
-          'with its role, label and tap point (points), including system '
-          'alerts the Flutter tree does not have. Use before native_tap.',
+          'Describes native OS elements (system dialogs, permissions). '
+          'Filter elements by query substring.',
       inputSchema: ToolInputSchema(
         properties: {
+          'query': JsonSchema.string(
+            description: 'Filter native elements by label or role substring.',
+          ),
           'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
             description:
@@ -571,8 +573,19 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
             ],
           );
         }
+        var description = describeNativeScreen(result.stdout);
+        final query = p['query']?.toString().toLowerCase();
+        if (query != null && query.isNotEmpty) {
+          final lines = description
+              .split('\n')
+              .where((l) => l.toLowerCase().contains(query))
+              .toList();
+          description = lines.isEmpty
+              ? 'No native elements matching "$query".'
+              : lines.join('\n');
+        }
         return CallToolResult(
-          content: [TextContent(text: describeNativeScreen(result.stdout))],
+          content: [TextContent(text: description)],
         );
       },
     );
@@ -580,10 +593,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_open_app'] = _tool(
       'native_open_app',
       description:
-          'Brings the connected app back to the foreground on the iOS '
-          'simulator (after native_button HOME, or when another app is in '
-          'front), keeping its state. iOS suspends a backgrounded app, so '
-          'every other tool fails until then.',
+          'Brings app back to foreground on simulator/device, resuming state and execution.',
       inputSchema: ToolInputSchema(properties: {}),
       callback: (p, e) async {
         if (_nativeOs == 'android') return _androidNative('native_open_app', p);

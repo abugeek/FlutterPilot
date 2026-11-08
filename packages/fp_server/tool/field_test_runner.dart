@@ -410,13 +410,17 @@ Future<void> main(List<String> args) async {
     });
 
     // 5. Whole-App Crawler
+    final isExample = !isHn && !isBloc && !isProviderApp && !isM3;
     await runTest('crawl_app', 'crawl_app', {'maxScreens': 3, 'restore': true}, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
       return text.contains('Crawled');
     });
 
+    if (isExample) {
+      await runTest('navigate_to (ensure / after crawl)', 'navigate_to', {'route': '/'}, allowError: true);
+    }
+
     // In-App Action Chain with Visual Impact
-    final isExample = !isHn && !isBloc && !isProviderApp && !isM3;
     // In-App Action Chain with Visual Impact & Dynamic Routing
     if (isExample || isProviderApp) {
       final chainSteps = isExample
@@ -751,6 +755,14 @@ Future<void> main(List<String> args) async {
 
     if (isExample) {
       await runTest('press_key (return to root)', 'press_key', {'key': 'back'}, allowError: true);
+      if (device != 'macos' && device != 'linux' && device != 'windows') {
+        final bundleId = isHn
+            ? 'dev.flutterpilot.hnReader'
+            : 'dev.flutterpilot.flutterPilotExample';
+        Process.runSync('xcrun', ['simctl', 'launch', device, bundleId]);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+      await runTest('navigate_to (return to /)', 'navigate_to', {'route': '/'}, allowError: true);
       // 16. Tier 5: Idempotent Toggle Checkbox
       await runTest('toggle_checkbox (idempotent value)', 'toggle_checkbox', {
         'key': 'todo_1',
@@ -899,6 +911,43 @@ Future<void> main(List<String> args) async {
       }, allowError: true, verify: (r) {
         final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
         return text.contains('online') || text.contains('Connected') || text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('mock_http_response')) {
+      // 33. Tier 10: Batch HTTP Response Mocking
+      await runTest('mock_http_response (batch mocks)', 'mock_http_response', {
+        'mocks': [
+          {'urlPattern': '/api/batch1', 'statusCode': 200, 'body': '{"ok": true}'},
+          {'urlPattern': '/api/batch2', 'statusCode': 201, 'body': '{"created": true}'},
+        ],
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Mocked') || text.contains('✓');
+      });
+      await runTest('mock_http_response (clear batch)', 'mock_http_response', {
+        'clear': true,
+      }, allowError: true);
+    }
+
+    if (device == 'macos') {
+      // 34. Tier 10: Scoped Viewports Matrix Simulation
+      await runTest('simulate_viewport_matrix (scoped viewports)', 'simulate_viewport_matrix', {
+        'viewports': ['phone'],
+        'restore': true,
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Viewport Matrix') || text.contains('Phone');
+      });
+    }
+
+    if (availableTools.contains('native_describe_screen')) {
+      // 35. Tier 10: Native Screen Query Filter
+      await runTest('native_describe_screen (query filter)', 'native_describe_screen', {
+        'query': 'button',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
       });
     }
 

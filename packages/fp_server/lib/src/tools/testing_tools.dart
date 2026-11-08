@@ -385,10 +385,8 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
     _tool(
       'export_network_mocks',
       description:
-          'Turns the responses the app received (Dio) into mock_http_response '
-          'steps, one per URL, ready for execute_action_chain; apply: true '
-          'installs them now so the app runs offline on recorded data '
-          '(scenario save keeps them). Says which bodies the log cut.',
+          'Exports recorded Dio HTTP responses as mock_http_response steps; '
+          'apply:true installs mocks for offline replay.',
       inputSchema: ToolInputSchema(
         properties: {
           'filter': JsonSchema.string(
