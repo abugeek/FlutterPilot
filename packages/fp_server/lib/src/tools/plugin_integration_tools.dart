@@ -159,11 +159,17 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_connectivity',
       description:
-          'Network connectivity as the app sees it (wifi, mobile, ethernet, '
-          'vpn, none) and whether it is online. history:true adds the '
-          'timestamped transitions.',
+          'Network connectivity (wifi, mobile, none) and online status. '
+          'waitForStatus polls until state matches.',
       inputSchema: ToolInputSchema(
         properties: {
+          'waitForStatus': JsonSchema.string(
+            enumValues: ['online', 'offline', 'wifi', 'mobile', 'none'],
+            description: 'Poll until network status matches this condition.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout in ms for waitForStatus (default 3000).',
+          ),
           'history': JsonSchema.boolean(
             description: 'Include the connectivity changes.',
           ),
@@ -173,6 +179,32 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        final waitForStatus = p['waitForStatus']?.toString().toLowerCase();
+        final timeoutMs =
+            (p['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
+
+        if (waitForStatus != null && waitForStatus.isNotEmpty) {
+          final stopwatch = Stopwatch()..start();
+          while (stopwatch.elapsedMilliseconds < timeoutMs) {
+            final check = await _callExtensionRaw(
+              'ext.flutterpilot.getConnectivity',
+              {},
+            );
+            if (!check.isError && check.data != null) {
+              final status =
+                  check.data!['status']?.toString().toLowerCase() ?? '';
+              final isOnline = check.data!['online'] == true;
+              final matched = switch (waitForStatus) {
+                'online' => isOnline,
+                'offline' => !isOnline,
+                _ => status.contains(waitForStatus),
+              };
+              if (matched) break;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+        }
+
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getConnectivity',
           {},

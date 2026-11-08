@@ -311,6 +311,9 @@ extension _DiagnosticsExtensions on FlutterPilot {
       method,
       parameters,
     ) async {
+      if (parameters['reset'] == 'true') {
+        FrameBudgetProfiler.clear();
+      }
       final profile = FrameBudgetProfiler.getProfile();
       return ServiceExtensionResponse.result(json.encode(profile));
     });

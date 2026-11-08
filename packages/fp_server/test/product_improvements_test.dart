@@ -554,6 +554,51 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('type'), isTrue);
     });
 
+    test('get_navigation_stack advertises waitForRoute parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_navigation_stack');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitForRoute'), isTrue);
+      expect(props['waitForRoute']['type'], 'string');
+    });
+
+    test('profile_frame_budget advertises reset parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'profile_frame_budget');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('reset'), isTrue);
+      expect(props['reset']['type'], 'boolean');
+    });
+
+    test('set_app_settings advertises reset parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'set_app_settings');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('reset'), isTrue);
+      expect(props['reset']['type'], 'boolean');
+    });
+
+    test('apply_patch_and_verify advertises waitFor parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'apply_patch_and_verify');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props['waitFor']['type'], 'string');
+    });
+
+    test('get_connectivity advertises waitForStatus parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_connectivity');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitForStatus'), isTrue);
+      expect(props['waitForStatus']['type'], 'string');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

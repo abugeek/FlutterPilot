@@ -190,8 +190,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_navigation_stack',
       description:
-          'Navigation stack. With go_router includes location and params; '
-          'routes/history flags add router table/history.',
+          'Navigation stack and route locations. waitForRoute polls until matching '
+          'route appears; routes/history add router table.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.boolean(
@@ -200,9 +200,44 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'history': JsonSchema.boolean(
             description: 'Include recent route changes (go_router).',
           ),
+          'waitForRoute': JsonSchema.string(
+            description: 'Poll until current route equals or contains this.',
+          ),
+          'timeoutMs': JsonSchema.integer(
+            description: 'Timeout in ms for waitForRoute (default 3000).',
+          ),
         },
       ),
       callback: (p, e) async {
+        final waitForRoute = p['waitForRoute']?.toString();
+        final timeoutMs =
+            (p['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
+
+        if (waitForRoute != null && waitForRoute.isNotEmpty) {
+          final stopwatch = Stopwatch()..start();
+          while (stopwatch.elapsedMilliseconds < timeoutMs) {
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.getNavigationStack',
+              {},
+            );
+            final router = await _callExtensionRaw(
+              'ext.flutterpilot.getGoRouterState',
+              {},
+            );
+            final loc = router.data?['currentLocation']?.toString();
+            final stack = (res.data?['stack'] as List?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                const [];
+            final current = loc ?? (stack.isNotEmpty ? stack.last : null);
+            if (current != null &&
+                (current == waitForRoute || current.contains(waitForRoute))) {
+              break;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+        }
+
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getNavigationStack',
           {},
@@ -255,10 +290,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_app_settings',
       description:
-          'Configures theme, locale, text scale, orientation, window size, '
-          'or debug overlays without modifying app code.',
+          'Configure theme, locale, text scale, orientation, window size, '
+          'or overlays without code edits; reset:true restores defaults.',
       inputSchema: ToolInputSchema(
         properties: {
+          'reset': JsonSchema.boolean(
+            description:
+                'Restore system theme, locale, text scale, and clear debug overlays.',
+          ),
           'theme': JsonSchema.string(enumValues: ['light', 'dark']),
           'locale': JsonSchema.string(
             description: 'BCP-47 tag (e.g. "fr", "ar", "zh") or "system".',
@@ -282,10 +321,11 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        final isReset = p['reset'] == true;
         final steps = <(String, String, Map<String, dynamic>)>[
-          if (p['theme'] != null)
+          if (p['theme'] != null || isReset)
             (
-              'theme ${p['theme']}',
+              'theme ${p['theme'] ?? 'light'}',
               'ext.flutter.brightnessOverride',
               {
                 'value': p['theme'] == 'dark'
@@ -293,62 +333,62 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                     : 'Brightness.light',
               },
             ),
-          if (p['locale'] != null)
+          if (p['locale'] != null || isReset)
             (
-              'locale ${p['locale']}',
+              'locale ${p['locale'] ?? 'system'}',
               'ext.flutterpilot.setLocale',
-              {'locale': p['locale'].toString()},
+              {'locale': (p['locale'] ?? 'system').toString()},
             ),
-          if (p['textScale'] != null)
+          if (p['textScale'] != null || isReset)
             (
-              'text scale ${p['textScale']}',
+              'text scale ${p['textScale'] ?? '0'}',
               'ext.flutterpilot.setTextScaleFactor',
-              {'scale': p['textScale'].toString()},
+              {'scale': (p['textScale'] ?? '0').toString()},
             ),
-          if (p['keyboardInset'] != null)
+          if (p['keyboardInset'] != null || isReset)
             (
-              'keyboard inset ${p['keyboardInset']}',
+              'keyboard inset ${p['keyboardInset'] ?? '0'}',
               'ext.flutterpilot.setKeyboardInset',
-              {'inset': p['keyboardInset'].toString()},
+              {'inset': (p['keyboardInset'] ?? '0').toString()},
             ),
-          if (p['orientation'] != null)
+          if (p['orientation'] != null || isReset)
             (
-              'orientation ${p['orientation']}',
+              'orientation ${p['orientation'] ?? 'all'}',
               'ext.flutterpilot.setOrientation',
               {
                 'orientation': orientationExtensionArgument(
-                  p['orientation'].toString(),
+                  (p['orientation'] ?? 'all').toString(),
                 ),
               },
             ),
-          if (p['debugPaint'] != null)
+          if (p['debugPaint'] != null || isReset)
             (
               'debug paint ${p['debugPaint'] == true ? 'on' : 'off'}',
               'ext.flutter.debugPaint',
               {'enabled': (p['debugPaint'] == true).toString()},
             ),
-          if (p['repaintRainbow'] != null)
+          if (p['repaintRainbow'] != null || isReset)
             (
               'repaint rainbow ${p['repaintRainbow'] == true ? 'on' : 'off'}',
               'ext.flutter.repaintRainbow',
               {'enabled': (p['repaintRainbow'] == true).toString()},
             ),
-          if (p['slowAnimations'] != null)
+          if (p['slowAnimations'] != null || isReset)
             (
               'slow animations ${p['slowAnimations'] == true ? 'on' : 'off'}',
               'ext.flutter.timeDilation',
               {'timeDilation': p['slowAnimations'] == true ? '5.0' : '1.0'},
             ),
         ];
-        if (steps.isEmpty && p['windowSize'] == null) {
+        if (steps.isEmpty && p['windowSize'] == null && !isReset) {
           return CallToolResult(
             isError: true,
             content: [
               TextContent(
                 text:
                     'Nothing to change: pass theme, locale, textScale, '
-                    'keyboardInset, orientation, windowSize, debugPaint, repaintRainbow or '
-                    'slowAnimations.',
+                    'keyboardInset, orientation, windowSize, debugPaint, repaintRainbow, '
+                    'slowAnimations or reset: true.',
               ),
             ],
           );

@@ -136,9 +136,8 @@ mixin _TestGenerationToolsMixin
     _tool(
       'apply_patch_and_verify',
       description:
-          'Surgically patches a widget in source code (wrap with widget, '
-          'unwrap, or replace constructor call), hot-reloads the app, audits '
-          'screen health post-reload, and automatically rolls back if reload fails.',
+          'Surgically patches widget in source (wrap, unwrap, replaceCall), '
+          'hot-reloads, audits health, and auto-rolls back if reload fails.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
@@ -163,6 +162,10 @@ mixin _TestGenerationToolsMixin
           ),
           'replaceCall': JsonSchema.string(
             description: 'Direct replacement snippet for the constructor call.',
+          ),
+          'waitFor': JsonSchema.string(
+            description:
+                'Optional widget key to wait for on screen after reload.',
           ),
           'patches': JsonSchema.array(
             description:
@@ -446,6 +449,24 @@ mixin _TestGenerationToolsMixin
         buf.writeln('Post-reload screen health:');
         buf.writeln('  • Overflows: ${overflows.length}');
         buf.writeln('  • Accessibility issues: ${a11y.length}');
+
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': waitFor,
+              'timeoutMs': '3000',
+            },
+          );
+          if (waitRes.isError) {
+            buf.writeln(
+              '✗ Expected widget "$waitFor" was not found: ${waitRes.errorMessage}',
+            );
+          } else {
+            buf.writeln('✓ Expected widget "$waitFor" is visible.');
+          }
+        }
 
         return CallToolResult(
           content: [TextContent(text: buf.toString().trim())],

@@ -896,15 +896,21 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'profile_frame_budget',
       description:
-          'Frame timings of the last 120 frames: p50/p90/p99 build, raster and '
-          'total, jank count, and whether the UI thread (build/layout) or the '
-          'raster thread causes dropped frames. profile_action explains '
-          'the slow frames of one interaction (phases, rebuilt widgets).',
-      inputSchema: ToolInputSchema(properties: {}),
+          'Frame timings and jank diagnostics (p50/p90/p99, UI/raster). '
+          'reset:true clears recorded frame window.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'reset': JsonSchema.boolean(
+            description: 'Clear recorded frame timings buffer.',
+          ),
+        },
+      ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getFrameBudgetProfile',
-          {},
+          {
+            if (p['reset'] == true) 'reset': 'true',
+          },
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(

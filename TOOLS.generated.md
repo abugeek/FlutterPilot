@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 45219 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 45699 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -83,12 +83,13 @@ Captured logs (print, debugPrint, log). Filter by query/level, or wait with wait
 
 ## `profile_frame_budget`
 
-Frame timings of the last 120 frames: p50/p90/p99 build, raster and total, jank count, and whether the UI thread (build/layout) or the raster thread causes dropped frames. profile_action explains the slow frames of one interaction (phases, rebuilt widgets).
+Frame timings and jank diagnostics (p50/p90/p99, UI/raster). reset:true clears recorded frame window.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `reset` | boolean | no | Clear recorded frame timings buffer. |
 
 ## `get_rebuild_stats`
 
@@ -338,7 +339,7 @@ Goes to a route or deep link directly (go_router: router.go; otherwise Navigator
 
 ## `get_navigation_stack`
 
-Navigation stack. With go_router includes location and params; routes/history flags add router table/history.
+Navigation stack and route locations. waitForRoute polls until matching route appears; routes/history add router table.
 
 _Read-only._
 
@@ -346,13 +347,16 @@ _Read-only._
 |---|---|---:|---|
 | `routes` | boolean | no | Include go_router's configured routes. |
 | `history` | boolean | no | Include recent route changes (go_router). |
+| `waitForRoute` | string | no | Poll until current route equals or contains this. |
+| `timeoutMs` | integer | no | Timeout in ms for waitForRoute (default 3000). |
 
 ## `set_app_settings`
 
-Configures theme, locale, text scale, orientation, window size, or debug overlays without modifying app code.
+Configure theme, locale, text scale, orientation, window size, or overlays without code edits; reset:true restores defaults.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `reset` | boolean | no | Restore system theme, locale, text scale, and clear debug overlays. |
 | `theme` | string: light \| dark | no |  |
 | `locale` | string | no | BCP-47 tag (e.g. "fr", "ar", "zh") or "system". |
 | `textScale` | number | no | Scale factor (1.0 default, 0 restores system). |
@@ -745,7 +749,7 @@ _Read-only._
 
 ## `apply_patch_and_verify`
 
-Surgically patches a widget in source code (wrap with widget, unwrap, or replace constructor call), hot-reloads the app, audits screen health post-reload, and automatically rolls back if reload fails.
+Surgically patches widget in source (wrap, unwrap, replaceCall), hot-reloads, audits health, and auto-rolls back if reload fails.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -756,6 +760,7 @@ Surgically patches a widget in source code (wrap with widget, unwrap, or replace
 | `wrapWith` | string | no | Widget to wrap target in (e.g. "Expanded", "SingleChildScrollView", "SafeArea", "Padding"). |
 | `unwrap` | boolean | no | Remove this widget, replacing it with its child argument. |
 | `replaceCall` | string | no | Direct replacement snippet for the constructor call. |
+| `waitFor` | string | no | Optional widget key to wait for on screen after reload. |
 | `patches` | array | no | Batch of patch objects to apply atomically in 1 reload. |
 
 ## `replay_flow`
@@ -854,12 +859,14 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `get_connectivity`
 
-Network connectivity as the app sees it (wifi, mobile, ethernet, vpn, none) and whether it is online. history:true adds the timestamped transitions.
+Network connectivity (wifi, mobile, none) and online status. waitForStatus polls until state matches.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `waitForStatus` | string: online \| offline \| wifi \| mobile \| none | no | Poll until network status matches this condition. |
+| `timeoutMs` | integer | no | Timeout in ms for waitForStatus (default 3000). |
 | `history` | boolean | no | Include the connectivity changes. |
 | `limit` | integer | no | Max history entries (default 100). |
 

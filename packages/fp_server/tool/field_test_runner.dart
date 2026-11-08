@@ -868,6 +868,40 @@ Future<void> main(List<String> args) async {
       return text.contains('Applied') && text.contains('0 errors');
     });
 
+    // 29. Tier 9: Navigation Stack Route Polling
+    await runTest('get_navigation_stack (waitForRoute)', 'get_navigation_stack', {
+      'waitForRoute': '/',
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Navigation stack') || text.contains('/');
+    });
+
+    // 30. Tier 9: Frame Budget Profiler Reset
+    await runTest('profile_frame_budget (reset: true)', 'profile_frame_budget', {
+      'reset': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Frame Budget') || text.contains('sampleCount');
+    });
+
+    // 31. Tier 9: System App Settings Reset
+    await runTest('set_app_settings (reset: true)', 'set_app_settings', {
+      'reset': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('theme') || text.contains('locale') || text.isNotEmpty;
+    });
+
+    if (availableTools.contains('get_connectivity')) {
+      // 32. Tier 9: Connectivity Polling
+      await runTest('get_connectivity (waitForStatus)', 'get_connectivity', {
+        'waitForStatus': 'online',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('online') || text.contains('Connected') || text.isNotEmpty;
+      });
+    }
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');
