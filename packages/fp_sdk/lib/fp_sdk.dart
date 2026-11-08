@@ -409,6 +409,11 @@ class FlutterPilot {
             'isHealthy': h['isHealthy'] ?? true,
             'overflowCount': h['overflowCount'] ?? 0,
             'accessibilityIssueCount': h['accessibilityIssueCount'] ?? 0,
+            'crampedCount': h['crampedScrollableViewCount'] ?? 0,
+            'clippedTextCount': h['clippedTextCount'] ?? 0,
+            'clippedElementCount': h['clippedElementCount'] ?? 0,
+            'overflows': h['overflows'] ?? [],
+            'clippedElements': h['clippedElements'] ?? [],
           };
         } catch (_) {
           return null;
@@ -466,6 +471,18 @@ class FlutterPilot {
         ? errors - _errorsReported
         : errors;
     _errorsReported = errors;
+
+    final health = () {
+      try {
+        return UiHealthAuditor.audit();
+      } catch (_) {
+        return null;
+      }
+    }();
+    final overflows = (health?['overflows'] as List<dynamic>?) ?? const [];
+    final clippedElements =
+        (health?['clippedElements'] as List<dynamic>?) ?? const [];
+
     return {
       'route': currentRoute,
       if (previousRoute != null) 'routeChanged': previousRoute != currentRoute,
@@ -482,6 +499,10 @@ class FlutterPilot {
               : (e['text'] ?? e['key'] ?? e['type']),
       ],
       'newErrorCount': newErrors,
+      if (newErrors > 0)
+        'lastError': ErrorInspector.errors.lastOrNull?['exception'],
+      if (overflows.isNotEmpty) 'overflows': overflows,
+      if (clippedElements.isNotEmpty) 'clippedElements': clippedElements,
       'draft': ?_draft(),
       if (!settled) 'stillMoving': true,
       if (_progressShowing()) 'loading': true,

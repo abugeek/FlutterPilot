@@ -76,9 +76,39 @@ String _screenNow(Map<String, dynamic>? data, {ScreenMemory? memory}) {
       'wait_for them.',
     );
   }
+  final overflows = post?['overflows'] as List?;
+  if (overflows != null && overflows.isNotEmpty) {
+    for (final ov in overflows) {
+      if (ov is Map) {
+        final type = ov['type'] ?? 'Widget';
+        final px = ov['pixels'] != null ? ' by ${ov['pixels']}px' : '';
+        final side = ov['side'] ?? 'edge';
+        final src = ov['source'] != null ? ' [${ov['source']}]' : '';
+        buffer.write('\n⚠️ Layout Overflow: $type overflowed$px on the $side$src');
+      }
+    }
+  }
+  final clipped = post?['clippedElements'] as List?;
+  if (clipped != null && clipped.isNotEmpty) {
+    for (final cl in clipped.take(2)) {
+      if (cl is Map) {
+        final target = cl['target'] ?? cl['type'] ?? 'Element';
+        final issue = cl['issue'] ?? 'partially clipped by viewport edge';
+        final src = cl['source'] != null ? ' [${cl['source']}]' : '';
+        buffer.write('\n⚠️ Clipped Action: "$target" $issue$src');
+      }
+    }
+  }
   final newErrors = post?['newErrorCount'];
   if (newErrors is int && newErrors > 0) {
-    buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
+    final lastErr = post?['lastError']?.toString();
+    if (lastErr != null && lastErr.isNotEmpty) {
+      final shortErr =
+          lastErr.length > 100 ? '${lastErr.substring(0, 100)}…' : lastErr;
+      buffer.write('\n⚠️ $newErrors new error(s): $shortErr');
+    } else {
+      buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
+    }
   }
   return buffer.toString();
 }
@@ -1429,10 +1459,26 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               overflows,
               (o) {
                 final src = o['source'] != null ? ' at ${o['source']}' : '';
+                final px = o['pixels'] != null ? ' by ${o['pixels']}px' : '';
+                final side = o['side'] != null ? ' on the ${o['side']}' : '';
+                final axis = o['axis'] ?? 'flex';
                 final fix = o['source'] != null
-                    ? '\n  → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded") or wrap in SingleChildScrollView'
+                    ? (axis == 'vertical'
+                        ? '\n  → Fix: wrap children in Expanded / Flexible or wrap Column in SingleChildScrollView'
+                        : '\n  → Fix: wrap children in Expanded / Flexible or replace Row with Wrap')
                     : '';
-                return '${o['type']}$src: ${o['details']}$fix';
+                return '${o['type']}$src: overflowed$px$side${o['details'] != null && !o['details'].toString().contains('overflowed') ? ' (${o['details']})' : ''}$fix';
+              },
+            );
+            final clippedList = list('clippedElements');
+            section(
+              'Clipped interactive elements',
+              clippedList,
+              (c) {
+                final target = c['target'] ?? c['type'] ?? 'Element';
+                final issue = c['issue'] ?? 'partially clipped';
+                final src = c['source'] != null ? ' at ${c['source']}' : '';
+                return '"$target"$src: $issue';
               },
             );
           }

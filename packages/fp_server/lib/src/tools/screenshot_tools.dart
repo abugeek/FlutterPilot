@@ -395,18 +395,39 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     final health = data['health'];
     if (health is Map) {
       final isHealthy = health['isHealthy'] == true;
-      final overflows = (health['overflowCount'] as num?)?.toInt() ?? 0;
+      final overflowsList = (health['overflows'] as List?) ?? const [];
+      final clippedList = (health['clippedElements'] as List?) ?? const [];
+      final overflows = (health['overflowCount'] as num?)?.toInt() ?? overflowsList.length;
       final a11y = (health['accessibilityIssueCount'] as num?)?.toInt() ?? 0;
-      if (isHealthy) {
+      if (isHealthy && overflowsList.isEmpty && clippedList.isEmpty) {
         summary.writeln('• Health: ✓ Clean (no overflows or small tap targets)');
       } else {
-        final issues = [
-          if (overflows > 0) '$overflows layout overflow(s)',
-          if (a11y > 0) '$a11y small tap target(s)',
-        ];
-        summary.writeln(
-          '• Health: ⚠️ ${issues.join(', ')} — call audit_screen_health for details',
-        );
+        if (overflowsList.isNotEmpty) {
+          for (final ov in overflowsList) {
+            if (ov is Map) {
+              final type = ov['type'] ?? 'Widget';
+              final px = ov['pixels'] != null ? ' by ${ov['pixels']}px' : '';
+              final side = ov['side'] ?? 'edge';
+              final src = ov['source'] != null ? ' [${ov['source']}]' : '';
+              summary.writeln('• ⚠️ Layout Overflow: $type overflowed$px on the $side$src');
+            }
+          }
+        } else if (overflows > 0) {
+          summary.writeln('• ⚠️ Layout Overflow: $overflows layout overflow(s)');
+        }
+        if (clippedList.isNotEmpty) {
+          for (final cl in clippedList.take(3)) {
+            if (cl is Map) {
+              final target = cl['target'] ?? cl['type'] ?? 'Element';
+              final issue = cl['issue'] ?? 'partially clipped by screen edge';
+              final src = cl['source'] != null ? ' [${cl['source']}]' : '';
+              summary.writeln('• ⚠️ Clipped Action: "$target" $issue$src');
+            }
+          }
+        }
+        if (a11y > 0) {
+          summary.writeln('• Health: ⚠️ $a11y small tap target(s)');
+        }
       }
     }
     final filteredElements = queryStr != null && queryStr.isNotEmpty
