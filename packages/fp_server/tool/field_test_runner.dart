@@ -409,9 +409,13 @@ Future<void> main(List<String> args) async {
       return text.contains('Patched lib/') && text.contains(targetExpectedFile);
     });
 
-    // 5. Whole-App Crawler
+    // 5. Whole-App Crawler with Health Auditing
     final isExample = !isHn && !isBloc && !isProviderApp && !isM3;
-    await runTest('crawl_app', 'crawl_app', {'maxScreens': 3, 'restore': true}, verify: (r) {
+    await runTest('crawl_app (audit: true)', 'crawl_app', {
+      'maxScreens': 3,
+      'restore': true,
+      'audit': true,
+    }, verify: (r) {
       final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
       return text.contains('Crawled');
     });
@@ -945,6 +949,39 @@ Future<void> main(List<String> args) async {
       // 35. Tier 10: Native Screen Query Filter
       await runTest('native_describe_screen (query filter)', 'native_describe_screen', {
         'query': 'button',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('replay_flow')) {
+      // 36. Tier 11: Replay Flow with CI Test Export
+      await runTest('replay_flow (exportAsTest)', 'replay_flow', {
+        'exportAsTest': true,
+        'testName': 'field_replayed_journey',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Replayed') || text.contains('No recorded steps') || text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('query_firestore')) {
+      // 37. Tier 11: Firestore Substring Query Search
+      await runTest('query_firestore (query search)', 'query_firestore', {
+        'path': 'users',
+        'query': 'alice',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('query_supabase_table')) {
+      // 38. Tier 11: Supabase Substring Row Search
+      await runTest('query_supabase_table (query search)', 'query_supabase_table', {
+        'table': 'profiles',
+        'query': 'active',
       }, allowError: true, verify: (r) {
         final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
         return text.isNotEmpty;

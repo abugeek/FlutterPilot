@@ -989,9 +989,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'fill_form',
       description:
-          'Fills several fields in one call and optionally taps a submit '
-          'button: text for text fields, true/false for checkboxes and '
-          'switches. Reports the route change and widget-tree diff.',
+          'Fills multiple fields and optionally submits (or pass waitFor). '
+          'Reports route changes and widget diffs.',
       inputSchema: ToolInputSchema(
         properties: {
           'fields': JsonSchema.object(

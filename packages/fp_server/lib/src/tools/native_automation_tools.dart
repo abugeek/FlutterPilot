@@ -265,10 +265,8 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_screenshot'] = _tool(
       'native_screenshot',
       description:
-          'Screenshot of the whole simulator screen, in points: unlike '
-          'capture_screenshot it includes system alerts, the keyboard and '
-          'other apps. Use when the Flutter screenshot does not show what is '
-          'on top.',
+          'Captures full simulator screen including native OS alerts, '
+          'keyboard, and dialogs outside Flutter.',
       inputSchema: ToolInputSchema(
         properties: {
           'serial': JsonSchema.string(description: 'Android adb serial.'),
@@ -350,10 +348,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_tap'] = _tool(
       'native_tap',
       description:
-          'Taps the simulator screen at x/y in points, e.g. a permission '
-          'alert\'s "Allow", which is not in the Flutter tree. Take the '
-          'point from native_describe_screen. For the app\'s own widgets use '
-          'tap_widget.',
+          'Taps simulator/device screen at x/y points for native dialogs/alerts.',
       inputSchema: ToolInputSchema(
         properties: {
           'x': JsonSchema.number(description: 'X in points.'),
@@ -410,9 +405,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_text'] = _tool(
       'native_text',
       description:
-          'Types text into whatever has focus on the simulator, through the '
-          'real iOS keyboard path: native alert fields, other apps. For the '
-          'app\'s own text fields use enter_text.',
+          'Types text into focused native field on simulator/device (for alerts/dialogs).',
       inputSchema: ToolInputSchema(
         properties: {
           'text': JsonSchema.string(description: 'Text to type.'),
@@ -464,8 +457,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
     _nativeTools['native_button'] = _tool(
       'native_button',
       description:
-          'Presses a simulator hardware button. HOME backgrounds the app '
-          '(iOS then suspends it; native_open_app brings it back).',
+          'Presses a simulator hardware button (HOME, LOCK, SIDE_BUTTON, BACK, etc.).',
       inputSchema: ToolInputSchema(
         properties: {
           'button': JsonSchema.string(

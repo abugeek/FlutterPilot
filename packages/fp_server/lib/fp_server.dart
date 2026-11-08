@@ -703,6 +703,8 @@ abstract class _FlutterPilotServerBase {
     Map<String, JsonSchema>? properties,
     List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
+    String Function(Map<String, dynamic> json, Map<String, dynamic> params)?
+        formatResultWithParams,
   });
 
   /// Whether [name] is a Riverpod provider or a Bloc/Cubit ("riverpod" or
@@ -1913,6 +1915,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     Map<String, JsonSchema>? properties,
     List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
+    String Function(Map<String, dynamic> json, Map<String, dynamic> params)?
+        formatResultWithParams,
   }) {
     _tool(
       name,
@@ -1924,9 +1928,11 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       callback: (p, e) async {
         final res = await _callExtensionRaw(extension, p);
         if (res.isError) return res.toCallToolResult();
-        final text = formatResult != null
-            ? formatResult(res.data!)
-            : jsonEncode(res.data);
+        final text = formatResultWithParams != null
+            ? formatResultWithParams(res.data!, p)
+            : (formatResult != null
+                ? formatResult(res.data!)
+                : jsonEncode(res.data));
         return CallToolResult(
           content: [TextContent(text: _boundToolText(text))],
         );

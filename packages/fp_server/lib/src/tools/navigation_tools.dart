@@ -664,10 +664,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'crawl_app',
       description:
-          'Finds reachable screens by tapping list rows, cards, tabs and '
-          'navigation destinations (never buttons, toggles or rows named like '
-          'actions), one row per list; returns the route graph and each '
-          'screen\'s overflow/tap-target counts, then goes back.',
+          'Crawls reachable screens via list rows and tabs; reports route graph '
+          'and health issues, then restores start route.',
       inputSchema: ToolInputSchema(
         properties: {
           'maxScreens': JsonSchema.integer(
@@ -678,10 +676,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                 'Go back to the starting route at the end (default '
                 'true).',
           ),
+          'audit': JsonSchema.boolean(
+            description: 'Include detailed health findings for screens with issues.',
+          ),
         },
       ),
       callback: (p, e) async {
         final maxTaps = (p['maxScreens'] as num?)?.toInt() ?? 15;
+        final shouldAudit = p['audit'] == true;
         Future<String> route() async =>
             (await _callExtensionRaw(
               'ext.flutterpilot.getNavigationStack',
@@ -696,6 +698,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
 
         final start = await route();
         final health = <String, Map<String, dynamic>>{};
+        final screenAudit = <String, List<dynamic>>{};
         final edges = <Map<String, String>>[];
         // route pattern → what was tapped there (a list's rows count once)
         final tried = <String, Set<String>>{};
@@ -719,6 +722,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
               'a11y': data['accessibilityIssueCount'] ?? 0,
             },
           );
+          if (shouldAudit) {
+            final auditRes =
+                await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+            final findings = (auditRes.data?['findings'] as List?) ?? const [];
+            if (findings.isNotEmpty) {
+              screenAudit[current] = findings;
+            }
+          }
           final done = tried.putIfAbsent(here, () => {});
           Map? next;
           for (final c
@@ -812,7 +823,18 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         final sick = health.values
             .where((h) => h['overflows'] != 0 || h['a11y'] != 0)
             .map((h) => '"${h['route']}"');
-        if (sick.isNotEmpty) {
+        if (screenAudit.isNotEmpty) {
+          buf.write('\nAudit Details:');
+          for (final entry in screenAudit.entries) {
+            buf.write('\n  • ${entry.key}:');
+            for (final f in entry.value) {
+              if (f is Map) {
+                final src = f['source'] != null ? ' at ${f['source']}' : '';
+                buf.write('\n    - ${f['details'] ?? f['type']}$src');
+              }
+            }
+          }
+        } else if (sick.isNotEmpty) {
           buf.write(
             '\nDetails: audit_screen_health(routes: [${sick.join(', ')}]).',
           );
@@ -825,6 +847,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             'edges': edges,
             'taps': taps,
             'restored': restored,
+            if (screenAudit.isNotEmpty) 'audit': screenAudit,
           },
         );
       },

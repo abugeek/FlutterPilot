@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 44975 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 44285 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -36,7 +36,7 @@ Adds a running Flutter app to the fleet under a name, e.g. the same app on an iP
 
 ## `run_on_devices`
 
-Runs the same steps on several registered devices at once (e.g. iPhone, Android and web) and compares them: which steps passed where, and how the final screens differ (route, tappable elements, errors). Each device stops at its first failed step. Use it to check a flow works on every platform in one call.
+Runs steps in parallel across registered devices, comparing step verdicts and final screen states.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -193,7 +193,7 @@ Toggles Checkbox, Switch or Radio. Pass value to set idempotently or waitFor to 
 
 ## `fill_form`
 
-Fills several fields in one call and optionally taps a submit button: text for text fields, true/false for checkboxes and switches. Reports the route change and widget-tree diff.
+Fills multiple fields and optionally submits (or pass waitFor). Reports route changes and widget diffs.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -264,7 +264,7 @@ Runs a known sequence of steps in one call, stopping at the first that fails. Re
 
 ## `native_screenshot`
 
-Screenshot of the whole simulator screen, in points: unlike capture_screenshot it includes system alerts, the keyboard and other apps. Use when the Flutter screenshot does not show what is on top.
+Captures full simulator screen including native OS alerts, keyboard, and dialogs outside Flutter.
 
 _Read-only._
 
@@ -275,7 +275,7 @@ _Read-only._
 
 ## `native_tap`
 
-Taps the simulator screen at x/y in points, e.g. a permission alert's "Allow", which is not in the Flutter tree. Take the point from native_describe_screen. For the app's own widgets use tap_widget.
+Taps simulator/device screen at x/y points for native dialogs/alerts.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -286,7 +286,7 @@ Taps the simulator screen at x/y in points, e.g. a permission alert's "Allow", w
 
 ## `native_text`
 
-Types text into whatever has focus on the simulator, through the real iOS keyboard path: native alert fields, other apps. For the app's own text fields use enter_text.
+Types text into focused native field on simulator/device (for alerts/dialogs).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -296,7 +296,7 @@ Types text into whatever has focus on the simulator, through the real iOS keyboa
 
 ## `native_button`
 
-Presses a simulator hardware button. HOME backgrounds the app (iOS then suspends it; native_open_app brings it back).
+Presses a simulator hardware button (HOME, LOCK, SIDE_BUTTON, BACK, etc.).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -388,12 +388,13 @@ Simulates on-screen keyboard inset, checks for layout overflows or obscured inpu
 
 ## `crawl_app`
 
-Finds reachable screens by tapping list rows, cards, tabs and navigation destinations (never buttons, toggles or rows named like actions), one row per list; returns the route graph and each screen's overflow/tap-target counts, then goes back.
+Crawls reachable screens via list rows and tabs; reports route graph and health issues, then restores start route.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `maxScreens` | integer | no | Stop after this many taps (default 15). |
 | `restore` | boolean | no | Go back to the starting route at the end (default true). |
+| `audit` | boolean | no | Include detailed health findings for screens with issues. |
 
 ## `capture_screenshot`
 
@@ -511,7 +512,7 @@ Hot reloads edited .dart files into running app (keeping state). restart:true re
 
 ## `launch_app`
 
-Builds and starts the app (flutter run, or flutterpilot/launch.json's command) on a device, waits for its first frame and connects; it outlives this session. Takes minutes: with the app running there it refuses unless relaunch:true (pubspec.yaml, assets or native code changed); hot_reload loads Dart changes in a second. A failed build returns its output's end.
+Builds and launches app on a device, awaits first frame, and connects. Pass relaunch:true to force rebuild.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -775,6 +776,8 @@ Replays recorded user interactions live on the connected app without writing a t
 | `delayMs` | integer | no | Delay between steps in ms (default: 300). |
 | `assertRoute` | string | no | Assert that the flow ends on this route. |
 | `assertWidget` | string | no | Assert that this widget key/text is visible after replay. |
+| `exportAsTest` | boolean | no | Write replayed flow as integration_test file. |
+| `testName` | string | no | Test file name in snake_case (e.g. "replayed_flow"). |
 
 ## `generate_test`
 
@@ -848,10 +851,11 @@ _Read-only._
 | `table` | string | yes | Supabase table name. |
 | `limit` | integer | no | 1–200, default 20. |
 | `filter` | string | no | One equality filter, "column=value". |
+| `query` | string | no | Case-insensitive substring filter across row data. |
 
 ## `supabase_session`
 
-Real Supabase Auth API call on the app's session (dev/test projects only): action "refresh" force-refreshes the token (test expiry flows); "sign_out" signs out with scope local (default), global or others. Needs --allow-destructive.
+Performs Supabase Auth action ("refresh" or "sign_out"). Needs --allow-destructive.
 
 _Destructive: replaces stored data (needs `--allow-destructive`) or runs app code._
 
@@ -895,6 +899,7 @@ _Read-only._
 | `where` | string | no | One filter, "field op value" with == != < <= > >= or array-contains, e.g. "done == false". |
 | `orderBy` | string | no | A field, optionally followed by "desc". |
 | `limit` | integer | no | 1–100, default 20. |
+| `query` | string | no | Case-insensitive substring filter in document data/id. |
 | `source` | string: server \| cache | no | cache: what the app has locally instead of the server. |
 
 ## `get_secure_storage`

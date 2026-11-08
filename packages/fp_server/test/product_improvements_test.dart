@@ -626,6 +626,44 @@ class MyList extends StatelessWidget {
       expect(props['query']['type'], 'string');
     });
 
+    test('crawl_app advertises audit parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'crawl_app');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('audit'), isTrue);
+      expect(props['audit']['type'], 'boolean');
+    });
+
+    test('replay_flow advertises exportAsTest and testName parameters', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'replay_flow');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('exportAsTest'), isTrue);
+      expect(props['exportAsTest']['type'], 'boolean');
+      expect(props.containsKey('testName'), isTrue);
+      expect(props['testName']['type'], 'string');
+    });
+
+    test('query_firestore advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'query_firestore');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('query_supabase_table advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'query_supabase_table');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

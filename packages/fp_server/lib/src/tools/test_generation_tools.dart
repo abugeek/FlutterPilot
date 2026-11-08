@@ -498,6 +498,12 @@ mixin _TestGenerationToolsMixin
           'assertWidget': JsonSchema.string(
             description: 'Assert that this widget key/text is visible after replay.',
           ),
+          'exportAsTest': JsonSchema.boolean(
+            description: 'Write replayed flow as integration_test file.',
+          ),
+          'testName': JsonSchema.string(
+            description: 'Test file name in snake_case (e.g. "replayed_flow").',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -624,6 +630,23 @@ mixin _TestGenerationToolsMixin
           buf.writeln('✓ Expected widget "$assertWidget" is visible.');
         }
 
+        String? exportedFile;
+        if (p['exportAsTest'] == true) {
+          final testName = p['testName']?.toString() ?? 'replayed_flow';
+          final writeRes = await _writeAndRunSteps(
+            testName,
+            steps,
+            const [],
+            run: false,
+          );
+          if (writeRes.result.isError) {
+            buf.writeln('⚠️ Failed to export test: ${writeRes.result.content.firstOrNull}');
+          } else {
+            exportedFile = 'integration_test/${testName}_test.dart';
+            buf.writeln('✓ Exported flow to $exportedFile.');
+          }
+        }
+
         return CallToolResult(
           isError: !isClean,
           content: [TextContent(text: buf.toString().trim())],
@@ -633,6 +656,7 @@ mixin _TestGenerationToolsMixin
             'overflowCount': overflows,
             'routeMatches': routeMatches,
             'isClean': isClean,
+            'exportedFile': ?exportedFile,
           },
         );
       },

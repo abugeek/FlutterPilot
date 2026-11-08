@@ -85,12 +85,19 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         'filter': JsonSchema.string(
           description: 'One equality filter, "column=value".',
         ),
+        'query': JsonSchema.string(
+          description: 'Case-insensitive substring filter across row data.',
+        ),
       },
       required: ['table'],
-      formatResult: (json) {
+      formatResultWithParams: (json, params) {
         final table = json['table'];
         final rowCount = json['rowCount'] ?? 0;
-        final rows = json['rows'] as List? ?? [];
+        var rows = (json['rows'] as List? ?? []).cast<dynamic>();
+        final q = params['query']?.toString().toLowerCase();
+        if (q != null && q.isNotEmpty) {
+          rows = rows.where((r) => jsonEncode(r).toLowerCase().contains(q)).toList();
+        }
         if (rows.isEmpty) return 'Table "$table": 0 rows returned.';
         final note = truncationNote(
           shown: rows.length > 50 ? 50 : rows.length,
@@ -98,7 +105,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           what: 'rows',
           how: 'Raise limit (1–200) or narrow with filter.',
         );
-        final buf = StringBuffer('Table "$table": $rowCount row(s)\n');
+        final buf = StringBuffer('Table "$table": ${rows.length} row(s)\n');
         for (final row in rows.take(50)) {
           buf.writeln('  ${jsonEncode(row)}');
         }
@@ -110,10 +117,7 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'supabase_session',
       description:
-          'Real Supabase Auth API call on the app\'s session (dev/test '
-          'projects only): action "refresh" force-refreshes the token (test '
-          'expiry flows); "sign_out" signs out with scope local (default), '
-          'global or others. Needs --allow-destructive.',
+          'Performs Supabase Auth action ("refresh" or "sign_out"). Needs --allow-destructive.',
       inputSchema: ToolInputSchema(
         properties: {
           'action': JsonSchema.string(enumValues: ['refresh', 'sign_out']),
@@ -304,13 +308,16 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           description: 'A field, optionally followed by "desc".',
         ),
         'limit': JsonSchema.integer(description: '1–100, default 20.'),
+        'query': JsonSchema.string(
+          description: 'Case-insensitive substring filter in document data/id.',
+        ),
         'source': JsonSchema.string(
           enumValues: ['server', 'cache'],
           description: 'cache: what the app has locally instead of the server.',
         ),
       },
       required: ['path'],
-      formatResult: (json) {
+      formatResultWithParams: (json, params) {
         final path = json['path'];
         final from = json['source'] == 'cache' ? ' (from the local cache)' : '';
         if (json['kind'] == 'document') {
@@ -318,7 +325,15 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
               ? 'Document $path$from:\n${jsonEncode(json['data'])}'
               : 'Document $path does not exist$from.';
         }
-        final docs = json['docs'] as List? ?? const [];
+        var docs = (json['docs'] as List? ?? const []).cast<dynamic>();
+        final q = params['query']?.toString().toLowerCase();
+        if (q != null && q.isNotEmpty) {
+          docs = docs.where((d) {
+            final id = d['id']?.toString().toLowerCase() ?? '';
+            final dataStr = jsonEncode(d['data']).toLowerCase();
+            return id.contains(q) || dataStr.contains(q);
+          }).toList();
+        }
         if (docs.isEmpty) return 'Collection $path: no documents match$from.';
         final note = docs.length == json['limit']
             ? truncationNote(

@@ -12,12 +12,8 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     _tool(
       'launch_app',
       description:
-          'Builds and starts the app (flutter run, or flutterpilot/launch.json'
-          "'s command) on a device, waits for its first frame and connects; "
-          'it outlives this session. Takes minutes: with the app running '
-          'there it refuses unless relaunch:true (pubspec.yaml, assets or '
-          'native code changed); hot_reload loads Dart changes in a second. '
-          "A failed build returns its output's end.",
+          'Builds and launches app on a device, awaits first frame, and '
+          'connects. Pass relaunch:true to force rebuild.',
       inputSchema: ToolInputSchema(
         properties: {
           'device': JsonSchema.string(

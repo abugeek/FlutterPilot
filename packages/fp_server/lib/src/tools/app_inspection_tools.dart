@@ -299,11 +299,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'run_on_devices',
       description:
-          'Runs the same steps on several registered devices at once (e.g. '
-          'iPhone, Android and web) and compares them: which steps passed '
-          'where, and how the final screens differ (route, tappable '
-          'elements, errors). Each device stops at its first failed step. '
-          'Use it to check a flow works on every platform in one call.',
+          'Runs steps in parallel across registered devices, comparing step '
+          'verdicts and final screen states.',
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(
