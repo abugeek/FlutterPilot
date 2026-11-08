@@ -265,10 +265,12 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_network_logs',
       description:
-          'Dio network requests (including mocks). Filter by query or errorsOnly, with limit.',
+          'Dio network requests (including mocks). Filter by query, method, errorsOnly.',
       inputSchema: ToolInputSchema(
         properties: {
           'query': JsonSchema.string(description: 'URL or message filter.'),
+          'url': JsonSchema.string(description: 'Alias for query.'),
+          'method': JsonSchema.string(description: 'HTTP method (GET, POST).'),
           'errorsOnly': JsonSchema.boolean(
             description: 'Only failed requests (status >= 400 or error).',
           ),
@@ -289,6 +291,16 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
                 .map((m) => Map<String, dynamic>.from(m))
                 .toList() ??
             [];
+        final methodFilter = (p['method'] as String?)?.toUpperCase();
+        if (methodFilter != null && methodFilter.isNotEmpty) {
+          logs = logs
+              .where(
+                (l) =>
+                    (l['method']?.toString().toUpperCase() ?? '') ==
+                    methodFilter,
+              )
+              .toList();
+        }
         if (p['errorsOnly'] == true) {
           logs = logs.where((l) {
             final code = l['statusCode'] as num?;
@@ -296,7 +308,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             return hasError || (code != null && code >= 400);
           }).toList();
         }
-        final query = p['query']?.toString().toLowerCase();
+        final query = (p['query'] ?? p['url'])?.toString().toLowerCase();
         if (query != null && query.isNotEmpty) {
           logs = logs.where((l) {
             final uri = (l['uri'] ?? '').toString().toLowerCase();

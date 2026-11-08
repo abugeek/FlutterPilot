@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 43732 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 44037 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -98,7 +98,8 @@ Rebuild counts of the app's widgets with source location. First call starts coun
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `filter` | string | no | Widget type or key substring to filter results. |
+| `query` | string | no | Widget type or key substring filter. |
+| `filter` | string | no | Alias for query. |
 | `reset` | boolean | no | Reset rebuild counts and start a new observation window. |
 | `minCount` | integer | no | Minimum rebuild count to report (default 1). |
 
@@ -235,6 +236,7 @@ Audits screen health: layout overflows, tap target sizes, contrast, unlabeled co
 |---|---|---:|---|
 | `routes` | array | no | Go to each route and check it. |
 | `category` | string: all \| overflow \| a11y \| contrast | no | Filter findings by category (default: all). |
+| `query` | string | no | Filter findings by widget, key, file, or text. |
 | `designQuality` | boolean | no | Audit 4/8dp spacing grid and typography hierarchy. |
 | `viewports` | array | no | Audit viewports (e.g. ["mobile_portrait", "tablet"]). |
 
@@ -349,6 +351,7 @@ _Read-only._
 |---|---|---:|---|
 | `routes` | boolean | no | Include go_router's configured routes. |
 | `history` | boolean | no | Include recent route changes (go_router). |
+| `query` | string | no | Filter routes or history by substring. |
 | `waitForRoute` | string | no | Poll until current route equals or contains this. |
 | `timeoutMs` | integer | no | Timeout in ms for waitForRoute (default 3000). |
 
@@ -456,13 +459,14 @@ _Read-only._
 
 ## `get_app_summary`
 
-Start here. The running app in a few lines: route, viewport, focus, tappable elements, errors, health, logs, jank, and window visibility.
+Running app summary: route, viewport, focus, tappable elements, errors, health, and logs.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `setup` | boolean | no | Also the server and app setup: connection, plugins the app registered, SDK capabilities, VM, buffer limits. For when a tool is missing or refused. |
+| `setup` | boolean | no | Also server/app setup: connection, registered plugins, SDK capabilities. |
+| `query` | string | no | Filter tappable elements and logs by substring. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{connected: bool, device?: string, platform?: string, route?: string, errorCount: int, buildMode?: string}`
 
@@ -561,13 +565,15 @@ Sets a Riverpod provider or Bloc/Cubit state in memory: name + value, or several
 
 ## `get_network_logs`
 
-Dio network requests (including mocks). Filter by query or errorsOnly, with limit.
+Dio network requests (including mocks). Filter by query, method, errorsOnly.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `query` | string | no | URL or message filter. |
+| `url` | string | no | Alias for query. |
+| `method` | string | no | HTTP method (GET, POST). |
 | `errorsOnly` | boolean | no | Only failed requests (status >= 400 or error). |
 | `limit` | integer | no | Max entries to return (default 50). |
 

@@ -194,13 +194,17 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
               {},
             );
             if (!check.isError && check.data != null) {
-              final status =
-                  check.data!['status']?.toString().toLowerCase() ?? '';
-              final isOnline = check.data!['online'] == true;
+              final connList = (check.data!['connectivity'] as List?)
+                      ?.map((e) => e.toString().toLowerCase())
+                      .toList() ??
+                  const [];
+              final isOnline = check.data!['isOnline'] == true ||
+                  check.data!['online'] == true;
               final matched = switch (waitForStatus) {
                 'online' => isOnline,
                 'offline' => !isOnline,
-                _ => status.contains(waitForStatus),
+                _ => connList.contains(waitForStatus) ||
+                    connList.any((c) => c.contains(waitForStatus)),
               };
               if (matched) break;
             }

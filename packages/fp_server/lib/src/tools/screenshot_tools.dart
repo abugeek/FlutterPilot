@@ -245,7 +245,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
 
   /// get_app_summary: from the SDK's snapshot, or without the SDK from the
   /// inspector.
-  Future<CallToolResult> _appSummary() async {
+  Future<CallToolResult> _appSummary({String? query}) async {
+    final queryStr = query?.toLowerCase();
     final res = await _callExtensionRaw('ext.flutterpilot.getAppSnapshot', {});
     if (res.isError) {
       // No SDK in the app (zero-code mode): summary from the inspector.
@@ -274,7 +275,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               text:
                   '${stale == null ? '' : '• Code: $stale\n'}'
                   '${device == null ? '' : '• Device: $device. ${deviceState!.fix}\n'}'
-                  '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload)}'
+                  '${zeroCodeSummary(basic.data!, lastReload: _activeContext?.lastReload, query: query)}'
                   '${profile ? '\n• Build: profile. Release-like timings; no hot reload, widget inspector or debug overlays.' : ''}',
             ),
           ],
@@ -408,9 +409,32 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         );
       }
     }
-    summary.writeln('• Tappable Elements (${elements.length}):');
+    final filteredElements = queryStr != null && queryStr.isNotEmpty
+        ? elements.where((el) {
+            if (el is! Map) return false;
+            final label = el['text']?.toString().toLowerCase() ?? '';
+            final key =
+                (el['key'] ?? el['identifier'] ?? '').toString().toLowerCase();
+            final type = el['type']?.toString().toLowerCase() ?? '';
+            return label.contains(queryStr) ||
+                key.contains(queryStr) ||
+                type.contains(queryStr);
+          }).toList()
+        : elements;
+    final filteredLogs = queryStr != null && queryStr.isNotEmpty
+        ? logs.where((l) {
+            if (l is! Map) return false;
+            final msg = l['message']?.toString().toLowerCase() ?? '';
+            final lvl = l['level']?.toString().toLowerCase() ?? '';
+            return msg.contains(queryStr) || lvl.contains(queryStr);
+          }).toList()
+        : logs;
+
+    summary.writeln(
+      '• Tappable Elements (${filteredElements.length}${query != null ? ' matching "$query"' : ''}):',
+    );
     final displayed = _collapseRepeatedElements(
-      elements.take(15).toList(),
+      filteredElements.take(15).toList(),
       threshold: 3,
     );
     for (final el in displayed) {
@@ -436,20 +460,22 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       );
     }
     final elementNote = truncationNote(
-      shown: elements.length > 15 ? 15 : elements.length,
-      total: elements.length,
+      shown: filteredElements.length > 15 ? 15 : filteredElements.length,
+      total: filteredElements.length,
       what: 'tappable elements (first kept)',
       how: 'get_interactive_elements lists them all.',
     );
     if (elementNote != null) summary.writeln('  $elementNote');
-    if (logs.isNotEmpty) {
-      summary.writeln('• Recent Console Logs (${logs.length}):');
-      for (final log in logs.take(5)) {
+    if (filteredLogs.isNotEmpty) {
+      summary.writeln(
+        '• Recent Console Logs (${filteredLogs.length}${query != null ? ' matching "$query"' : ''}):',
+      );
+      for (final log in filteredLogs.take(5)) {
         summary.writeln('  [${log['level'] ?? 'info'}] ${log['message']}');
       }
       final logNote = truncationNote(
-        shown: logs.length > 5 ? 5 : logs.length,
-        total: logs.length,
+        shown: filteredLogs.length > 5 ? 5 : filteredLogs.length,
+        total: filteredLogs.length,
         what: 'recent console logs (newest kept)',
         how:
             'get_debug_logs(level, query, sinceSeconds, logger, limit) has '
@@ -1100,21 +1126,21 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_app_summary',
       description:
-          'Start here. The running app in a few lines: route, viewport, '
-          'focus, tappable elements, errors, health, logs, jank, and '
-          'window visibility.',
+          'Running app summary: route, viewport, focus, tappable elements, '
+          'errors, health, and logs.',
       inputSchema: ToolInputSchema(
         properties: {
           'setup': JsonSchema.boolean(
             description:
-                'Also the server and app setup: connection, plugins the app '
-                'registered, SDK capabilities, VM, buffer limits. For when a '
-                'tool is missing or refused.',
+                'Also server/app setup: connection, registered plugins, SDK capabilities.',
+          ),
+          'query': JsonSchema.string(
+            description: 'Filter tappable elements and logs by substring.',
           ),
         },
       ),
       callback: (p, e) async {
-        final summary = await _appSummary();
+        final summary = await _appSummary(query: p['query']?.toString());
         if (p['setup'] != true) return summary;
         // Also when there is no summary: the setup says why.
         return keepingStructured(

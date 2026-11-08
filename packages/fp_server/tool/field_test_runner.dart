@@ -67,12 +67,14 @@ class _McpClient {
 /// Usage:
 ///   dart run packages/fp_server/tool/field_test_runner.dart [--app <path>] [-d <device>] [--uri <ws://...>]
 Future<void> main(List<String> args) async {
-  final dIdx = args.indexOf('-d');
+  var dIdx = args.indexOf('-d');
+  if (dIdx < 0) dIdx = args.indexOf('--device');
   final device =
       dIdx >= 0 && dIdx + 1 < args.length ? args[dIdx + 1] : 'macos';
 
   var appIdx = args.indexOf('--app');
   if (appIdx < 0) appIdx = args.indexOf('-a');
+  if (appIdx < 0) appIdx = args.indexOf('--target');
   final repo = Directory.fromUri(Platform.script.resolve('../../..')).path;
   final defaultApp = p.join(repo, 'examples', 'flutter_pilot_example');
   final appPath =
@@ -1012,6 +1014,48 @@ Future<void> main(List<String> args) async {
       // 41. Tier 12: Error Message Substring Search
       await runTest('get_errors (query search)', 'get_errors', {
         'query': 'overflow',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('audit_screen_health')) {
+      // 42. Tier 13: Screen Health Query Scoping
+      await runTest('audit_screen_health (query filter)', 'audit_screen_health', {
+        'query': 'overflow',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_app_summary')) {
+      // 43. Tier 13: App Summary Query Scoping
+      await runTest('get_app_summary (query filter)', 'get_app_summary', {
+        'query': 'add',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_navigation_stack')) {
+      // 44. Tier 13: Navigation Stack Substring Scoping
+      await runTest('get_navigation_stack (query filter)', 'get_navigation_stack', {
+        'routes': true,
+        'query': '/',
+      }, allowError: true, verify: (r) {
+        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      });
+    }
+
+    if (availableTools.contains('get_network_logs')) {
+      // 45. Tier 13: Network Logs Method & URL Parity
+      await runTest('get_network_logs (method & url)', 'get_network_logs', {
+        'method': 'GET',
+        'url': 'api',
       }, allowError: true, verify: (r) {
         final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
         return text.isNotEmpty;

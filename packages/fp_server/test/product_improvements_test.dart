@@ -691,6 +691,54 @@ class MyList extends StatelessWidget {
       expect(props['query']['type'], 'string');
     });
 
+    test('audit_screen_health advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'audit_screen_health');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('get_app_summary advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_app_summary');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('get_rebuild_stats advertises query and filter parameters', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_rebuild_stats');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('filter'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('get_navigation_stack advertises query parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_navigation_stack');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props['query']['type'], 'string');
+    });
+
+    test('get_network_logs advertises query, url, and method parameters', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_network_logs');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('query'), isTrue);
+      expect(props.containsKey('url'), isTrue);
+      expect(props.containsKey('method'), isTrue);
+      expect(props['method']['type'], 'string');
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

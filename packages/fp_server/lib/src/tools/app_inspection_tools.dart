@@ -686,7 +686,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           .toLowerCase();
       final waitFor = params['waitFor']?.toString().toLowerCase();
       final timeoutMs = (params['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
-      final sinceSeconds = (params['since_seconds'] as num?)?.toInt();
+      final sinceSeconds =
+          ((params['sinceSeconds'] ?? params['since_seconds']) as num?)
+              ?.toInt();
       final rawLimit = (params['limit'] as int?) ?? 100;
       final limit = rawLimit.clamp(1, _Constants.debugLogBufferMax);
 
@@ -933,8 +935,11 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           "call starts counting; second call reports counts.",
       inputSchema: ToolInputSchema(
         properties: {
+          'query': JsonSchema.string(
+            description: 'Widget type or key substring filter.',
+          ),
           'filter': JsonSchema.string(
-            description: 'Widget type or key substring to filter results.',
+            description: 'Alias for query.',
           ),
           'reset': JsonSchema.boolean(
             description:
@@ -946,9 +951,10 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        final queryVal = (p['query'] ?? p['filter'])?.toString();
         final res =
             await _callExtensionRaw('ext.flutterpilot.getRebuildStats', {
-              if (p['filter'] != null) 'filter': p['filter'].toString(),
+              'filter': ?queryVal,
               if (p['reset'] != null) 'reset': p['reset'].toString(),
               if (p['minCount'] != null) 'minCount': p['minCount'].toString(),
             });

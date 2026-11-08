@@ -200,6 +200,9 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'history': JsonSchema.boolean(
             description: 'Include recent route changes (go_router).',
           ),
+          'query': JsonSchema.string(
+            description: 'Filter routes or history by substring.',
+          ),
           'waitForRoute': JsonSchema.string(
             description: 'Poll until current route equals or contains this.',
           ),
@@ -258,8 +261,15 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           final queryParams = json['queryParameters'] as Map? ?? {};
           if (queryParams.isNotEmpty) buf.write('\nQuery params: $queryParams');
           buf.write('\nCan pop: ${json['canPop']}');
+          final queryStr = p['query']?.toString().toLowerCase();
           for (final m in json['matchedRoutes'] as List? ?? const []) {
-            buf.write('\n  Matched: ${m['matchedLocation']} → ${m['route']}');
+            final loc = '${m['matchedLocation']} → ${m['route']}';
+            if (queryStr != null &&
+                queryStr.isNotEmpty &&
+                !loc.toLowerCase().contains(queryStr)) {
+              continue;
+            }
+            buf.write('\n  Matched: $loc');
           }
           for (final (flag, ext, label) in [
             ('routes', 'ext.flutterpilot.getGoRouterConfig', 'Routes'),
@@ -267,8 +277,27 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           ]) {
             if (p[flag] != true) continue;
             final extra = await _callExtensionRaw(ext, {});
+            Object? dataToFormat = extra.data;
+            if (queryStr != null && queryStr.isNotEmpty && extra.data != null) {
+              if (flag == 'routes' && extra.data is Map) {
+                final map = Map<String, dynamic>.from(extra.data as Map);
+                final rList = map['routes'] as List?;
+                if (rList != null) {
+                  map['routes'] = rList
+                      .where(
+                        (r) => r.toString().toLowerCase().contains(queryStr),
+                      )
+                      .toList();
+                  dataToFormat = map;
+                }
+              } else if (flag == 'history' && extra.data is List) {
+                dataToFormat = (extra.data as List)
+                    .where((h) => h.toString().toLowerCase().contains(queryStr))
+                    .toList();
+              }
+            }
             buf.write(
-              '\n$label: ${extra.isError ? extra.errorMessage : jsonEncode(extra.data)}',
+              '\n$label: ${extra.isError ? extra.errorMessage : jsonEncode(dataToFormat)}',
             );
           }
         } else if (p['routes'] == true || p['history'] == true) {

@@ -219,7 +219,11 @@ String _shortenFileUris(String text) => text.replaceAllMapped(
 /// `get_app_summary` text for an app without the SDK. [lastReload] splits the
 /// errors the way the SDK path does (field test #334): a zero-code app keeps
 /// its error records across a hot reload too.
-String zeroCodeSummary(Map<String, dynamic> data, {DateTime? lastReload}) {
+String zeroCodeSummary(
+  Map<String, dynamic> data, {
+  DateTime? lastReload,
+  String? query,
+}) {
   // Distinct items in order, repeats counted: a list of 40 rows with the
   // same label must not push everything else out.
   String quoted(Iterable<Object?> items, int max) {
@@ -234,8 +238,13 @@ String zeroCodeSummary(Map<String, dynamic> data, {DateTime? lastReload}) {
     return counts.length > max ? '$shown … (+${counts.length - max})' : shown;
   }
 
-  final texts = (data['texts'] as List?) ?? const [];
-  final keys = (data['keys'] as List?) ?? const [];
+  var texts = (data['texts'] as List?) ?? const [];
+  var keys = (data['keys'] as List?) ?? const [];
+  if (query != null && query.isNotEmpty) {
+    final q = query.toLowerCase();
+    texts = texts.where((t) => t.toString().toLowerCase().contains(q)).toList();
+    keys = keys.where((k) => k.toString().toLowerCase().contains(q)).toList();
+  }
   final errorSplit = errorsByReload(
     ((data['errors'] as List?) ?? const [])
         .whereType<Map<String, dynamic>>()

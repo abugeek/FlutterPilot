@@ -1368,6 +1368,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             enumValues: ['all', 'overflow', 'a11y', 'contrast'],
             description: 'Filter findings by category (default: all).',
           ),
+          'query': JsonSchema.string(
+            description: 'Filter findings by widget, key, file, or text.',
+          ),
           'designQuality': JsonSchema.boolean(
             description: 'Audit 4/8dp spacing grid and typography hierarchy.',
           ),
@@ -1382,7 +1385,26 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         // out the reading order.
         String report(Map<String, dynamic> data, {required bool sweep}) {
           final max = sweep ? 5 : 12;
-          List<dynamic> list(String key) => data[key] as List? ?? const [];
+          final queryStr = p['query']?.toString().toLowerCase();
+          bool matchesQuery(dynamic item) {
+            if (queryStr == null || queryStr.isEmpty) return true;
+            if (item is Map) {
+              final src = item['source']?.toString().toLowerCase() ?? '';
+              final target = item['target']?.toString().toLowerCase() ?? '';
+              final details = item['details']?.toString().toLowerCase() ?? '';
+              final issue = item['issue']?.toString().toLowerCase() ?? '';
+              final type = item['type']?.toString().toLowerCase() ?? '';
+              return src.contains(queryStr) ||
+                  target.contains(queryStr) ||
+                  details.contains(queryStr) ||
+                  issue.contains(queryStr) ||
+                  type.contains(queryStr);
+            }
+            return item.toString().toLowerCase().contains(queryStr);
+          }
+
+          List<dynamic> list(String key) =>
+              (data[key] as List? ?? const []).where(matchesQuery).toList();
           final overflows = list('overflows');
           final targets = list('accessibilityIssues');
           final unlabeled = list('unlabeled');
