@@ -45,14 +45,15 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
     _tool(
       'apply_and_verify',
       description:
-          'Hot-reloads or restarts the app, awaits frame settle, and verifies '
-          'error-free state in one turn. Returns uncaught exceptions and '
-          'prescriptive RenderFlex overflow diagnostics (pixel delta, culprit flex, '
-          'and layout fix). Use after editing Dart code.',
+          'Hot-reloads/restarts app, awaits frame settle, verifies zero '
+          'errors, and optionally polls waitFor widget in 1 turn.',
       inputSchema: ToolInputSchema(
         properties: {
           'restart': JsonSchema.boolean(
             description: 'Hot restart instead of reload.',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget key or text to wait for after reload.',
           ),
           'quickSettle': JsonSchema.boolean(
             description: 'Settle in <=400ms.',
@@ -132,6 +133,29 @@ mixin _LaunchToolsMixin on _FlutterPilotServerBase {
               'errorCount': split.since.length,
             },
           );
+        }
+
+        final waitFor = p['waitFor']?.toString();
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': waitFor,
+              'timeoutMs': timeoutMs.toString(),
+            },
+          );
+          if (waitRes.isError) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'Reload succeeded cleanly on route "$route", but expected '
+                      'widget "$waitFor" was not found: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
         }
 
         return CallToolResult(

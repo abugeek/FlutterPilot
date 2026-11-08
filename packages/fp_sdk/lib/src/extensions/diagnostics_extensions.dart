@@ -186,6 +186,12 @@ extension _DiagnosticsExtensions on FlutterPilot {
 
     // -- ext.flutterpilot.getErrors -------------------------------------------
     registerExtension('ext.flutterpilot.getErrors', (method, parameters) async {
+      if (parameters['clear'] == 'true') {
+        ErrorInspector.clear();
+        return ServiceExtensionResponse.result(
+          json.encode({'errors': const [], 'cleared': true}),
+        );
+      }
       return ServiceExtensionResponse.result(
         json.encode({'errors': ErrorInspector.errors}),
       );

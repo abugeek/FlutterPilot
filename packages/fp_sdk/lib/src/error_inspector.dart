@@ -206,4 +206,7 @@ class ErrorInspector {
   /// - `timestamp` — ISO 8601 timestamp of when the error was captured.
   static List<Map<String, dynamic>> get errors =>
       List.unmodifiable(_errorBuffer.toList());
+
+  /// Clears all recorded errors from the buffer.
+  static void clear() => _errorBuffer.clear();
 }

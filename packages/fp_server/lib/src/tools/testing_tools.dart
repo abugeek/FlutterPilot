@@ -60,10 +60,8 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
     _tool(
       'mock_platform_channel',
       description:
-          'Stands in for the native side of a plugin (camera, scanner, '
-          'permissions, Bluetooth). No argument: lists mocks and recent calls. '
-          'channel + method + result (or error) answers a MethodChannel call; '
-          'channel + event delivers to an EventChannel. clear:true resets.',
+          'Mocks native platform MethodChannels (method + result/error) '
+          'or EventChannels (event). clear:true resets; omit lists.',
       inputSchema: ToolInputSchema(
         properties: {
           'channel': JsonSchema.string(

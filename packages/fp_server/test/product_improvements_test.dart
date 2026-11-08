@@ -512,6 +512,48 @@ class MyList extends StatelessWidget {
       expect(props.containsKey('limit'), isTrue);
     });
 
+    test('get_errors advertises clear parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'get_errors');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('clear'), isTrue);
+      expect(props['clear']['type'], 'boolean');
+    });
+
+    test('apply_and_verify advertises waitFor parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'apply_and_verify');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('waitFor'), isTrue);
+      expect(props['waitFor']['type'], 'string');
+    });
+
+    test('audit_screen_health advertises category parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'audit_screen_health');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('category'), isTrue);
+    });
+
+    test('replay_flow advertises assertWidget parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'replay_flow');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('assertWidget'), isTrue);
+    });
+
+    test('audit_design_tokens advertises type parameter', () {
+      final tools = server.toolListJson();
+      final tool = tools.firstWhere((t) => t['name'] == 'audit_design_tokens');
+      final schema = tool['inputSchema'] as Map;
+      final props = schema['properties'] as Map;
+      expect(props.containsKey('type'), isTrue);
+    });
+
     test('curated workflow prompts include 1-turn and design workflows', () {
       final promptNames = server
           .promptListJson()

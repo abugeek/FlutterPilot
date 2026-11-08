@@ -832,6 +832,42 @@ Future<void> main(List<String> args) async {
       });
     }
 
+    // 25. Tier 8: Error Buffer Reset / Clearing
+    await runTest('get_errors (clear: true)', 'get_errors', {
+      'clear': true,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Error buffer cleared') ||
+          text.contains('No Flutter errors detected') ||
+          text.toLowerCase().contains('errors');
+    });
+
+    // 26. Tier 8: Category-Filtered Screen Health Audit
+    await runTest('audit_screen_health (category: overflow)', 'audit_screen_health', {
+      'category': 'overflow',
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('overflow') ||
+          text.toLowerCase().contains('findings') ||
+          text.contains('Screen Health Audit');
+    });
+
+    // 27. Tier 8: Type-Filtered Design Token Audit
+    await runTest('audit_design_tokens (type: colors)', 'audit_design_tokens', {
+      'type': 'colors',
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains("app's code") || text.contains('theme');
+    });
+
+    // 28. Tier 8: Apply and Verify with Widget Polling
+    await runTest('apply_and_verify (waitFor target)', 'apply_and_verify', {
+      'waitFor': targetKey,
+    }, verify: (r) {
+      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+      return text.contains('Applied') && text.contains('0 errors');
+    });
+
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

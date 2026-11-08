@@ -1357,15 +1357,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Audits screen health: layout overflows, tap targets under minimum '
-          '(48dp mobile, 24px desktop), unlabeled controls, low contrast text '
-          'and reading order jumps. routes sweeps multiple routes; viewports '
-          'audits responsive breakpoints.',
+          'Audits screen health: layout overflows, tap target sizes, '
+          'contrast, unlabeled controls. viewports sweeps breakpoints.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.array(
             items: JsonSchema.string(),
             description: 'Go to each route and check it.',
+          ),
+          'category': JsonSchema.string(
+            enumValues: ['all', 'overflow', 'a11y', 'contrast'],
+            description: 'Filter findings by category (default: all).',
           ),
           'designQuality': JsonSchema.boolean(
             description: 'Audit 4/8dp spacing grid and typography hierarchy.',
@@ -1404,76 +1406,87 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             }
           }
 
-          section(
-            'Layout overflows',
-            overflows,
-            (o) {
-              final src = o['source'] != null ? ' at ${o['source']}' : '';
-              final fix = o['source'] != null
-                  ? '\n  → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded") or wrap in SingleChildScrollView'
-                  : '';
-              return '${o['type']}$src: ${o['details']}$fix';
-            },
-          );
-          section(
-            'Small tap targets',
-            targets,
-            (a) {
-              final src = a['source'] != null ? ' at ${a['source']}' : '';
-              final fix = a['source'] != null
-                  ? '\n  → Fix: apply_patch_and_verify(target: "${a['source']}", wrapWith: "SizedBox(width: 48, height: 48)") or add padding'
-                  : '';
-              return '`${a['target']}` (${a['type']})$src: ${a['issue']}$fix';
-            },
-          );
-          // Grouped on purpose: identical controls (one list row repeating one
-          // widget) are one finding. Say both numbers so a count of "1" is
-          // never read as "one control".
-          if (unlabeled.isNotEmpty) {
-            final controls = unlabeled.fold<int>(
-              0,
-              (n, u) => n + _unlabeledControls('$u'),
+          final category = p['category']?.toString() ?? 'all';
+          if (category == 'all' || category == 'overflow') {
+            section(
+              'Layout overflows',
+              overflows,
+              (o) {
+                final src = o['source'] != null ? ' at ${o['source']}' : '';
+                final fix = o['source'] != null
+                    ? '\n  → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded") or wrap in SingleChildScrollView'
+                    : '';
+                return '${o['type']}$src: ${o['details']}$fix';
+              },
             );
-            buffer.writeln(
-              'Controls without a label (${unlabeled.length} '
-              'finding${unlabeled.length == 1 ? '' : 's'}, '
-              '$controls control${controls == 1 ? '' : 's'}):',
+          }
+          if (category == 'all' || category == 'a11y') {
+            section(
+              'Small tap targets',
+              targets,
+              (a) {
+                final src = a['source'] != null ? ' at ${a['source']}' : '';
+                final fix = a['source'] != null
+                    ? '\n  → Fix: apply_patch_and_verify(target: "${a['source']}", wrapWith: "SizedBox(width: 48, height: 48)") or add padding'
+                    : '';
+                return '`${a['target']}` (${a['type']})$src: ${a['issue']}$fix';
+              },
             );
-            for (final item in unlabeled.take(max)) {
-              buffer.writeln('- $item');
-              final srcMatch = RegExp(
-                r'Code:\s*([^\s,;()]+\.dart):(\d+):(\d+)',
-              ).firstMatch('$item');
-              if (srcMatch != null) {
-                final f = srcMatch.group(1)!;
-                final l = srcMatch.group(2)!;
-                buffer.writeln(
-                  '  → Fix: apply_patch_and_verify(file: "$f", line: $l, ...) or add tooltip: \'...\' / Semantics(label: \'...\')',
-                );
+            // Grouped on purpose: identical controls (one list row repeating one
+            // widget) are one finding. Say both numbers so a count of "1" is
+            // never read as "one control".
+            if (unlabeled.isNotEmpty) {
+              final controls = unlabeled.fold<int>(
+                0,
+                (n, u) => n + _unlabeledControls('$u'),
+              );
+              buffer.writeln(
+                'Controls without a label (${unlabeled.length} '
+                'finding${unlabeled.length == 1 ? '' : 's'}, '
+                '$controls control${controls == 1 ? '' : 's'}):',
+              );
+              for (final item in unlabeled.take(max)) {
+                buffer.writeln('- $item');
+                final srcMatch = RegExp(
+                  r'Code:\s*([^\s,;()]+\.dart):(\d+):(\d+)',
+                ).firstMatch('$item');
+                if (srcMatch != null) {
+                  final f = srcMatch.group(1)!;
+                  final l = srcMatch.group(2)!;
+                  buffer.writeln(
+                    '  → Fix: apply_patch_and_verify(file: "$f", line: $l, ...) or add tooltip: \'...\' / Semantics(label: \'...\')',
+                  );
+                }
+              }
+              if (unlabeled.length > max) {
+                buffer.writeln('- … ${unlabeled.length - max} more');
               }
             }
-            if (unlabeled.length > max) {
-              buffer.writeln('- … ${unlabeled.length - max} more');
-            }
           }
-          section('Low contrast text', contrast, (c) => '$c');
-          section('Reading order jumps', jumps, (j) => '$j');
-          final gridIssues = list('spacingGridIssues');
-          section(
-            'Padding off the 4dp grid, set in the app\'s code',
-            gridIssues,
-            (g) =>
-                '${g['widget']} ${g['source']}: ${g['details']}'
-                '${(g['count'] ?? 1) > 1 ? ' (×${g['count']})' : ''}',
-          );
-          final typography = list('typographyHierarchy');
-          if (typography.isNotEmpty && !sweep) {
-            buffer.writeln('Typography hierarchy: ${typography.join(", ")}');
+          if (category == 'all' || category == 'contrast') {
+            section('Low contrast text', contrast, (c) => '$c');
+          }
+          if (category == 'all') {
+            section('Reading order jumps', jumps, (j) => '$j');
+            final gridIssues = list('spacingGridIssues');
+            section(
+              'Padding off the 4dp grid, set in the app\'s code',
+              gridIssues,
+              (g) =>
+                  '${g['widget']} ${g['source']}: ${g['details']}'
+                  '${(g['count'] ?? 1) > 1 ? ' (×${g['count']})' : ''}',
+            );
+            final typography = list('typographyHierarchy');
+            if (typography.isNotEmpty && !sweep) {
+              buffer.writeln('Typography hierarchy: ${typography.join(", ")}');
+            }
           }
           if (buffer.isEmpty) {
             buffer.writeln(
-              'No layout overflows, small tap targets, unlabeled controls, '
-              'low-contrast text or reading order jumps.',
+              category == 'all'
+                  ? 'No layout overflows, small tap targets, unlabeled controls, '
+                      'low-contrast text or reading order jumps.'
+                  : 'No $category findings on screen.',
             );
           }
           if (order.isNotEmpty && !sweep) {
@@ -1776,11 +1789,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_design_tokens',
       description:
-          'Colors and corner radii the app\'s own widgets hard-code instead of '
-          'taking from the theme\'s ColorScheme (radii off the 4dp grid), each '
-          'with file:line and the closest token. Framework widgets are not '
-          'checked. Debug builds.',
-      inputSchema: ToolInputSchema(properties: {}),
+          'Audits hard-coded colors and off-grid corner radii in app '
+          'widgets with source location and closest theme token.',
+      inputSchema: ToolInputSchema(
+        properties: {
+          'type': JsonSchema.string(
+            enumValues: ['all', 'colors', 'radii'],
+            description: 'Filter findings by colors or radii (default: all).',
+          ),
+        },
+      ),
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.auditDesignTokens',
@@ -1794,6 +1812,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             content: [TextContent(text: '${data['unavailable']}')],
           );
         }
+        final filterType = p['type']?.toString() ?? 'all';
         final colors = (data['unthemedColors'] as List?) ?? const [];
         final radii = (data['offGridRadii'] as List?) ?? const [];
         final colorCount = data['unthemedColorCount'] ?? colors.length;
@@ -1806,7 +1825,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           buf.write(' All come from the theme.');
         }
         String at(Map m) => m['location'] != null ? ' at ${m['location']}' : '';
-        if (colors.isNotEmpty) {
+        if (colors.isNotEmpty && (filterType == 'all' || filterType == 'colors')) {
           buf.write('\nNot from the ColorScheme ($colorCount):');
           for (final c in colors.cast<Map>()) {
             buf.write(
@@ -1818,7 +1837,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             buf.write('\n  … ${colorCount - colors.length} more');
           }
         }
-        if (radii.isNotEmpty) {
+        if (radii.isNotEmpty && (filterType == 'all' || filterType == 'radii')) {
           buf.write('\nCorner radii off the 4dp grid ($radiusCount):');
           for (final r in radii.cast<Map>()) {
             buf.write(

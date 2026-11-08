@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 74
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 45821 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 45219 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -55,13 +55,14 @@ Makes a registered device the active one: every tool call after this targets it.
 
 ## `get_errors`
 
-Recent uncaught exceptions, deduplicated, with your source frame (file:line) and, for layout errors, the culprit widget. report:true returns the structured report of the latest crash instead: exception, stack, route, recent actions and state.
+Recent uncaught exceptions with source file:line and layout culprits. report:true returns crash report; clear:true empties buffer.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `report` | boolean | no | Return the latest crash report instead of the list. |
+| `clear` | boolean | no | Clear the recorded error buffer. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{hasErrors: bool, count: int, errors: [{kind: "exception"|"overflow", message: string, location?: string, beforeReload: bool}], status?: "ok"|"unavailable", reason?: string}`
 
@@ -226,11 +227,12 @@ _Read-only._
 
 ## `audit_screen_health`
 
-Audits screen health: layout overflows, tap targets under minimum (48dp mobile, 24px desktop), unlabeled controls, low contrast text and reading order jumps. routes sweeps multiple routes; viewports audits responsive breakpoints.
+Audits screen health: layout overflows, tap target sizes, contrast, unlabeled controls. viewports sweeps breakpoints.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `routes` | array | no | Go to each route and check it. |
+| `category` | string: all \| overflow \| a11y \| contrast | no | Filter findings by category (default: all). |
 | `designQuality` | boolean | no | Audit 4/8dp spacing grid and typography hierarchy. |
 | `viewports` | array | no | Audit viewports (e.g. ["mobile_portrait", "tablet"]). |
 
@@ -238,12 +240,13 @@ Audits screen health: layout overflows, tap targets under minimum (48dp mobile, 
 
 ## `audit_design_tokens`
 
-Colors and corner radii the app's own widgets hard-code instead of taking from the theme's ColorScheme (radii off the 4dp grid), each with file:line and the closest token. Framework widgets are not checked. Debug builds.
+Audits hard-coded colors and off-grid corner radii in app widgets with source location and closest theme token.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
+| `type` | string: all \| colors \| radii | no | Filter findings by colors or radii (default: all). |
 
 ## `execute_action_chain`
 
@@ -515,11 +518,12 @@ Builds and starts the app (flutter run, or flutterpilot/launch.json's command) o
 
 ## `apply_and_verify`
 
-Hot-reloads or restarts the app, awaits frame settle, and verifies error-free state in one turn. Returns uncaught exceptions and prescriptive RenderFlex overflow diagnostics (pixel delta, culprit flex, and layout fix). Use after editing Dart code.
+Hot-reloads/restarts app, awaits frame settle, verifies zero errors, and optionally polls waitFor widget in 1 turn.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `restart` | boolean | no | Hot restart instead of reload. |
+| `waitFor` | string | no | Optional widget key or text to wait for after reload. |
 | `quickSettle` | boolean | no | Settle in <=400ms. |
 | `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
 
@@ -645,7 +649,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 ## `mock_platform_channel`
 
-Stands in for the native side of a plugin (camera, scanner, permissions, Bluetooth). No argument: lists mocks and recent calls. channel + method + result (or error) answers a MethodChannel call; channel + event delivers to an EventChannel. clear:true resets.
+Mocks native platform MethodChannels (method + result/error) or EventChannels (event). clear:true resets; omit lists.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -756,12 +760,13 @@ Surgically patches a widget in source code (wrap with widget, unwrap, or replace
 
 ## `replay_flow`
 
-Replays recently recorded user interactions live on the connected app without writing or compiling a test binary, verifying that the flow completes and reaches the expected route.
+Replays recorded user interactions live on the connected app without writing a test binary.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `delayMs` | integer | no | Delay between steps in ms (default: 300). |
 | `assertRoute` | string | no | Assert that the flow ends on this route. |
+| `assertWidget` | string | no | Assert that this widget key/text is visible after replay. |
 
 ## `generate_test`
 
@@ -776,7 +781,7 @@ Records user interactions and writes executable integration_test files (start:tr
 
 ## `synthesize_golden_test`
 
-Writes and runs a golden widget test for one of the app's screens at phone, tablet and desktop sizes; returns the image paths to look at (no network, test font).
+Writes and runs golden widget tests for a screen across phone, tablet, and desktop viewports.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -787,7 +792,7 @@ Writes and runs a golden widget test for one of the app's screens at phone, tabl
 
 ## `scenario`
 
-Named app states to start from, kept as flutterpilot/scenarios/<name>.json in the app (check them in, edit them). No argument lists them. save writes the route, SharedPreferences (sensitive keys left out), the rows of registered Drift/sqflite databases and plain Hive boxes, active HTTP and platform-channel mocks and simple Riverpod/Bloc values. load replaces the stored data (needs --allow-destructive), hot-restarts with the mocks answering from the first call, sets the state and goes to the route.
+Named app states (route, preferences, state, mocks) saved in flutterpilot/scenarios/. save writes, load restores, omit lists.
 
 _Destructive: replaces stored data (needs `--allow-destructive`) or runs app code._
 

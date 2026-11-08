@@ -464,9 +464,8 @@ mixin _TestGenerationToolsMixin
     _tool(
       'replay_flow',
       description:
-          'Replays recently recorded user interactions live on the connected '
-          'app without writing or compiling a test binary, verifying that '
-          'the flow completes and reaches the expected route.',
+          'Replays recorded user interactions live on the connected app '
+          'without writing a test binary.',
       inputSchema: ToolInputSchema(
         properties: {
           'delayMs': JsonSchema.integer(
@@ -474,6 +473,9 @@ mixin _TestGenerationToolsMixin
           ),
           'assertRoute': JsonSchema.string(
             description: 'Assert that the flow ends on this route.',
+          ),
+          'assertWidget': JsonSchema.string(
+            description: 'Assert that this widget key/text is visible after replay.',
           ),
         },
       ),
@@ -583,6 +585,24 @@ mixin _TestGenerationToolsMixin
           buf.writeln('✓ Flow completed successfully with clean screen health.');
         }
 
+        final assertWidget = p['assertWidget']?.toString();
+        if (assertWidget != null && assertWidget.isNotEmpty) {
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {
+              'key': assertWidget,
+              'timeoutMs': '3000',
+            },
+          );
+          if (waitRes.isError) {
+            return fail(
+              'Replayed $replayedCount step(s), but expected widget "$assertWidget" '
+              'was not visible: ${waitRes.errorMessage}',
+            );
+          }
+          buf.writeln('✓ Expected widget "$assertWidget" is visible.');
+        }
+
         return CallToolResult(
           isError: !isClean,
           content: [TextContent(text: buf.toString().trim())],
@@ -639,9 +659,8 @@ mixin _TestGenerationToolsMixin
     _tool(
       'synthesize_golden_test',
       description:
-          'Writes and runs a golden widget test for one of the app\'s '
-          'screens at phone, tablet and desktop sizes; returns the image '
-          'paths to look at (no network, test font).',
+          'Writes and runs golden widget tests for a screen across phone, '
+          'tablet, and desktop viewports.',
       inputSchema: ToolInputSchema(
         properties: {
           'screen': JsonSchema.string(

@@ -8,15 +8,8 @@ mixin _ScenarioToolsMixin
     _tool(
       'scenario',
       description:
-          'Named app states to start from, kept as '
-          'flutterpilot/scenarios/<name>.json in the app (check them in, '
-          'edit them). No argument lists them. save writes the route, '
-          'SharedPreferences (sensitive keys left out), the rows of '
-          'registered Drift/sqflite databases and plain Hive boxes, '
-          'active HTTP and platform-channel mocks and simple '
-          'Riverpod/Bloc values. load replaces the stored data (needs '
-          '--allow-destructive), hot-restarts with the mocks answering '
-          'from the first call, sets the state and goes to the route.',
+          'Named app states (route, preferences, state, mocks) saved in '
+          'flutterpilot/scenarios/. save writes, load restores, omit lists.',
       inputSchema: ToolInputSchema(
         properties: {
           'save': JsonSchema.string(description: 'Name to write.'),

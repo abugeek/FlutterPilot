@@ -568,18 +568,26 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
     _tool(
       'get_errors',
       description:
-          'Recent uncaught exceptions, deduplicated, with your source frame '
-          '(file:line) and, for layout errors, the culprit widget. '
-          'report:true returns the structured report of the latest crash '
-          'instead: exception, stack, route, recent actions and state.',
+          'Recent uncaught exceptions with source file:line and layout '
+          'culprits. report:true returns crash report; clear:true empties buffer.',
       inputSchema: ToolInputSchema(
         properties: {
           'report': JsonSchema.boolean(
             description: 'Return the latest crash report instead of the list.',
           ),
+          'clear': JsonSchema.boolean(
+            description: 'Clear the recorded error buffer.',
+          ),
         },
       ),
       callback: (p, e) async {
+        if (p['clear'] == true) {
+          final res = await _callExtensionRaw('ext.flutterpilot.getErrors', {'clear': 'true'});
+          if (res.isError) return res.toCallToolResult();
+          return CallToolResult(
+            content: [TextContent(text: 'Error buffer cleared.')],
+          );
+        }
         if (p['report'] == true) {
           final report = await _selfHealManager.getLatestReport((ext) async {
             final res = await _callExtensionRaw(ext, {});
