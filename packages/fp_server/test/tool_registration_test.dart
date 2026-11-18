@@ -20,9 +20,9 @@ void main() {
     });
 
     test('stays within the tool budget (ROADMAP §4.2: 60–80)', () {
-      // 71 tools across autonomous capabilities.
+      // 67 consolidated tools across autonomous capabilities.
       // The limit is the current count + 5.
-      expect(names.length, lessThanOrEqualTo(76));
+      expect(names.length, lessThanOrEqualTo(72));
     });
 
     test('plugin-gated and zero-code tools name registered tools', () {
@@ -57,21 +57,21 @@ void main() {
         toolListTotalChars(server.toolListJson(names.where(listed)));
 
     test('the tool list stays within its size budget', () {
-      // Measured after adding autonomous superpowers (74 tools);
+      // Measured after tool consolidation (67 tools);
       // each limit is that profile's measurement plus margin (from tool/tool_list_report.dart).
-      // Every tool (--static-tools): 74 tools, 47 098 chars.
-      expect(listChars((_) => true), lessThanOrEqualTo(47500));
-      // An app with the SDK and no plugin, not on an iOS simulator: 35 652 chars plus margin.
+      // Every tool (--static-tools): 67 tools, 42 137 chars.
+      expect(listChars((_) => true), lessThanOrEqualTo(42600));
+      // An app with the SDK and no plugin, not on an iOS simulator: 30 964 chars plus margin.
       expect(
         listChars(
           (name) =>
               !pluginToolExtensions.containsKey(name) &&
               !name.startsWith('native_'),
         ),
-        lessThanOrEqualTo(36000),
+        lessThanOrEqualTo(31400),
       );
-      // An app without the SDK: 9 612 chars.
-      expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9700));
+      // An app without the SDK: 9 251 chars.
+      expect(listChars(zeroCodeTools.contains), lessThanOrEqualTo(9500));
     });
 
     test('the core profile fits a client with a tool limit', () {
@@ -118,6 +118,7 @@ void main() {
           'supabase_session',
           'scenario',
           'call_custom_tool',
+          'apply_patch_and_verify',
         },
       );
       // No navigational route sweep is advertised as purely read-only, and a

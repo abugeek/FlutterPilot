@@ -138,17 +138,6 @@ extension _WidgetExtensions on FlutterPilot {
     return foundState == true;
   }
 
-  static ServiceExtensionResponse? _refuseIfDisabled(
-    Element element,
-    String target,
-  ) {
-    if (!_isElementDisabled(element)) return null;
-    return ServiceExtensionResponse.error(
-      ServiceExtensionResponse.extensionError,
-      _disabledMessage(target),
-    );
-  }
-
   /// Set by [_tapTarget] when it closed the on-screen keyboard to reach its
   /// target; the tap response says so.
   static String? _tapNote;
@@ -174,6 +163,17 @@ extension _WidgetExtensions on FlutterPilot {
     if (look()) {
       await FlutterPilot._waitForScreenSettled();
       element = PilotWidgetInspector.findElement(target);
+      if (element != null && !HitTestUtils.isElementHittable(element)) {
+        // A dismissing drawer/dialog barrier may still be fading out after
+        // text positions stopped moving; wait briefly for it to clear.
+        final deadline = DateTime.now().add(const Duration(milliseconds: 400));
+        while (DateTime.now().isBefore(deadline) &&
+            !HitTestUtils.isElementHittable(element!)) {
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          element = PilotWidgetInspector.findElement(target);
+          if (element == null) break;
+        }
+      }
       if (look()) {
         scrolled = await ScrollSimulator.scrollUntilVisible(target);
         element = PilotWidgetInspector.findElement(target);
@@ -239,6 +239,161 @@ extension _WidgetExtensions on FlutterPilot {
       label: target,
     );
     return (status: 'ok', error: null);
+  }
+
+  /// Double-taps or long-presses [target]. Shared by doubleTapWidget,
+  /// longPressWidget, and executeActionChain.
+  static Future<({String status, String? error, Map<String, dynamic>? after})>
+      _performPointGesture(
+    String target, {
+    required String kind,
+    Duration duration = const Duration(milliseconds: 600),
+    Duration appearWithin = Duration.zero,
+    bool collectAfter = true,
+  }) async {
+    var element = PilotWidgetInspector.findElement(target);
+    element ??= await _awaitTarget(target, appearWithin);
+    if (element == null) {
+      return (
+        status: 'notFound',
+        error: _makeWidgetNotFoundMessage(target),
+        after: null,
+      );
+    }
+    final ro = element.renderObject;
+    if (ro is! RenderBox || !ro.hasSize) {
+      return (
+        status: 'noLayout',
+        error: 'No layout for widget: $target',
+        after: null,
+      );
+    }
+    if (!HitTestUtils.isElementHittable(element)) {
+      return (status: 'covered', error: _coveredMessage(target), after: null);
+    }
+    if (_isElementDisabled(element)) {
+      return (status: 'disabled', error: _disabledMessage(target), after: null);
+    }
+    final pos = ro.localToGlobal(ro.size.center(Offset.zero));
+    TestRecorder.add(kind, element: element);
+    final routeBefore = collectAfter ? NavigationTracker.currentRoute : '';
+    final treeBefore = collectAfter
+        ? PilotWidgetInspector.captureWidgetTree()
+        : const <String, dynamic>{};
+    if (kind == 'doubleTap') {
+      await InteractionManager.doubleTapAt(pos, label: target);
+    } else {
+      await InteractionManager.longPressAt(
+        pos,
+        duration: duration,
+        label: target,
+      );
+    }
+    if (!collectAfter) return (status: 'ok', error: null, after: null);
+    final after = await _afterAction(
+      routeBefore: routeBefore,
+      treeBefore: treeBefore,
+    );
+    return (status: 'ok', error: null, after: after);
+  }
+
+  /// Swipes [target] in [direction] by [distance] logical pixels. Shared by
+  /// swipeWidget and executeActionChain.
+  static Future<({
+    String status,
+    String? error,
+    bool pullToRefresh,
+    Map<String, dynamic>? after,
+  })> _performSwipe(
+    String target,
+    String direction,
+    double distance, {
+    Duration appearWithin = Duration.zero,
+    bool collectAfter = true,
+  }) async {
+    var element = PilotWidgetInspector.findElement(target);
+    element ??= await _awaitTarget(target, appearWithin);
+    if (element == null) {
+      return (
+        status: 'notFound',
+        error: _makeWidgetNotFoundMessage(target),
+        pullToRefresh: false,
+        after: null,
+      );
+    }
+    final ro = element.renderObject;
+    if (ro is! RenderBox || !ro.hasSize) {
+      return (
+        status: 'noLayout',
+        error: 'No layout for widget: $target',
+        pullToRefresh: false,
+        after: null,
+      );
+    }
+    var start = ro.localToGlobal(ro.size.center(Offset.zero));
+    // Pull to refresh: down in a RefreshIndicator whose list is at its top.
+    final indicator = direction == 'down'
+        ? element.findAncestorStateOfType<RefreshIndicatorState>()
+        : null;
+    final atTop = Scrollable.maybeOf(element)?.position.extentBefore == 0;
+    final pullToRefresh = indicator != null && atTop;
+    if (pullToRefresh) {
+      final box = indicator.context.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        start = Offset(start.dx, box.localToGlobal(Offset.zero).dy + 8);
+        if (box.size.height * 0.85 > distance) {
+          distance = box.size.height * 0.85;
+        }
+      }
+    }
+    final Offset end;
+    switch (direction) {
+      case 'up':
+        end = start.translate(0, -distance);
+      case 'down':
+        end = start.translate(0, distance);
+      case 'left':
+        end = start.translate(-distance, 0);
+      case 'right':
+        end = start.translate(distance, 0);
+      default:
+        return (
+          status: 'invalidParams',
+          error: 'direction must be up|down|left|right',
+          pullToRefresh: false,
+          after: null,
+        );
+    }
+    TestRecorder.add(
+      'drag',
+      element: element,
+      data: {'dx': end.dx - start.dx, 'dy': end.dy - start.dy},
+    );
+    final routeBefore = collectAfter ? NavigationTracker.currentRoute : '';
+    final treeBefore = collectAfter
+        ? PilotWidgetInspector.captureWidgetTree()
+        : const <String, dynamic>{};
+    await InteractionManager.swipeFromTo(start, end);
+    if (pullToRefresh) await _waitForRefresh();
+    if (!collectAfter) {
+      return (
+        status: 'ok',
+        error: null,
+        pullToRefresh: pullToRefresh,
+        after: null,
+      );
+    }
+    final after = await _afterAction(
+      routeBefore: routeBefore,
+      treeBefore: treeBefore,
+      watchQuiet: false,
+    );
+    return (
+      status: 'ok',
+      error: null,
+      pullToRefresh: pullToRefresh,
+      after: after,
+    );
   }
 
   /// Types [text] into the field [target] resolves to (or the focused field
@@ -382,6 +537,70 @@ extension _WidgetExtensions on FlutterPilot {
     return found;
   }
 
+  /// Toggles the Checkbox, Switch or Radio under [target] (or sets it to
+  /// [value] when provided, reporting [alreadySet] when no tap was needed).
+  static Future<({String status, String? error, bool alreadySet, bool? value})>
+  _toggleTarget(String target, {bool? value, VoidCallback? beforeTap}) async {
+    final element = PilotWidgetInspector.findElement(target);
+    if (element == null) {
+      return (
+        status: 'notFound',
+        error: _makeWidgetNotFoundMessage(target),
+        alreadySet: false,
+        value: null,
+      );
+    }
+    if (value != null) {
+      final currentVal = PilotWidgetInspector.controlValue(element);
+      if (currentVal is bool && currentVal == value) {
+        return (status: 'ok', error: null, alreadySet: true, value: value);
+      }
+    }
+    RenderBox? renderBox;
+    void findToggleable(Element e) {
+      if (renderBox != null) return;
+      final w = e.widget;
+      if (_isToggle(w)) {
+        renderBox = e.renderObject as RenderBox?;
+        return;
+      }
+      e.debugVisitOnstageChildren(findToggleable);
+    }
+
+    if (_isToggle(element.widget)) {
+      renderBox = element.renderObject as RenderBox?;
+    } else {
+      findToggleable(element);
+    }
+    renderBox ??= element.renderObject as RenderBox?;
+    if (renderBox == null) {
+      return (
+        status: 'noLayout',
+        error: 'Widget "$target" has no renderable box',
+        alreadySet: false,
+        value: null,
+      );
+    }
+    if (!HitTestUtils.isElementHittable(element)) {
+      return (
+        status: 'covered',
+        error: _coveredMessage(target),
+        alreadySet: false,
+        value: null,
+      );
+    }
+    final box = renderBox!;
+    final offset = box.localToGlobal(Offset.zero);
+    final center = offset + Offset(box.size.width / 2, box.size.height / 2);
+    beforeTap?.call();
+    final toggle = box.debugCreator is DebugCreator
+        ? (box.debugCreator as DebugCreator).element
+        : element;
+    TestRecorder.add('tap', element: toggle, data: {'target': target});
+    await InteractionManager.tapAt(center, label: target);
+    return (status: 'ok', error: null, alreadySet: false, value: value);
+  }
+
   /// How long a chain step waits for a target the step before it may still
   /// be bringing on screen (a page that loads its content after opening).
   static const _chainStepAppearWithin = Duration(seconds: 3);
@@ -490,7 +709,7 @@ extension _WidgetExtensions on FlutterPilot {
   }
 
   /// How long an action that changed nothing is watched for a late effect.
-  static const _quietWatch = Duration(milliseconds: 500);
+  static const _quietWatch = Duration(milliseconds: 300);
 
   /// What an action led to, read once the screen it led to has settled: the
   /// `postActionState` and the `delta` (route change and a capped
@@ -529,8 +748,21 @@ extension _WidgetExtensions on FlutterPilot {
         : _quietWatch;
     if (watchQuiet && !isTest && quiet()) {
       final watch = Stopwatch()..start();
+      var frameDirty = false;
+      void armFrameHook() {
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          frameDirty = true;
+        });
+      }
+
+      armFrameHook();
       while (watch.elapsed < effectiveQuietWatch && quiet()) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (!frameDirty && NavigationTracker.currentRoute == routeBefore) {
+          continue;
+        }
+        frameDirty = false;
+        armFrameHook();
         diff = PilotWidgetInspector.diffWidgetTrees(
           treeBefore,
           PilotWidgetInspector.captureWidgetTree(),
@@ -1135,35 +1367,15 @@ extension _WidgetExtensions on FlutterPilot {
           'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
-      if (element == null) {
+      final res = await _performPointGesture(target, kind: 'doubleTap');
+      if (res.status != 'ok') {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          _makeWidgetNotFoundMessage(target),
+          res.error!,
         );
       }
-      final ro = element.renderObject;
-      if (ro is RenderBox && ro.hasSize) {
-        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-        TestRecorder.add('doubleTap', element: element);
-        final routeBefore = NavigationTracker.currentRoute;
-        final treeBefore = PilotWidgetInspector.captureWidgetTree();
-        final covered = _refuseIfCovered(element, target);
-        if (covered != null) return covered;
-        final disabled = _refuseIfDisabled(element, target);
-        if (disabled != null) return disabled;
-        await InteractionManager.doubleTapAt(pos, label: target);
-        final after = await _afterAction(
-          routeBefore: routeBefore,
-          treeBefore: treeBefore,
-        );
-        return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', ...after}),
-        );
-      }
-      return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.extensionError,
-        'No layout for widget: $target',
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', ...?res.after}),
       );
     });
 
@@ -1180,39 +1392,19 @@ extension _WidgetExtensions on FlutterPilot {
           'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
-      if (element == null) {
+      final res = await _performPointGesture(
+        target,
+        kind: 'longPress',
+        duration: Duration(milliseconds: ms),
+      );
+      if (res.status != 'ok') {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          _makeWidgetNotFoundMessage(target),
+          res.error!,
         );
       }
-      final ro = element.renderObject;
-      if (ro is RenderBox && ro.hasSize) {
-        final pos = ro.localToGlobal(ro.size.center(Offset.zero));
-        TestRecorder.add('longPress', element: element);
-        final routeBefore = NavigationTracker.currentRoute;
-        final treeBefore = PilotWidgetInspector.captureWidgetTree();
-        final covered = _refuseIfCovered(element, target);
-        if (covered != null) return covered;
-        final disabled = _refuseIfDisabled(element, target);
-        if (disabled != null) return disabled;
-        await InteractionManager.longPressAt(
-          pos,
-          duration: Duration(milliseconds: ms),
-          label: target,
-        );
-        final after = await _afterAction(
-          routeBefore: routeBefore,
-          treeBefore: treeBefore,
-        );
-        return ServiceExtensionResponse.result(
-          json.encode({'status': 'success', ...after}),
-        );
-      }
-      return ServiceExtensionResponse.error(
-        ServiceExtensionResponse.extensionError,
-        'No layout for widget: $target',
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', ...?res.after}),
       );
     });
 
@@ -1223,81 +1415,27 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       final target = parameters['key'] ?? parameters['target'];
       final direction = parameters['direction'] ?? 'up';
-      var distance = double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
+      final distance = double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
       if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,
           'Missing target',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
-      if (element == null) {
+      final res = await _performSwipe(target, direction, distance);
+      if (res.status != 'ok') {
         return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          _makeWidgetNotFoundMessage(target),
+          res.status == 'invalidParams'
+              ? ServiceExtensionResponse.invalidParams
+              : ServiceExtensionResponse.extensionError,
+          res.error!,
         );
       }
-      final ro = element.renderObject;
-      if (ro is! RenderBox || !ro.hasSize) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'No layout for widget: $target',
-        );
-      }
-      var start = ro.localToGlobal(ro.size.center(Offset.zero));
-      // Pull to refresh: down in a RefreshIndicator whose list is at its
-      // top. Apple's bouncing physics overscrolls less the further it goes:
-      // a 300 px pull in a 500 px list never armed the indicator.
-      final indicator = direction == 'down'
-          ? element.findAncestorStateOfType<RefreshIndicatorState>()
-          : null;
-      final atTop = Scrollable.maybeOf(element)?.position.extentBefore == 0;
-      final pullToRefresh = indicator != null && atTop;
-      if (pullToRefresh) {
-        // From the top of the list, so the pull stays on screen.
-        final box = indicator.context.findRenderObject() as RenderBox?;
-        if (box != null && box.hasSize) {
-          start = Offset(start.dx, box.localToGlobal(Offset.zero).dy + 8);
-          if (box.size.height * 0.85 > distance) {
-            distance = box.size.height * 0.85;
-          }
-        }
-      }
-      final Offset end;
-      switch (direction) {
-        case 'up':
-          end = start.translate(0, -distance);
-        case 'down':
-          end = start.translate(0, distance);
-        case 'left':
-          end = start.translate(-distance, 0);
-        case 'right':
-          end = start.translate(distance, 0);
-        default:
-          return ServiceExtensionResponse.error(
-            ServiceExtensionResponse.invalidParams,
-            'direction must be up|down|left|right',
-          );
-      }
-      TestRecorder.add(
-        'drag',
-        element: element,
-        data: {'dx': end.dx - start.dx, 'dy': end.dy - start.dy},
-      );
-      final routeBefore = NavigationTracker.currentRoute;
-      final treeBefore = PilotWidgetInspector.captureWidgetTree();
-      await InteractionManager.swipeFromTo(start, end);
-      if (pullToRefresh) await _waitForRefresh();
-      final after = await _afterAction(
-        routeBefore: routeBefore,
-        treeBefore: treeBefore,
-        watchQuiet: false,
-      );
       return ServiceExtensionResponse.result(
         json.encode({
           'status': 'success',
-          if (pullToRefresh) 'pullToRefresh': true,
-          ...after,
+          if (res.pullToRefresh) 'pullToRefresh': true,
+          ...?res.after,
         }),
       );
     });
@@ -1467,61 +1605,34 @@ extension _WidgetExtensions on FlutterPilot {
           'Missing required parameter: key or target',
         );
       }
-      final element = PilotWidgetInspector.findElement(target);
-      if (element == null) {
+      final desired = parameters['value'] != null
+          ? parameters['value'] == 'true'
+          : null;
+      String? routeBefore;
+      Map<String, dynamic> treeBefore = const {};
+      final r = await _toggleTarget(
+        target,
+        value: desired,
+        beforeTap: () {
+          routeBefore = NavigationTracker.currentRoute;
+          treeBefore = PilotWidgetInspector.captureWidgetTree();
+        },
+      );
+      if (r.status != 'ok') {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.extensionError,
-          _makeWidgetNotFoundMessage(target),
+          r.error ?? 'Toggle failed',
         );
       }
-      if (parameters['value'] != null) {
-        final targetBool = parameters['value'] == 'true';
-        final currentVal = PilotWidgetInspector.controlValue(element);
-        if (currentVal is bool && currentVal == targetBool) {
-          return ServiceExtensionResponse.result(
-            json.encode({
-              'status': 'success',
-              'alreadySet': true,
-              'value': targetBool,
-            }),
-          );
-        }
-      }
-      RenderBox? renderBox;
-      void findToggleable(Element e) {
-        if (renderBox != null) return;
-        final w = e.widget;
-        if (_isToggle(w)) {
-          renderBox = e.renderObject as RenderBox?;
-          return;
-        }
-        e.debugVisitOnstageChildren(findToggleable);
-      }
-
-      if (_isToggle(element.widget)) {
-        renderBox = element.renderObject as RenderBox?;
-      } else {
-        findToggleable(element);
-      }
-      renderBox ??= element.renderObject as RenderBox?;
-      if (renderBox == null) {
-        return ServiceExtensionResponse.error(
-          ServiceExtensionResponse.extensionError,
-          'Widget "$target" has no renderable box',
+      if (r.alreadySet) {
+        return ServiceExtensionResponse.result(
+          json.encode({
+            'status': 'success',
+            'alreadySet': true,
+            'value': r.value,
+          }),
         );
       }
-      final box = renderBox!;
-      final offset = box.localToGlobal(Offset.zero);
-      final center = offset + Offset(box.size.width / 2, box.size.height / 2);
-      final routeBefore = NavigationTracker.currentRoute;
-      final treeBefore = PilotWidgetInspector.captureWidgetTree();
-      final covered = _refuseIfCovered(element, target);
-      if (covered != null) return covered;
-      final toggle = box.debugCreator is DebugCreator
-          ? (box.debugCreator as DebugCreator).element
-          : element;
-      TestRecorder.add('tap', element: toggle, data: {'target': target});
-      await InteractionManager.tapAt(center, label: target);
       final after = await _afterAction(
         routeBefore: routeBefore,
         treeBefore: treeBefore,
@@ -1982,8 +2093,8 @@ extension _WidgetExtensions on FlutterPilot {
       final anyOfStr = parameters['anyOf'];
       final List<String> targets = anyOfStr != null && anyOfStr.isNotEmpty
           ? (anyOfStr.contains(',')
-              ? anyOfStr.split(',').map((s) => s.trim()).toList()
-              : [anyOfStr])
+                ? anyOfStr.split(',').map((s) => s.trim()).toList()
+                : [anyOfStr])
           : (selector != null ? [selector.toString()] : const <String>[]);
       final failureKey = parameters['failureKey'];
       // 3000 is the default the server's `wait_for` copies (its `timeoutOf`
@@ -2180,7 +2291,8 @@ extension _WidgetExtensions on FlutterPilot {
             'totalFields': fields.length,
             'submitted': submitted,
             'failedFields': failedFields,
-            if (validationErrors.isNotEmpty) 'validationErrors': validationErrors,
+            if (validationErrors.isNotEmpty)
+              'validationErrors': validationErrors,
             ...after,
           }),
         );
@@ -2284,13 +2396,16 @@ extension _WidgetExtensions on FlutterPilot {
               final ok = await ScrollSimulator.scrollUntilVisible(target);
               r = ok
                   ? (status: 'ok', error: null)
-                  : (status: 'notFound', error: 'Could not scroll "$target" into view.');
+                  : (
+                      status: 'notFound',
+                      error: 'Could not scroll "$target" into view.',
+                    );
             case 'assert_widget' || 'assertWidget' when target != null:
-              final exact =
-                  item['exact'] == 'true' ||
-                  item['exact'] == true;
-              final found =
-                  PilotWidgetInspector.findElement(target, partial: !exact);
+              final exact = item['exact'] == 'true' || item['exact'] == true;
+              final found = PilotWidgetInspector.findElement(
+                target,
+                partial: !exact,
+              );
               r = found != null
                   ? (status: 'ok', error: null)
                   : (
@@ -2299,10 +2414,7 @@ extension _WidgetExtensions on FlutterPilot {
                     );
             case 'wait_for' || 'waitFor' when target != null:
               final ms =
-                  int.tryParse(
-                    item['timeoutMs']?.toString() ?? '3000',
-                  ) ??
-                  3000;
+                  int.tryParse(item['timeoutMs']?.toString() ?? '3000') ?? 3000;
               final found = await _awaitTarget(
                 target,
                 Duration(milliseconds: ms),
@@ -2321,12 +2433,93 @@ extension _WidgetExtensions on FlutterPilot {
                       status: 'notFound',
                       error: 'Text field "$target" could not be cleared.',
                     );
+            case 'press_key' || 'pressKey' when target != null:
+              try {
+                await _keyboardSimulator.pressKey(target);
+                await InteractionManager.pumpAndSettleAdaptive();
+                r = (status: 'ok', error: null);
+              } catch (e) {
+                r = (status: 'failed', error: 'press_key "$target" failed: $e');
+              }
+            case 'navigate_to' || 'navigateTo' when target != null:
+              try {
+                await _pushRoute(target);
+                await InteractionManager.pumpAndSettleAdaptive();
+                r = (status: 'ok', error: null);
+              } catch (e) {
+                r = (
+                  status: 'navigationFailed',
+                  error: 'Navigation to "$target" failed: $e',
+                );
+              }
+            case 'toggle_checkbox' || 'toggleCheckbox' when target != null:
+              final rawVal = item['value'];
+              final desired = rawVal == null
+                  ? null
+                  : (rawVal == true || rawVal.toString() == 'true');
+              final toggled = await _toggleTarget(target, value: desired);
+              r = (status: toggled.status, error: toggled.error);
+              if (toggled.alreadySet) {
+                _tapNote = 'already ${toggled.value} (no-op)';
+              }
+            case 'wait_for_route' || 'waitForRoute' when target != null:
+              final ms =
+                  int.tryParse(item['timeoutMs']?.toString() ?? '5000') ?? 5000;
+              final deadline = DateTime.now().add(Duration(milliseconds: ms));
+              var reached = NavigationTracker.currentRoute == target;
+              while (!reached && DateTime.now().isBefore(deadline)) {
+                await Future<void>.delayed(const Duration(milliseconds: 50));
+                reached = NavigationTracker.currentRoute == target;
+              }
+              r = reached
+                  ? (status: 'ok', error: null)
+                  : (
+                      status: 'timeout',
+                      error:
+                          'Timeout: route "$target" not reached within ${ms}ms '
+                          '(currently on "${NavigationTracker.currentRoute}")',
+                    );
+            case 'double_tap' || 'doubleTap' when target != null:
+              final g = await _performPointGesture(
+                target,
+                kind: 'doubleTap',
+                appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
+                collectAfter: false,
+              );
+              r = (status: g.status, error: g.error);
+            case 'long_press' || 'longPress' when target != null:
+              final ms =
+                  int.tryParse(item['durationMs']?.toString() ?? '600') ?? 600;
+              final g = await _performPointGesture(
+                target,
+                kind: 'longPress',
+                duration: Duration(milliseconds: ms),
+                appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
+                collectAfter: false,
+              );
+              r = (status: g.status, error: g.error);
+            case 'swipe' when target != null:
+              final direction = item['direction']?.toString() ?? 'up';
+              final distance =
+                  double.tryParse(item['distance']?.toString() ?? '200') ??
+                  200.0;
+              final s = await _performSwipe(
+                target,
+                direction,
+                distance,
+                appearWithin: i == 0 ? Duration.zero : _chainStepAppearWithin,
+                collectAfter: false,
+              );
+              r = (status: s.status, error: s.error);
             default:
               r = (
                 status: 'unsupportedAction',
                 error:
-                    'unsupported action "$action". Use "tap", "enter_text", '
-                    '"scroll_into_view", "assert_widget", "wait_for", or "clear_text".',
+                    'unsupported action "$action". Use "tap", "double_tap", '
+                    '"long_press", "swipe", "enter_text", "press_key", '
+                    '"navigate_to", "toggle_checkbox", "wait_for_route", '
+                    '"scroll_into_view", "assert_widget", "wait_for", or '
+                    '"clear_text".',
               );
           }
           if (r.status == 'ok') {

@@ -16,8 +16,12 @@ class OperationScheduler {
   Future<T> schedule<T>({
     required bool mutating,
     required Future<T> Function() operation,
+    Duration? timeout,
   }) {
-    final result = _mutationTail.then((_) => operation());
+    final result = _mutationTail.then((_) {
+      final future = operation();
+      return timeout == null ? future : future.timeout(timeout);
+    });
     if (mutating) {
       _mutationTail = result.then<void>(
         (_) {},

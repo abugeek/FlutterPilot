@@ -368,6 +368,57 @@ final structuredContracts = <String, StructuredSpec>{
       StructuredSpec.string(oneOf: {'ok', 'refused', 'unavailable'}),
     ),
   }),
+  'crawl_app': StructuredSpec.object({
+    'screens': _req(
+      StructuredSpec.list(
+        StructuredSpec.object({
+          'route': _req(StructuredSpec.string()),
+          'overflows': _req(StructuredSpec.integer()),
+          'a11y': _req(StructuredSpec.integer()),
+        }),
+      ),
+    ),
+    'edges': _req(
+      StructuredSpec.list(
+        StructuredSpec.object({
+          'from': _req(StructuredSpec.string()),
+          'to': _req(StructuredSpec.string()),
+          'via': _req(StructuredSpec.string()),
+        }),
+      ),
+    ),
+    'taps': _req(StructuredSpec.integer()),
+    'restored': _req(StructuredSpec.boolean()),
+  }),
+  'get_rebuild_stats': StructuredSpec.object({
+    'started': _opt(StructuredSpec.boolean()),
+    'sinceMs': _req(StructuredSpec.integer()),
+    'totalRebuilds': _req(StructuredSpec.integer()),
+    'widgetTypes': _req(StructuredSpec.integer()),
+    'rebuilds': _req(
+      StructuredSpec.list(
+        StructuredSpec.object({
+          'widget': _req(StructuredSpec.string()),
+          'rebuilds': _req(StructuredSpec.integer()),
+          'createdAt': _opt(StructuredSpec.string()),
+        }),
+      ),
+    ),
+    'moreTypes': _opt(StructuredSpec.integer()),
+    'hints': _req(StructuredSpec.list(StructuredSpec.string())),
+  }),
+  'apply_patch_and_verify': StructuredSpec.object({
+    'patchCount': _req(StructuredSpec.integer()),
+    'fileCount': _req(StructuredSpec.integer()),
+    'reloaded': _req(StructuredSpec.boolean()),
+    'rolledBack': _req(StructuredSpec.boolean()),
+    'overflowCount': _req(StructuredSpec.integer()),
+    'accessibilityIssueCount': _req(StructuredSpec.integer()),
+  }),
+  'synthesize_golden_test': StructuredSpec.object({
+    'file': _req(StructuredSpec.string()),
+    'images': _req(StructuredSpec.list(StructuredSpec.string())),
+  }),
 };
 
 /// A short note appended to a family's shape in `TOOLS.generated.md`.

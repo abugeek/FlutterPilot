@@ -6,134 +6,6 @@ mixin _TestGenerationToolsMixin
     on _FlutterPilotServerBase, _DevtoolsToolsMixin {
   void _registerTestGenerationTools() {
     _tool(
-      'locate_source_ast',
-      description:
-          'Locates widget constructor call in source code (file:line, code '
-          'snippet, named arguments, start/end file offsets).',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'key': JsonSchema.string(
-            description: 'Key, selector or visible text of the widget.',
-          ),
-          'file': JsonSchema.string(
-            description: 'File in the app, e.g. "lib/ui/tile.dart".',
-          ),
-          'line': JsonSchema.integer(description: '1-based line, with file.'),
-          'column': JsonSchema.integer(
-            description: '1-based column where the call starts, with file.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        CallToolResult fail(String s) =>
-            CallToolResult(isError: true, content: [TextContent(text: s)]);
-        var file = p['file']?.toString();
-        var line = (p['line'] as num?)?.toInt();
-        var column = (p['column'] as num?)?.toInt();
-        String? type;
-        var isStaticFallback = false;
-        if (file == null) {
-          if (p['key'] == null) return fail('Give key, or file and line.');
-          final keyStr = p['key'].toString();
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.inspectWidget',
-            {'key': keyStr},
-          );
-          final source = !res.isError && res.data?['source'] is Map
-              ? res.data!['source'] as Map
-              : null;
-          final loc = source?['loc']?.toString();
-          final m = loc == null
-              ? null
-              : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
-          if (m != null) {
-            type = source?['type']?.toString();
-            file = m[1]!;
-            line = int.parse(m[2]!);
-            column = int.parse(m[3]!);
-          } else {
-            // Live widget not mounted in current viewport / tree:
-            // Fall back to scanning the app's lib/ directory statically.
-            final vm = (await _deviceContextForParameters(const {}))?.service;
-            final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
-            final root = isolateId == null
-                ? null
-                : (await _appEntrypoint(vm!, isolateId))?.root;
-            final appRoot = root ?? Directory.current.path;
-            final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
-            final match =
-                await findWidgetConstructorInProject(searchDir, keyStr);
-            if (match != null) {
-              file = path_pkg.relative(match.file, from: appRoot);
-              line = match.line;
-              column = match.column;
-              type = match.type;
-              isStaticFallback = true;
-            } else {
-              if (res.isError) return res.toCallToolResult();
-              return fail(
-                'No source location for "$keyStr": it is not created by '
-                "the app's code, or this is not a debug build.",
-              );
-            }
-          }
-        }
-        if (line == null) return fail('Give line with file.');
-
-        // Locations are relative to the app's folder, not the server's.
-        var path = file;
-        if (path.startsWith('file://')) path = Uri.parse(path).toFilePath();
-        if (!path_pkg.isAbsolute(path)) {
-          final vm = (await _deviceContextForParameters(const {}))?.service;
-          final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
-          final root = isolateId == null
-              ? null
-              : (await _appEntrypoint(vm!, isolateId))?.root;
-          path = path_pkg.join(root ?? Directory.current.path, path);
-        }
-        final f = File(path);
-        if (!f.existsSync()) return fail('Not found on disk: $path');
-        final text = f.readAsStringSync();
-        final span = constructorSpanAt(text, line, column ?? 1);
-        if (span == null) {
-          return fail(
-            'No widget constructor call starts at $file:$line:${column ?? 1}'
-            '${column == null ? ' (give the column where it starts)' : ''}.',
-          );
-        }
-        var snippet = text.substring(span.offset, span.end);
-        final lines = snippet.split('\n');
-        final cut = lines.length > 80;
-        if (cut) snippet = '${lines.take(80).join('\n')}\n…';
-        final endLine = line + lines.length - 1;
-        final args = span.namedArgs.isEmpty
-            ? 'none'
-            : span.namedArgs.join(', ');
-        return CallToolResult(
-          content: [
-            TextContent(
-              text:
-                  '${type ?? 'Call'} at $file:$line-$endLine '
-                  '(offset ${span.offset}–${span.end}). Named arguments: '
-                  '$args.${cut ? ' Showing 80 of ${lines.length} lines.' : ''}'
-                  '${isStaticFallback ? ' (resolved via offline AST fallback: unmounted/off-screen)' : ''}'
-                  '\n```dart\n$snippet\n```',
-            ),
-          ],
-          structuredContent: {
-            'file': file,
-            'line': line,
-            'endLine': endLine,
-            'offset': span.offset,
-            'end': span.end,
-            'namedArgs': span.namedArgs,
-            'widget': ?type,
-          },
-        );
-      },
-    );
-
-    _tool(
       'apply_patch_and_verify',
       description:
           'Surgically patches widget in source (wrap, unwrap, replaceCall), '
@@ -213,15 +85,18 @@ mixin _TestGenerationToolsMixin
               column = int.parse(m[3]!);
             } else {
               final vm = (await _deviceContextForParameters(const {}))?.service;
-              final isolateId =
-                  vm == null ? null : await _uiIsolateId(vm, null);
+              final isolateId = vm == null
+                  ? null
+                  : await _uiIsolateId(vm, null);
               final root = isolateId == null
                   ? null
                   : (await _appEntrypoint(vm!, isolateId))?.root;
               final appRoot = root ?? Directory.current.path;
               final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
-              final match =
-                  await findWidgetConstructorInProject(searchDir, keyStr);
+              final match = await findWidgetConstructorInProject(
+                searchDir,
+                keyStr,
+              );
               if (match != null) {
                 file = path_pkg.relative(match.file, from: appRoot);
                 line = match.line;
@@ -230,11 +105,17 @@ mixin _TestGenerationToolsMixin
                 isStaticFallback = true;
               } else {
                 if (res.isError) {
-                  return (patch: null, error: res.data?['error']?.toString() ?? 'Widget inspection failed');
+                  return (
+                    patch: null,
+                    error:
+                        res.data?['error']?.toString() ??
+                        'Widget inspection failed',
+                  );
                 }
                 return (
                   patch: null,
-                  error: 'No source location for "$keyStr": not found in live tree or offline AST.',
+                  error:
+                      'No source location for "$keyStr": not found in live tree or offline AST.',
                 );
               }
             }
@@ -262,7 +143,8 @@ mixin _TestGenerationToolsMixin
           if (span == null) {
             return (
               patch: null,
-              error: 'No widget constructor call starts at $file:$line:${column ?? 1}.',
+              error:
+                  'No widget constructor call starts at $file:$line:${column ?? 1}.',
             );
           }
 
@@ -288,8 +170,9 @@ mixin _TestGenerationToolsMixin
               patchEnd = parent.end;
               newCall = originalCall;
             } else {
-              final childMatch =
-                  RegExp(r'\bchild\s*:\s*').firstMatch(originalCall);
+              final childMatch = RegExp(
+                r'\bchild\s*:\s*',
+              ).firstMatch(originalCall);
               if (childMatch != null) {
                 var depth = 0;
                 var startIdx = childMatch.end;
@@ -313,7 +196,8 @@ mixin _TestGenerationToolsMixin
               } else {
                 return (
                   patch: null,
-                  error: 'Cannot unwrap ${type ?? 'widget'}: no child parameter found.',
+                  error:
+                      'Cannot unwrap ${type ?? 'widget'}: no child parameter found.',
                 );
               }
             }
@@ -360,9 +244,9 @@ mixin _TestGenerationToolsMixin
 
         final List<Map<String, dynamic>> patchList = p['patches'] is List
             ? (p['patches'] as List)
-                .whereType<Map>()
-                .map((m) => m.cast<String, dynamic>())
-                .toList()
+                  .whereType<Map>()
+                  .map((m) => m.cast<String, dynamic>())
+                  .toList()
             : [p];
         if (patchList.isEmpty) return fail('No patches specified.');
 
@@ -390,7 +274,8 @@ mixin _TestGenerationToolsMixin
 
           var content = originalFiles[path]!;
           for (final patch in patches) {
-            content = content.substring(0, patch.patchOffset) +
+            content =
+                content.substring(0, patch.patchOffset) +
                 patch.newCall +
                 content.substring(patch.patchEnd);
           }
@@ -418,15 +303,27 @@ mixin _TestGenerationToolsMixin
               .whereType<TextContent>()
               .map((c) => c.text)
               .join('\n');
-          return fail(
-            'Hot reload failed after applying patch:\n$err\n'
-            'Rolled back changes across ${originalFiles.length} file(s).',
+          return withVerdict(
+            fail(
+              'Hot reload failed after applying patch:\n$err\n'
+              'Rolled back changes across ${originalFiles.length} file(s).',
+            ),
+            {
+              'patchCount': resolved.length,
+              'fileCount': originalFiles.length,
+              'reloaded': false,
+              'rolledBack': true,
+              'overflowCount': 0,
+              'accessibilityIssueCount': 0,
+            },
           );
         }
 
         await Future<void>.delayed(const Duration(milliseconds: 150));
-        final audit =
-            await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+        final audit = await _callExtensionRaw(
+          'ext.flutterpilot.auditScreenHealth',
+          {},
+        );
         final auditData = audit.data ?? const <String, dynamic>{};
         final overflows = (auditData['overflows'] as List?) ?? const [];
         final a11y = (auditData['accessibilityIssues'] as List?) ?? const [];
@@ -447,7 +344,9 @@ mixin _TestGenerationToolsMixin
           );
           for (var i = 0; i < resolved.length; i++) {
             final r = resolved[i];
-            buf.writeln('  ${i + 1}. ${r.file}:${r.line} (${r.newCall.split('\n').first})');
+            buf.writeln(
+              '  ${i + 1}. ${r.file}:${r.line} (${r.newCall.split('\n').first})',
+            );
           }
         }
         buf.writeln('Post-reload screen health:');
@@ -456,14 +355,11 @@ mixin _TestGenerationToolsMixin
 
         final waitFor = p['waitFor']?.toString();
         if (waitFor != null && waitFor.isNotEmpty) {
-          final timeout =
-              ((p['timeoutMs'] as num?)?.toInt() ?? 3000).toString();
+          final timeout = ((p['timeoutMs'] as num?)?.toInt() ?? 3000)
+              .toString();
           final waitRes = await _callExtensionRaw(
             'ext.flutterpilot.waitForCondition',
-            {
-              'selector': waitFor,
-              'timeoutMs': timeout,
-            },
+            {'selector': waitFor, 'timeoutMs': timeout},
           );
           if (waitRes.isError) {
             buf.writeln(
@@ -480,192 +376,9 @@ mixin _TestGenerationToolsMixin
             'patchCount': resolved.length,
             'fileCount': originalFiles.length,
             'reloaded': true,
+            'rolledBack': false,
             'overflowCount': overflows.length,
             'accessibilityIssueCount': a11y.length,
-            'health': auditData,
-          },
-        );
-      },
-    );
-
-    _tool(
-      'replay_flow',
-      description:
-          'Replays recorded user interactions live on the connected app '
-          'without writing a test binary.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'delayMs': JsonSchema.integer(
-            description: 'Delay between steps in ms (default: 300).',
-          ),
-          'assertRoute': JsonSchema.string(
-            description: 'Assert that the flow ends on this route.',
-          ),
-          'assertWidget': JsonSchema.string(
-            description: 'Assert that this widget key/text is visible after replay.',
-          ),
-          'exportAsTest': JsonSchema.boolean(
-            description: 'Write replayed flow as integration_test file.',
-          ),
-          'testName': JsonSchema.string(
-            description: 'Test file name in snake_case (e.g. "replayed_flow").',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        CallToolResult fail(String s) =>
-            CallToolResult(isError: true, content: [TextContent(text: s)]);
-
-        final recRes = await _callExtensionRaw(
-          'ext.flutterpilot.testRecording',
-          {'action': 'read'},
-        );
-        if (recRes.isError) return recRes.toCallToolResult();
-        final rawSteps = (recRes.data?['steps'] as List? ?? const []);
-        final steps = [
-          for (final s in rawSteps)
-            if (s is Map) s.cast<String, dynamic>(),
-        ];
-
-        if (steps.isEmpty) {
-          return fail(
-            'No recorded steps to replay. Call generate_test(start: true) and '
-            'interact with the app first.',
-          );
-        }
-
-        final delay = (p['delayMs'] as num?)?.toInt() ?? 300;
-        final assertRoute = p['assertRoute']?.toString();
-
-        var replayedCount = 0;
-        for (final step in steps) {
-          final type = step['type']?.toString();
-          if (type == 'tap' || type == 'tapAt') {
-            final key = step['key']?.toString();
-            final text = step['text']?.toString();
-            if (key != null) {
-              await _callExtensionRaw(
-                'ext.flutterpilot.tapWidget',
-                {'key': key},
-              );
-            } else if (text != null) {
-              await _callExtensionRaw(
-                'ext.flutterpilot.tapWidget',
-                {'text': text},
-              );
-            } else if (step['x'] != null && step['y'] != null) {
-              await _callExtensionRaw('ext.flutterpilot.tapWidget', {
-                'x': step['x'].toString(),
-                'y': step['y'].toString(),
-              });
-            }
-          } else if (type == 'enterText') {
-            final key = step['key']?.toString();
-            final input = step['text']?.toString() ?? '';
-            await _callExtensionRaw('ext.flutterpilot.enterText', {
-              'key': ?key,
-              'text': input,
-            });
-          } else if (type == 'scrollTo') {
-            final key = step['key']?.toString();
-            if (key != null) {
-              await _callExtensionRaw(
-                'ext.flutterpilot.scrollIntoView',
-                {'key': key},
-              );
-            }
-          }
-          replayedCount++;
-          if (delay > 0) {
-            await Future<void>.delayed(Duration(milliseconds: delay));
-          }
-        }
-
-        await _callExtensionRaw(
-          'ext.flutterpilot.waitForAnimation',
-          {'timeoutMs': '1000'},
-        );
-
-        final navRes =
-            await _callExtensionRaw('ext.flutterpilot.getNavigationStack', {});
-        final currentRoute = navRes.data?['current']?.toString() ??
-            (navRes.data?['stack'] as List?)?.lastOrNull?.toString() ??
-            '/';
-
-        final healthRes =
-            await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
-        final health = healthRes.data ?? const <String, dynamic>{};
-        final overflows = (health['overflowCount'] as num?)?.toInt() ?? 0;
-
-        final routeMatches = assertRoute == null || currentRoute == assertRoute;
-        final isClean = overflows == 0 && routeMatches;
-
-        final buf =
-            StringBuffer('Replayed $replayedCount step(s) in active app:\n');
-        buf.writeln(
-          '- Final Route: $currentRoute${assertRoute != null ? ' (expected: $assertRoute)' : ''}',
-        );
-        buf.writeln('- Overflows: $overflows');
-        if (!routeMatches) {
-          buf.writeln(
-            '✗ Route mismatch: expected "$assertRoute" but ended on "$currentRoute".',
-          );
-        }
-        if (overflows > 0) {
-          buf.writeln('✗ Screen has $overflows layout overflow(s).');
-        }
-        if (isClean) {
-          buf.writeln('✓ Flow completed successfully with clean screen health.');
-        }
-
-        final assertWidget = p['assertWidget']?.toString();
-        if (assertWidget != null && assertWidget.isNotEmpty) {
-          final waitRes = await _callExtensionRaw(
-            'ext.flutterpilot.waitForWidget',
-            {
-              'key': assertWidget,
-              'timeoutMs': '3000',
-            },
-          );
-          if (waitRes.isError) {
-            return fail(
-              'Replayed $replayedCount step(s), but expected widget "$assertWidget" '
-              'was not visible: ${waitRes.errorMessage}',
-            );
-          }
-          buf.writeln('✓ Expected widget "$assertWidget" is visible.');
-        }
-
-        String? exportedFile;
-        if (p['exportAsTest'] == true) {
-          final rawTestName = p['testName']?.toString();
-          final testName = (rawTestName != null && rawTestName.isNotEmpty)
-              ? sanitizeTestName(rawTestName)
-              : 'replayed_flow';
-          final writeRes = await _writeAndRunSteps(
-            testName,
-            steps,
-            const [],
-            run: false,
-          );
-          if (writeRes.result.isError) {
-            buf.writeln('⚠️ Failed to export test: ${writeRes.result.content.firstOrNull}');
-          } else {
-            exportedFile = 'integration_test/${testName}_test.dart';
-            buf.writeln('✓ Exported flow to $exportedFile.');
-          }
-        }
-
-        return CallToolResult(
-          isError: !isClean,
-          content: [TextContent(text: buf.toString().trim())],
-          structuredContent: {
-            'replayedSteps': replayedCount,
-            'finalRoute': currentRoute,
-            'overflowCount': overflows,
-            'routeMatches': routeMatches,
-            'isClean': isClean,
-            'exportedFile': ?exportedFile,
           },
         );
       },
@@ -674,17 +387,38 @@ mixin _TestGenerationToolsMixin
     _tool(
       'generate_test',
       description:
-          'Records user interactions and writes executable integration_test '
-          'files (start:true begins recording; name writes and runs test).',
+          'Records/replays user interactions and writes executable '
+          'integration_test files (start:true begins, replay:true runs live, '
+          'name writes and runs test).',
       inputSchema: ToolInputSchema(
         properties: {
-          'start': JsonSchema.boolean(),
+          'start': JsonSchema.boolean(
+            description: 'Start fresh test recording from app restart.',
+          ),
           'fromCrash': JsonSchema.boolean(
             description: 'Write repro test from recent crash.',
           ),
           'name': JsonSchema.string(description: 'Letters, digits and _.'),
           'run': JsonSchema.boolean(
             description: 'Run the written test (default true).',
+          ),
+          'replay': JsonSchema.boolean(
+            description: 'Replay recorded interactions live on connected app.',
+          ),
+          'delayMs': JsonSchema.integer(
+            description: 'Delay between replayed steps in ms (default: 300).',
+          ),
+          'assertRoute': JsonSchema.string(
+            description: 'Assert that replayed flow ends on this route.',
+          ),
+          'assertWidget': JsonSchema.string(
+            description: 'Assert this widget key/text is visible after replay.',
+          ),
+          'exportAsTest': JsonSchema.boolean(
+            description: 'Write replayed flow as integration_test file.',
+          ),
+          'testName': JsonSchema.string(
+            description: 'Test file name in snake_case (with exportAsTest).',
           ),
         },
       ),
@@ -694,17 +428,178 @@ mixin _TestGenerationToolsMixin
           content: [TextContent(text: s)],
         );
         if (params['start'] == true) return _startTestRecording(extra);
+        if (params['replay'] == true) {
+          final recRes = await _callExtensionRaw(
+            'ext.flutterpilot.testRecording',
+            {'action': 'read'},
+          );
+          if (recRes.isError) return recRes.toCallToolResult();
+          final rawSteps = (recRes.data?['steps'] as List? ?? const []);
+          final steps = [
+            for (final s in rawSteps)
+              if (s is Map) s.cast<String, dynamic>(),
+          ];
+          if (steps.isEmpty) {
+            return text(
+              'No recorded steps to replay. Call generate_test(start: true) and '
+              'interact with the app first.',
+              error: true,
+            );
+          }
+
+          final delay = (params['delayMs'] as num?)?.toInt() ?? 300;
+          final assertRoute = params['assertRoute']?.toString();
+          var replayedCount = 0;
+          for (final step in steps) {
+            final type = step['type']?.toString();
+            if (type == 'tap' || type == 'tapAt') {
+              final key = step['key']?.toString();
+              final labelText = step['text']?.toString();
+              if (key != null) {
+                await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+                  'key': key,
+                });
+              } else if (labelText != null) {
+                await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+                  'text': labelText,
+                });
+              } else if (step['x'] != null && step['y'] != null) {
+                await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+                  'x': step['x'].toString(),
+                  'y': step['y'].toString(),
+                });
+              }
+            } else if (type == 'enterText') {
+              final key = step['key']?.toString();
+              final input = step['text']?.toString() ?? '';
+              await _callExtensionRaw('ext.flutterpilot.enterText', {
+                'key': ?key,
+                'text': input,
+              });
+            } else if (type == 'scrollTo') {
+              final key = step['key']?.toString();
+              if (key != null) {
+                await _callExtensionRaw('ext.flutterpilot.scrollIntoView', {
+                  'key': key,
+                });
+              }
+            }
+            replayedCount++;
+            if (delay > 0) {
+              await Future<void>.delayed(Duration(milliseconds: delay));
+            }
+          }
+
+          await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+            'timeoutMs': '1000',
+          });
+
+          final navRes = await _callExtensionRaw(
+            'ext.flutterpilot.getNavigationStack',
+            {},
+          );
+          final currentRoute =
+              navRes.data?['current']?.toString() ??
+              (navRes.data?['stack'] as List?)?.lastOrNull?.toString() ??
+              '/';
+
+          final healthRes = await _callExtensionRaw(
+            'ext.flutterpilot.auditScreenHealth',
+            {},
+          );
+          final health = healthRes.data ?? const <String, dynamic>{};
+          final overflows = (health['overflowCount'] as num?)?.toInt() ?? 0;
+          final routeMatches =
+              assertRoute == null || currentRoute == assertRoute;
+          final isClean = overflows == 0 && routeMatches;
+
+          final buf = StringBuffer(
+            'Replayed $replayedCount step(s) in active app:\n',
+          );
+          buf.writeln(
+            '- Final Route: $currentRoute'
+            '${assertRoute != null ? ' (expected: $assertRoute)' : ''}',
+          );
+          buf.writeln('- Overflows: $overflows');
+          if (!routeMatches) {
+            buf.writeln(
+              '✗ Route mismatch: expected "$assertRoute" but ended on "$currentRoute".',
+            );
+          }
+          if (overflows > 0) {
+            buf.writeln('✗ Screen has $overflows layout overflow(s).');
+          }
+          if (isClean) {
+            buf.writeln(
+              '✓ Flow completed successfully with clean screen health.',
+            );
+          }
+
+          final assertWidget = params['assertWidget']?.toString();
+          if (assertWidget != null && assertWidget.isNotEmpty) {
+            final waitRes = await _callExtensionRaw(
+              'ext.flutterpilot.waitForWidget',
+              {'key': assertWidget, 'timeoutMs': '3000'},
+            );
+            if (waitRes.isError) {
+              return text(
+                'Replayed $replayedCount step(s), but expected widget "$assertWidget" '
+                'was not visible: ${waitRes.errorMessage}',
+                error: true,
+              );
+            }
+            buf.writeln('✓ Expected widget "$assertWidget" is visible.');
+          }
+
+          String? exportedFile;
+          if (params['exportAsTest'] == true) {
+            final rawTestName = (params['testName'] ?? params['name'])
+                ?.toString();
+            final testName = (rawTestName != null && rawTestName.isNotEmpty)
+                ? sanitizeTestName(rawTestName)
+                : 'replayed_flow';
+            final writeRes = await _writeAndRunSteps(
+              testName,
+              steps,
+              const [],
+              run: false,
+            );
+            if (writeRes.result.isError) {
+              buf.writeln(
+                '⚠️ Failed to export test: ${writeRes.result.content.firstOrNull}',
+              );
+            } else {
+              exportedFile = 'integration_test/${testName}_test.dart';
+              buf.writeln('✓ Exported flow to $exportedFile.');
+            }
+          }
+
+          return CallToolResult(
+            isError: !isClean,
+            content: [TextContent(text: buf.toString().trim())],
+            structuredContent: {
+              'replayedSteps': replayedCount,
+              'finalRoute': currentRoute,
+              'overflowCount': overflows,
+              'routeMatches': routeMatches,
+              'isClean': isClean,
+              'exportedFile': ?exportedFile,
+            },
+          );
+        }
         final rawName = params['name']?.toString() ?? '';
         if (params['fromCrash'] == true) {
-          final testName =
-              rawName.isEmpty ? 'repro_crash' : sanitizeTestName(rawName);
+          final testName = rawName.isEmpty
+              ? 'repro_crash'
+              : sanitizeTestName(rawName);
           return _generateCrashReproTest(testName);
         }
         final name = sanitizeTestName(rawName);
         if (name.isEmpty) {
           return text(
-            'Pass start:true to begin recording, fromCrash:true to repro crash, '
-            'or name: in lower_snake_case (e.g. "login_flow") to write and run it.',
+            'Pass start:true to begin recording, replay:true to replay recorded '
+            'steps, fromCrash:true to repro crash, or name: in lower_snake_case '
+            '(e.g. "login_flow") to write and run it.',
             error: true,
           );
         }
@@ -809,6 +704,7 @@ mixin _TestGenerationToolsMixin
                     '$relative --update-goldens',
               ),
             ],
+            structuredContent: {'file': relative, 'images': const <String>[]},
           );
         }
         final ProcessResult result;

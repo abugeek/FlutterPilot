@@ -1302,4 +1302,40 @@ final validStructuredFixtures = <String, Map<String, dynamic>>{
     'completed': true,
     'uncertain': false,
   },
+  'crawl_app': {
+    'screens': [
+      {'route': '/home', 'overflows': 0, 'a11y': 1},
+    ],
+    'edges': [
+      {'from': '/home', 'to': '/details', 'via': 'ListTile "Open"'},
+    ],
+    'taps': 1,
+    'restored': true,
+  },
+  'get_rebuild_stats': {
+    'started': false,
+    'sinceMs': 1200,
+    'totalRebuilds': 4,
+    'widgetTypes': 1,
+    'rebuilds': [
+      {
+        'widget': 'CounterText',
+        'rebuilds': 4,
+        'createdAt': 'lib/main.dart:12:5',
+      },
+    ],
+    'hints': <String>[],
+  },
+  'apply_patch_and_verify': {
+    'patchCount': 1,
+    'fileCount': 1,
+    'reloaded': true,
+    'rolledBack': false,
+    'overflowCount': 0,
+    'accessibilityIssueCount': 0,
+  },
+  'synthesize_golden_test': {
+    'file': 'test/home_screen_golden_test.dart',
+    'images': ['test/goldens/home_screen_phone.png'],
+  },
 };

@@ -136,9 +136,9 @@ void main() {
   test('the profile costs match the budget test\'s numbers', () {
     int chars(AppProfile profile) =>
         profileCost(profile, all, server.toolListJson).chars;
-    expect(chars(AppProfile.all), lessThanOrEqualTo(47500));
-    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(36000));
-    expect(chars(AppProfile.zeroCode), lessThanOrEqualTo(9700));
+    expect(chars(AppProfile.all), lessThanOrEqualTo(42600));
+    expect(chars(AppProfile.sdkNoPlugins), lessThanOrEqualTo(31400));
+    expect(chars(AppProfile.zeroCode), lessThanOrEqualTo(9500));
   });
 
   test('a profile cost adds up and is sorted by size', () {

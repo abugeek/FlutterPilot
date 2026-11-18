@@ -30,7 +30,11 @@ class SettleTracker {
   /// elements remain stationary across consecutive samples, the screen is
   /// considered settled even if dynamic tickers or blinking cursors continuously
   /// rebuild individual RenderParagraph instances.
-  bool add(Map<Object, Offset> sample, DateTime at, {bool routesSettled = false}) {
+  bool add(
+    Map<Object, Offset> sample,
+    DateTime at, {
+    bool routesSettled = false,
+  }) {
     final last = _last;
     _last = sample;
     if (last == null) {
@@ -40,6 +44,7 @@ class SettleTracker {
     // Text that went away: something is still changing.
     var still = last.keys.every(sample.containsKey);
     var stationaryCount = 0;
+    var translating = false;
     for (final MapEntry(key: text, value: position) in sample.entries) {
       if (looping[text] == true) {
         stationaryCount++;
@@ -54,6 +59,7 @@ class SettleTracker {
       final since = _movingSince.putIfAbsent(text, () => at);
       if (at.difference(since) < loopingAfter) {
         still = false;
+        if (before != null) translating = true;
       } else {
         looping[text] = true;
         stationaryCount++;
@@ -64,7 +70,7 @@ class SettleTracker {
       return true;
     }
 
-    if (routesSettled) {
+    if (routesSettled && !translating && sample.length == last.length) {
       final total = math.max(last.length, sample.length);
       if (total >= 4 && (stationaryCount / total) >= stabilityRatio) {
         _consecutiveStableSamples++;

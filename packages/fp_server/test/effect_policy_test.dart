@@ -68,6 +68,30 @@ void main() {
         expect(historyBool.replaySafe, isFalse);
       },
     );
+
+    test(
+      'getRebuildStats and getFrameBudgetProfile read cleanly, but reset is not replay-safe',
+      () {
+        for (final extension in const [
+          'ext.flutterpilot.getRebuildStats',
+          'ext.flutterpilot.getFrameBudgetProfile',
+        ]) {
+          final read = extensionPolicyOf(extension, const {});
+          expect(read.replaySafe, isTrue, reason: extension);
+          expect(read.mutating, isFalse, reason: extension);
+
+          final resetStr = extensionPolicyOf(extension, const {
+            'reset': 'true',
+          });
+          expect(resetStr.replaySafe, isFalse, reason: extension);
+          expect(resetStr.mutating, isTrue, reason: extension);
+
+          final resetBool = extensionPolicyOf(extension, const {'reset': true});
+          expect(resetBool.replaySafe, isFalse, reason: extension);
+          expect(resetBool.mutating, isTrue, reason: extension);
+        }
+      },
+    );
   });
 
   group('runWithReplay', () {

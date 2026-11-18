@@ -13,6 +13,27 @@ const retiredTools = <String, RetiredTool>{
   'pinch_zoom': (tool: 'gesture_widget', set: {'gesture': 'pinch'}),
   'focus_widget': (tool: 'gesture_widget', set: {'gesture': 'focus'}),
   'set_slider_value': (tool: 'gesture_widget', set: {'gesture': 'slide'}),
+  'simulate_viewport_matrix': (
+    tool: 'audit_screen_health',
+    set: {
+      'viewports': ['phone', 'tablet', 'desktop'],
+    },
+  ),
+  'simulate_keyboard': (
+    tool: 'audit_screen_health',
+    set: {'keyboardInset': 320},
+  ),
+  'audit_design_tokens': (
+    tool: 'audit_screen_health',
+    set: {'category': 'tokens'},
+  ),
+  'apply_and_verify': (tool: 'hot_reload', set: {'waitForSettled': true}),
+  'locate_source_ast': (tool: 'inspect_widget', set: {'ast': true}),
+  'export_network_mocks': (
+    tool: 'mock_http_response',
+    set: {'fromRecorded': true},
+  ),
+  'replay_flow': (tool: 'generate_test', set: {'replay': true}),
 };
 
 /// [tool] with [arguments], rewritten when [tool] was merged: the new tool and

@@ -78,8 +78,6 @@ const toolEffects = <String, ToolEffect>{
   'native_button': ToolEffect.acts,
   'native_open_app': ToolEffect.acts,
   'hot_reload': ToolEffect.acts,
-  'apply_and_verify': ToolEffect.acts,
-  'simulate_viewport_matrix': ToolEffect.acts,
 
   // State, storage and network
   'set_state': ToolEffect.acts,
@@ -113,13 +111,8 @@ const toolEffects = <String, ToolEffect>{
   'scenario': ToolEffect.destructive,
   'crawl_app': ToolEffect.acts,
   'get_rebuild_stats': ToolEffect.acts,
-  'locate_source_ast': ToolEffect.reads,
-  'export_network_mocks': ToolEffect.reads,
   'synthesize_golden_test': ToolEffect.acts,
-  'audit_design_tokens': ToolEffect.reads,
-  'simulate_keyboard': ToolEffect.acts,
-  'apply_patch_and_verify': ToolEffect.acts,
-  'replay_flow': ToolEffect.acts,
+  'apply_patch_and_verify': ToolEffect.destructive,
 };
 
 /// Tools that leave the app as it is when called again with the same
@@ -175,8 +168,9 @@ const openWorldTools = <String>{
   'verify_feature',
   'generate_test',
   'scenario',
+  'crawl_app',
+  'synthesize_golden_test',
   'apply_patch_and_verify',
-  'replay_flow',
 };
 
 /// The MCP annotations of the tool called [name].

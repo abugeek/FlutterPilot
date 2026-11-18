@@ -228,8 +228,12 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'text': JsonSchema.string(description: 'Expected text.'),
           'exact': JsonSchema.boolean(description: 'Exact text match.'),
           'key': JsonSchema.string(description: 'Key, selector or label.'),
-          'enabled': JsonSchema.boolean(description: 'Expect enabled/disabled.'),
-          'type': JsonSchema.string(description: 'Widget type (e.g. ListTile).'),
+          'enabled': JsonSchema.boolean(
+            description: 'Expect enabled/disabled.',
+          ),
+          'type': JsonSchema.string(
+            description: 'Widget type (e.g. ListTile).',
+          ),
           'count': JsonSchema.integer(description: 'Expected count of type.'),
           'asserts': JsonSchema.array(
             items: JsonSchema.object(),
@@ -243,30 +247,29 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             'Say what to check: text, key (optionally with enabled), '
             'or type with count.';
 
-        Future<({_ExtensionResult res, String check, String? expected, int? found})>
+        Future<
+          ({_ExtensionResult res, String check, String? expected, int? found})
+        >
         evalCheck(Map<String, dynamic> checkParams) async {
           final target = checkParams['target'] ?? checkParams['key'];
           if (checkParams['text'] != null) {
             final expected = checkParams['text'].toString();
-            final res = await _callExtensionRaw(
-              'ext.flutterpilot.assertTextVisible',
-              {
-                'text': expected,
-                if (checkParams['exact'] != null)
-                  'exact': checkParams['exact'].toString(),
-                if (checkParams['autoScroll'] == true) 'autoScroll': 'true',
-              },
-            );
+            final res =
+                await _callExtensionRaw('ext.flutterpilot.assertTextVisible', {
+                  'text': expected,
+                  if (checkParams['exact'] != null)
+                    'exact': checkParams['exact'].toString(),
+                  if (checkParams['autoScroll'] == true) 'autoScroll': 'true',
+                });
             return (res: res, check: 'text', expected: expected, found: 1);
-          } else if (checkParams['type'] != null && checkParams['count'] != null) {
+          } else if (checkParams['type'] != null &&
+              checkParams['count'] != null) {
             final expected = '${checkParams['count']} ${checkParams['type']}';
-            final res = await _callExtensionRaw(
-              'ext.flutterpilot.assertWidgetCount',
-              {
-                'type': checkParams['type'].toString(),
-                'count': checkParams['count'].toString(),
-              },
-            );
+            final res =
+                await _callExtensionRaw('ext.flutterpilot.assertWidgetCount', {
+                  'type': checkParams['type'].toString(),
+                  'count': checkParams['count'].toString(),
+                });
             return (
               res: res,
               check: 'count',
@@ -379,124 +382,6 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
             found: eval.res.isError ? null : eval.found,
             reason: eval.res.isError ? eval.res.errorMessage : null,
           ),
-        );
-      },
-    );
-
-    _tool(
-      'export_network_mocks',
-      description:
-          'Exports recorded Dio responses as mock_http_response steps; '
-          'apply:true installs them.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'filter': JsonSchema.string(
-            description: 'Only URLs containing this.',
-          ),
-          'statusCode': JsonSchema.integer(
-            description: 'Use this status instead of the recorded one.',
-          ),
-          'apply': JsonSchema.boolean(
-            description: 'Install the mocks now instead of only listing them.',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getNetworkLogs',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        final filter = p['filter']?.toString();
-        final status = (p['statusCode'] as num?)?.toInt();
-        // Latest real (not mocked) response per URL.
-        final byUrl = <String, Map>{};
-        for (final log
-            in (res.data?['logs'] as List? ?? const []).whereType<Map>()) {
-          final uri = log['uri']?.toString();
-          if (log['type'] != 'response' ||
-              log['mocked'] == true ||
-              uri == null) {
-            continue;
-          }
-          if (filter != null && !uri.contains(filter)) continue;
-          byUrl[uri] = log;
-        }
-        if (byUrl.isEmpty) {
-          return CallToolResult(
-            isError: true,
-            content: [
-              TextContent(
-                text:
-                    'No recorded responses${filter != null ? ' matching "$filter"' : ''}. '
-                    'Drive the app so it makes the requests first (get_network_logs '
-                    'lists what it made).',
-              ),
-            ],
-          );
-        }
-        final steps = <Map<String, dynamic>>[];
-        final cut = <String>[];
-        for (final MapEntry(key: uri, value: log) in byUrl.entries) {
-          final u = Uri.tryParse(uri);
-          // mock_http_response matches URLs that contain the pattern.
-          final pattern = u == null
-              ? uri
-              : '${u.host}${u.path}${u.hasQuery ? '?${u.query}' : ''}';
-          final body = log['body'];
-          if (log['bodyCut'] == true) cut.add(pattern);
-          steps.add({
-            'tool': 'mock_http_response',
-            'arguments': {
-              'urlPattern': pattern,
-              'statusCode':
-                  status ?? (log['statusCode'] as num?)?.toInt() ?? 200,
-              'body': body is String ? body : jsonEncode(body ?? ''),
-            },
-          });
-        }
-        final buf = StringBuffer('${steps.length} URL(s) recorded.');
-        if (cut.isNotEmpty) {
-          buf.write(
-            '\n${cut.length} bodies are not the whole response (the log keeps '
-            '20 list items and 4 KB of text, and masks credential fields): '
-            '${cut.take(5).join(', ')}${cut.length > 5 ? ', …' : ''}. A mock of '
-            'those answers less than the server did.',
-          );
-        }
-        if (p['apply'] == true) {
-          final mock = _toolCallbacks['mock_http_response']!;
-          var failed = 0;
-          for (final step in steps) {
-            final r = await mock(
-              Map<String, dynamic>.from(step['arguments'] as Map),
-              e,
-            );
-            if (r.isError == true) failed++;
-          }
-          buf.write(
-            '\nInstalled ${steps.length - failed} mock(s)'
-            '${failed > 0 ? ', $failed refused' : ''}. '
-            'mock_http_response(clear: true) removes them.',
-          );
-        } else {
-          final json = jsonEncode(steps);
-          buf.write(
-            json.length <= 6000
-                ? '\nSteps for execute_action_chain:\n$json'
-                : '\nThe steps are ${json.length} characters: apply: true '
-                      'installs them without listing them, or narrow with '
-                      'filter. URLs: ${byUrl.keys.take(10).join(', ')}'
-                      '${byUrl.length > 10 ? ', …' : ''}',
-          );
-        }
-        return CallToolResult(
-          content: [TextContent(text: buf.toString())],
-          structuredContent: {
-            'count': steps.length,
-            'cut': cut,
-            'applied': p['apply'] == true,
-          },
         );
       },
     );

@@ -470,6 +470,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
               'BACK',
               'WAKEUP',
             ],
+            description: 'Hardware button to press on simulator/device.',
           ),
           'serial': JsonSchema.string(description: 'Android adb serial.'),
           'simulatorUdid': JsonSchema.string(
@@ -576,9 +577,7 @@ mixin _NativeAutomationToolsMixin on _FlutterPilotServerBase {
               ? 'No native elements matching "$query".'
               : lines.join('\n');
         }
-        return CallToolResult(
-          content: [TextContent(text: description)],
-        );
+        return CallToolResult(content: [TextContent(text: description)]);
       },
     );
 

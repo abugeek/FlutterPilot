@@ -547,7 +547,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             final stack = e['stackTrace']?.toString();
             final sourceLoc = firstAppStackLocation(stack);
             final prescription =
-                prescribeOverflowText(exception) ?? prescribeOverflow(exception);
+                prescribeOverflowText(exception) ??
+                prescribeOverflow(exception);
             return '--- Error (x${e['count']}) ---\n$exception\n'
                 '${e['widget'] != null ? 'Widget: ${e['widget']}\n' : ''}'
                 '${sourceLoc != null ? 'Source: $sourceLoc\n' : ''}'
@@ -578,7 +579,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       ),
       callback: (p, e) async {
         if (p['clear'] == true) {
-          final res = await _callExtensionRaw('ext.flutterpilot.getErrors', {'clear': 'true'});
+          final res = await _callExtensionRaw('ext.flutterpilot.getErrors', {
+            'clear': 'true',
+          });
           if (res.isError) return res.toCallToolResult();
           return CallToolResult(
             content: [TextContent(text: 'Error buffer cleared.')],
@@ -618,16 +621,19 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             .toList();
         if (query != null && query.isNotEmpty) {
           rawErrors = rawErrors.where((err) {
-            final msg = (err['message'] ?? err['error'] ?? '').toString().toLowerCase();
-            final stack = (err['stackTrace'] ?? err['stack'] ?? '').toString().toLowerCase();
+            final msg = (err['message'] ?? err['error'] ?? '')
+                .toString()
+                .toLowerCase();
+            final stack = (err['stackTrace'] ?? err['stack'] ?? '')
+                .toString()
+                .toLowerCase();
             final culprit = (err['culprit'] ?? '').toString().toLowerCase();
-            return msg.contains(query) || stack.contains(query) || culprit.contains(query);
+            return msg.contains(query) ||
+                stack.contains(query) ||
+                culprit.contains(query);
           }).toList();
         }
-        final split = errorsByReload(
-          rawErrors,
-          _activeContext?.lastReload,
-        );
+        final split = errorsByReload(rawErrors, _activeContext?.lastReload);
         final sinceText = split.since.isEmpty && split.before.isNotEmpty
             ? 'No uncaught exceptions since the last reload.'
             : formatErrors({'errors': split.since, 'sdkMode': data['sdkMode']});
@@ -685,7 +691,8 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           ?.toString()
           .toLowerCase();
       final waitFor = params['waitFor']?.toString().toLowerCase();
-      final timeoutMs = (params['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
+      final timeoutMs =
+          (params['timeoutMs'] as num?)?.toInt().clamp(100, 30000) ?? 3000;
       final sinceSeconds =
           ((params['sinceSeconds'] ?? params['since_seconds']) as num?)
               ?.toInt();
@@ -698,9 +705,13 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
           final serverEntries = _activeDebugLogs;
           final preConnection = await preConnectionLogsFromApp(serverEntries);
           final allEntries = [...preConnection, ...serverEntries];
-          final found = allEntries.any((e) =>
-              (e['message']?.toString().toLowerCase().contains(waitFor) ?? false) ||
-              (e['logger']?.toString().toLowerCase().contains(waitFor) ?? false));
+          final found = allEntries.any(
+            (e) =>
+                (e['message']?.toString().toLowerCase().contains(waitFor) ??
+                    false) ||
+                (e['logger']?.toString().toLowerCase().contains(waitFor) ??
+                    false),
+          );
           if (found) break;
           await Future<void>.delayed(const Duration(milliseconds: 50));
         }
@@ -867,6 +878,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         properties: {
           'level': JsonSchema.string(
             enumValues: ['debug', 'info', 'warning', 'warn', 'error'],
+            description: 'Minimum log severity filter.',
           ),
           'query': JsonSchema.string(
             description: 'Only messages containing this.',
@@ -885,7 +897,9 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
             description:
                 'Only this logger (partial match), e.g. "debugPrint", "stdout".',
           ),
-          'clear': JsonSchema.boolean(),
+          'clear': JsonSchema.boolean(
+            description: 'Clear captured debug logs after returning.',
+          ),
         },
       ),
       callback: (params, extra) {
@@ -911,9 +925,7 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final res = await _callExtensionRaw(
           'ext.flutterpilot.getFrameBudgetProfile',
-          {
-            if (p['reset'] == true) 'reset': 'true',
-          },
+          {if (p['reset'] == true) 'reset': 'true'},
         );
         if (res.isError) return res.toCallToolResult();
         return CallToolResult(
@@ -937,9 +949,6 @@ mixin _AppInspectionToolsMixin on _FlutterPilotServerBase {
         properties: {
           'query': JsonSchema.string(
             description: 'Widget type or key substring filter.',
-          ),
-          'filter': JsonSchema.string(
-            description: 'Alias for query.',
           ),
           'reset': JsonSchema.boolean(
             description:

@@ -10,14 +10,14 @@ class _McpClient {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      try {
-        final msg = jsonDecode(line) as Map<String, dynamic>;
-        final id = msg['id'] as int?;
-        if (id != null) {
-          _pending.remove(id)?.complete(msg);
-        }
-      } catch (_) {}
-    });
+          try {
+            final msg = jsonDecode(line) as Map<String, dynamic>;
+            final id = msg['id'] as int?;
+            if (id != null) {
+              _pending.remove(id)?.complete(msg);
+            }
+          } catch (_) {}
+        });
   }
 
   final Process _process;
@@ -43,11 +43,7 @@ class _McpClient {
 
   void notify(String method, [Map<String, dynamic>? params]) {
     _process.stdin.writeln(
-      jsonEncode({
-        'jsonrpc': '2.0',
-        'method': method,
-        'params': ?params,
-      }),
+      jsonEncode({'jsonrpc': '2.0', 'method': method, 'params': ?params}),
     );
   }
 
@@ -55,10 +51,7 @@ class _McpClient {
     String name,
     Map<String, dynamic> arguments,
   ) {
-    return request('tools/call', {
-      'name': name,
-      'arguments': arguments,
-    });
+    return request('tools/call', {'name': name, 'arguments': arguments});
   }
 }
 
@@ -69,20 +62,19 @@ class _McpClient {
 Future<void> main(List<String> args) async {
   var dIdx = args.indexOf('-d');
   if (dIdx < 0) dIdx = args.indexOf('--device');
-  final device =
-      dIdx >= 0 && dIdx + 1 < args.length ? args[dIdx + 1] : 'macos';
+  final device = dIdx >= 0 && dIdx + 1 < args.length ? args[dIdx + 1] : 'macos';
 
   var appIdx = args.indexOf('--app');
   if (appIdx < 0) appIdx = args.indexOf('-a');
   if (appIdx < 0) appIdx = args.indexOf('--target');
   final repo = Directory.fromUri(Platform.script.resolve('../../..')).path;
   final defaultApp = p.join(repo, 'examples', 'flutter_pilot_example');
-  final appPath =
-      appIdx >= 0 && appIdx + 1 < args.length ? p.normalize(p.absolute(args[appIdx + 1])) : defaultApp;
+  final appPath = appIdx >= 0 && appIdx + 1 < args.length
+      ? p.normalize(p.absolute(args[appIdx + 1]))
+      : defaultApp;
 
   final uriIdx = args.indexOf('--uri');
-  var wsUri =
-      uriIdx >= 0 && uriIdx + 1 < args.length ? args[uriIdx + 1] : null;
+  var wsUri = uriIdx >= 0 && uriIdx + 1 < args.length ? args[uriIdx + 1] : null;
 
   final tIdx = args.indexOf('-t');
   String? target = tIdx >= 0 && tIdx + 1 < args.length ? args[tIdx + 1] : null;
@@ -125,33 +117,35 @@ Future<void> main(List<String> args) async {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((line) {
-      if (!line.startsWith('[{')) return;
-      try {
-        for (final item in (jsonDecode(line) as List).cast<Map>()) {
-          final event = item['event'] as String?;
-          final params = item['params'] as Map?;
-          if (event == 'app.debugPort' && !wsCompleter.isCompleted) {
-            wsCompleter.complete(params!['wsUri'] as String);
-          }
-          if (event == 'app.started' && !startedCompleter.isCompleted) {
-            startedCompleter.complete();
-          }
-        }
-      } catch (_) {}
-    });
+          if (!line.startsWith('[{')) return;
+          try {
+            for (final item in (jsonDecode(line) as List).cast<Map>()) {
+              final event = item['event'] as String?;
+              final params = item['params'] as Map?;
+              if (event == 'app.debugPort' && !wsCompleter.isCompleted) {
+                wsCompleter.complete(params!['wsUri'] as String);
+              }
+              if (event == 'app.started' && !startedCompleter.isCompleted) {
+                startedCompleter.complete();
+              }
+            }
+          } catch (_) {}
+        });
 
     flutterProcess.stderr
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen((err) {
-      if (err.trim().isNotEmpty) print('  [app err] $err');
-    });
+          if (err.trim().isNotEmpty) print('  [app err] $err');
+        });
 
     try {
       wsUri = await wsCompleter.future.timeout(const Duration(minutes: 3));
       print('✓ Connected to Flutter VM Service at $wsUri');
-      await startedCompleter.future
-          .timeout(const Duration(seconds: 45), onTimeout: () {});
+      await startedCompleter.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {},
+      );
       await Future<void>.delayed(const Duration(seconds: 2));
     } catch (e) {
       print('✗ Failed to obtain VM Service URI: $e');
@@ -163,17 +157,18 @@ Future<void> main(List<String> args) async {
   }
 
   print('▶ Starting FlutterPilot server...');
-  serverProcess = await Process.start(
-    'dart',
-    ['run', 'bin/fp_server.dart', '--uri', wsUri],
-    workingDirectory: p.join(repo, 'packages', 'fp_server'),
-  );
+  serverProcess = await Process.start('dart', [
+    'run',
+    'bin/fp_server.dart',
+    '--uri',
+    wsUri,
+  ], workingDirectory: p.join(repo, 'packages', 'fp_server'));
   serverProcess.stderr
       .transform(utf8.decoder)
       .transform(const LineSplitter())
       .listen((line) {
-    if (line.trim().isNotEmpty) print('  [server err] $line');
-  });
+        if (line.trim().isNotEmpty) print('  [server err] $line');
+      });
 
   final client = _McpClient(serverProcess);
   await client.request('initialize', {
@@ -185,7 +180,8 @@ Future<void> main(List<String> args) async {
 
   final isHn = appPath.contains('hn_reader');
   final isBloc = appPath.contains('flutter_todos');
-  final isProviderApp = appPath.contains('provider_testing_app') ||
+  final isProviderApp =
+      appPath.contains('provider_testing_app') ||
       appPath.contains('testing_app') ||
       appPath.contains('testing_codelab');
   final isM3 = appPath.contains('material_3_demo');
@@ -208,7 +204,9 @@ Future<void> main(List<String> args) async {
       if (msg.containsKey('error')) {
         if (allowError) {
           passedCount++;
-          print('PASS (${stopwatch.elapsedMilliseconds}ms, permitted RPC error: ${msg['error']?['message']})');
+          print(
+            'PASS (${stopwatch.elapsedMilliseconds}ms, permitted RPC error: ${msg['error']?['message']})',
+          );
           return;
         }
         failedCount++;
@@ -218,7 +216,8 @@ Future<void> main(List<String> args) async {
       }
       final res = msg['result'] as Map<String, dynamic>? ?? {};
       final isError = res['isError'] == true;
-      final ok = (allowError || (expectError ? isError : !isError)) &&
+      final ok =
+          (allowError || (expectError ? isError : !isError)) &&
           (verify == null || verify(res));
       stopwatch.stop();
       if (ok) {
@@ -232,7 +231,9 @@ Future<void> main(List<String> args) async {
             .join('\n');
         final firstText = textBlock.isNotEmpty
             ? textBlock
-            : (content.isNotEmpty ? content.first['text']?.toString() ?? '' : '');
+            : (content.isNotEmpty
+                  ? content.first['text']?.toString() ?? ''
+                  : '');
         if (firstText.isNotEmpty) {
           if (label == 'get_app_summary') {
             print('--- APP SUMMARY ---\n$firstText\n-------------------');
@@ -242,10 +243,12 @@ Future<void> main(List<String> args) async {
         }
       } else {
         if (res['content'] is List &&
-            (res['content'] as List).any((c) =>
-                c is Map &&
-                c['text']?.toString().contains('app is in the background') ==
-                    true)) {
+            (res['content'] as List).any(
+              (c) =>
+                  c is Map &&
+                  c['text']?.toString().contains('app is in the background') ==
+                      true,
+            )) {
           if (device != 'macos' && device != 'linux' && device != 'windows') {
             final bundleId = isHn
                 ? 'dev.flutterpilot.hnReader'
@@ -271,9 +274,15 @@ Future<void> main(List<String> args) async {
         print('FAIL (${stopwatch.elapsedMilliseconds}ms)');
         final sanitizedRes = Map<String, dynamic>.from(res);
         if (sanitizedRes['content'] is List) {
-          sanitizedRes['content'] = (sanitizedRes['content'] as List).map((item) {
+          sanitizedRes['content'] = (sanitizedRes['content'] as List).map((
+            item,
+          ) {
             if (item is Map && item['type'] == 'image') {
-              return {'type': 'image', 'mimeType': item['mimeType'], 'data': '<base64 redacted>'};
+              return {
+                'type': 'image',
+                'mimeType': item['mimeType'],
+                'data': '<base64 redacted>',
+              };
             }
             return item;
           }).toList();
@@ -298,59 +307,97 @@ Future<void> main(List<String> args) async {
 
   try {
     // 1. App Summary & Screen Health
-    await runTest('get_app_summary', 'get_app_summary', {}, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Route') || text.contains('App');
-    });
+    await runTest(
+      'get_app_summary',
+      'get_app_summary',
+      {},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Route') || text.contains('App');
+      },
+    );
 
-    await runTest('audit_screen_health', 'audit_screen_health', {}, verify: (r) {
-      return (r['content'] as List?)?.isNotEmpty == true;
-    });
+    await runTest(
+      'audit_screen_health',
+      'audit_screen_health',
+      {},
+      verify: (r) {
+        return (r['content'] as List?)?.isNotEmpty == true;
+      },
+    );
 
     // Token-efficient Interactive Elements with Repetition Collapsing
-    await runTest('get_interactive_elements (collapse: true)', 'get_interactive_elements', {
-      'collapse': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('elements') || text.contains('count');
-    });
+    await runTest(
+      'get_interactive_elements (collapse: true)',
+      'get_interactive_elements',
+      {'collapse': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('elements') || text.contains('count');
+      },
+    );
 
     // Multi-Assertion Batching (1 turn)
-    await runTest('assert_widget (batch)', 'assert_widget', {
-      'asserts': [
-        {'text': isHn ? 'Hacker News' : (isProviderApp ? 'Testing Sample' : 'FlutterPilot Demo')},
-      ],
-    }, allowError: true, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Passed') || text.contains('Failed');
-    });
+    await runTest(
+      'assert_widget (batch)',
+      'assert_widget',
+      {
+        'asserts': [
+          {
+            'text': isHn
+                ? 'Hacker News'
+                : (isProviderApp ? 'Testing Sample' : 'FlutterPilot Demo'),
+          },
+        ],
+      },
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Passed') || text.contains('Failed');
+      },
+    );
 
     // Prescriptive Error Inspection
-    await runTest('get_errors (prescriptive)', 'get_errors', {}, allowError: true, verify: (r) {
-      final text =
-          (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('error') ||
-          text.contains('overflow') ||
-          text.contains('None') ||
-          text.contains('No recent');
-    });
+    await runTest(
+      'get_errors (prescriptive)',
+      'get_errors',
+      {},
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('error') ||
+            text.contains('overflow') ||
+            text.contains('None') ||
+            text.contains('No recent');
+      },
+    );
 
     // 2. Keyboard Simulation
     await runTest(
-      'simulate_keyboard',
-      'simulate_keyboard',
-      {'height': 300, 'restore': true},
+      'audit_screen_health (keyboardInset)',
+      'audit_screen_health',
+      {'keyboardInset': 300, 'restore': true},
       allowError: true,
       verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
         return text.contains('Simulated on-screen keyboard (300dp)');
       },
     );
 
     // 3. Screenshot Capture & Previous Comparison
-    await runTest('capture_screenshot', 'capture_screenshot', {'scale': 0.5}, verify: (r) {
-      return (r['content'] as List?)?.isNotEmpty == true;
-    });
+    await runTest(
+      'capture_screenshot',
+      'capture_screenshot',
+      {'scale': 0.5},
+      verify: (r) {
+        return (r['content'] as List?)?.isNotEmpty == true;
+      },
+    );
 
     await runTest(
       'compare_screenshot (comparePrevious)',
@@ -367,63 +414,86 @@ Future<void> main(List<String> args) async {
     );
 
     // Widget Tree with Repetition Collapsing
-    await runTest('get_widget_tree (collapse: true)', 'get_widget_tree', {
-      'collapse': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('widget') || text.contains('type') || text.contains('tree') || text.contains('Root');
-    });
+    await runTest(
+      'get_widget_tree (collapse: true)',
+      'get_widget_tree',
+      {'collapse': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('widget') ||
+            text.contains('type') ||
+            text.contains('tree') ||
+            text.contains('Root');
+      },
+    );
 
     // 4. AST Source Locator & Surgical Patching (on initial screen)
     final targetKey = isHn
         ? 'Hacker News'
         : (isBloc
-            ? 'homeView_addTodo_floatingActionButton'
-            : (isProviderApp
-                ? 'icon_0'
-                : (isM3 ? 'Elevated' : 'add_todo')));
+              ? 'homeView_addTodo_floatingActionButton'
+              : (isProviderApp ? 'icon_0' : (isM3 ? 'Elevated' : 'add_todo')));
     final targetExpectedFile = isHn
         ? 'feed_screen.dart'
         : (isBloc
-            ? 'home_page.dart'
-            : (isProviderApp
-                ? 'home.dart'
-                : (isM3 ? 'component_screen.dart' : 'screens.dart')));
+              ? 'home_page.dart'
+              : (isProviderApp
+                    ? 'home.dart'
+                    : (isM3 ? 'component_screen.dart' : 'screens.dart')));
 
-    await runTest('locate_source_ast', 'locate_source_ast', {'key': targetKey}, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains(targetExpectedFile);
-    });
+    await runTest(
+      'inspect_widget (ast: true)',
+      'inspect_widget',
+      {'key': targetKey, 'ast': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains(targetExpectedFile);
+      },
+    );
 
-    await runTest('apply_patch_and_verify (wrap)', 'apply_patch_and_verify', {
-      'key': targetKey,
-      'wrapWith': 'Center',
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Patched lib/') && text.contains(targetExpectedFile);
-    });
+    await runTest(
+      'apply_patch_and_verify (wrap)',
+      'apply_patch_and_verify',
+      {'key': targetKey, 'wrapWith': 'Center'},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Patched lib/') &&
+            text.contains(targetExpectedFile);
+      },
+    );
 
-    await runTest('apply_patch_and_verify (unwrap to restore)', 'apply_patch_and_verify', {
-      'key': targetKey,
-      'unwrap': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Patched lib/') && text.contains(targetExpectedFile);
-    });
+    await runTest(
+      'apply_patch_and_verify (unwrap to restore)',
+      'apply_patch_and_verify',
+      {'key': targetKey, 'unwrap': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Patched lib/') &&
+            text.contains(targetExpectedFile);
+      },
+    );
 
     // 5. Whole-App Crawler with Health Auditing
     final isExample = !isHn && !isBloc && !isProviderApp && !isM3;
-    await runTest('crawl_app (audit: true)', 'crawl_app', {
-      'maxScreens': 3,
-      'restore': true,
-      'audit': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Crawled');
-    });
+    await runTest(
+      'crawl_app (audit: true)',
+      'crawl_app',
+      {'maxScreens': 3, 'restore': true, 'audit': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Crawled');
+      },
+    );
 
     if (isExample) {
-      await runTest('navigate_to (ensure / after crawl)', 'navigate_to', {'route': '/'}, allowError: true);
+      await runTest('navigate_to (ensure / after crawl)', 'navigate_to', {
+        'route': '/',
+      }, allowError: true);
     }
 
     // In-App Action Chain with Visual Impact
@@ -451,39 +521,57 @@ Future<void> main(List<String> args) async {
               },
             ];
 
-      await runTest('execute_action_chain (with visual diff)', 'execute_action_chain', {
-        'steps': chainSteps,
-      }, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Action chain') && (text.contains('Widget tree') || text.contains('steps done'));
-      });
+      await runTest(
+        'execute_action_chain (with visual diff)',
+        'execute_action_chain',
+        {'steps': chainSteps},
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Action chain') &&
+              (text.contains('Widget tree') || text.contains('steps done'));
+        },
+      );
 
       // GoRouter Navigation with pathParams & suggestion engine
       if (isExample) {
-        await runTest('navigate_to (/add)', 'navigate_to', {
-          'route': '/add',
-        }, verify: (r) {
-          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-          return text.contains('/add');
-        });
+        await runTest(
+          'navigate_to (/add)',
+          'navigate_to',
+          {'route': '/add'},
+          verify: (r) {
+            final text =
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+            return text.contains('/add');
+          },
+        );
 
         // Fused action-and-submission in 1 turn
-        await runTest('enter_text (submit: true)', 'enter_text', {
-          'key': 'title_field',
-          'text': 'Automated Task #42',
-          'submit': true,
-        }, verify: (r) {
-          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-          return text.contains('Typed') && text.contains('Automated Task #42');
-        });
+        await runTest(
+          'enter_text (submit: true)',
+          'enter_text',
+          {'key': 'title_field', 'text': 'Automated Task #42', 'submit': true},
+          verify: (r) {
+            final text =
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+            return text.contains('Typed') &&
+                text.contains('Automated Task #42');
+          },
+        );
 
-        await runTest('navigate_to (/todo/:id with pathParams)', 'navigate_to', {
-          'route': '/todo/:id',
-          'pathParams': {'id': '1'},
-        }, verify: (r) {
-          final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-          return text.contains('/todo/1');
-        });
+        await runTest(
+          'navigate_to (/todo/:id with pathParams)',
+          'navigate_to',
+          {
+            'route': '/todo/:id',
+            'pathParams': {'id': '1'},
+          },
+          verify: (r) {
+            final text =
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+            return text.contains('/todo/1');
+          },
+        );
 
         await runTest(
           'navigate_to (unknown route suggestion)',
@@ -492,28 +580,31 @@ Future<void> main(List<String> args) async {
           expectError: true,
           verify: (r) {
             final text =
-                (r['content'] as List?)?.firstOrNull?['text']?.toString() ??
-                '';
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
             return text.contains('Did you mean "/settings"') ||
                 text.contains('Known routes');
           },
         );
 
-        await runTest(
-          'navigate_to (return to /)',
-          'navigate_to',
-          {'route': '/'},
-        );
-      } else if (isProviderApp) {
-        await runTest('navigate_to (/favorites_page)', 'navigate_to', {
-          'route': '/favorites_page',
-        }, verify: (r) {
-          final text =
-              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-          return text.contains('favorites_page') || text.contains('Favorites');
+        await runTest('navigate_to (return to /)', 'navigate_to', {
+          'route': '/',
         });
+      } else if (isProviderApp) {
+        await runTest(
+          'navigate_to (/favorites_page)',
+          'navigate_to',
+          {'route': '/favorites_page'},
+          verify: (r) {
+            final text =
+                (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+            return text.contains('favorites_page') ||
+                text.contains('Favorites');
+          },
+        );
 
-        await runTest('navigate_to (return to /)', 'navigate_to', {'route': '/'});
+        await runTest('navigate_to (return to /)', 'navigate_to', {
+          'route': '/',
+        });
       }
     } else if (isHn) {
       await runTest('mock_http_response (/search)', 'mock_http_response', {
@@ -527,10 +618,7 @@ Future<void> main(List<String> args) async {
       await runTest(
         'enter_text (submit: true on search)',
         'enter_text',
-        {
-          'text': 'dart',
-          'submit': true,
-        },
+        {'text': 'dart', 'submit': true},
         verify: (r) {
           final text =
               (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
@@ -583,16 +671,28 @@ Future<void> main(List<String> args) async {
     }
 
     // 6. Reactive Rebuild Profiler
-    await runTest('get_rebuild_stats (init)', 'get_rebuild_stats', {}, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('counting') || text.contains('rebuilds');
-    });
+    await runTest(
+      'get_rebuild_stats (init)',
+      'get_rebuild_stats',
+      {},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('counting') || text.contains('rebuilds');
+      },
+    );
 
     // 7. Design Token Auditor
-    await runTest('audit_design_tokens', 'audit_design_tokens', {}, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains("app's code") || text.contains("theme");
-    });
+    await runTest(
+      'audit_screen_health (category: tokens)',
+      'audit_screen_health',
+      {'category': 'tokens'},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains("app's code") || text.contains("theme");
+      },
+    );
 
     // Check available tools for plugin-specific tests
     final toolsRes = await client.request('tools/list', {});
@@ -602,165 +702,259 @@ Future<void> main(List<String> args) async {
     ];
 
     if (availableTools.contains('get_state')) {
-      await runTest('get_state (all states)', 'get_state', {}, verify: (r) {
-        return (r['content'] as List?)?.isNotEmpty == true;
-      });
+      await runTest(
+        'get_state (all states)',
+        'get_state',
+        {},
+        verify: (r) {
+          return (r['content'] as List?)?.isNotEmpty == true;
+        },
+      );
 
-      await runTest('get_state (fuzzy provider lookup)', 'get_state', {
-        'name': isHn ? 'feed' : (isProviderApp ? 'fav' : 'todo'),
-      }, verify: (r) {
-        return (r['content'] as List?)?.isNotEmpty == true;
-      });
+      await runTest(
+        'get_state (fuzzy provider lookup)',
+        'get_state',
+        {'name': isHn ? 'feed' : (isProviderApp ? 'fav' : 'todo')},
+        verify: (r) {
+          return (r['content'] as List?)?.isNotEmpty == true;
+        },
+      );
     }
 
-    if (availableTools.contains('export_network_mocks')) {
-      await runTest('export_network_mocks', 'export_network_mocks', {}, verify: (r) {
-        return (r['content'] as List?)?.isNotEmpty == true;
-      });
+    if (availableTools.contains('mock_http_response')) {
+      await runTest(
+        'mock_http_response (fromRecorded)',
+        'mock_http_response',
+        {'fromRecorded': true},
+        verify: (r) {
+          return (r['content'] as List?)?.isNotEmpty == true;
+        },
+      );
     }
 
     if (availableTools.contains('get_network_logs')) {
-      await runTest('get_network_logs (query filter)', 'get_network_logs', {
-        'query': 'http',
-        'limit': 10,
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('LOG') || text.contains('No network traffic') || text.isNotEmpty;
-      });
+      await runTest(
+        'get_network_logs (query filter)',
+        'get_network_logs',
+        {'query': 'http', 'limit': 10},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('LOG') ||
+              text.contains('No network traffic') ||
+              text.isNotEmpty;
+        },
+      );
     }
 
     // 8. Responsive Viewport Matrix Validation
-    await runTest('audit_screen_health (viewports matrix)', 'audit_screen_health', {
-      'viewports': ['mobile_portrait', 'mobile_landscape'],
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Responsive Viewport Matrix');
-    });
+    await runTest(
+      'audit_screen_health (viewports matrix)',
+      'audit_screen_health',
+      {
+        'viewports': ['mobile_portrait', 'mobile_landscape'],
+      },
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Responsive Viewport Matrix');
+      },
+    );
 
     // 9. Network Chaos & Fuzzing
-    await runTest('simulate_network (chaos)', 'simulate_network', {
-      'errorRate': 0.5,
-      'statusCode': 503,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('success');
-    });
+    await runTest(
+      'simulate_network (chaos)',
+      'simulate_network',
+      {'errorRate': 0.5, 'statusCode': 503},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('success');
+      },
+    );
 
-    await runTest('simulate_network (restore)', 'simulate_network', {
-      'restore': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('restored');
-    });
+    await runTest(
+      'simulate_network (restore)',
+      'simulate_network',
+      {'restore': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('restored');
+      },
+    );
 
     // 10. Memory Introspection & Automated Canary Diffing
-    await runTest('get_memory_details (classes: true)', 'get_memory_details', {
-      'classes': true,
-      'limit': 5,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Top') || text.contains('Heap') || text.contains('classes');
-    });
+    await runTest(
+      'get_memory_details (classes: true)',
+      'get_memory_details',
+      {'classes': true, 'limit': 5},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Top') ||
+            text.contains('Heap') ||
+            text.contains('classes');
+      },
+    );
 
-    await runTest('get_memory_details (resetBaseline: true)', 'get_memory_details', {
-      'resetBaseline': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Baseline memory snapshot saved');
-    });
+    await runTest(
+      'get_memory_details (resetBaseline: true)',
+      'get_memory_details',
+      {'resetBaseline': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Baseline memory snapshot saved');
+      },
+    );
 
-    await runTest('get_memory_details (diffBaseline: true)', 'get_memory_details', {
-      'diffBaseline': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('growth') || text.contains('tracked classes');
-    });
+    await runTest(
+      'get_memory_details (diffBaseline: true)',
+      'get_memory_details',
+      {'diffBaseline': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('growth') || text.contains('tracked classes');
+      },
+    );
 
     // HTTP Profiling Multi-Filtering
-    await runTest('get_http_profile (filtered)', 'get_http_profile', {
-      'limit': 5,
-    }, allowError: true, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('HTTP') || text.contains('recorded');
-    });
+    await runTest(
+      'get_http_profile (filtered)',
+      'get_http_profile',
+      {'limit': 5},
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('HTTP') || text.contains('recorded');
+      },
+    );
 
     // Settled Hot Reload Verification
-    await runTest('hot_reload (waitForSettled: true)', 'hot_reload', {
-      'waitForSettled': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Hot reload applied');
-    });
+    await runTest(
+      'hot_reload (waitForSettled: true)',
+      'hot_reload',
+      {'waitForSettled': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Hot reload applied');
+      },
+    );
 
     // 11. Journey Flow Export to Integration Test
     final chainKey = isHn ? 'Stories Tab 1 of 3' : targetKey;
-    await runTest('execute_action_chain (exportAsTest)', 'execute_action_chain', {
-      'steps': [
-        {
-          'tool': 'tap_widget',
-          'arguments': {'key': chainKey},
-        },
-      ],
-      'exportAsTest': true,
-      'testName': 'field_journey',
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Action chain') && text.contains('Exported journey');
-    });
+    await runTest(
+      'execute_action_chain (exportAsTest)',
+      'execute_action_chain',
+      {
+        'steps': [
+          {
+            'tool': 'tap_widget',
+            'arguments': {'key': chainKey},
+          },
+        ],
+        'exportAsTest': true,
+        'testName': 'field_journey',
+      },
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Action chain') &&
+            text.contains('Exported journey');
+      },
+    );
 
     if (isExample) {
-      await runTest('press_key (restore /)', 'press_key', {'key': 'back'}, allowError: true);
+      await runTest('press_key (restore /)', 'press_key', {
+        'key': 'back',
+      }, allowError: true);
     }
 
     // 12. Tier 4: Fused Scroll & Tap
-    await runTest('scroll_into_view (tap: true)', 'scroll_into_view', {
-      'key': targetKey,
-      'tap': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Scrolled into view and tapped') || text.contains('Tapped');
-    });
+    await runTest(
+      'scroll_into_view (tap: true)',
+      'scroll_into_view',
+      {'key': targetKey, 'tap': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Scrolled into view and tapped') ||
+            text.contains('Tapped');
+      },
+    );
 
     if (availableTools.contains('get_shared_preferences')) {
-      await runTest('get_shared_preferences (query filter)', 'get_shared_preferences', {
-        'query': 'theme',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('prefs') || text.isNotEmpty;
-      });
+      await runTest(
+        'get_shared_preferences (query filter)',
+        'get_shared_preferences',
+        {'query': 'theme'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('prefs') || text.isNotEmpty;
+        },
+      );
     }
 
     // 13. Tier 4: 1-Turn Batch Feature Verification
-    await runTest('verify_feature (1-turn batch)', 'verify_feature', {
-      'feature': 'Field Verification',
-      'criteria': ['Key is present'],
-      'asserts': [{'key': targetKey}],
-      'finish': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Field Verification') || text.contains('PASS') || text.contains('criteria');
-    });
+    await runTest(
+      'verify_feature (1-turn batch)',
+      'verify_feature',
+      {
+        'feature': 'Field Verification',
+        'criteria': ['Key is present'],
+        'asserts': [
+          {'key': targetKey},
+        ],
+        'finish': true,
+      },
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Field Verification') ||
+            text.contains('PASS') ||
+            text.contains('criteria');
+      },
+    );
 
     // 14. Tier 5: Multi-Key Stroke Sequence (press_key count)
-    await runTest('press_key (count sequence)', 'press_key', {
-      'key': 'down',
-      'count': 2,
-    }, allowError: true, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('pressed') || text.contains('Key');
-    });
+    await runTest(
+      'press_key (count sequence)',
+      'press_key',
+      {'key': 'down', 'count': 2},
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('pressed') || text.contains('Key');
+      },
+    );
 
     // 15. Tier 5: Race-Free Multi-Target Wait (wait_for anyOf)
-    await runTest('wait_for (anyOf targets)', 'wait_for', {
-      'anyOf': ['title_field', targetKey, 'phantom_never_appearing_widget'],
-      'timeoutMs': 3000,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('is on screen') || text.contains('matched');
-    });
+    await runTest(
+      'wait_for (anyOf targets)',
+      'wait_for',
+      {
+        'anyOf': ['title_field', targetKey, 'phantom_never_appearing_widget'],
+        'timeoutMs': 3000,
+      },
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('is on screen') || text.contains('matched');
+      },
+    );
 
     if (isExample) {
-      await runTest('press_key (return to root)', 'press_key', {'key': 'back'}, allowError: true);
+      await runTest('press_key (return to root)', 'press_key', {
+        'key': 'back',
+      }, allowError: true);
       if (device != 'macos' && device != 'linux' && device != 'windows') {
         final bundleId = isHn
             ? 'dev.flutterpilot.hnReader'
@@ -768,169 +962,268 @@ Future<void> main(List<String> args) async {
         Process.runSync('xcrun', ['simctl', 'launch', device, bundleId]);
         await Future<void>.delayed(const Duration(milliseconds: 300));
       }
-      await runTest('navigate_to (return to /)', 'navigate_to', {'route': '/'}, allowError: true);
+      await runTest('navigate_to (return to /)', 'navigate_to', {
+        'route': '/',
+      }, allowError: true);
       // 16. Tier 5: Idempotent Toggle Checkbox
-      await runTest('toggle_checkbox (idempotent value)', 'toggle_checkbox', {
-        'key': 'todo_1',
-        'value': true,
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Toggled') || text.contains('already');
-      });
+      await runTest(
+        'toggle_checkbox (idempotent value)',
+        'toggle_checkbox',
+        {'key': 'todo_1', 'value': true},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Toggled') || text.contains('already');
+        },
+      );
     }
 
     // 17. Tier 6: Element-Scoped Screenshot Crop
-    await runTest('capture_screenshot (element crop)', 'capture_screenshot', {
-      'key': targetKey,
-    }, verify: (r) {
-      final content = r['content'] as List?;
-      return content != null && content.any((c) => c['type'] == 'image');
-    });
+    await runTest(
+      'capture_screenshot (element crop)',
+      'capture_screenshot',
+      {'key': targetKey},
+      verify: (r) {
+        final content = r['content'] as List?;
+        return content != null && content.any((c) => c['type'] == 'image');
+      },
+    );
 
     // 18. Tier 6: Fused Inspection + Properties
-    await runTest('inspect_widget (properties: true)', 'inspect_widget', {
-      'key': targetKey,
-      'properties': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('widget') || text.contains('properties') || text.contains('target');
-    });
+    await runTest(
+      'inspect_widget (properties: true)',
+      'inspect_widget',
+      {'key': targetKey, 'properties': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('widget') ||
+            text.contains('properties') ||
+            text.contains('target');
+      },
+    );
 
     // 19. Tier 6: Targeted Semantics Query Filter
-    await runTest('get_semantics_tree (query filter)', 'get_semantics_tree', {
-      'query': 'add',
-    }, allowError: true, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.isNotEmpty;
-    });
+    await runTest(
+      'get_semantics_tree (query filter)',
+      'get_semantics_tree',
+      {'query': 'add'},
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      },
+    );
 
     // 20. Tier 6: Fused Gesture & Settlement
-    await runTest('gesture_widget (waitFor settlement)', 'gesture_widget', {
-      'gesture': 'swipe',
-      'key': targetKey,
-      'direction': 'down',
-      'distance': 40,
-      'waitFor': targetKey,
-    }, allowError: true, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Swipe') || text.contains('appeared') || text.contains('complete');
-    });
+    await runTest(
+      'gesture_widget (waitFor settlement)',
+      'gesture_widget',
+      {
+        'gesture': 'swipe',
+        'key': targetKey,
+        'direction': 'down',
+        'distance': 40,
+        'waitFor': targetKey,
+      },
+      allowError: true,
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Swipe') ||
+            text.contains('appeared') ||
+            text.contains('complete');
+      },
+    );
 
     // 21. Tier 7: Interactive Elements Query Filter
-    await runTest('get_interactive_elements (query filter)', 'get_interactive_elements', {
-      'query': isExample ? 'add' : (isHn ? 'item' : 'fav'),
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('elements') || text.contains('count');
-    });
+    await runTest(
+      'get_interactive_elements (query filter)',
+      'get_interactive_elements',
+      {'query': isExample ? 'add' : (isHn ? 'item' : 'fav')},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('elements') || text.contains('count');
+      },
+    );
 
     // 22. Tier 7: Batch Widget Properties Inspection
-    await runTest('get_widget_properties (batch keys)', 'get_widget_properties', {
-      'keys': [targetKey],
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains(targetKey);
-    });
+    await runTest(
+      'get_widget_properties (batch keys)',
+      'get_widget_properties',
+      {
+        'keys': [targetKey],
+      },
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains(targetKey);
+      },
+    );
 
     // 23. Tier 7: Debug Logs Substring Filtering & Limits
-    await runTest('get_debug_logs (filtered limit)', 'get_debug_logs', {
-      'limit': 5,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.isNotEmpty;
-    });
+    await runTest(
+      'get_debug_logs (filtered limit)',
+      'get_debug_logs',
+      {'limit': 5},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.isNotEmpty;
+      },
+    );
 
     // 24. Tier 7: SQL Query Schema Filtering
     if (isExample || isHn) {
-      await runTest('exec_sql_query (schema query)', 'exec_sql_query', {
-        'query': 'to',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('tables') || text.contains('No database');
-      });
+      await runTest(
+        'exec_sql_query (schema query)',
+        'exec_sql_query',
+        {'query': 'to'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('tables') || text.contains('No database');
+        },
+      );
     }
 
     // 25. Tier 8: Error Buffer Reset / Clearing
-    await runTest('get_errors (clear: true)', 'get_errors', {
-      'clear': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Error buffer cleared') ||
-          text.contains('No Flutter errors detected') ||
-          text.toLowerCase().contains('errors');
-    });
+    await runTest(
+      'get_errors (clear: true)',
+      'get_errors',
+      {'clear': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Error buffer cleared') ||
+            text.contains('No Flutter errors detected') ||
+            text.toLowerCase().contains('errors');
+      },
+    );
 
     // 26. Tier 8: Category-Filtered Screen Health Audit
-    await runTest('audit_screen_health (category: overflow)', 'audit_screen_health', {
-      'category': 'overflow',
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('overflow') ||
-          text.toLowerCase().contains('findings') ||
-          text.contains('Screen Health Audit');
-    });
+    await runTest(
+      'audit_screen_health (category: overflow)',
+      'audit_screen_health',
+      {'category': 'overflow'},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('overflow') ||
+            text.toLowerCase().contains('findings') ||
+            text.contains('Screen Health Audit');
+      },
+    );
 
-    // 27. Tier 8: Type-Filtered Design Token Audit
-    await runTest('audit_design_tokens (type: colors)', 'audit_design_tokens', {
-      'type': 'colors',
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains("app's code") || text.contains('theme');
-    });
+    // 27. Tier 8: Design Token Audit with Query Filter
+    await runTest(
+      'audit_screen_health (category: tokens)',
+      'audit_screen_health',
+      {'category': 'tokens'},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains("app's code") || text.contains('theme');
+      },
+    );
 
-    // 28. Tier 8: Apply and Verify with Widget Polling
-    await runTest('apply_and_verify (waitFor target)', 'apply_and_verify', {
-      'waitFor': targetKey,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Applied') && text.contains('0 errors');
-    });
+    // 28. Tier 8: Hot Reload and Verify with Widget Polling
+    await runTest(
+      'hot_reload (waitFor target)',
+      'hot_reload',
+      {'waitForSettled': true, 'waitFor': targetKey},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Applied') && text.contains('0 errors');
+      },
+    );
 
     // 29. Tier 9: Navigation Stack Route Polling
-    await runTest('get_navigation_stack (waitForRoute)', 'get_navigation_stack', {
-      'waitForRoute': '/',
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Navigation stack') || text.contains('/');
-    });
+    await runTest(
+      'get_navigation_stack (waitForRoute)',
+      'get_navigation_stack',
+      {'waitForRoute': '/'},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Navigation stack') || text.contains('/');
+      },
+    );
 
     // 30. Tier 9: Frame Budget Profiler Reset
-    await runTest('profile_frame_budget (reset: true)', 'profile_frame_budget', {
-      'reset': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('Frame Budget') || text.contains('sampleCount');
-    });
+    await runTest(
+      'profile_frame_budget (reset: true)',
+      'profile_frame_budget',
+      {'reset': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('Frame Budget') || text.contains('sampleCount');
+      },
+    );
 
     // 31. Tier 9: System App Settings Reset
-    await runTest('set_app_settings (reset: true)', 'set_app_settings', {
-      'reset': true,
-    }, verify: (r) {
-      final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-      return text.contains('theme') || text.contains('locale') || text.isNotEmpty;
-    });
+    await runTest(
+      'set_app_settings (reset: true)',
+      'set_app_settings',
+      {'reset': true},
+      verify: (r) {
+        final text =
+            (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+        return text.contains('theme') ||
+            text.contains('locale') ||
+            text.isNotEmpty;
+      },
+    );
 
     if (availableTools.contains('get_connectivity')) {
       // 32. Tier 9: Connectivity Polling
-      await runTest('get_connectivity (waitForStatus)', 'get_connectivity', {
-        'waitForStatus': 'online',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('online') || text.contains('Connected') || text.isNotEmpty;
-      });
+      await runTest(
+        'get_connectivity (waitForStatus)',
+        'get_connectivity',
+        {'waitForStatus': 'online'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('online') ||
+              text.contains('Connected') ||
+              text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('mock_http_response')) {
       // 33. Tier 10: Batch HTTP Response Mocking
-      await runTest('mock_http_response (batch mocks)', 'mock_http_response', {
-        'mocks': [
-          {'urlPattern': '/api/batch1', 'statusCode': 200, 'body': '{"ok": true}'},
-          {'urlPattern': '/api/batch2', 'statusCode': 201, 'body': '{"created": true}'},
-        ],
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Mocked') || text.contains('✓');
-      });
+      await runTest(
+        'mock_http_response (batch mocks)',
+        'mock_http_response',
+        {
+          'mocks': [
+            {
+              'urlPattern': '/api/batch1',
+              'statusCode': 200,
+              'body': '{"ok": true}',
+            },
+            {
+              'urlPattern': '/api/batch2',
+              'statusCode': 201,
+              'body': '{"created": true}',
+            },
+          ],
+        },
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Mocked') || text.contains('✓');
+        },
+      );
       await runTest('mock_http_response (clear batch)', 'mock_http_response', {
         'clear': true,
       }, allowError: true);
@@ -938,165 +1231,246 @@ Future<void> main(List<String> args) async {
 
     if (device == 'macos') {
       // 34. Tier 10: Scoped Viewports Matrix Simulation
-      await runTest('simulate_viewport_matrix (scoped viewports)', 'simulate_viewport_matrix', {
-        'viewports': ['phone'],
-        'restore': true,
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Viewport Matrix') || text.contains('Phone');
-      });
+      await runTest(
+        'audit_screen_health (scoped viewports)',
+        'audit_screen_health',
+        {
+          'viewports': ['phone'],
+          'restore': true,
+        },
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Viewport Matrix') || text.contains('Phone');
+        },
+      );
     }
 
     if (availableTools.contains('native_describe_screen')) {
       // 35. Tier 10: Native Screen Query Filter
-      await runTest('native_describe_screen (query filter)', 'native_describe_screen', {
-        'query': 'button',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'native_describe_screen (query filter)',
+        'native_describe_screen',
+        {'query': 'button'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
-    if (availableTools.contains('replay_flow')) {
+    if (availableTools.contains('generate_test')) {
       // 36. Tier 11: Replay Flow with CI Test Export
-      await runTest('replay_flow (exportAsTest)', 'replay_flow', {
-        'exportAsTest': true,
-        'testName': 'field_replayed_journey',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.contains('Replayed') || text.contains('No recorded steps') || text.isNotEmpty;
-      });
+      await runTest(
+        'generate_test (replay + exportAsTest)',
+        'generate_test',
+        {
+          'replay': true,
+          'exportAsTest': true,
+          'testName': 'field_replayed_journey',
+        },
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.contains('Replayed') ||
+              text.contains('No recorded steps') ||
+              text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('query_firestore')) {
       // 37. Tier 11: Firestore Substring Query Search
-      await runTest('query_firestore (query search)', 'query_firestore', {
-        'path': 'users',
-        'query': 'alice',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'query_firestore (query search)',
+        'query_firestore',
+        {'path': 'users', 'query': 'alice'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('query_supabase_table')) {
       // 38. Tier 11: Supabase Substring Row Search
-      await runTest('query_supabase_table (query search)', 'query_supabase_table', {
-        'table': 'profiles',
-        'query': 'active',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'query_supabase_table (query search)',
+        'query_supabase_table',
+        {'table': 'profiles', 'query': 'active'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_state')) {
       // 39. Tier 12: State Value Substring Search
-      await runTest('get_state (query search)', 'get_state', {
-        'query': 'theme',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_state (query search)',
+        'get_state',
+        {'query': 'theme'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_widget_tree')) {
       // 40. Tier 12: Widget Tree Subtree & Node Query Pruning
-      await runTest('get_widget_tree (query filter)', 'get_widget_tree', {
-        'query': 'todo',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_widget_tree (query filter)',
+        'get_widget_tree',
+        {'query': 'todo'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_errors')) {
       // 41. Tier 12: Error Message Substring Search
-      await runTest('get_errors (query search)', 'get_errors', {
-        'query': 'overflow',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_errors (query search)',
+        'get_errors',
+        {'query': 'overflow'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('audit_screen_health')) {
       // 42. Tier 13: Screen Health Query Scoping
-      await runTest('audit_screen_health (query filter)', 'audit_screen_health', {
-        'query': 'overflow',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'audit_screen_health (query filter)',
+        'audit_screen_health',
+        {'query': 'overflow'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_app_summary')) {
       // 43. Tier 13: App Summary Query Scoping
-      await runTest('get_app_summary (query filter)', 'get_app_summary', {
-        'query': 'add',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_app_summary (query filter)',
+        'get_app_summary',
+        {'query': 'add'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_navigation_stack')) {
       // 44. Tier 13: Navigation Stack Substring Scoping
-      await runTest('get_navigation_stack (query filter)', 'get_navigation_stack', {
-        'routes': true,
-        'query': '/',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_navigation_stack (query filter)',
+        'get_navigation_stack',
+        {'routes': true, 'query': '/'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_network_logs')) {
       // 45. Tier 13: Network Logs Method & URL Parity
-      await runTest('get_network_logs (method & url)', 'get_network_logs', {
-        'method': 'GET',
-        'url': 'api',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_network_logs (method & url)',
+        'get_network_logs',
+        {'method': 'GET', 'url': 'api'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('tap_widget')) {
       // 46. Tier 14: Fast-Fail / Multi-Target UI Automation
-      await runTest('tap_widget (fast-fail & anyOf)', 'tap_widget', {
-        'x': 50,
-        'y': 50,
-        'anyOf': ['non_existent_key_1', 'non_existent_key_2'],
-        'timeoutMs': 100,
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'tap_widget (fast-fail & anyOf)',
+        'tap_widget',
+        {
+          'x': 50,
+          'y': 50,
+          'anyOf': ['non_existent_key_1', 'non_existent_key_2'],
+          'timeoutMs': 100,
+        },
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('navigate_to')) {
       // 47. Tier 14: Configurable Timeout & Fast-Fail Navigation
-      await runTest('navigate_to (timeoutMs & failureKey)', 'navigate_to', {
-        'route': '/',
-        'failureKey': 'impossible_error_banner',
-        'timeoutMs': 100,
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'navigate_to (timeoutMs & failureKey)',
+        'navigate_to',
+        {
+          'route': '/',
+          'failureKey': 'impossible_error_banner',
+          'timeoutMs': 100,
+        },
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
 
     if (availableTools.contains('get_shared_preferences')) {
       // 48. Tier 14: SharedPreferences Value Substring Query
-      await runTest('get_shared_preferences (value query)', 'get_shared_preferences', {
-        'query': 'true',
-      }, allowError: true, verify: (r) {
-        final text = (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
-        return text.isNotEmpty;
-      });
+      await runTest(
+        'get_shared_preferences (value query)',
+        'get_shared_preferences',
+        {'query': 'true'},
+        allowError: true,
+        verify: (r) {
+          final text =
+              (r['content'] as List?)?.firstOrNull?['text']?.toString() ?? '';
+          return text.isNotEmpty;
+        },
+      );
     }
-
   } finally {
     print('===============================================================');
     print('Field Test Results: $passedCount PASSED, $failedCount FAILED');

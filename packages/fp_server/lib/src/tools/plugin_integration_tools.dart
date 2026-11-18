@@ -96,7 +96,9 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
         var rows = (json['rows'] as List? ?? []).cast<dynamic>();
         final q = params['query']?.toString().toLowerCase();
         if (q != null && q.isNotEmpty) {
-          rows = rows.where((r) => jsonEncode(r).toLowerCase().contains(q)).toList();
+          rows = rows
+              .where((r) => jsonEncode(r).toLowerCase().contains(q))
+              .toList();
         }
         if (rows.isEmpty) return 'Table "$table": 0 rows returned.';
         final note = truncationNote(
@@ -120,7 +122,10 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
           'Performs Supabase Auth action ("refresh" or "sign_out"). Needs --allow-destructive.',
       inputSchema: ToolInputSchema(
         properties: {
-          'action': JsonSchema.string(enumValues: ['refresh', 'sign_out']),
+          'action': JsonSchema.string(
+            enumValues: ['refresh', 'sign_out'],
+            description: 'Auth session action ("refresh" or "sign_out").',
+          ),
           'scope': JsonSchema.string(
             enumValues: ['local', 'global', 'others'],
             description: 'For sign_out.',
@@ -194,17 +199,20 @@ mixin _PluginIntegrationToolsMixin on _FlutterPilotServerBase {
               {},
             );
             if (!check.isError && check.data != null) {
-              final connList = (check.data!['connectivity'] as List?)
+              final connList =
+                  (check.data!['connectivity'] as List?)
                       ?.map((e) => e.toString().toLowerCase())
                       .toList() ??
                   const [];
-              final isOnline = check.data!['isOnline'] == true ||
+              final isOnline =
+                  check.data!['isOnline'] == true ||
                   check.data!['online'] == true;
               final matched = switch (waitForStatus) {
                 'online' => isOnline,
                 'offline' => !isOnline,
-                _ => connList.contains(waitForStatus) ||
-                    connList.any((c) => c.contains(waitForStatus)),
+                _ =>
+                  connList.contains(waitForStatus) ||
+                      connList.any((c) => c.contains(waitForStatus)),
               };
               if (matched) break;
             }

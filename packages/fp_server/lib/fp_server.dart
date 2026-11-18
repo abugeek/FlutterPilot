@@ -534,11 +534,10 @@ abstract class _FlutterPilotServerBase {
         );
       }
       final started = DateTime.now();
-      void log(CallToolResult result) {
-        final text = result.content
-            .whereType<TextContent>()
-            .map((c) => c.text)
-            .join('\n');
+      String resultText(CallToolResult r) =>
+          r.content.whereType<TextContent>().map((c) => c.text).join('\n');
+      void log(CallToolResult result, [String? precomputedText]) {
+        final text = precomputedText ?? resultText(result);
         _callLog?.record(
           name,
           ms: DateTime.now().difference(started).inMilliseconds,
@@ -556,14 +555,26 @@ abstract class _FlutterPilotServerBase {
           }
         }
         var result = await callback(args, extra);
-        if (result.isError) result = await _withPhoneState(result);
-        if (result.isError) result = await _withNativeCrash(result);
-        if (result.isError) result = await _withHangDiagnosis(result);
-        log(result);
+        var text = resultText(result);
+        if (result.isError) {
+          final isSilentOrDropped =
+              isNoAnswer(text) ||
+              text.contains('connection to the app dropped') ||
+              text.contains('No active Flutter app connection') ||
+              text.contains('Service has disappeared') ||
+              text.contains('No running Flutter app found');
+          if (isSilentOrDropped) {
+            result = await _withPhoneState(result);
+            if (_nativeCrash != null) result = await _withNativeCrash(result);
+            result = await _withHangDiagnosis(result);
+            text = resultText(result);
+          }
+        }
+        log(result, text);
         _verification?.record(
           name,
           args,
-          result.content.whereType<TextContent>().map((c) => c.text).join('\n'),
+          text,
           isError: result.isError == true,
           structured: result.structuredContent,
         );
@@ -704,7 +715,7 @@ abstract class _FlutterPilotServerBase {
     List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
     String Function(Map<String, dynamic> json, Map<String, dynamic> params)?
-        formatResultWithParams,
+    formatResultWithParams,
   });
 
   /// Whether [name] is a Riverpod provider or a Bloc/Cubit ("riverpod" or
@@ -755,6 +766,12 @@ abstract class _FlutterPilotServerBase {
   /// An error result when [name] would draw the screen of a phone that is
   /// off or locked, else null.
   Future<CallToolResult?> _hiddenPhoneRefusal();
+
+  /// Resizes the desktop app window to `WIDTHxHEIGHT` via the host OS.
+  Future<({String line, bool failed})> _setWindowSize(
+    Map<String, dynamic> p,
+    String value,
+  );
 
   /// Removes the adb forward this server made, if any.
   // ignore: unused_element
@@ -855,6 +872,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
   /// [ErrorCategory.reconnecting]) instead of a premature "no app found",
   /// which a client could read as a dead app rather than a starting one.
   bool _initialConnectPending = false;
+  Future<void>? _initialConnectFuture;
 
   /// Test-only: replaces [start]'s background VM-service connection, so a test
   /// can hold the first connection pending and observe the "connecting" answer
@@ -992,7 +1010,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     await server.connect(transport ?? StdioServerTransport());
     _recordListedTools();
     _log.info('FlutterPilot MCP Server started 🚀');
-    unawaited(_initialConnect());
+    _initialConnectFuture = _initialConnect();
+    unawaited(_initialConnectFuture);
   }
 
   /// The background first connection. A failure is logged, never fatal: the
@@ -1079,16 +1098,27 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         var settled = isolates.isNotEmpty;
         for (final ref in isolates) {
           final isolate = await vm.getIsolate(ref.id!);
-          if (isolate.extensionRPCs?.any(
-                (e) => e.startsWith('ext.flutterpilot.'),
-              ) ??
-              false) {
+          final rpcs = isolate.extensionRPCs ?? const <String>[];
+          if (rpcs.any((e) => e.startsWith('ext.flutterpilot.'))) {
             return true;
+          }
+          var firstFrame = false;
+          if (rpcs.contains('ext.flutter.didSendFirstFrameEvent')) {
+            try {
+              final res = await vm
+                  .callServiceExtension(
+                    'ext.flutter.didSendFirstFrameEvent',
+                    isolateId: ref.id!,
+                  )
+                  .timeout(const Duration(seconds: 2));
+              firstFrame = res.json?['enabled'] == 'true';
+            } catch (_) {}
           }
           final started = isolate.startTime;
           settled &=
-              started != null &&
-              DateTime.now().millisecondsSinceEpoch - started > 10000;
+              firstFrame ||
+              (started != null &&
+                  DateTime.now().millisecondsSinceEpoch - started > 3000);
         }
         if (settled) return false;
       } catch (_) {
@@ -1916,7 +1946,7 @@ class FlutterPilotServer extends _FlutterPilotServerBase
     List<String>? required,
     String Function(Map<String, dynamic> json)? formatResult,
     String Function(Map<String, dynamic> json, Map<String, dynamic> params)?
-        formatResultWithParams,
+    formatResultWithParams,
   }) {
     _tool(
       name,
@@ -1931,8 +1961,8 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         final text = formatResultWithParams != null
             ? formatResultWithParams(res.data!, p)
             : (formatResult != null
-                ? formatResult(res.data!)
-                : jsonEncode(res.data));
+                  ? formatResult(res.data!)
+                  : jsonEncode(res.data));
         return CallToolResult(
           content: [TextContent(text: _boundToolText(text))],
         );
@@ -2031,6 +2061,15 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       return _pinnedContext(pinned);
     }
     final deviceId = _fleetManager.activeDeviceId ?? 'default';
+    if (_vmService == null && _initialConnectPending) {
+      if (debugInitialConnect == null && _initialConnectFuture != null) {
+        await _initialConnectFuture!.timeout(
+          const Duration(milliseconds: 250),
+          onTimeout: () {},
+        );
+      }
+      if (_vmService == null && _initialConnectPending) return null;
+    }
     if (_vmService == null) await _connectWithUri();
     if (_vmService == null) return _deviceContexts[deviceId];
     return (_deviceContexts[deviceId] ??= DeviceRuntimeContext(
@@ -2097,8 +2136,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
       '(device=${context.deviceId}, connection=${context.uri}, generation=$generation)',
     );
 
+    final deadline = allowingWait(_operationDeadline, parameters);
     final scheduled = scheduler.schedule(
       mutating: mutating,
+      timeout: deadline,
       operation: () async {
         if (generation != context.connectionGeneration && generation != 0) {
           return _ExtensionResult.error(
@@ -2144,7 +2185,6 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         );
       }
     });
-    final deadline = allowingWait(_operationDeadline, parameters);
     try {
       return await Future.any([
         scheduled.timeout(
@@ -2157,6 +2197,12 @@ class FlutterPilotServer extends _FlutterPilotServerBase
         ),
         stopped.future,
       ]);
+    } on TimeoutException {
+      return _ExtensionResult.error(
+        'No answer from the app within ${deadline.inSeconds} s. '
+        'Check the app state before retrying: a change may still apply.',
+        ErrorCategory.deadlineExceeded,
+      );
     } finally {
       await pauses.cancel();
     }
@@ -2572,8 +2618,10 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               'tree': tree,
             });
           }
-          final vm = await vmService.getVM();
-          final memory = await vmService.getMemoryUsage(isolateId);
+          final vmFuture = vmService.getVM();
+          final memoryFuture = vmService.getMemoryUsage(isolateId);
+          final vm = await vmFuture;
+          final memory = await memoryFuture;
           final content = screenContent(tree);
           return _ExtensionResult.success({
             'sdkMode': 'zero-code',
@@ -2598,24 +2646,32 @@ class FlutterPilotServer extends _FlutterPilotServerBase
               ErrorCategory.extensionError,
             );
           }
-          final layout = await vmService.callServiceExtension(
-            'ext.flutter.inspector.getLayoutExplorerNode',
-            isolateId: isolateId,
-            args: {'groupName': _inspectorGroup, 'id': id, 'subtreeDepth': '0'},
-          );
-          final size = (layout.json?['result'] as Map?)?['size'] as Map?;
           // Like the SDK: logical pixels x scale.
           final pixelRatio = double.tryParse('${parameters['scale']}') ?? 1.0;
-          final res = await vmService.callServiceExtension(
-            'ext.flutter.inspector.screenshot',
-            isolateId: isolateId,
-            args: {
-              'id': id,
-              'width': '100000',
-              'height': '100000',
-              'maxPixelRatio': '$pixelRatio',
-            },
-          );
+          final pair = await Future.wait([
+            vmService.callServiceExtension(
+              'ext.flutter.inspector.getLayoutExplorerNode',
+              isolateId: isolateId,
+              args: {
+                'groupName': _inspectorGroup,
+                'id': id,
+                'subtreeDepth': '0',
+              },
+            ),
+            vmService.callServiceExtension(
+              'ext.flutter.inspector.screenshot',
+              isolateId: isolateId,
+              args: {
+                'id': id,
+                'width': '100000',
+                'height': '100000',
+                'maxPixelRatio': '$pixelRatio',
+              },
+            ),
+          ]);
+          final layout = pair[0];
+          final size = (layout.json?['result'] as Map?)?['size'] as Map?;
+          final res = pair[1];
           final data = res.json?['result'];
           if (data is! String) {
             return _ExtensionResult.error(

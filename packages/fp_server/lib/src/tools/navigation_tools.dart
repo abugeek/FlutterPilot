@@ -6,42 +6,26 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
   void _registerNavigationTools() {
     _tool(
       'navigate_to',
-      description:
-          'Goes to route or deep link directly (go_router: router.go; '
-          'otherwise Navigator.pushNamed). Supports waitFor, failureKey, anyOf.',
+      description: 'Navigates to route or deep link (go_router or Navigator).',
       inputSchema: ToolInputSchema(
         properties: {
-          'route': JsonSchema.string(
-            description:
-                'Route or deep link URL (e.g. "/home", "/story/:id").',
-          ),
+          'route': JsonSchema.string(description: 'Route or deep link URL.'),
           'action': JsonSchema.string(
             enumValues: ['go', 'push', 'replace'],
-            description:
-                'Default "go". push/replace need the go_router plugin.',
+            description: 'Default "go" (push/replace use go_router).',
           ),
-          'deepLink': JsonSchema.boolean(
-            description: 'Open route as an OS deep link (myapp://product/1).',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Key or text to wait for on the new page.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'deepLink': JsonSchema.boolean(description: 'Open as OS deep link.'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await on the new page.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for wait in ms (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
-          'pathParams': JsonSchema.object(
-            description: 'Dynamic params (e.g. {"id": "123"}).',
-          ),
-          'queryParams': JsonSchema.object(
-            description: 'Query params (e.g. {"tab": "all"}).',
-          ),
+          'pathParams': JsonSchema.object(description: 'Path params map.'),
+          'queryParams': JsonSchema.object(description: 'Query params map.'),
         },
         required: ['route'],
       ),
@@ -145,7 +129,9 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             ? rawAnyOf.map((s) => s.toString()).join(',')
             : rawAnyOf?.toString();
         final timeoutMs = (p['timeoutMs'] as num?)?.toInt() ?? 5000;
-        final timeoutSec = (timeoutMs / 1000).toStringAsFixed(timeoutMs % 1000 == 0 ? 0 : 1);
+        final timeoutSec = (timeoutMs / 1000).toStringAsFixed(
+          timeoutMs % 1000 == 0 ? 0 : 1,
+        );
         final waitRequired =
             (waitFor != null && waitFor.isNotEmpty) ||
             failureKey != null ||
@@ -154,9 +140,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           'ext.flutterpilot.getNavigationStack',
           {},
         );
-        final screenFuture = !waitRequired
-            ? _screenAfter(route: false)
-            : null;
+        final screenFuture = !waitRequired ? _screenAfter(route: false) : null;
         final stack = await stackFuture;
         final stackList = (stack.data?['stack'] as List?)
             ?.map((e) => '$e')
@@ -170,15 +154,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         var waited = '';
         var missing = false;
         if (waitRequired) {
-          final found = await _callExtensionRaw(
-            'ext.flutterpilot.waitForCondition',
-            {
-              if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
-              'anyOf': ?anyOfStr,
-              'failureKey': ?failureKey,
-              'timeoutMs': '$timeoutMs',
-            },
-          );
+          final found =
+              await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
+                if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
+                'anyOf': ?anyOfStr,
+                'failureKey': ?failureKey,
+                'timeoutMs': '$timeoutMs',
+              });
           missing = found.isError;
           final targetDesc = waitFor ?? anyOfStr ?? 'target';
           waited = missing
@@ -254,7 +236,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
               {},
             );
             final loc = router.data?['currentLocation']?.toString();
-            final stack = (res.data?['stack'] as List?)
+            final stack =
+                (res.data?['stack'] as List?)
                     ?.map((e) => e.toString())
                     .toList() ??
                 const [];
@@ -267,18 +250,41 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
           }
         }
 
-        final res = await _callExtensionRaw(
+        final stackFuture = _callExtensionRaw(
           'ext.flutterpilot.getNavigationStack',
           {},
         );
+        final routerFuture = _callExtensionRaw(
+          'ext.flutterpilot.getGoRouterState',
+          {},
+        );
+        final extras =
+            <({String flag, String label, Future<_ExtensionResult> future})>[
+              if (p['routes'] == true)
+                (
+                  flag: 'routes',
+                  label: 'Routes',
+                  future: _callExtensionRaw(
+                    'ext.flutterpilot.getGoRouterConfig',
+                    {},
+                  ),
+                ),
+              if (p['history'] == true)
+                (
+                  flag: 'history',
+                  label: 'History',
+                  future: _callExtensionRaw(
+                    'ext.flutterpilot.getGoRouterHistory',
+                    {},
+                  ),
+                ),
+            ];
+        final res = await stackFuture;
         if (res.isError) return res.toCallToolResult();
         final buf = StringBuffer(
           'Navigation stack: ${(res.data?['stack'] as List?)?.join(' -> ') ?? 'empty'}',
         );
-        final router = await _callExtensionRaw(
-          'ext.flutterpilot.getGoRouterState',
-          {},
-        );
+        final router = await routerFuture;
         if (!router.isError) {
           final json = router.data!;
           buf.write('\ngo_router location: ${json['currentLocation']}');
@@ -297,12 +303,13 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             }
             buf.write('\n  Matched: $loc');
           }
-          for (final (flag, ext, label) in [
-            ('routes', 'ext.flutterpilot.getGoRouterConfig', 'Routes'),
-            ('history', 'ext.flutterpilot.getGoRouterHistory', 'History'),
-          ]) {
-            if (p[flag] != true) continue;
-            final extra = await _callExtensionRaw(ext, {});
+          final extraResults = extras.isEmpty
+              ? const <_ExtensionResult>[]
+              : await Future.wait([for (final item in extras) item.future]);
+          for (var i = 0; i < extras.length; i++) {
+            final flag = extras[i].flag;
+            final label = extras[i].label;
+            final extra = extraResults[i];
             Object? dataToFormat = extra.data;
             if (queryStr != null && queryStr.isNotEmpty && extra.data != null) {
               if (flag == 'routes' && extra.data is Map) {
@@ -345,33 +352,34 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'set_app_settings',
       description:
-          'Configure theme, locale, text scale, orientation, window size, '
-          'or overlays without code edits; reset:true restores defaults.',
+          'Sets theme, locale, text scale, orientation, window size, or '
+          'debug overlays.',
       inputSchema: ToolInputSchema(
         properties: {
           'reset': JsonSchema.boolean(
-            description: 'Restore defaults and clear debug overlays.',
+            description: 'Restore defaults and clear overlays.',
           ),
-          'theme': JsonSchema.string(enumValues: ['light', 'dark']),
-          'locale': JsonSchema.string(
-            description: 'BCP-47 tag (e.g. "fr", "ar", "zh") or "system".',
+          'theme': JsonSchema.string(
+            enumValues: ['light', 'dark'],
+            description: 'App brightness.',
           ),
-          'textScale': JsonSchema.number(
-            description: 'Scale factor (1.0 default).',
-          ),
+          'locale': JsonSchema.string(description: 'BCP-47 tag or "system".'),
+          'textScale': JsonSchema.number(description: 'Text scale factor.'),
           'keyboardInset': JsonSchema.number(
-            description: 'Logical pixel height (0 removes).',
+            description: 'Keyboard height in dp (0 clears).',
           ),
           'orientation': JsonSchema.string(
             enumValues: ['portrait', 'landscape', 'all', 'auto'],
             description: 'Phones.',
           ),
-          'windowSize': JsonSchema.string(
-            description: 'WIDTHxHEIGHT (e.g. "390x844").',
+          'windowSize': JsonSchema.string(description: 'WIDTHxHEIGHT.'),
+          'debugPaint': JsonSchema.boolean(description: 'Show layout bounds.'),
+          'repaintRainbow': JsonSchema.boolean(
+            description: 'Show repaint rainbow.',
           ),
-          'debugPaint': JsonSchema.boolean(),
-          'repaintRainbow': JsonSchema.boolean(),
-          'slowAnimations': JsonSchema.boolean(),
+          'slowAnimations': JsonSchema.boolean(
+            description: '5x slow animations.',
+          ),
         },
       ),
       callback: (p, e) async {
@@ -483,239 +491,6 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'simulate_viewport_matrix',
-      description:
-          'Sweeps app window across phone, tablet, or desktop breakpoints '
-          'to detect layout overflows.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'viewports': JsonSchema.array(
-            items: JsonSchema.string(
-              enumValues: ['phone', 'tablet', 'desktop'],
-            ),
-            description: 'Optional subset of breakpoints to sweep.',
-          ),
-          'restore': JsonSchema.boolean(
-            description:
-                'Restore initial window size afterwards (default true).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        const matrix = [
-          ('Phone', 390, 844),
-          ('Tablet', 768, 1024),
-          ('Desktop', 1280, 800),
-        ];
-        final requested = (p['viewports'] as List?)
-            ?.map((e) => e.toString().toLowerCase())
-            .toSet();
-        final selectedMatrix = matrix.where((m) {
-          if (requested == null || requested.isEmpty) return true;
-          return requested.contains(m.$1.toLowerCase());
-        }).toList();
-        // The real window, as set_app_settings(windowSize) resizes it: a
-        // MediaQuery override alone leaves the layout constraints as they
-        // were, so a Row never overflows under it.
-        final context = await _deviceContextForParameters(p);
-        final vm = context?.service;
-        final pid = vm == null ? null : (await vm.getVM()).pid;
-        final initial = pid != null && context?.operatingSystem == 'macos'
-            ? await readAppWindowSize(pid)
-            : null;
-
-        final results = <Map<String, dynamic>>[];
-        var anyFail = false;
-        for (final (label, width, height) in selectedMatrix) {
-          final resized = await _setWindowSize(p, '${width}x$height');
-          if (resized.failed) {
-            if (initial != null) await _setWindowSize(p, initial);
-            return CallToolResult(
-              isError: true,
-              content: [
-                TextContent(
-                  text:
-                      '${resized.line}\nThe viewport matrix resizes the app '
-                      'window, so it needs a macOS or Windows desktop app. '
-                      'On phones use run_on_devices with a phone and a tablet.',
-                ),
-              ],
-            );
-          }
-          final audit = await _callExtensionRaw(
-            'ext.flutterpilot.auditScreenHealth',
-            {},
-          );
-          final auditData = audit.data ?? const <String, dynamic>{};
-          final overflows = (auditData['overflows'] as List?) ?? const [];
-          final cramped =
-              (auditData['crampedScrollables'] as List?) ?? const [];
-          final pass = overflows.isEmpty && cramped.isEmpty;
-          if (!pass) anyFail = true;
-          results.add({
-            'device': label,
-            'viewport': '${width}x$height',
-            'pass': pass,
-            'overflows': overflows
-                .map((o) => o['details'] ?? o['type'])
-                .toList(),
-            'cramped': cramped.map((c) => c['details'] ?? c['type']).toList(),
-          });
-        }
-        if (p['restore'] != false && initial != null) {
-          await _setWindowSize(p, initial);
-        }
-        final buf = StringBuffer('Viewport Matrix Audit Results:\n');
-        for (final r in results) {
-          final pass = r['pass'] == true;
-          buf.writeln(
-            '${pass ? "[PASS]" : "[FAIL]"} ${r['device']} (${r['viewport']})',
-          );
-          if (!pass) {
-            for (final o in (r['overflows'] as List)) {
-              buf.writeln('  - Overflow: $o');
-            }
-            for (final c in (r['cramped'] as List)) {
-              buf.writeln('  - Cramped: $c');
-            }
-          }
-        }
-        buf.writeln(
-          '\nMatrix Verdict: ${anyFail ? "FAIL — responsive layout issues detected" : "PASS — all viewports clean"}',
-        );
-
-        return CallToolResult(
-          content: [TextContent(text: buf.toString().trim())],
-          structuredContent: {
-            'verdict': anyFail ? 'fail' : 'pass',
-            'matrix': results,
-          },
-        );
-      },
-    );
-
-    _tool(
-      'simulate_keyboard',
-      description:
-          'Simulates on-screen keyboard inset, checks for layout overflows '
-          'or obscured inputs, and restores inset.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'height': JsonSchema.number(
-            description:
-                'Keyboard height in logical pixels (default: 320; 0 closes).',
-          ),
-          'restore': JsonSchema.boolean(
-            description:
-                'Remove the simulated keyboard afterwards (default true).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final height = (p['height'] as num?)?.toDouble() ?? 320.0;
-        final restore = p['restore'] != false;
-
-        final setRes = await _callExtensionRaw(
-          'ext.flutterpilot.setKeyboardInset',
-          {'inset': height.toString()},
-        );
-        if (setRes.isError) return setRes.toCallToolResult();
-
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-
-        final audit = await _callExtensionRaw(
-          'ext.flutterpilot.auditScreenHealth',
-          {},
-        );
-        final auditData = audit.data ?? const <String, dynamic>{};
-        final overflows = (auditData['overflows'] as List?) ?? const [];
-
-        final interactive = await _callExtensionRaw(
-          'ext.flutterpilot.getInteractiveElements',
-          {},
-        );
-        final elements = (interactive.data?['elements'] as List?) ?? const [];
-        final focusedInput = elements.firstWhere(
-          (el) => el is Map && el['isFocused'] == true,
-          orElse: () => null,
-        );
-
-        var focusedObscured = false;
-        if (focusedInput is Map && focusedInput['bounds'] is Map) {
-          final bounds = focusedInput['bounds'] as Map;
-          final bottomY =
-              (bounds['y'] as num? ?? 0) + (bounds['height'] as num? ?? 0);
-          final viewHeight =
-              (setRes.data?['height'] as num?)?.toDouble() ?? 844.0;
-          final availableHeight = viewHeight - height;
-          if (bottomY > availableHeight) {
-            focusedObscured = true;
-          }
-        }
-
-        if (restore && height > 0) {
-          await _callExtensionRaw(
-            'ext.flutterpilot.setKeyboardInset',
-            {'inset': '0'},
-          );
-        }
-
-        final hasOverflow = overflows.isNotEmpty;
-        final pass = !hasOverflow && !focusedObscured;
-
-        final buf = StringBuffer(
-          'Simulated on-screen keyboard (${height.toInt()}dp)'
-          '${restore ? ' (restored)' : ''}:\n',
-        );
-        if (pass) {
-          buf.write('✓ Screen layout is clean with keyboard open. No overflows.');
-        } else {
-          buf.write('✗ Layout defects detected with keyboard open:');
-          if (hasOverflow) {
-            buf.write(
-              '\n  • RenderFlex bottom overflow (${overflows.length} issue(s)):',
-            );
-            for (final o in overflows) {
-              final src = o['source'] != null ? ' at ${o['source']}' : '';
-              buf.write('\n    - ${o['details'] ?? o['type']}$src');
-              if (o['source'] != null) {
-                buf.write(
-                  '\n      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "SingleChildScrollView")',
-                );
-              }
-            }
-            buf.write(
-              '\n  Prescription: Wrap the screen body in SingleChildScrollView or set Scaffold.resizeToAvoidBottomInset: false.',
-            );
-          }
-          if (focusedObscured) {
-            final name =
-                focusedInput['label'] ?? focusedInput['key'] ?? 'input';
-            buf.write(
-              '\n  • Focused text field "$name" is obscured behind the keyboard.',
-            );
-            buf.write(
-              '\n  Prescription: Ensure the input is within a Scrollable or call Scrollable.ensureVisible.',
-            );
-          }
-        }
-
-        return CallToolResult(
-          isError: !pass,
-          content: [TextContent(text: buf.toString())],
-          structuredContent: {
-            'pass': pass,
-            'height': height,
-            'overflowCount': overflows.length,
-            'overflows': overflows,
-            'focusedObscured': focusedObscured,
-            'restored': restore,
-          },
-        );
-      },
-    );
-
-    _tool(
       'crawl_app',
       description:
           'Crawls reachable screens via list rows and tabs; reports route graph '
@@ -731,7 +506,8 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
                 'true).',
           ),
           'audit': JsonSchema.boolean(
-            description: 'Include detailed health findings for screens with issues.',
+            description:
+                'Include detailed health findings for screens with issues.',
           ),
         },
       ),
@@ -760,10 +536,14 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         var current = start;
 
         while (taps < maxTaps) {
-          final screen = await _callExtensionRaw(
+          final screenFuture = _callExtensionRaw(
             'ext.flutterpilot.crawlScreen',
             {},
           );
+          final auditFuture = shouldAudit
+              ? _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {})
+              : null;
+          final screen = await screenFuture;
           if (screen.isError) return screen.toCallToolResult();
           final data = screen.data ?? const <String, dynamic>{};
           current = data['currentRoute']?.toString() ?? current;
@@ -772,13 +552,12 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             here,
             () => {
               'route': current,
-              'overflows': data['overflowCount'] ?? 0,
-              'a11y': data['accessibilityIssueCount'] ?? 0,
+              'overflows': (data['overflowCount'] as num?)?.toInt() ?? 0,
+              'a11y': (data['accessibilityIssueCount'] as num?)?.toInt() ?? 0,
             },
           );
-          if (shouldAudit) {
-            final auditRes =
-                await _callExtensionRaw('ext.flutterpilot.auditScreenHealth', {});
+          if (auditFuture != null) {
+            final auditRes = await auditFuture;
             final findings = (auditRes.data?['findings'] as List?) ?? const [];
             if (findings.isNotEmpty) {
               screenAudit[current] = findings;
@@ -839,8 +618,10 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
         var restored = (await route()) == start;
         if (p['restore'] != false && !restored) {
           for (var i = 0; i < taps && (await route()) != start; i++) {
-            final popped =
-                await _callExtensionRaw('ext.flutterpilot.pressBack', {});
+            final popped = await _callExtensionRaw(
+              'ext.flutterpilot.pressBack',
+              {},
+            );
             if (popped.isError || (popped.data?['popped'] == false)) break;
             await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
               'timeoutMs': '300',
@@ -901,7 +682,6 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
             'edges': edges,
             'taps': taps,
             'restored': restored,
-            if (screenAudit.isNotEmpty) 'audit': screenAudit,
           },
         );
       },
@@ -910,6 +690,7 @@ mixin _NavigationToolsMixin on _FlutterPilotServerBase {
 
   /// set_app_settings(windowSize): resizes the window on the host, then
   /// reports the viewport the app now has.
+  @override
   Future<({String line, bool failed})> _setWindowSize(
     Map<String, dynamic> p,
     String value,
