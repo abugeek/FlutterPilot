@@ -180,6 +180,7 @@ const mutatingExtensions = <String>{
   'ext.flutterpilot.restoreHive',
   'ext.flutterpilot.restoreSqflite',
   'ext.flutterpilot.scrollIntoView',
+  'ext.flutterpilot.scrollToFraction',
   'ext.flutterpilot.secondaryTapWidget',
   'ext.flutterpilot.setKeyboardInset',
   'ext.flutterpilot.setLocale',

@@ -781,10 +781,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
     _tool(
       'scroll_into_view',
-      description: 'Scrolls until widget is visible; tap:true taps it.',
+      description:
+          'Scrolls until widget is visible; tap:true taps it. fraction (0-1) '
+          'instead jumps a list there the way a scrollbar thumb drag does and '
+          'times the frames (key: the list or a widget in it; default: the '
+          'largest list on screen).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(description: 'Key, selector or text.'),
+          'fraction': JsonSchema.number(
+            description: 'Jump to this share of the list: 0 top, 1 end.',
+          ),
           'tap': JsonSchema.boolean(description: 'Tap once visible.'),
           'waitFor': JsonSchema.string(description: 'Key/text to await.'),
           'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
@@ -798,6 +805,28 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
+        if (p['fraction'] != null) {
+          final res =
+              await _callExtensionRaw('ext.flutterpilot.scrollToFraction', {
+                'fraction': p['fraction'].toString(),
+                if (p['key'] != null) 'key': p['key'].toString(),
+              });
+          if (res.isError) return res.toCallToolResult();
+          final d = res.data ?? const {};
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Jumped to ${p['fraction']} (offset ${d['offset']} of '
+                    '${d['maxScrollExtent']}) in ${d['frames']} frame(s), '
+                    'worst ${d['worstFrameMs']} ms, ${d['elapsedMs']} ms in '
+                    'all. Frames: ${d['frameMs']}. Several frames or a slow '
+                    'one: the list has no fixed extent and lays out every '
+                    'row on the way (use itemExtent / prototypeItem).',
+              ),
+            ],
+          );
+        }
         final scrollArgs = Map<String, dynamic>.of(p)
           ..remove('tap')
           ..remove('waitFor')

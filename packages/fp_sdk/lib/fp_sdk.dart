@@ -45,6 +45,7 @@ import 'src/hit_test_utils.dart';
 import 'src/keyboard_simulator.dart';
 import 'src/layout_explorer.dart';
 import 'src/screen_capture.dart';
+import 'src/scroll_jump.dart';
 import 'src/scroll_simulator.dart';
 import 'src/set_of_mark.dart';
 import 'src/app_crawler.dart';

@@ -224,7 +224,8 @@ class UiHealthAuditor {
 
   /// Detects interactive elements that are partially cut off by screen boundaries.
   static List<Map<String, dynamic>> detectClippedElements() {
-    final view = WidgetsBinding.instance.platformDispatcher.implicitView ??
+    final view =
+        WidgetsBinding.instance.platformDispatcher.implicitView ??
         WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
     if (view == null) return const [];
     final dpr = view.devicePixelRatio > 0 ? view.devicePixelRatio : 1.0;
@@ -240,6 +241,10 @@ class UiHealthAuditor {
       final y = (bounds['y'] as num?)?.toDouble() ?? 0.0;
       final w = (bounds['width'] as num?)?.toDouble() ?? 0.0;
       final h = (bounds['height'] as num?)?.toDouble() ?? 0.0;
+
+      // A row cut off where its list scrolls is how lists look, not a bug:
+      // scrolling brings it into view.
+      if (e['scrollClipped'] == true) continue;
 
       // Detect partially cut-off interactive controls on screen edges
       final cutBottom = (y + h > logicalHeight) && (y < logicalHeight);
@@ -257,7 +262,8 @@ class UiHealthAuditor {
         clipped.add({
           'target': e['key'] ?? e['text'] ?? e['type'],
           'type': e['type'],
-          'issue': 'partially clipped by viewport $side edge (cut off by ${cutPx}px)',
+          'issue':
+              'partially clipped by viewport $side edge (cut off by ${cutPx}px)',
           'bounds': bounds,
           if (e['source'] != null) 'source': e['source'],
         });

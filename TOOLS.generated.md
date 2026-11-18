@@ -4,7 +4,7 @@ Generated from the running server registration. Do not edit manually.
 
 Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 42137 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 42477 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -182,11 +182,12 @@ Drives widget with swipe, drag, pinch, focus or slide. Reports screen and route 
 
 ## `scroll_into_view`
 
-Scrolls until widget is visible; tap:true taps it.
+Scrolls until widget is visible; tap:true taps it. fraction (0-1) instead jumps a list there the way a scrollbar thumb drag does and times the frames (key: the list or a widget in it; default: the largest list on screen).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or text. |
+| `fraction` | number | no | Jump to this share of the list: 0 top, 1 end. |
 | `tap` | boolean | no | Tap once visible. |
 | `waitFor` | string | no | Key/text to await. |
 | `failureKey` | string | no | Fast-fail key. |

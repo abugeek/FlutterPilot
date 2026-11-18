@@ -25,7 +25,10 @@ void main() {
       expect(overflow['type'], 'Row');
       expect(overflow['pixels'], 200.0);
       expect(overflow['side'], 'right');
-      expect(overflow['details'], contains('overflowed by 200.0px on the right'));
+      expect(
+        overflow['details'],
+        contains('overflowed by 200.0px on the right'),
+      );
     });
 
     testWidgets('flags each undersized control once', (tester) async {
@@ -161,7 +164,73 @@ void main() {
       );
     });
 
-    testWidgets('flags an interactive element partially clipped by viewport edge', (
+    testWidgets(
+      'flags an interactive element partially clipped by viewport edge',
+      (tester) async {
+        tester.view.physicalSize = const Size(400, 600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: [
+                  Positioned(
+                    top: 570,
+                    left: 20,
+                    child: ElevatedButton(
+                      key: const Key('submit_btn'),
+                      onPressed: () {},
+                      child: const SizedBox(
+                        width: 100,
+                        height: 50,
+                        child: Text('Submit'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        final report = UiHealthAuditor.audit();
+        expect(report['clippedElementCount'], 1);
+        final clipped = (report['clippedElements'] as List).single as Map;
+        expect(clipped['target'], 'submit_btn');
+        expect(clipped['issue'], contains('clipped by viewport bottom edge'));
+        expect(report['isHealthy'], isFalse);
+      },
+    );
+    testWidgets('a list row cut off where the list scrolls is not flagged', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView.builder(
+              itemCount: 50,
+              itemExtent: 70, // 600 / 70: row 8 is half off the bottom
+              itemBuilder: (context, i) => TextButton(
+                key: Key('row_$i'),
+                onPressed: () {},
+                child: Text('Row $i'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final report = UiHealthAuditor.audit();
+      expect(report['clippedElementCount'], 0);
+    });
+
+    testWidgets('a button clipped inside a list row still is flagged', (
       tester,
     ) async {
       tester.view.physicalSize = const Size(400, 600);
@@ -173,17 +242,14 @@ void main() {
           home: Scaffold(
             body: Stack(
               children: [
+                ListView(children: const [SizedBox(height: 100)]),
                 Positioned(
                   top: 570,
                   left: 20,
                   child: ElevatedButton(
-                    key: const Key('submit_btn'),
+                    key: const Key('over_list'),
                     onPressed: () {},
-                    child: const SizedBox(
-                      width: 100,
-                      height: 50,
-                      child: Text('Submit'),
-                    ),
+                    child: const SizedBox(width: 100, height: 50),
                   ),
                 ),
               ],
@@ -194,10 +260,6 @@ void main() {
 
       final report = UiHealthAuditor.audit();
       expect(report['clippedElementCount'], 1);
-      final clipped = (report['clippedElements'] as List).single as Map;
-      expect(clipped['target'], 'submit_btn');
-      expect(clipped['issue'], contains('clipped by viewport bottom edge'));
-      expect(report['isHealthy'], isFalse);
     });
   });
 }

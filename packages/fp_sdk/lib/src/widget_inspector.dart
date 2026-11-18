@@ -1247,6 +1247,8 @@ class PilotWidgetInspector {
         // A field's validation error, when one is shown.
         'fieldError': ?FormInspector.of(target)?.shown,
         'source': ?_source(target),
+        // Part of it is scrolled out of its list: scrolling shows it.
+        if (_cutByScroll(target, ro)) 'scrollClipped': true,
         'bounds': {
           'x': pos.dx.round(),
           'y': pos.dy.round(),
@@ -1263,6 +1265,25 @@ class PilotWidgetInspector {
       }
     }
     return elements;
+  }
+
+  /// Whether a scrollable around [element] cuts [box] at its scrolling edge.
+  static bool _cutByScroll(Element element, RenderBox box) {
+    final r = box.localToGlobal(Offset.zero) & box.size;
+    for (
+      var s = Scrollable.maybeOf(element);
+      s != null;
+      s = Scrollable.maybeOf(s.context)
+    ) {
+      final vp = s.context.findRenderObject();
+      if (vp is! RenderBox || !vp.hasSize) continue;
+      final v = vp.localToGlobal(Offset.zero) & vp.size;
+      final cut = s.position.axis == Axis.vertical
+          ? r.top < v.top - 0.5 || r.bottom > v.bottom + 0.5
+          : r.left < v.left - 0.5 || r.right > v.right + 0.5;
+      if (cut) return true;
+    }
+    return false;
   }
 
   static String? _source(Element element) {

@@ -1355,6 +1355,35 @@ extension _WidgetExtensions on FlutterPilot {
       );
     });
 
+    // -- ext.flutterpilot.scrollToFraction ------------------------------------
+    // What a scrollbar thumb drag does: jump the list's position, so a list
+    // that lays out every row on the way (no fixed extent) shows its cost.
+    registerExtension('ext.flutterpilot.scrollToFraction', (
+      method,
+      parameters,
+    ) async {
+      final fraction = double.tryParse(parameters['fraction'] ?? '');
+      if (fraction == null || fraction < 0 || fraction > 1) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.invalidParams,
+          'fraction must be a number from 0 (top) to 1 (end).',
+        );
+      }
+      final scrollable = scrollableFor(parameters['key']);
+      if (scrollable == null) {
+        return ServiceExtensionResponse.error(
+          ServiceExtensionResponse.extensionError,
+          parameters['key'] == null
+              ? 'No scrollable list on screen.'
+              : 'No scrollable at or around "${parameters['key']}".',
+        );
+      }
+      final result = await jumpToFraction(scrollable.position, fraction);
+      return ServiceExtensionResponse.result(
+        json.encode({'status': 'success', ...result}),
+      );
+    });
+
     // -- ext.flutterpilot.doubleTapWidget -------------------------------------
     registerExtension('ext.flutterpilot.doubleTapWidget', (
       method,
