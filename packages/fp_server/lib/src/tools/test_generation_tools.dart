@@ -171,6 +171,7 @@ mixin _TestGenerationToolsMixin
             description: 'Timeout for waitFor in ms (default 3000).',
           ),
           'patches': JsonSchema.array(
+            items: JsonSchema.object(),
             description:
                 'Batch of patch objects to apply atomically in 1 reload.',
           ),

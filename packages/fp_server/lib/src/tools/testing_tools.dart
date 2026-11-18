@@ -232,6 +232,7 @@ mixin _TestingToolsMixin on _FlutterPilotServerBase {
           'type': JsonSchema.string(description: 'Widget type (e.g. ListTile).'),
           'count': JsonSchema.integer(description: 'Expected count of type.'),
           'asserts': JsonSchema.array(
+            items: JsonSchema.object(),
             description:
                 'Batch of checks: [{text, exact, key, enabled, type, count}].',
           ),

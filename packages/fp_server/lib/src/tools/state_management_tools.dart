@@ -699,6 +699,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
                 'can\'t be reached (connection).',
           ),
           'mocks': JsonSchema.array(
+            items: JsonSchema.object(),
             description:
                 'Batch of mocks: [{urlPattern, statusCode, body, delayMs, error}].',
           ),
