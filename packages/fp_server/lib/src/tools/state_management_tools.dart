@@ -97,7 +97,10 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
           'query': JsonSchema.string(
             description: 'Substring search across state values and names.',
           ),
-          'history': JsonSchema.boolean(),
+          'history': JsonSchema.boolean(
+            description:
+                'List the last 50 state and route changes with timestamps.',
+          ),
           'clear': JsonSchema.boolean(
             description:
                 'Empty the history after returning it: do that before an action '
@@ -332,11 +335,13 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
               final type = l['type']?.toString().toUpperCase() ?? 'LOG';
               final method = l['method'] != null ? '${l['method']} ' : '';
               final uri = l['uri'] ?? '';
-              final status =
-                  l['statusCode'] != null ? ' ${l['statusCode']}' : '';
+              final status = l['statusCode'] != null
+                  ? ' ${l['statusCode']}'
+                  : '';
               final mocked = l['mocked'] == true ? ' [MOCKED]' : '';
-              final msg =
-                  l['message'] != null ? ' error="${l['message']}"' : '';
+              final msg = l['message'] != null
+                  ? ' error="${l['message']}"'
+                  : '';
               final body = l['body'] != null ? ' body=${l['body']}' : '';
               return '[${l['timestamp']}] $type $method$uri$status$mocked$msg$body';
             })
@@ -376,8 +381,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
                 'Database name, only needed when the app registers several.',
           ),
           'query': JsonSchema.string(
-            description:
-                'Substring filter for table names or row content.',
+            description: 'Substring filter for table names or row content.',
           ),
           'limit': JsonSchema.integer(
             description: 'Max rows or tables to return (default 50, max 200).',
@@ -512,8 +516,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
               ? pluginTotal
               : filteredRows.length,
           what: 'rows (first kept)',
-          how:
-              'Page with LIMIT/OFFSET in the SQL, or narrow with query/WHERE.',
+          how: 'Page with LIMIT/OFFSET in the SQL, or narrow with query/WHERE.',
         );
         final buf = StringBuffer('$origin: ${displayRows.length} row(s)');
         if (note != null) buf.write('\n$note');
@@ -562,13 +565,11 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         },
       ),
       callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.getSharedPreferences',
-          {
-            if (p['key'] != null) 'key': p['key'].toString(),
-            if (p['showSensitive'] == true) 'showSensitive': 'true',
-          },
-        );
+        final res =
+            await _callExtensionRaw('ext.flutterpilot.getSharedPreferences', {
+              if (p['key'] != null) 'key': p['key'].toString(),
+              if (p['showSensitive'] == true) 'showSensitive': 'true',
+            });
         if (res.isError) return res.toCallToolResult();
         var data = res.data ?? <String, dynamic>{};
         final query = p['query']?.toString().toLowerCase();
@@ -651,6 +652,7 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
         properties: {
           'condition': JsonSchema.string(
             enumValues: ['normal', 'slow_3g', 'fast_4g', 'offline'],
+            description: 'Network profile preset (default: normal).',
           ),
           'delayMs': JsonSchema.integer(description: 'Up to 60000.'),
           'errorRate': JsonSchema.number(
@@ -673,34 +675,30 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
     _tool(
       'mock_http_response',
       description:
-          'Canned Dio responses or errors (timeout/connection). Single endpoint '
-          'or batch via mocks:[...]; clear:true resets.',
+          'Mocks Dio responses/errors, batch mocks, or exports recorded traffic.',
       inputSchema: ToolInputSchema(
         properties: {
           'urlPattern': JsonSchema.string(
-            description: 'Part of the URL, e.g. "/api/users".',
+            description: 'URL substring to match.',
           ),
           'clear': JsonSchema.boolean(
-            description:
-                'Remove the mock for urlPattern, or every mock without one.',
+            description: 'Clear mock for urlPattern (or all).',
           ),
-          'statusCode': JsonSchema.integer(),
-          'body': JsonSchema.string(
-            description:
-                'Response body as a JSON string, e.g. \'{"error":"not found"}\'.',
+          'statusCode': JsonSchema.integer(
+            description: 'HTTP status (default 200).',
           ),
-          'delayMs': JsonSchema.integer(
-            description: 'Delay before the response or failure (default 0).',
-          ),
+          'body': JsonSchema.string(description: 'JSON response body string.'),
+          'delayMs': JsonSchema.integer(description: 'Response delay in ms.'),
           'error': JsonSchema.string(
             enumValues: ['timeout', 'connection'],
-            description:
-                'In place of statusCode: the server never answers (timeout) or '
-                'can\'t be reached (connection).',
+            description: 'Simulate timeout or connection failure.',
           ),
-          'mocks': JsonSchema.array(
-            description:
-                'Batch of mocks: [{urlPattern, statusCode, body, delayMs, error}].',
+          'mocks': JsonSchema.array(description: 'Batch of mock definitions.'),
+          'fromRecorded': JsonSchema.boolean(
+            description: 'Export mocks from recorded Dio logs.',
+          ),
+          'apply': JsonSchema.boolean(
+            description: 'Install exported mocks immediately.',
           ),
         },
       ),
@@ -720,6 +718,103 @@ mixin _StateManagementToolsMixin on _FlutterPilotServerBase {
             });
           }
           return res.toCallToolResult();
+        }
+
+        if (p['fromRecorded'] == true) {
+          final netRes = await _callExtensionRaw(
+            'ext.flutterpilot.getNetworkLogs',
+            {},
+          );
+          if (netRes.isError) return netRes.toCallToolResult();
+          final filter = (p['urlPattern'] ?? p['filter'])?.toString();
+          final status = (p['statusCode'] as num?)?.toInt();
+          final byUrl = <String, Map>{};
+          for (final log
+              in (netRes.data?['logs'] as List? ?? const []).whereType<Map>()) {
+            final uri = log['uri']?.toString();
+            if (log['type'] != 'response' ||
+                log['mocked'] == true ||
+                uri == null) {
+              continue;
+            }
+            if (filter != null && !uri.contains(filter)) continue;
+            byUrl[uri] = log;
+          }
+          if (byUrl.isEmpty) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'No recorded responses${filter != null ? ' matching "$filter"' : ''}. '
+                      'Drive the app so it makes the requests first (get_network_logs '
+                      'lists what it made).',
+                ),
+              ],
+            );
+          }
+          final steps = <Map<String, dynamic>>[];
+          final cut = <String>[];
+          for (final MapEntry(key: uri, value: log) in byUrl.entries) {
+            final u = Uri.tryParse(uri);
+            final pattern = u == null
+                ? uri
+                : '${u.host}${u.path}${u.hasQuery ? '?${u.query}' : ''}';
+            final body = log['body'];
+            if (log['bodyCut'] == true) cut.add(pattern);
+            steps.add({
+              'tool': 'mock_http_response',
+              'arguments': {
+                'urlPattern': pattern,
+                'statusCode':
+                    status ?? (log['statusCode'] as num?)?.toInt() ?? 200,
+                'body': body is String ? body : jsonEncode(body ?? ''),
+              },
+            });
+          }
+          final buf = StringBuffer('${steps.length} URL(s) recorded.');
+          if (cut.isNotEmpty) {
+            buf.write(
+              '\n${cut.length} bodies are not the whole response (the log keeps '
+              '20 list items and 4 KB of text, and masks credential fields): '
+              '${cut.take(5).join(', ')}${cut.length > 5 ? ', …' : ''}. A mock of '
+              'those answers less than the server did.',
+            );
+          }
+          if (p['apply'] == true) {
+            final mock = _toolCallbacks['mock_http_response']!;
+            var failed = 0;
+            for (final step in steps) {
+              final r = await mock(
+                Map<String, dynamic>.from(step['arguments'] as Map),
+                e,
+              );
+              if (r.isError == true) failed++;
+            }
+            buf.write(
+              '\nInstalled ${steps.length - failed} mock(s)'
+              '${failed > 0 ? ', $failed refused' : ''}. '
+              'mock_http_response(clear: true) removes them.',
+            );
+          } else {
+            final json = jsonEncode(steps);
+            buf.write(
+              json.length <= 6000
+                  ? '\nSteps for execute_action_chain:\n$json'
+                  : '\nThe steps are ${json.length} characters: apply: true '
+                        'installs them without listing them, or narrow with '
+                        'urlPattern. URLs: ${byUrl.keys.take(10).join(', ')}'
+                        '${byUrl.length > 10 ? ', …' : ''}',
+            );
+          }
+          return CallToolResult(
+            content: [TextContent(text: buf.toString())],
+            structuredContent: {
+              'count': steps.length,
+              'cut': cut,
+              'applied': p['apply'] == true,
+            },
+          );
         }
 
         final rawMocks = p['mocks'];

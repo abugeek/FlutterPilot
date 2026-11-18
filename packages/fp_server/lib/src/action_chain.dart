@@ -18,8 +18,8 @@ typedef ChainStep = ({String tool, Map<String, dynamic> arguments});
 /// example.
 JsonSchema compositeStepSchema() => JsonSchema.object(
   properties: {
-    'tool': JsonSchema.string(),
-    'arguments': JsonSchema.object(),
+    'tool': JsonSchema.string(description: 'Tool name.'),
+    'arguments': JsonSchema.object(description: 'Tool arguments.'),
   },
   required: ['tool'],
 );
@@ -41,41 +41,152 @@ ChainStep? chainStep(Object? raw) {
 }
 
 /// [step] as an action of the SDK's own chain, which runs inside the app
-/// without a round trip per step: tap, text entry, scrolling, assertions,
-/// waits, or clearing fields.
+/// without a round trip per step: tap, text entry, key presses, simple
+/// navigation, toggling, scrolling, assertions, waits, or clearing fields.
 Map<String, String>? inAppChainAction(ChainStep step) {
   final arguments = step.arguments;
-  final target = (arguments['key'] ??
-          arguments['target'] ??
-          arguments['text'] ??
-          arguments['selector'])
-      ?.toString();
-  if (target == null || target.isEmpty) return null;
-  final text = arguments['text'];
+  final target =
+      (arguments['key'] ??
+              arguments['target'] ??
+              arguments['text'] ??
+              arguments['selector'])
+          ?.toString();
   final exact = arguments['exact'] == true;
   final timeout = arguments['timeoutMs']?.toString() ?? '3000';
+  final hasWaitOpts =
+      arguments['waitFor'] != null ||
+      arguments['failureKey'] != null ||
+      arguments['anyOf'] != null;
 
-  return switch (step.tool) {
-    'tap_widget' => {'action': 'tap', 'target': target},
-    'enter_text' when text is String && text.isNotEmpty => {
-        'action': 'enter_text',
-        'target': target,
-        'text': text,
-      },
-    'scroll_into_view' => {'action': 'scroll_into_view', 'target': target},
-    'assert_widget' => {
+  switch (step.tool) {
+    case 'tap_widget':
+      if (target == null || target.isEmpty) return null;
+      if (hasWaitOpts) return null;
+      final gesture = arguments['gesture']?.toString();
+      if (gesture == null || gesture == 'tap') {
+        return {'action': 'tap', 'target': target};
+      }
+      if (gesture == 'double' || gesture == 'double_tap') {
+        return {'action': 'double_tap', 'target': target};
+      }
+      if (gesture == 'long' || gesture == 'long_press') {
+        return {
+          'action': 'long_press',
+          'target': target,
+          if (arguments['durationMs'] != null)
+            'durationMs': '${arguments['durationMs']}',
+        };
+      }
+      return null;
+    case 'gesture_widget':
+      if (hasWaitOpts) return null;
+      final gesture = arguments['gesture']?.toString();
+      if (target == null || target.isEmpty) return null;
+      if (gesture == 'swipe') {
+        final direction = arguments['direction']?.toString() ?? 'up';
+        if (direction != 'up' &&
+            direction != 'down' &&
+            direction != 'left' &&
+            direction != 'right') {
+          return null;
+        }
+        return {
+          'action': 'swipe',
+          'target': target,
+          'direction': direction,
+          if (arguments['distance'] != null)
+            'distance': '${arguments['distance']}',
+        };
+      }
+      if (gesture == 'double' || gesture == 'double_tap') {
+        return {'action': 'double_tap', 'target': target};
+      }
+      if (gesture == 'long' || gesture == 'long_press') {
+        return {
+          'action': 'long_press',
+          'target': target,
+          if (arguments['durationMs'] != null)
+            'durationMs': '${arguments['durationMs']}',
+        };
+      }
+      return null;
+    case 'enter_text':
+      if (hasWaitOpts) return null;
+      final text = arguments['text'];
+      if (text is! String) return null;
+      final fieldTarget =
+          (arguments['key'] ?? arguments['target'] ?? arguments['selector'])
+              ?.toString() ??
+          'focused';
+      return {'action': 'enter_text', 'target': fieldTarget, 'text': text};
+    case 'press_key':
+      if (hasWaitOpts || arguments['modifiers'] != null) return null;
+      final key = arguments['key']?.toString();
+      if (key == null || key.isEmpty) return null;
+      return {'action': 'press_key', 'target': key};
+    case 'navigate_to':
+      if (hasWaitOpts ||
+          arguments['action'] != null ||
+          arguments['deepLink'] == true ||
+          arguments['pathParams'] != null ||
+          arguments['queryParams'] != null) {
+        return null;
+      }
+      final route = arguments['route']?.toString();
+      if (route == null || route.isEmpty) return null;
+      return {'action': 'navigate_to', 'target': route};
+    case 'scroll_into_view':
+      if (target == null || target.isEmpty) return null;
+      return {'action': 'scroll_into_view', 'target': target};
+    case 'assert_widget':
+      if (target == null || target.isEmpty) return null;
+      if (arguments['enabled'] != null ||
+          arguments['count'] != null ||
+          arguments['visible'] != null) {
+        return null;
+      }
+      return {
         'action': 'assert_widget',
         'target': target,
         if (exact) 'exact': 'true',
-      },
-    'wait_for' => {
-        'action': 'wait_for',
-        'target': target,
-        'timeoutMs': timeout,
-      },
-    'clear_text' => {'action': 'clear_text', 'target': target},
-    _ => null,
-  };
+      };
+    case 'wait_for':
+      if (arguments['animations'] != null ||
+          arguments['frames'] != null ||
+          arguments['state'] != null ||
+          arguments['failureKey'] != null ||
+          arguments['anyOf'] != null ||
+          arguments['gone'] == true) {
+        return null;
+      }
+      final route = arguments['route']?.toString();
+      if (route != null && route.isNotEmpty) {
+        if (target != null && target.isNotEmpty) return null;
+        return {
+          'action': 'wait_for_route',
+          'target': route,
+          'timeoutMs': arguments['timeoutMs']?.toString() ?? '5000',
+        };
+      }
+      if (target == null || target.isEmpty) return null;
+      return {'action': 'wait_for', 'target': target, 'timeoutMs': timeout};
+    case 'toggle_checkbox':
+      if (hasWaitOpts) return null;
+      final toggleTarget = (arguments['key'] ?? arguments['target'])
+          ?.toString();
+      if (toggleTarget == null || toggleTarget.isEmpty) return null;
+      return {
+        'action': 'toggle_checkbox',
+        'target': toggleTarget,
+        if (arguments.containsKey('value') && arguments['value'] is bool)
+          'value': '${arguments['value']}',
+      };
+    case 'clear_text':
+      if (target == null || target.isEmpty) return null;
+      return {'action': 'clear_text', 'target': target};
+    default:
+      return null;
+  }
 }
 
 /// What a chain run one tool at a time did: each step's first line, and in

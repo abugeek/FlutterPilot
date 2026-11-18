@@ -59,7 +59,10 @@ Map<String, dynamic> withFormerNames(Map<String, dynamic> args) {
 const _legacy = [
   ['name', 'provider', 'cubit'],
   ['submitWith', 'submitTarget'],
-  ['query', 'search'],
+  ['query', 'search', 'filter'],
+  ['keyboardInset', 'height'],
+  ['urlPattern', 'filter'],
+  ['waitForSettled', 'quickSettle'],
 ];
 
 /// The arguments in [given] a tool with these schema [properties] doesn't

@@ -84,7 +84,9 @@ String _screenNow(Map<String, dynamic>? data, {ScreenMemory? memory}) {
         final px = ov['pixels'] != null ? ' by ${ov['pixels']}px' : '';
         final side = ov['side'] ?? 'edge';
         final src = ov['source'] != null ? ' [${ov['source']}]' : '';
-        buffer.write('\n⚠️ Layout Overflow: $type overflowed$px on the $side$src');
+        buffer.write(
+          '\n⚠️ Layout Overflow: $type overflowed$px on the $side$src',
+        );
       }
     }
   }
@@ -103,8 +105,9 @@ String _screenNow(Map<String, dynamic>? data, {ScreenMemory? memory}) {
   if (newErrors is int && newErrors > 0) {
     final lastErr = post?['lastError']?.toString();
     if (lastErr != null && lastErr.isNotEmpty) {
-      final shortErr =
-          lastErr.length > 100 ? '${lastErr.substring(0, 100)}…' : lastErr;
+      final shortErr = lastErr.length > 100
+          ? '${lastErr.substring(0, 100)}…'
+          : lastErr;
       buffer.write('\n⚠️ $newErrors new error(s): $shortErr');
     } else {
       buffer.write('\n⚠️ $newErrors new error(s) — call get_errors.');
@@ -249,23 +252,22 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     if (waitFor == null && failureKey == null && anyOfStr == null) return null;
 
     final timeout = ((params['timeoutMs'] as num?)?.toInt() ?? 5000).toString();
-    final waitRes = await _callExtensionRaw(
-      'ext.flutterpilot.waitForCondition',
-      {
-        if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
-        'anyOf': ?anyOfStr,
-        'failureKey': ?failureKey,
-        'timeoutMs': timeout,
-        'previousRoute': ?fromRoute,
-      },
-    );
+    final waitRes =
+        await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
+          if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
+          'anyOf': ?anyOfStr,
+          'failureKey': ?failureKey,
+          'timeoutMs': timeout,
+          'previousRoute': ?fromRoute,
+        });
     if (waitRes.isError) {
       final targetDesc = waitFor ?? anyOfStr ?? 'target';
       return CallToolResult(
         isError: true,
         content: [
           TextContent(
-            text: '${_formatActionFeedback(verb, params, actionResult)}\n'
+            text:
+                '${_formatActionFeedback(verb, params, actionResult)}\n'
                 'But "$targetDesc" did not appear: ${waitRes.errorMessage}',
           ),
         ],
@@ -288,57 +290,35 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'tap_widget',
       description:
-          'Taps a widget by key, selector or text (scrolling first) or at x/y. '
-          'Reports route change, widget diff and tappable elements now.',
+          'Taps widget by key/text/selector (auto-scrolls) or x/y. '
+          'Reports route, diff and tappable elements.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description: 'Key, selector, visible text or icon name.',
-          ),
-          'mark': JsonSchema.integer(
-            description: 'Mark number from capture_screenshot.',
-          ),
-          'identifier': JsonSchema.string(
-            description: 'Semantics identifier.',
-          ),
-          'semanticsId': JsonSchema.integer(
-            description: 'SemanticsNode id.',
-          ),
-          'text': JsonSchema.string(
-            description: 'Visible text inside the widget.',
-          ),
-          'type': JsonSchema.string(
-            description: 'Widget type, e.g. "IconButton".',
-          ),
-          'x': JsonSchema.number(
-            description: 'X in logical pixels, with y.',
-          ),
-          'y': JsonSchema.number(description: 'Y in logical pixels.'),
+          'key': JsonSchema.string(description: 'Key, selector, text or icon.'),
+          'mark': JsonSchema.integer(description: 'Set-of-Mark id.'),
+          'identifier': JsonSchema.string(description: 'Semantics id.'),
+          'semanticsId': JsonSchema.integer(description: 'SemanticsNode id.'),
+          'text': JsonSchema.string(description: 'Visible text.'),
+          'type': JsonSchema.string(description: 'Widget type.'),
+          'x': JsonSchema.number(description: 'X in logical px.'),
+          'y': JsonSchema.number(description: 'Y in logical px.'),
           'gesture': JsonSchema.string(
             enumValues: ['tap', 'double', 'long', 'secondary'],
-            description: 'Default tap (or double/long/secondary).',
+            description: 'Default tap.',
           ),
-          'durationMs': JsonSchema.integer(
-            description: 'Long-press duration (default 600).',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget to wait for after tap.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'durationMs': JsonSchema.integer(description: 'Long-press ms (600).'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for waitFor (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
-          'quickSettle': JsonSchema.boolean(
-            description: 'Settle in <=400ms.',
-          ),
+          'quickSettle': JsonSchema.boolean(description: '<=400ms settle.'),
           'settleTimeoutMs': JsonSchema.integer(
-            description: 'Screen settle timeout in ms.',
+            description: 'Settle timeout ms.',
           ),
         },
       ),
@@ -426,9 +406,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             : null;
         return CallToolResult(
           content: [
-            TextContent(
-              text: dialog == null ? feedback : '$feedback\n$dialog',
-            ),
+            TextContent(text: dialog == null ? feedback : '$feedback\n$dialog'),
           ],
         );
       },
@@ -437,41 +415,28 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'enter_text',
       description:
-          'Types text into a field by key, selector or label (or focused '
-          'field). Fires onChanged; pass submit:true to press Enter, or '
-          'waitFor to poll for a resulting widget.',
+          'Types text into field by key/selector/label or focused field. '
+          'Pass submit:true for Enter.',
       inputSchema: ToolInputSchema(
         properties: {
-          'text': JsonSchema.string(
-            description: 'Text to enter ("" clears the field).',
-          ),
+          'text': JsonSchema.string(description: 'Text ("" clears).'),
           'key': JsonSchema.string(
-            description: 'Key, selector or label. Omit for focused field.',
+            description: 'Key/label (omit for focused).',
           ),
-          'mark': JsonSchema.integer(
-            description: 'Mark number from capture_screenshot.',
-          ),
-          'identifier': JsonSchema.string(
-            description: 'Semantics id.',
-          ),
+          'mark': JsonSchema.integer(description: 'Set-of-Mark id.'),
+          'identifier': JsonSchema.string(description: 'Semantics id.'),
           'clearFirst': JsonSchema.boolean(
-            description: 'Clear existing text first (default true).',
+            description: 'Clear first (default true).',
           ),
-          'submit': JsonSchema.boolean(
-            description: 'Press Enter to submit.',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget or text to wait for.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'submit': JsonSchema.boolean(description: 'Press Enter.'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout in ms (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
         },
         required: ['text'],
@@ -524,22 +489,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         );
         if (waitResult != null) return waitResult;
 
-        final feedback = _formatActionFeedback(
-          verb,
-          {'key': target ?? 'the focused field'},
-          activeRes,
-        );
-        final notes = <String>[
-          if (shouldSubmit) 'submitted with Enter',
-        ];
+        final feedback = _formatActionFeedback(verb, {
+          'key': target ?? 'the focused field',
+        }, activeRes);
+        final notes = <String>[if (shouldSubmit) 'submitted with Enter'];
         final suffix = notes.isEmpty ? '' : ' (${notes.join(', ')}).';
-        return CallToolResult(
-          content: [
-            TextContent(
-              text: '$feedback$suffix',
-            ),
-          ],
-        );
+        return CallToolResult(content: [TextContent(text: '$feedback$suffix')]);
       },
     );
 
@@ -547,34 +502,26 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
       'press_key',
       description:
           'Presses key on focused widget (enter, tab, escape, arrows, '
-          'or "back" to pop). Supports count, waitFor, failureKey, and anyOf.',
+          'or "back" to pop).',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description:
-                'E.g. "enter", "tab", "escape", "back", "arrowDown", "space", '
-                '"backspace", or character.',
+                'Key name ("enter", "back", "tab", "escape", arrow, char).',
           ),
           'modifiers': JsonSchema.array(
             items: JsonSchema.string(),
-            description:
-                'Modifier keys: "shift", "ctrl", "alt", "meta".',
+            description: 'shift, ctrl, alt, meta.',
           ),
-          'count': JsonSchema.integer(
-            description: 'Number of times to press key (1–20, default 1).',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget key/selector to wait for.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'count': JsonSchema.integer(description: 'Repeat count (1–20).'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for waitFor (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
         },
         required: ['key'],
@@ -643,11 +590,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           fromRoute: fromRoute,
         );
         if (waitResult != null) return waitResult;
-        final feedback = _formatActionFeedback(
-          verb,
-          p,
-          res,
-        );
+        final feedback = _formatActionFeedback(verb, p, res);
         // In a text field, say what the field holds now: the diff above only
         // tracks widgets, and a cursor move changes no widget.
         final field = res.data?['field'] as Map<String, dynamic>?;
@@ -699,11 +642,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           'scale': JsonSchema.number(
             description: 'Pinch scale (>1 zoom in, <1 zoom out).',
           ),
-          'identifier': JsonSchema.string(
-            description: 'Semantics id.',
-          ),
+          'identifier': JsonSchema.string(description: 'Semantics id.'),
           'x': JsonSchema.number(description: 'Center x for pinch, with y.'),
-          'y': JsonSchema.number(),
+          'y': JsonSchema.number(description: 'Center y for pinch, with x.'),
           'value': JsonSchema.number(description: 'Slider value for slide.'),
           'waitFor': JsonSchema.string(
             description: 'Widget key/selector to wait for.',
@@ -840,29 +781,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
     _tool(
       'scroll_into_view',
-      description:
-          'Scrolls until widget (key, selector, or text) is visible. '
-          'Pass tap: true to tap once visible; supports waitFor and failureKey.',
+      description: 'Scrolls until widget is visible; tap:true taps it.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description: 'Key, selector or text of widget.',
-          ),
-          'tap': JsonSchema.boolean(
-            description: 'Whether to tap widget once scrolled into view.',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget key/selector to wait for.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'key': JsonSchema.string(description: 'Key, selector or text.'),
+          'tap': JsonSchema.boolean(description: 'Tap once visible.'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for waitFor (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
         },
       ),
@@ -881,10 +812,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         if (p['tap'] == true) {
           final target =
               p['key'] ?? p['target'] ?? p['identifier'] ?? p['text'] ?? '';
-          final tapRes = await _callExtensionRaw(
-            'ext.flutterpilot.tapWidget',
-            {'key': target.toString()},
-          );
+          final tapRes = await _callExtensionRaw('ext.flutterpilot.tapWidget', {
+            'key': target.toString(),
+          });
           if (tapRes.isError) return tapRes.toCallToolResult();
           final fromRoute =
               (tapRes.data?['delta'] as Map<String, dynamic>?)?['fromRoute']
@@ -925,30 +855,21 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'toggle_checkbox',
       description:
-          'Toggles Checkbox, Switch or Radio. Pass value to set idempotently '
-          'or waitFor to await next widget.',
+          'Toggles Checkbox, Switch or Radio; value sets state idempotently.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description:
-                'Key, selector or label of toggle or row holding it.',
-          ),
+          'key': JsonSchema.string(description: 'Key, selector or row label.'),
           'value': JsonSchema.boolean(
-            description:
-                'Target state (true/false). If already set, does not toggle.',
+            description: 'Target state (no-op if already set).',
           ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget key/selector to wait for.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for waitFor (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
         },
       ),
@@ -989,34 +910,24 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
     _tool(
       'fill_form',
-      description:
-          'Fills multiple fields and optionally submits (or pass waitFor). '
-          'Reports route changes and widget diffs.',
+      description: 'Fills multiple form fields and optionally submits.',
       inputSchema: ToolInputSchema(
         properties: {
           'fields': JsonSchema.object(
-            description:
-                'Map of field key/selector to value, e.g. {"TextField[\'Email\']": "a@b.dev", "Checkbox[\'Terms\']": true}.',
+            description: 'Map of field key/selector to value (string or bool).',
           ),
           'submitWith': JsonSchema.string(
-            description:
-                'Optional button to tap after filling (e.g. "ElevatedButton[\'Log In\']").',
+            description: 'Button key/selector to tap after filling.',
           ),
-          'submit': JsonSchema.boolean(
-            description: 'Tap the one primary button.',
-          ),
-          'waitFor': JsonSchema.string(
-            description: 'Widget or text to wait for after submitting.',
-          ),
-          'failureKey': JsonSchema.string(
-            description: 'Fast-fail key (e.g. error banner).',
-          ),
+          'submit': JsonSchema.boolean(description: 'Tap primary button.'),
+          'waitFor': JsonSchema.string(description: 'Key/text to await.'),
+          'failureKey': JsonSchema.string(description: 'Fast-fail key.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Candidate keys to await.',
+            description: 'Keys to await.',
           ),
           'timeoutMs': JsonSchema.integer(
-            description: 'Timeout for waitFor (default 5000).',
+            description: 'Wait timeout ms (5000).',
           ),
         },
         required: ['fields'],
@@ -1036,8 +947,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
               r'submit|save|continue|log\s*in|sign\s*in|register|next|confirm|done|send',
               caseSensitive: false,
             );
-            final matching =
-                primary.where((b) => submitPattern.hasMatch(b)).toList();
+            final matching = primary
+                .where((b) => submitPattern.hasMatch(b))
+                .toList();
             if (matching.length == 1) {
               submit = matching.single;
             } else {
@@ -1081,8 +993,8 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             .toList();
         final validationNote =
             (validationList != null && validationList.isNotEmpty)
-                ? '\n⚠️ Form validation issues (${validationList.length}): ${validationList.join('; ')}'
-                : '';
+            ? '\n⚠️ Form validation issues (${validationList.length}): ${validationList.join('; ')}'
+            : '';
 
         final waitFor = p['waitFor']?.toString();
         final failureKey = p['failureKey']?.toString();
@@ -1091,21 +1003,19 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             ? rawAnyOf.map((s) => s.toString()).join(',')
             : rawAnyOf?.toString();
         if (waitFor != null || failureKey != null || anyOfStr != null) {
-          final timeout =
-              ((p['timeoutMs'] as num?)?.toInt() ?? 5000).toString();
+          final timeout = ((p['timeoutMs'] as num?)?.toInt() ?? 5000)
+              .toString();
           final fromRoute =
               (res.data?['delta'] as Map<String, dynamic>?)?['fromRoute']
                   ?.toString();
-          final waitRes = await _callExtensionRaw(
-            'ext.flutterpilot.waitForCondition',
-            {
-              if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
-              'anyOf': ?anyOfStr,
-              'failureKey': ?failureKey,
-              'timeoutMs': timeout,
-              'previousRoute': ?fromRoute,
-            },
-          );
+          final waitRes =
+              await _callExtensionRaw('ext.flutterpilot.waitForCondition', {
+                if (waitFor != null && waitFor.isNotEmpty) 'selector': waitFor,
+                'anyOf': ?anyOfStr,
+                'failureKey': ?failureKey,
+                'timeoutMs': timeout,
+                'previousRoute': ?fromRoute,
+              });
           if (waitRes.isError) {
             final targetDesc = waitFor ?? anyOfStr ?? 'target';
             return withVerdict(
@@ -1140,10 +1050,9 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final diffNote = _widgetDiffSummary(
           delta?['widgetDiff'] as Map<String, dynamic>?,
         );
-        final waitNote =
-            waitFor != null && waitFor.isNotEmpty
-                ? ' Settled on "$waitFor".'
-                : (anyOfStr != null ? ' Settled.' : '');
+        final waitNote = waitFor != null && waitFor.isNotEmpty
+            ? ' Settled on "$waitFor".'
+            : (anyOfStr != null ? ' Settled.' : '');
         return withVerdict(
           CallToolResult(
             content: [
@@ -1168,39 +1077,27 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'wait_for',
       description:
-          'Waits for condition: widget key, anyOf targets, route, animations, '
-          'state, or frames. Supports failureKey for fast error abort.',
+          'Waits for widget key, anyOf, route, animations, state, or frames.',
       inputSchema: ToolInputSchema(
         properties: {
-          'key': JsonSchema.string(
-            description: 'Key, selector or text on screen.',
-          ),
+          'key': JsonSchema.string(description: 'Key, selector or text.'),
           'anyOf': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Wait until any one of these keys/selectors appears.',
+            description: 'Wait until any listed key appears.',
           ),
           'failureKey': JsonSchema.string(
-            description:
-                'Immediate failure key (e.g. error banner). Aborts wait immediately if seen.',
+            description: 'Fast-fail key that aborts wait if seen.',
           ),
           'gone': JsonSchema.boolean(description: 'Until key is gone.'),
-          'route': JsonSchema.string(
-            description: 'Target route (e.g. "/dashboard").',
-          ),
-          'animations': JsonSchema.boolean(
-            description: 'Until animations have settled.',
-          ),
-          'state': JsonSchema.string(
-            description: 'Provider or bloc name from get_state.',
-          ),
+          'route': JsonSchema.string(description: 'Target route.'),
+          'animations': JsonSchema.boolean(description: 'Wait for animations.'),
+          'state': JsonSchema.string(description: 'Provider or bloc name.'),
           'expectedValue': JsonSchema.string(
-            description: 'Substring expected in state value.',
+            description: 'Expected state substring.',
           ),
-          'frames': JsonSchema.integer(
-            description: 'Pump this many frames (1–120).',
-          ),
+          'frames': JsonSchema.integer(description: 'Frames to pump (1–120).'),
           'timeoutMs': JsonSchema.integer(
-            description: 'Default 5000 (3000 for key).',
+            description: 'Timeout ms (default 5000).',
           ),
         },
       ),
@@ -1381,52 +1278,69 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     _tool(
       'audit_screen_health',
       description:
-          'Audits screen health: layout overflows, tap target sizes, '
-          'contrast, unlabeled controls. viewports sweeps breakpoints.',
+          'Audits layout overflows, tap targets, contrast, labels, tokens, '
+          'keyboard, or viewports.',
       inputSchema: ToolInputSchema(
         properties: {
           'routes': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Go to each route and check it.',
+            description: 'Routes to sweep.',
           ),
           'category': JsonSchema.string(
-            enumValues: ['all', 'overflow', 'a11y', 'contrast'],
-            description: 'Filter findings by category (default: all).',
+            enumValues: ['all', 'overflow', 'a11y', 'contrast', 'tokens'],
+            description: 'Category filter (default all).',
           ),
           'query': JsonSchema.string(
-            description: 'Filter findings by widget, key, file, or text.',
+            description: 'Filter by widget, key, file, or text.',
           ),
           'designQuality': JsonSchema.boolean(
-            description: 'Audit 4/8dp spacing grid and typography hierarchy.',
+            description: 'Audit 4/8dp spacing, typography, and tokens.',
           ),
           'viewports': JsonSchema.array(
             items: JsonSchema.string(),
-            description: 'Audit viewports (e.g. ["mobile_portrait", "tablet"]).',
+            description: 'Viewports (phone, tablet, desktop, WxH).',
+          ),
+          'keyboardInset': JsonSchema.number(
+            description: 'Keyboard height in dp to test and restore.',
+          ),
+          'restore': JsonSchema.boolean(
+            description: 'Restore initial state afterwards (default true).',
           ),
         },
       ),
       callback: (p, e) async {
+        final queryStr = p['query']?.toString().toLowerCase();
+        bool matchesQuery(dynamic item) {
+          if (queryStr == null || queryStr.isEmpty) return true;
+          if (item is Map) {
+            for (final key in const [
+              'source',
+              'target',
+              'details',
+              'issue',
+              'type',
+              'widget',
+              'location',
+              'color',
+              'closestToken',
+              'radius',
+              'nearest',
+            ]) {
+              final value = item[key];
+              if (value != null &&
+                  value.toString().toLowerCase().contains(queryStr)) {
+                return true;
+              }
+            }
+            return false;
+          }
+          return item.toString().toLowerCase().contains(queryStr);
+        }
+
         // One screen's findings; a sweep shows fewer per kind and leaves
         // out the reading order.
         String report(Map<String, dynamic> data, {required bool sweep}) {
           final max = sweep ? 5 : 12;
-          final queryStr = p['query']?.toString().toLowerCase();
-          bool matchesQuery(dynamic item) {
-            if (queryStr == null || queryStr.isEmpty) return true;
-            if (item is Map) {
-              final src = item['source']?.toString().toLowerCase() ?? '';
-              final target = item['target']?.toString().toLowerCase() ?? '';
-              final details = item['details']?.toString().toLowerCase() ?? '';
-              final issue = item['issue']?.toString().toLowerCase() ?? '';
-              final type = item['type']?.toString().toLowerCase() ?? '';
-              return src.contains(queryStr) ||
-                  target.contains(queryStr) ||
-                  details.contains(queryStr) ||
-                  issue.contains(queryStr) ||
-                  type.contains(queryStr);
-            }
-            return item.toString().toLowerCase().contains(queryStr);
-          }
 
           List<dynamic> list(String key) =>
               (data[key] as List? ?? const []).where(matchesQuery).toList();
@@ -1454,46 +1368,34 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
 
           final category = p['category']?.toString() ?? 'all';
           if (category == 'all' || category == 'overflow') {
-            section(
-              'Layout overflows',
-              overflows,
-              (o) {
-                final src = o['source'] != null ? ' at ${o['source']}' : '';
-                final px = o['pixels'] != null ? ' by ${o['pixels']}px' : '';
-                final side = o['side'] != null ? ' on the ${o['side']}' : '';
-                final axis = o['axis'] ?? 'flex';
-                final fix = o['source'] != null
-                    ? (axis == 'vertical'
+            section('Layout overflows', overflows, (o) {
+              final src = o['source'] != null ? ' at ${o['source']}' : '';
+              final px = o['pixels'] != null ? ' by ${o['pixels']}px' : '';
+              final side = o['side'] != null ? ' on the ${o['side']}' : '';
+              final axis = o['axis'] ?? 'flex';
+              final fix = o['source'] != null
+                  ? (axis == 'vertical'
                         ? '\n  → Fix: wrap children in Expanded / Flexible or wrap Column in SingleChildScrollView'
                         : '\n  → Fix: wrap children in Expanded / Flexible or replace Row with Wrap')
-                    : '';
-                return '${o['type']}$src: overflowed$px$side${o['details'] != null && !o['details'].toString().contains('overflowed') ? ' (${o['details']})' : ''}$fix';
-              },
-            );
+                  : '';
+              return '${o['type']}$src: overflowed$px$side${o['details'] != null && !o['details'].toString().contains('overflowed') ? ' (${o['details']})' : ''}$fix';
+            });
             final clippedList = list('clippedElements');
-            section(
-              'Clipped interactive elements',
-              clippedList,
-              (c) {
-                final target = c['target'] ?? c['type'] ?? 'Element';
-                final issue = c['issue'] ?? 'partially clipped';
-                final src = c['source'] != null ? ' at ${c['source']}' : '';
-                return '"$target"$src: $issue';
-              },
-            );
+            section('Clipped interactive elements', clippedList, (c) {
+              final target = c['target'] ?? c['type'] ?? 'Element';
+              final issue = c['issue'] ?? 'partially clipped';
+              final src = c['source'] != null ? ' at ${c['source']}' : '';
+              return '"$target"$src: $issue';
+            });
           }
           if (category == 'all' || category == 'a11y') {
-            section(
-              'Small tap targets',
-              targets,
-              (a) {
-                final src = a['source'] != null ? ' at ${a['source']}' : '';
-                final fix = a['source'] != null
-                    ? '\n  → Fix: apply_patch_and_verify(target: "${a['source']}", wrapWith: "SizedBox(width: 48, height: 48)") or add padding'
-                    : '';
-                return '`${a['target']}` (${a['type']})$src: ${a['issue']}$fix';
-              },
-            );
+            section('Small tap targets', targets, (a) {
+              final src = a['source'] != null ? ' at ${a['source']}' : '';
+              final fix = a['source'] != null
+                  ? '\n  → Fix: apply_patch_and_verify(target: "${a['source']}", wrapWith: "SizedBox(width: 48, height: 48)") or add padding'
+                  : '';
+              return '`${a['target']}` (${a['type']})$src: ${a['issue']}$fix';
+            });
             // Grouped on purpose: identical controls (one list row repeating one
             // widget) are one finding. Say both numbers so a count of "1" is
             // never read as "one control".
@@ -1547,7 +1449,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             buffer.writeln(
               category == 'all'
                   ? 'No layout overflows, small tap targets, unlabeled controls, '
-                      'low-contrast text or reading order jumps.'
+                        'low-contrast text or reading order jumps.'
                   : 'No $category findings on screen.',
             );
           }
@@ -1594,12 +1496,297 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         final viewports = [
           for (final v in (p['viewports'] as List?) ?? const []) '$v',
         ];
+        final restore = p['restore'] != false;
+
+        String formatTokenAudit(
+          Map<String, dynamic> data, {
+          String filterType = 'all',
+        }) {
+          final colors = ((data['unthemedColors'] as List?) ?? const [])
+              .where(matchesQuery)
+              .toList();
+          final radii = ((data['offGridRadii'] as List?) ?? const [])
+              .where(matchesQuery)
+              .toList();
+          final colorCount = data['unthemedColorCount'] ?? colors.length;
+          final radiusCount = data['offGridRadiusCount'] ?? radii.length;
+          final buf = StringBuffer(
+            'Checked ${data['checked'] ?? 0} colors and radii set in the '
+            'app\'s code on this screen.',
+          );
+          if (colors.isEmpty && radii.isEmpty) {
+            buf.write(' All come from the theme.');
+          }
+          String at(Map m) =>
+              m['location'] != null ? ' at ${m['location']}' : '';
+          if (colors.isNotEmpty &&
+              (filterType == 'all' || filterType == 'colors')) {
+            buf.write('\nNot from the ColorScheme ($colorCount):');
+            for (final c in colors.cast<Map>()) {
+              buf.write(
+                '\n  ${c['color']} in ${c['widget']}${at(c)} '
+                '(closest: ${c['closestToken']})',
+              );
+            }
+            if (colorCount is int && colorCount > colors.length) {
+              buf.write('\n  … ${colorCount - colors.length} more');
+            }
+          }
+          if (radii.isNotEmpty &&
+              (filterType == 'all' || filterType == 'radii')) {
+            buf.write('\nCorner radii off the 4dp grid ($radiusCount):');
+            for (final r in radii.cast<Map>()) {
+              buf.write(
+                '\n  ${r['radius']} in ${r['widget']}${at(r)} '
+                '(nearest: ${r['nearest']})',
+              );
+            }
+          }
+          return buf.toString();
+        }
+
+        final requestedCategory = p['category']?.toString() ?? 'all';
+        if (requestedCategory == 'tokens') {
+          final res = await _callExtensionRaw(
+            'ext.flutterpilot.auditDesignTokens',
+            {},
+          );
+          if (res.isError) {
+            return withVerdict(
+              res.toCallToolResult(),
+              auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 0,
+                failed: 1,
+                skipped: 0,
+                findings: const {},
+                restored: true,
+                incomplete: true,
+                loading: false,
+                status: 'unavailable',
+                reason: res.errorMessage,
+              ),
+            );
+          }
+          final data = res.data ?? const <String, dynamic>{};
+          if (data['unavailable'] != null) {
+            final msg = '${data['unavailable']}';
+            return CallToolResult(
+              isError: true,
+              content: [TextContent(text: msg)],
+              structuredContent: auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 0,
+                failed: 1,
+                skipped: 0,
+                findings: const {},
+                restored: true,
+                incomplete: true,
+                loading: false,
+                status: 'unavailable',
+                reason: msg,
+              ),
+            );
+          }
+          return CallToolResult(
+            content: [TextContent(text: formatTokenAudit(data))],
+            structuredContent: auditVerdict(
+              requested: 0,
+              visited: 0,
+              audited: 1,
+              failed: 0,
+              skipped: 0,
+              findings: const {},
+              restored: true,
+              incomplete: false,
+              loading: false,
+              status: 'ok',
+            ),
+          );
+        }
+
+        final kbHeight = ((p['keyboardInset'] ?? p['height']) as num?)
+            ?.toDouble();
+        if (kbHeight != null) {
+          final setRes = await _callExtensionRaw(
+            'ext.flutterpilot.setKeyboardInset',
+            {'inset': kbHeight.toString()},
+          );
+          if (setRes.isError) {
+            return withVerdict(
+              setRes.toCallToolResult(),
+              auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 0,
+                failed: 1,
+                skipped: 0,
+                findings: const {},
+                restored: true,
+                incomplete: true,
+                loading: false,
+                status: 'unavailable',
+                reason: setRes.errorMessage,
+              ),
+            );
+          }
+
+          try {
+            await Future<void>.delayed(const Duration(milliseconds: 150));
+            final results = await Future.wait([
+              _callExtensionRaw(
+                'ext.flutterpilot.auditScreenHealth',
+                auditParams,
+              ),
+              _callExtensionRaw('ext.flutterpilot.getInteractiveElements', {}),
+            ]);
+            final audit = results[0];
+            if (audit.isError) {
+              return withVerdict(
+                audit.toCallToolResult(),
+                auditVerdict(
+                  requested: 0,
+                  visited: 0,
+                  audited: 0,
+                  failed: 1,
+                  skipped: 0,
+                  findings: const {},
+                  restored: restore || kbHeight <= 0,
+                  incomplete: true,
+                  loading: false,
+                  status: 'unavailable',
+                  reason: audit.errorMessage,
+                ),
+              );
+            }
+            final interactive = results[1];
+            final auditData = audit.data ?? const <String, dynamic>{};
+            final overflows = (auditData['overflows'] as List?) ?? const [];
+            final elements =
+                (interactive.data?['elements'] as List?) ?? const [];
+            final focusedInput = elements.firstWhere(
+              (el) => el is Map && el['isFocused'] == true,
+              orElse: () => null,
+            );
+
+            var focusedObscured = false;
+            if (focusedInput is Map && focusedInput['bounds'] is Map) {
+              final bounds = focusedInput['bounds'] as Map;
+              final bottomY =
+                  (bounds['y'] as num? ?? 0) + (bounds['height'] as num? ?? 0);
+              final viewHeight =
+                  (setRes.data?['height'] as num?)?.toDouble() ?? 844.0;
+              if (bottomY > viewHeight - kbHeight) {
+                focusedObscured = true;
+              }
+            }
+
+            final hasOverflow = overflows.isNotEmpty;
+            final pass = !hasOverflow && !focusedObscured;
+            final buf = StringBuffer(
+              'Simulated on-screen keyboard (${kbHeight.toInt()}dp)'
+              '${restore ? ' (restored)' : ''}:\n',
+            );
+            if (pass) {
+              buf.write(
+                '✓ Screen layout is clean with keyboard open. No overflows.',
+              );
+            } else {
+              buf.write('✗ Layout defects detected with keyboard open:');
+              if (hasOverflow) {
+                buf.write(
+                  '\n  • RenderFlex bottom overflow (${overflows.length} issue(s)):',
+                );
+                for (final o in overflows) {
+                  final src = o['source'] != null ? ' at ${o['source']}' : '';
+                  buf.write('\n    - ${o['details'] ?? o['type']}$src');
+                  if (o['source'] != null) {
+                    buf.write(
+                      '\n      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "SingleChildScrollView")',
+                    );
+                  }
+                }
+                buf.write(
+                  '\n  Prescription: Wrap the screen body in SingleChildScrollView or set Scaffold.resizeToAvoidBottomInset: false.',
+                );
+              }
+              if (focusedObscured) {
+                final name =
+                    focusedInput['label'] ?? focusedInput['key'] ?? 'input';
+                buf.write(
+                  '\n  • Focused text field "$name" is obscured behind the keyboard.',
+                );
+                buf.write(
+                  '\n  Prescription: Ensure the input is within a Scrollable or call Scrollable.ensureVisible.',
+                );
+              }
+            }
+
+            return CallToolResult(
+              content: [TextContent(text: buf.toString())],
+              structuredContent: auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 1,
+                failed: 0,
+                skipped: 0,
+                findings: screenFindings(auditData),
+                restored: restore || kbHeight <= 0,
+                incomplete: false,
+                loading: false,
+                status: 'ok',
+                reason: focusedObscured
+                    ? 'Focused input is obscured behind simulated keyboard'
+                    : null,
+              ),
+            );
+          } finally {
+            if (restore && kbHeight > 0) {
+              await _callExtensionRaw('ext.flutterpilot.setKeyboardInset', {
+                'inset': '0',
+              });
+            }
+          }
+        }
+
         if (viewports.isNotEmpty) {
-          final snapshot =
-              await _callExtensionRaw('ext.flutterpilot.getAppSnapshot', {});
+          final context = await _deviceContextForParameters(p);
+          final vm = context?.service;
+          int? pid;
+          try {
+            pid = vm == null ? null : (await vm.getVM()).pid;
+          } catch (_) {}
+          final initialOs = pid != null && context?.operatingSystem == 'macos'
+              ? await readAppWindowSize(pid)
+              : null;
+          final snapshot = await _callExtensionRaw(
+            'ext.flutterpilot.getAppSnapshot',
+            {},
+          );
+          if (snapshot.isError && vm == null) {
+            return withVerdict(
+              snapshot.toCallToolResult(),
+              auditVerdict(
+                requested: 0,
+                visited: 0,
+                audited: 0,
+                failed: 1,
+                skipped: 0,
+                findings: const {},
+                restored: true,
+                incomplete: true,
+                loading: false,
+                status: 'unavailable',
+                reason: snapshot.errorMessage,
+              ),
+            );
+          }
           final initialViewport = snapshot.data?['viewport'];
 
           const presets = <String, ({int width, int height})>{
+            'phone': (width: 390, height: 844),
             'mobile_portrait': (width: 390, height: 844),
             'mobile_landscape': (width: 844, height: 390),
             'tablet': (width: 768, height: 1024),
@@ -1609,81 +1796,129 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           final matrixBuffer = StringBuffer(
             'Responsive Viewport Matrix (${viewports.length} viewport${viewports.length == 1 ? '' : 's'}):\n',
           );
-          var totalOverflows = 0;
-          final matrixResults = <String, dynamic>{};
+          final totals = <String, int>{};
+          var audited = 0;
+          var failed = 0;
+          var usedOsResize = false;
+          var usedInAppResize = false;
 
-          for (final vp in viewports) {
-            final sz = presets[vp] ?? parseWindowSize(vp);
-            if (sz == null) {
-              matrixBuffer.writeln('• $vp: Skipped (unknown dimensions)');
-              continue;
-            }
-            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
-              'width': '${sz.width}',
-              'height': '${sz.height}',
-            });
-            await Future<void>.delayed(const Duration(milliseconds: 100));
-
-            final res = await _callExtensionRaw(
-              'ext.flutterpilot.auditScreenHealth',
-              auditParams,
-            );
-            final data = res.data ?? const <String, dynamic>{};
-            final ov = (data['overflows'] as List?) ?? const [];
-            totalOverflows += ov.length;
-            matrixResults[vp] = {
-              'width': sz.width,
-              'height': sz.height,
-              'overflows': ov.length,
-              'findings': screenFindings(data),
-            };
-
-            if (ov.isEmpty) {
-              matrixBuffer.writeln('• $vp (${sz.width}x${sz.height}): PASS (0 overflows)');
-            } else {
-              matrixBuffer.writeln(
-                '• $vp (${sz.width}x${sz.height}): FAIL (${ov.length} layout overflow${ov.length == 1 ? '' : 's'})',
-              );
-              for (final o in ov) {
-                final src = o['source'] != null ? ' at ${o['source']}' : '';
-                matrixBuffer.writeln('    - ${o['type']}$src: ${o['details']}');
-                if (o['source'] != null) {
+          try {
+            for (final vp in viewports) {
+              final sz = presets[vp.toLowerCase()] ?? parseWindowSize(vp);
+              if (sz == null) {
+                matrixBuffer.writeln('• $vp: Skipped (unknown dimensions)');
+                failed++;
+                continue;
+              }
+              final dim = '${sz.width}x${sz.height}';
+              final osResized = await _setWindowSize(p, dim);
+              if (!osResized.failed) {
+                usedOsResize = true;
+              } else {
+                final appResized = await _callExtensionRaw(
+                  'ext.flutterpilot.setWindowSize',
+                  {'width': '${sz.width}', 'height': '${sz.height}'},
+                );
+                if (appResized.isError) {
                   matrixBuffer.writeln(
-                    '      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded")',
+                    '• $vp ($dim): Failed (${osResized.line})',
+                  );
+                  failed++;
+                  continue;
+                }
+                usedInAppResize = true;
+                await Future<void>.delayed(const Duration(milliseconds: 100));
+              }
+
+              final res = await _callExtensionRaw(
+                'ext.flutterpilot.auditScreenHealth',
+                auditParams,
+              );
+              if (res.isError) {
+                matrixBuffer.writeln('• $vp ($dim): Audit failed');
+                failed++;
+                continue;
+              }
+              audited++;
+              final data = res.data ?? const <String, dynamic>{};
+              addFindings(totals, screenFindings(data));
+              final ov = (data['overflows'] as List?) ?? const [];
+              final cramped = (data['crampedScrollables'] as List?) ?? const [];
+
+              if (ov.isEmpty && cramped.isEmpty) {
+                matrixBuffer.writeln('• $vp ($dim): PASS (0 overflows)');
+              } else {
+                matrixBuffer.writeln(
+                  '• $vp ($dim): FAIL (${ov.length} overflow${ov.length == 1 ? '' : 's'}, ${cramped.length} cramped)',
+                );
+                for (final o in ov) {
+                  final src = o['source'] != null ? ' at ${o['source']}' : '';
+                  matrixBuffer.writeln(
+                    '    - ${o['type']}$src: ${o['details']}',
+                  );
+                  if (o['source'] != null) {
+                    matrixBuffer.writeln(
+                      '      → Fix: apply_patch_and_verify(target: "${o['source']}", wrapWith: "Expanded")',
+                    );
+                  }
+                }
+                for (final c in cramped) {
+                  matrixBuffer.writeln(
+                    '    - Cramped: ${c['details'] ?? c['type']}',
                   );
                 }
               }
             }
+          } finally {
+            if (restore) {
+              if (usedOsResize && initialOs != null) {
+                await _setWindowSize(p, initialOs);
+              }
+              if (usedInAppResize) {
+                if (initialViewport is Map &&
+                    initialViewport['width'] != null &&
+                    initialViewport['height'] != null) {
+                  await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
+                    'width': '${initialViewport['width']}',
+                    'height': '${initialViewport['height']}',
+                  });
+                } else {
+                  await _callExtensionRaw('ext.flutterpilot.setWindowSize', {});
+                }
+              }
+              matrixBuffer.writeln('✓ Restored initial viewport.');
+            }
           }
-
-          if (initialViewport is Map &&
-              initialViewport['width'] != null &&
-              initialViewport['height'] != null) {
-            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {
-              'width': '${initialViewport['width']}',
-              'height': '${initialViewport['height']}',
-            });
-          } else {
-            await _callExtensionRaw('ext.flutterpilot.setWindowSize', {});
-          }
-          matrixBuffer.writeln('✓ Restored initial viewport.');
 
           return CallToolResult(
             content: [TextContent(text: matrixBuffer.toString().trim())],
-            structuredContent: {
-              'totalViewports': viewports.length,
-              'totalOverflows': totalOverflows,
-              'matrix': matrixResults,
-              'restored': true,
-            },
+            structuredContent: auditVerdict(
+              requested: 0,
+              visited: 0,
+              audited: audited,
+              failed: failed,
+              skipped: 0,
+              findings: totals,
+              restored: restore,
+              incomplete: failed > 0,
+              loading: false,
+              status: failed > 0
+                  ? (audited == 0 ? 'unavailable' : 'partial')
+                  : 'ok',
+            ),
           );
         }
 
         if (routes.isEmpty) {
-          final res = await _callExtensionRaw(
+          final includeDesignQuality = p['designQuality'] == true;
+          final auditFuture = _callExtensionRaw(
             'ext.flutterpilot.auditScreenHealth',
             auditParams,
           );
+          final tokensFuture = includeDesignQuality
+              ? _callExtensionRaw('ext.flutterpilot.auditDesignTokens', {})
+              : null;
+          final res = await auditFuture;
           if (res.isError) {
             // The current screen could not be read: one audit failed, nothing
             // visited, so the caller does not read an empty findings map as a
@@ -1706,8 +1941,16 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             );
           }
           final data = res.data ?? const <String, dynamic>{};
+          var body = report(data, sweep: false);
+          if (tokensFuture != null) {
+            final tokens = await tokensFuture;
+            final tData = tokens.data ?? const <String, dynamic>{};
+            if (!tokens.isError && tData['unavailable'] == null) {
+              body = '$body\n\n${formatTokenAudit(tData)}';
+            }
+          }
           return CallToolResult(
-            content: [TextContent(text: report(data, sweep: false))],
+            content: [TextContent(text: body)],
             structuredContent: auditVerdict(
               requested: 0,
               visited: 0,
@@ -1768,13 +2011,17 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
             'timeoutMs': '1500',
           });
-          final now = await _callExtensionRaw('ext.flutterpilot.screenNow', {});
+          final pair = await Future.wait([
+            _callExtensionRaw('ext.flutterpilot.screenNow', {}),
+            _callExtensionRaw(
+              'ext.flutterpilot.auditScreenHealth',
+              auditParams,
+            ),
+          ]);
+          final now = pair[0];
           final post = now.data?['postActionState'] as Map?;
           final errors = (post?['newErrorCount'] as num?)?.toInt() ?? 0;
-          final res = await _callExtensionRaw(
-            'ext.flutterpilot.auditScreenHealth',
-            auditParams,
-          );
+          final res = pair[1];
           if (res.isError) {
             out.writeln('Audit failed: ${res.errorMessage}');
             failed++;
@@ -1849,91 +2096,23 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
     );
 
     _tool(
-      'audit_design_tokens',
-      description:
-          'Audits hard-coded colors and off-grid corner radii in app '
-          'widgets with source location and closest theme token.',
-      inputSchema: ToolInputSchema(
-        properties: {
-          'type': JsonSchema.string(
-            enumValues: ['all', 'colors', 'radii'],
-            description: 'Filter findings by colors or radii (default: all).',
-          ),
-        },
-      ),
-      callback: (p, e) async {
-        final res = await _callExtensionRaw(
-          'ext.flutterpilot.auditDesignTokens',
-          {},
-        );
-        if (res.isError) return res.toCallToolResult();
-        final data = res.data ?? const <String, dynamic>{};
-        if (data['unavailable'] != null) {
-          return CallToolResult(
-            isError: true,
-            content: [TextContent(text: '${data['unavailable']}')],
-          );
-        }
-        final filterType = p['type']?.toString() ?? 'all';
-        final colors = (data['unthemedColors'] as List?) ?? const [];
-        final radii = (data['offGridRadii'] as List?) ?? const [];
-        final colorCount = data['unthemedColorCount'] ?? colors.length;
-        final radiusCount = data['offGridRadiusCount'] ?? radii.length;
-        final buf = StringBuffer(
-          'Checked ${data['checked'] ?? 0} colors and radii set in the app\'s '
-          'code on this screen.',
-        );
-        if (colors.isEmpty && radii.isEmpty) {
-          buf.write(' All come from the theme.');
-        }
-        String at(Map m) => m['location'] != null ? ' at ${m['location']}' : '';
-        if (colors.isNotEmpty && (filterType == 'all' || filterType == 'colors')) {
-          buf.write('\nNot from the ColorScheme ($colorCount):');
-          for (final c in colors.cast<Map>()) {
-            buf.write(
-              '\n  ${c['color']} in ${c['widget']}${at(c)} '
-              '(closest: ${c['closestToken']})',
-            );
-          }
-          if (colorCount is int && colorCount > colors.length) {
-            buf.write('\n  … ${colorCount - colors.length} more');
-          }
-        }
-        if (radii.isNotEmpty && (filterType == 'all' || filterType == 'radii')) {
-          buf.write('\nCorner radii off the 4dp grid ($radiusCount):');
-          for (final r in radii.cast<Map>()) {
-            buf.write(
-              '\n  ${r['radius']} in ${r['widget']}${at(r)} '
-              '(nearest: ${r['nearest']})',
-            );
-          }
-        }
-        return CallToolResult(
-          content: [TextContent(text: buf.toString())],
-          structuredContent: data,
-        );
-      },
-    );
-
-    _tool(
       'execute_action_chain',
       description:
-          'Runs a known sequence of steps in one call, stopping at the first '
-          'that fails. Returns each step\'s outcome and post-chain screen state '
-          '(route, visual diff, elements).',
+          'Runs steps in order, stopping on failure; returns step outcomes '
+          'and final screen state.',
       inputSchema: ToolInputSchema(
         properties: {
           'steps': JsonSchema.array(
             items: compositeStepSchema(),
-            description:
-                'Sequence of steps, e.g. [{"tool": "tap_widget", "arguments": {"key": "Save"}}].',
+            description: 'Ordered list of {tool, arguments} steps.',
           ),
           'exportAsTest': JsonSchema.boolean(
-            description:
-                'Export the executed journey as a runnable integration test file.',
+            description: 'Write executed flow as an integration test.',
           ),
-          'testName': JsonSchema.string(description: 'Name of the generated test.'),
-          'testFilePath': JsonSchema.string(description: 'Target test file path.'),
+          'testName': JsonSchema.string(description: 'Generated test name.'),
+          'testFilePath': JsonSchema.string(
+            description: 'Output test file path.',
+          ),
         },
         required: ['steps'],
       ),
@@ -1969,8 +2148,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           if (p['exportAsTest'] != true || !passed) return null;
           try {
             final vm = (await _deviceContextForParameters(const {}))?.service;
-            final isolateId =
-                vm == null ? null : await _uiIsolateId(vm, null);
+            final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
             final entry = isolateId == null
                 ? null
                 : await _appEntrypoint(vm!, isolateId);
@@ -1978,9 +2156,12 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             final mainImport = entry?.mainImport ?? 'package:app/main.dart';
             final testName =
                 p['testName']?.toString() ?? 'Action Chain Journey';
-            final sanitizedName =
-                testName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
-            final relPath = p['testFilePath']?.toString() ??
+            final sanitizedName = testName.toLowerCase().replaceAll(
+              RegExp(r'[^a-z0-9_]'),
+              '_',
+            );
+            final relPath =
+                p['testFilePath']?.toString() ??
                 path_pkg.join('integration_test', '${sanitizedName}_test.dart');
             final fullPath = path_pkg.isAbsolute(relPath)
                 ? relPath
@@ -2070,23 +2251,40 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                 .join(', ');
             buffer.write('Not run: $notRun.\n');
           }
-          for (final step in (res.data?['steps'] as List?) ?? const []) {
-            // Tap notes, one per step that ran; numbered like `describeChain`.
-            if (step is Map && step['index'] is num && step['note'] is String) {
-              final index = (step['index'] as num).toInt();
-              final tool = index >= 0 && index < steps.length
-                  ? steps[index].tool
-                  : null;
+          final resSteps = (res.data?['steps'] as List?) ?? const [];
+          for (var i = 0; i < resSteps.length; i++) {
+            final step = resSteps[i];
+            if (step is! Map) continue;
+            final index = (step['index'] as num?)?.toInt() ?? i;
+            if (index < 0 || index >= steps.length) continue;
+            final stepDef = steps[index];
+            final status = step['status']?.toString();
+            if (Verification.checks.contains(stepDef.tool) &&
+                (status == 'ok' ||
+                    status == 'assertionFailed' ||
+                    status == 'timeout')) {
+              _verification?.record(
+                stepDef.tool,
+                stepDef.arguments,
+                status == 'ok' ? 'ok' : (failure ?? status ?? 'failed'),
+                isError: status != 'ok',
+              );
+            }
+            final note = step['note'];
+            final hasNote = note is String && note.isNotEmpty;
+            if (status == 'ok' && (steps.length > 1 || hasNote)) {
               buffer.write(
-                'Step ${index + 1}${tool == null ? '' : ' $tool'}: '
-                '${step['note']}\n',
+                'Step ${index + 1} ${stepDef.tool}: '
+                '${hasNote ? note : 'ok'}\n',
               );
             }
           }
           buffer.write(_formatActionFeedback('Chain finished', const {}, res));
           final exported = await exportJourney(passed: failure == null);
           if (exported != null) {
-            buffer.writeln('\n✓ Exported journey to runnable integration test: $exported');
+            buffer.writeln(
+              '\n✓ Exported journey to runnable integration test: $exported',
+            );
           }
           return withVerdict(
             CallToolResult(
@@ -2103,26 +2301,105 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
           );
         }
 
-        // Anything else: one tool after the other, each as if called alone.
+        // Mixed chains batch contiguous segments of >= 2 in-app steps into
+        // single RPCs instead of paying one round-trip per step.
         final progress = ToolProgress(e, total: steps.length.toDouble());
         final outcomes = <String>[];
         var failed = false;
         int? failedStep;
         var completed = 0;
-        for (final (index, step) in steps.indexed) {
+        var index = 0;
+        while (index < steps.length) {
           if (progress.cancelled) {
-            outcomes.add('Cancelled before running ${step.tool}.');
+            outcomes.add('Cancelled before running ${steps[index].tool}.');
             failed = true;
             failedStep = index + 1;
             break;
           }
+
+          final segmentInApp = <Map<String, String>>[];
+          for (var j = index; j < steps.length; j++) {
+            final action = inAppChainAction(steps[j]);
+            if (action == null) break;
+            segmentInApp.add(action);
+          }
+          if (segmentInApp.length >= 2) {
+            final end = index + segmentInApp.length;
+            await progress.advance(
+              'Steps ${index + 1}-$end/${steps.length}: in-app batch',
+            );
+            final res = await _callExtensionRaw(
+              'ext.flutterpilot.executeActionChain',
+              {'actions': json.encode(segmentInApp)},
+            );
+            if (res.isError) {
+              outcomes.add(res.errorMessage ?? 'Action batch failed.');
+              failed = true;
+              failedStep = index + 1;
+              break;
+            }
+            final executed = (res.data?['executedCount'] as num?)?.toInt() ?? 0;
+            final failure = res.data?['failure'] as String?;
+            final resSteps = (res.data?['steps'] as List?) ?? const [];
+            final isFinalSegment = end == steps.length && failure == null;
+            for (var k = 0; k < executed && k < segmentInApp.length; k++) {
+              final s = k < resSteps.length && resSteps[k] is Map
+                  ? resSteps[k] as Map
+                  : const {};
+              final note = s['note']?.toString();
+              var outcome = note != null && note.isNotEmpty ? note : 'ok';
+              if (isFinalSegment && k == executed - 1) {
+                final feedback = _formatActionFeedback(
+                  'Chain finished',
+                  const {},
+                  res,
+                );
+                if (feedback.isNotEmpty) outcome = '$outcome\n$feedback';
+              }
+              if (Verification.checks.contains(steps[index + k].tool)) {
+                _verification?.record(
+                  steps[index + k].tool,
+                  steps[index + k].arguments,
+                  outcome,
+                  isError: false,
+                );
+              }
+              outcomes.add(outcome);
+              completed++;
+            }
+            if (failure != null) {
+              final failIdx = index + executed;
+              if (failIdx < steps.length &&
+                  Verification.checks.contains(steps[failIdx].tool)) {
+                _verification?.record(
+                  steps[failIdx].tool,
+                  steps[failIdx].arguments,
+                  failure,
+                  isError: true,
+                );
+              }
+              outcomes.add(failure);
+              failed = true;
+              failedStep = failIdx + 1;
+              break;
+            }
+            index = end;
+            continue;
+          }
+
+          final step = steps[index];
           await progress.advance(
             'Step ${index + 1}/${steps.length}: ${step.tool}',
           );
-          final res = await _toolCallbacks[step.tool]!(
-            Map.of(step.arguments),
-            e,
-          );
+          final stepArgs = Map<String, dynamic>.of(step.arguments);
+          if (step.tool == 'tap_widget' &&
+              index < steps.length - 1 &&
+              stepArgs['waitFor'] == null &&
+              stepArgs['failureKey'] == null &&
+              stepArgs['anyOf'] == null) {
+            stepArgs.putIfAbsent('quickSettle', () => true);
+          }
+          final res = await _toolCallbacks[step.tool]!(stepArgs, e);
           final text = res.content
               .whereType<TextContent>()
               .map((c) => c.text)
@@ -2144,6 +2421,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
             break;
           }
           completed++;
+          index++;
         }
         final chainDesc = describeChain(
           [for (final step in steps) step.tool],
@@ -2157,11 +2435,7 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
         return withVerdict(
           CallToolResult(
             isError: failed,
-            content: [
-              TextContent(
-                text: fullText,
-              ),
-            ],
+            content: [TextContent(text: fullText)],
           ),
           actionChainVerdict(
             passed: !failed,

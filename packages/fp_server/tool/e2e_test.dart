@@ -76,7 +76,7 @@ Future<void> main(List<String> args) async {
   Future<void> explainDtd() async {
     final watch = Stopwatch()..start();
     try {
-      final r = await Process.run('dart', [
+      final r = await Process.run(Platform.resolvedExecutable, [
         'tooling-daemon',
         '--list',
         '--machine',
@@ -104,11 +104,13 @@ Future<void> main(List<String> args) async {
         );
       }
     }
-    // `dart tooling-daemon` or its snapshot, dart_tooling_daemon.
-    final ps = await Process.run('pgrep', ['-fl', 'tooling.daemon']);
-    print(
-      '   daemons running: ${'${ps.stdout}'.trim().replaceAll('\n', '; ')}',
-    );
+    if (!Platform.isWindows) {
+      // `dart tooling-daemon` or its snapshot, dart_tooling_daemon.
+      final ps = await Process.run('pgrep', ['-fl', 'tooling.daemon']);
+      print(
+        '   daemons running: ${'${ps.stdout}'.trim().replaceAll('\n', '; ')}',
+      );
+    }
     for (final line in await DtdDiscovery.report([work])) {
       print('   | $line');
     }
@@ -205,7 +207,7 @@ Future<void> main(List<String> args) async {
     await started.future.timeout(const Duration(minutes: 2));
     print('▶ app running at $uri');
 
-    server = await Process.start('dart', [
+    server = await Process.start(Platform.resolvedExecutable, [
       'run',
       'bin/fp_server.dart',
       '--uri',
@@ -648,9 +650,9 @@ Future<void> main(List<String> args) async {
         2048,
       );
       await check(
-        'locate_source_ast returns the Send call',
-        'locate_source_ast',
-        {'key': 'Send'},
+        'inspect_widget(ast: true) returns the Send call',
+        'inspect_widget',
+        {'key': 'Send', 'ast': true},
         ['at lib/main.dart:90', '```dart'],
         false,
         Duration.zero,
@@ -669,15 +671,15 @@ Future<void> main(List<String> args) async {
         ["rebuilds of the app's own widgets"],
       );
       await check(
-        'audit_design_tokens checks app code',
-        'audit_design_tokens',
-        {},
+        'audit_screen_health(category: tokens) checks app code',
+        'audit_screen_health',
+        {'category': 'tokens'},
         ["set in the app's code"],
       );
       await check(
-        'simulate_keyboard checks layout under keyboard',
-        'simulate_keyboard',
-        {'height': 300, 'restore': true},
+        'audit_screen_health(keyboardInset) checks layout under keyboard',
+        'audit_screen_health',
+        {'keyboardInset': 300, 'restore': true},
         ['Simulated on-screen keyboard', '300dp'],
       );
       await check(
@@ -1521,11 +1523,18 @@ Future<void> main(List<String> args) async {
         List<String>? command,
       }) async {
         final retry = roots != null || command != null;
-        final cmd = command ?? ['dart', 'run', '$serverDir/bin/fp_server.dart'];
+        final cmd =
+            command ??
+            [
+              Platform.resolvedExecutable,
+              'run',
+              '$serverDir/bin/fp_server.dart',
+            ];
         final p = await Process.start(
           cmd.first,
           cmd.skip(1).toList(),
           workingDirectory: elsewhere.path,
+          runInShell: Platform.isWindows && command != null,
         );
         p.stderr.drain<void>();
         final m = _Mcp(
@@ -1559,10 +1568,12 @@ Future<void> main(List<String> args) async {
                 .map((c) => c['text'] ?? '')
                 .join('\n');
             ok = res['error'] == null && result?['isError'] != true;
-            if (!ok && retry) {
+            if (!ok && (retry || text.contains('[reconnecting]'))) {
               await Future<void>.delayed(const Duration(milliseconds: 500));
             }
-          } while (!ok && retry && DateTime.now().isBefore(deadline));
+          } while (!ok &&
+              (retry || text.contains('[reconnecting]')) &&
+              DateTime.now().isBefore(deadline));
           return ok ? null : text;
         } finally {
           p.kill();
@@ -1585,7 +1596,7 @@ Future<void> main(List<String> args) async {
       );
       // flutterpilot doctor reads what the running app registered (§3.4).
       final doctor = await Process.run(
-        'dart',
+        Platform.resolvedExecutable,
         ['run', '${repo}packages/fp_cli/bin/fp.dart', 'doctor', '-p', app],
         stdoutEncoding: utf8,
         stderrEncoding: utf8,
@@ -1638,6 +1649,7 @@ Future<void> main(List<String> args) async {
             dartEntry['command'] as String,
             (dartEntry['args'] as List).cast<String>(),
             workingDirectory: app,
+            runInShell: Platform.isWindows,
           );
           p.stderr.drain<void>();
           final m = _Mcp(
@@ -1723,7 +1735,7 @@ Future<void> main(List<String> args) async {
         if (viaDtd != null) await explainDtd();
         if (!zeroCode && !forgotten) {
           final doctor = await Process.run(
-            'dart',
+            Platform.resolvedExecutable,
             ['run', '${repo}packages/fp_cli/bin/fp.dart', 'doctor', '-p', app],
             stdoutEncoding: utf8,
             stderrEncoding: utf8,

@@ -2,9 +2,9 @@
 
 Generated from the running server registration. Do not edit manually.
 
-Tool count: 74
+Tool count: 67
 
-Size of the whole list as an agent receives it (names, descriptions, schemas): 45509 bytes. An app is shown only the tools that work for it.
+Size of the whole list as an agent receives it (names, descriptions, schemas): 42137 bytes. An app is shown only the tools that work for it.
 
 `native_*` tools are listed to agents only when the connected app runs on an iOS simulator and `idb` (or `xcrun`, for `native_screenshot`) is installed, or on Android and `adb` is found (PATH, ANDROID_HOME or the SDK folder).
 
@@ -73,14 +73,14 @@ Captured logs (print, debugPrint, log). Filter by query/level, or wait with wait
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `level` | string: debug \| info \| warning \| warn \| error | no |  |
+| `level` | string: debug \| info \| warning \| warn \| error | no | Minimum log severity filter. |
 | `query` | string | no | Only messages containing this. |
 | `waitFor` | string | no | Poll until a log message containing this appears. |
 | `timeoutMs` | integer | no | Timeout in ms for waitFor (default 3000). |
 | `sinceSeconds` | integer | no | Only the last N seconds. |
 | `limit` | integer | no | Default 100. |
 | `logger` | string | no | Only this logger (partial match), e.g. "debugPrint", "stdout". |
-| `clear` | boolean | no |  |
+| `clear` | boolean | no | Clear captured debug logs after returning. |
 
 ## `profile_frame_budget`
 
@@ -99,63 +99,64 @@ Rebuild counts of the app's widgets with source location. First call starts coun
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `query` | string | no | Widget type or key substring filter. |
-| `filter` | string | no | Alias for query. |
 | `reset` | boolean | no | Reset rebuild counts and start a new observation window. |
 | `minCount` | integer | no | Minimum rebuild count to report (default 1). |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{started?: bool, sinceMs: int, totalRebuilds: int, widgetTypes: int, rebuilds: [{widget: string, rebuilds: int, createdAt?: string}], moreTypes?: int, hints: [string]}`
+
 ## `tap_widget`
 
-Taps a widget by key, selector or text (scrolling first) or at x/y. Reports route change, widget diff and tappable elements now.
+Taps widget by key/text/selector (auto-scrolls) or x/y. Reports route, diff and tappable elements.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector, visible text or icon name. |
-| `mark` | integer | no | Mark number from capture_screenshot. |
-| `identifier` | string | no | Semantics identifier. |
+| `key` | string | no | Key, selector, text or icon. |
+| `mark` | integer | no | Set-of-Mark id. |
+| `identifier` | string | no | Semantics id. |
 | `semanticsId` | integer | no | SemanticsNode id. |
-| `text` | string | no | Visible text inside the widget. |
-| `type` | string | no | Widget type, e.g. "IconButton". |
-| `x` | number | no | X in logical pixels, with y. |
-| `y` | number | no | Y in logical pixels. |
-| `gesture` | string: tap \| double \| long \| secondary | no | Default tap (or double/long/secondary). |
-| `durationMs` | integer | no | Long-press duration (default 600). |
-| `waitFor` | string | no | Widget to wait for after tap. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
-| `quickSettle` | boolean | no | Settle in <=400ms. |
-| `settleTimeoutMs` | integer | no | Screen settle timeout in ms. |
+| `text` | string | no | Visible text. |
+| `type` | string | no | Widget type. |
+| `x` | number | no | X in logical px. |
+| `y` | number | no | Y in logical px. |
+| `gesture` | string: tap \| double \| long \| secondary | no | Default tap. |
+| `durationMs` | integer | no | Long-press ms (600). |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
+| `quickSettle` | boolean | no | <=400ms settle. |
+| `settleTimeoutMs` | integer | no | Settle timeout ms. |
 
 ## `enter_text`
 
-Types text into a field by key, selector or label (or focused field). Fires onChanged; pass submit:true to press Enter, or waitFor to poll for a resulting widget.
+Types text into field by key/selector/label or focused field. Pass submit:true for Enter.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `text` | string | yes | Text to enter ("" clears the field). |
-| `key` | string | no | Key, selector or label. Omit for focused field. |
-| `mark` | integer | no | Mark number from capture_screenshot. |
+| `text` | string | yes | Text ("" clears). |
+| `key` | string | no | Key/label (omit for focused). |
+| `mark` | integer | no | Set-of-Mark id. |
 | `identifier` | string | no | Semantics id. |
-| `clearFirst` | boolean | no | Clear existing text first (default true). |
-| `submit` | boolean | no | Press Enter to submit. |
-| `waitFor` | string | no | Widget or text to wait for. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout in ms (default 5000). |
+| `clearFirst` | boolean | no | Clear first (default true). |
+| `submit` | boolean | no | Press Enter. |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
 
 ## `press_key`
 
-Presses key on focused widget (enter, tab, escape, arrows, or "back" to pop). Supports count, waitFor, failureKey, and anyOf.
+Presses key on focused widget (enter, tab, escape, arrows, or "back" to pop).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | yes | E.g. "enter", "tab", "escape", "back", "arrowDown", "space", "backspace", or character. |
-| `modifiers` | array | no | Modifier keys: "shift", "ctrl", "alt", "meta". |
-| `count` | integer | no | Number of times to press key (1–20, default 1). |
-| `waitFor` | string | no | Widget key/selector to wait for. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
+| `key` | string | yes | Key name ("enter", "back", "tab", "escape", arrow, char). |
+| `modifiers` | array | no | shift, ctrl, alt, meta. |
+| `count` | integer | no | Repeat count (1–20). |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
 
 ## `gesture_widget`
 
@@ -172,7 +173,7 @@ Drives widget with swipe, drag, pinch, focus or slide. Reports screen and route 
 | `scale` | number | no | Pinch scale (>1 zoom in, <1 zoom out). |
 | `identifier` | string | no | Semantics id. |
 | `x` | number | no | Center x for pinch, with y. |
-| `y` | number | no |  |
+| `y` | number | no | Center y for pinch, with x. |
 | `value` | number | no | Slider value for slide. |
 | `waitFor` | string | no | Widget key/selector to wait for. |
 | `failureKey` | string | no | Fast-fail key (e.g. error banner). |
@@ -181,101 +182,93 @@ Drives widget with swipe, drag, pinch, focus or slide. Reports screen and route 
 
 ## `scroll_into_view`
 
-Scrolls until widget (key, selector, or text) is visible. Pass tap: true to tap once visible; supports waitFor and failureKey.
+Scrolls until widget is visible; tap:true taps it.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or text of widget. |
-| `tap` | boolean | no | Whether to tap widget once scrolled into view. |
-| `waitFor` | string | no | Widget key/selector to wait for. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
+| `key` | string | no | Key, selector or text. |
+| `tap` | boolean | no | Tap once visible. |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
 
 ## `toggle_checkbox`
 
-Toggles Checkbox, Switch or Radio. Pass value to set idempotently or waitFor to await next widget.
+Toggles Checkbox, Switch or Radio; value sets state idempotently.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or label of toggle or row holding it. |
-| `value` | boolean | no | Target state (true/false). If already set, does not toggle. |
-| `waitFor` | string | no | Widget key/selector to wait for. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
+| `key` | string | no | Key, selector or row label. |
+| `value` | boolean | no | Target state (no-op if already set). |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
 
 ## `fill_form`
 
-Fills multiple fields and optionally submits (or pass waitFor). Reports route changes and widget diffs.
+Fills multiple form fields and optionally submits.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `fields` | object | yes | Map of field key/selector to value, e.g. {"TextField['Email']": "a@b.dev", "Checkbox['Terms']": true}. |
-| `submitWith` | string | no | Optional button to tap after filling (e.g. "ElevatedButton['Log In']"). |
-| `submit` | boolean | no | Tap the one primary button. |
-| `waitFor` | string | no | Widget or text to wait for after submitting. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await. |
-| `timeoutMs` | integer | no | Timeout for waitFor (default 5000). |
+| `fields` | object | yes | Map of field key/selector to value (string or bool). |
+| `submitWith` | string | no | Button key/selector to tap after filling. |
+| `submit` | boolean | no | Tap primary button. |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{submitted: bool, filledCount: int, totalFields: int, failedField?: string, validationErrors?: [string], status?: "ok"|"unavailable"}`
 
 ## `wait_for`
 
-Waits for condition: widget key, anyOf targets, route, animations, state, or frames. Supports failureKey for fast error abort.
+Waits for widget key, anyOf, route, animations, state, or frames.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `key` | string | no | Key, selector or text on screen. |
-| `anyOf` | array | no | Wait until any one of these keys/selectors appears. |
-| `failureKey` | string | no | Immediate failure key (e.g. error banner). Aborts wait immediately if seen. |
+| `key` | string | no | Key, selector or text. |
+| `anyOf` | array | no | Wait until any listed key appears. |
+| `failureKey` | string | no | Fast-fail key that aborts wait if seen. |
 | `gone` | boolean | no | Until key is gone. |
-| `route` | string | no | Target route (e.g. "/dashboard"). |
-| `animations` | boolean | no | Until animations have settled. |
-| `state` | string | no | Provider or bloc name from get_state. |
-| `expectedValue` | string | no | Substring expected in state value. |
-| `frames` | integer | no | Pump this many frames (1–120). |
-| `timeoutMs` | integer | no | Default 5000 (3000 for key). |
+| `route` | string | no | Target route. |
+| `animations` | boolean | no | Wait for animations. |
+| `state` | string | no | Provider or bloc name. |
+| `expectedValue` | string | no | Expected state substring. |
+| `frames` | integer | no | Frames to pump (1–120). |
+| `timeoutMs` | integer | no | Timeout ms (default 5000). |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{met: bool, waitedMs: int, timedOut: bool, condition: "key"|"route"|"state"|"frames"|"animations"|"none", route?: string, status?: "ok"|"unavailable"|"refused"}`
 
 ## `audit_screen_health`
 
-Audits screen health: layout overflows, tap target sizes, contrast, unlabeled controls. viewports sweeps breakpoints.
+Audits layout overflows, tap targets, contrast, labels, tokens, keyboard, or viewports.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `routes` | array | no | Go to each route and check it. |
-| `category` | string: all \| overflow \| a11y \| contrast | no | Filter findings by category (default: all). |
-| `query` | string | no | Filter findings by widget, key, file, or text. |
-| `designQuality` | boolean | no | Audit 4/8dp spacing grid and typography hierarchy. |
-| `viewports` | array | no | Audit viewports (e.g. ["mobile_portrait", "tablet"]). |
+| `routes` | array | no | Routes to sweep. |
+| `category` | string: all \| overflow \| a11y \| contrast \| tokens | no | Category filter (default all). |
+| `query` | string | no | Filter by widget, key, file, or text. |
+| `designQuality` | boolean | no | Audit 4/8dp spacing, typography, and tokens. |
+| `viewports` | array | no | Viewports (phone, tablet, desktop, WxH). |
+| `keyboardInset` | number | no | Keyboard height in dp to test and restore. |
+| `restore` | boolean | no | Restore initial state afterwards (default true). |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: int, visited: int, audited: int, failed: int, skipped: int, findings: {overflows: int, tapTargets: int, unlabeled: int, lowContrast: int, readingOrderJumps: int}, restored: bool, incomplete: bool, loading: bool, status?: "ok"|"partial"|"unavailable", reason?: string}`
 
-## `audit_design_tokens`
-
-Audits hard-coded colors and off-grid corner radii in app widgets with source location and closest theme token.
-
-_Read-only._
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `type` | string: all \| colors \| radii | no | Filter findings by colors or radii (default: all). |
-
 ## `execute_action_chain`
 
-Runs a known sequence of steps in one call, stopping at the first that fails. Returns each step's outcome and post-chain screen state (route, visual diff, elements).
+Runs steps in order, stopping on failure; returns step outcomes and final screen state.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `steps` | array | yes | Sequence of steps, e.g. [{"tool": "tap_widget", "arguments": {"key": "Save"}}]. |
-| `exportAsTest` | boolean | no | Export the executed journey as a runnable integration test file. |
-| `testName` | string | no | Name of the generated test. |
-| `testFilePath` | string | no | Target test file path. |
+| `steps` | array | yes | Ordered list of {tool, arguments} steps. |
+| `exportAsTest` | boolean | no | Write executed flow as an integration test. |
+| `testName` | string | no | Generated test name. |
+| `testFilePath` | string | no | Output test file path. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, completedSteps: int, totalSteps: int, failedStep?: int, failureReason?: string, status?: "ok"|"refused"|"unavailable"}`
 
@@ -317,7 +310,7 @@ Presses a simulator hardware button (HOME, LOCK, SIDE_BUTTON, BACK, etc.).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `button` | string: APPLE_PAY \| HOME \| LOCK \| SIDE_BUTTON \| SIRI \| BACK \| WAKEUP | yes |  |
+| `button` | string: APPLE_PAY \| HOME \| LOCK \| SIDE_BUTTON \| SIRI \| BACK \| WAKEUP | yes | Hardware button to press on simulator/device. |
 | `serial` | string | no | Android adb serial. |
 | `simulatorUdid` | string | no | Target simulator UDID. Omit to auto-detect when exactly one simulator is booted. |
 
@@ -342,19 +335,19 @@ Brings app back to foreground on simulator/device, resuming state and execution.
 
 ## `navigate_to`
 
-Goes to route or deep link directly (go_router: router.go; otherwise Navigator.pushNamed). Supports waitFor, failureKey, anyOf.
+Navigates to route or deep link (go_router or Navigator).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `route` | string | yes | Route or deep link URL (e.g. "/home", "/story/:id"). |
-| `action` | string: go \| push \| replace | no | Default "go". push/replace need the go_router plugin. |
-| `deepLink` | boolean | no | Open route as an OS deep link (myapp://product/1). |
-| `waitFor` | string | no | Key or text to wait for on the new page. |
-| `failureKey` | string | no | Fast-fail key (e.g. error banner). |
-| `anyOf` | array | no | Candidate keys to await on the new page. |
-| `timeoutMs` | integer | no | Timeout for wait in ms (default 5000). |
-| `pathParams` | object | no | Dynamic params (e.g. {"id": "123"}). |
-| `queryParams` | object | no | Query params (e.g. {"tab": "all"}). |
+| `route` | string | yes | Route or deep link URL. |
+| `action` | string: go \| push \| replace | no | Default "go" (push/replace use go_router). |
+| `deepLink` | boolean | no | Open as OS deep link. |
+| `waitFor` | string | no | Key/text to await. |
+| `failureKey` | string | no | Fast-fail key. |
+| `anyOf` | array | no | Keys to await. |
+| `timeoutMs` | integer | no | Wait timeout ms (5000). |
+| `pathParams` | object | no | Path params map. |
+| `queryParams` | object | no | Query params map. |
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{requested: string, resolvedUri?: string, current?: string, waitRequired: bool, waitStatus?: "found"|"missing", completed: bool, uncertain: bool, status?: "ok"|"refused"|"unavailable"}`
 
@@ -374,38 +367,20 @@ _Read-only._
 
 ## `set_app_settings`
 
-Configure theme, locale, text scale, orientation, window size, or overlays without code edits; reset:true restores defaults.
+Sets theme, locale, text scale, orientation, window size, or debug overlays.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `reset` | boolean | no | Restore defaults and clear debug overlays. |
-| `theme` | string: light \| dark | no |  |
-| `locale` | string | no | BCP-47 tag (e.g. "fr", "ar", "zh") or "system". |
-| `textScale` | number | no | Scale factor (1.0 default). |
-| `keyboardInset` | number | no | Logical pixel height (0 removes). |
+| `reset` | boolean | no | Restore defaults and clear overlays. |
+| `theme` | string: light \| dark | no | App brightness. |
+| `locale` | string | no | BCP-47 tag or "system". |
+| `textScale` | number | no | Text scale factor. |
+| `keyboardInset` | number | no | Keyboard height in dp (0 clears). |
 | `orientation` | string: portrait \| landscape \| all \| auto | no | Phones. |
-| `windowSize` | string | no | WIDTHxHEIGHT (e.g. "390x844"). |
-| `debugPaint` | boolean | no |  |
-| `repaintRainbow` | boolean | no |  |
-| `slowAnimations` | boolean | no |  |
-
-## `simulate_viewport_matrix`
-
-Sweeps app window across phone, tablet, or desktop breakpoints to detect layout overflows.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `viewports` | array | no | Optional subset of breakpoints to sweep. |
-| `restore` | boolean | no | Restore initial window size afterwards (default true). |
-
-## `simulate_keyboard`
-
-Simulates on-screen keyboard inset, checks for layout overflows or obscured inputs, and restores inset.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `height` | number | no | Keyboard height in logical pixels (default: 320; 0 closes). |
-| `restore` | boolean | no | Remove the simulated keyboard afterwards (default true). |
+| `windowSize` | string | no | WIDTHxHEIGHT. |
+| `debugPaint` | boolean | no | Show layout bounds. |
+| `repaintRainbow` | boolean | no | Show repaint rainbow. |
+| `slowAnimations` | boolean | no | 5x slow animations. |
 
 ## `crawl_app`
 
@@ -417,6 +392,8 @@ Crawls reachable screens via list rows and tabs; reports route graph and health 
 | `restore` | boolean | no | Go back to the starting route at the end (default true). |
 | `audit` | boolean | no | Include detailed health findings for screens with issues. |
 
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{screens: [{route: string, overflows: int, a11y: int}], edges: [{from: string, to: string, via: string}], taps: int, restored: bool}`
+
 ## `capture_screenshot`
 
 Screenshot of the app screen (or specific widget with key). Supports scale, format, and labeled Set-of-Mark.
@@ -426,7 +403,7 @@ _Read-only._
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Optional widget key to crop screenshot to. |
-| `format` | string: png \| jpeg \| webp | no |  |
+| `format` | string: png \| jpeg \| webp | no | Image encoding format (default: png). |
 | `scale` | number | no | 0.2–1.0 (default 0.5). |
 | `labeled` | boolean | no | Overlay numbered badges on interactive elements. |
 | `quality` | integer | no | JPEG compression quality 10-100 (default: 80 for jpeg). |
@@ -454,7 +431,7 @@ _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `diff` | boolean | no |  |
+| `diff` | boolean | no | Return structural tree diff since last call. |
 | `rootKey` | string | no | Subtree key or selector. |
 | `subtree` | string | no | Subtree root key. |
 | `query` | string | no | Filter tree nodes matching key, type, or text. |
@@ -500,18 +477,22 @@ _Read-only._
 
 ## `inspect_widget`
 
-Where a widget is in source code (file:line), bounds, ancestors, layout constraints, styling, and semantic properties.
+Returns widget source file:line, AST, bounds, ancestors, layout, style, or properties.
 
 _Read-only._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `key` | string | no | Key, selector or visible text. |
-| `x` | number | no | X in logical pixels (top-left origin), with y. |
-| `y` | number | no | Y in logical pixels. |
-| `layout` | boolean | no | Also each box's constraints and size up the ancestors, and why it overflows or is 0 wide. |
-| `style` | boolean | no | Also text size, weight and color, paddings, fills, borders, radii and elevation of the widget. |
-| `properties` | boolean | no | Also include semantic properties (isEnabled, text, isChecked, etc.). |
+| `x` | number | no | X in logical px, with y. |
+| `y` | number | no | Y in logical px. |
+| `layout` | boolean | no | Include ancestor constraints/sizes and overflow cause. |
+| `style` | boolean | no | Include text style, padding, fills, borders, and radii. |
+| `properties` | boolean | no | Include semantic properties (isEnabled, text, etc.). |
+| `ast` | boolean | no | Include constructor AST snippet and offsets. |
+| `file` | string | no | Source file for AST lookup. |
+| `line` | integer | no | 1-based line for AST lookup. |
+| `column` | integer | no | 1-based column for AST lookup. |
 
 ## `get_semantics_tree`
 
@@ -526,12 +507,14 @@ _Read-only._
 
 ## `hot_reload`
 
-Hot reloads edited .dart files into running app (keeping state). restart:true resets state (for main, initState, providers). waitForSettled:true waits for frame settlement (default true).
+Hot reloads edited .dart files into running app (keeping state). restart:true resets state; waitForSettled checks settle/errors; waitFor awaits widget.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
 | `restart` | boolean | no | Hot restart instead of hot reload. |
-| `waitForSettled` | boolean | no | Wait for frame settlement (default true). |
+| `waitForSettled` | boolean | no | Wait for frame settlement and verify 0 new errors (default true). |
+| `waitFor` | string | no | Optional widget key/text to wait for after reload. |
+| `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
 
 ## `launch_app`
 
@@ -546,17 +529,6 @@ Builds and launches app on a device, awaits first frame, and connects. Pass rela
 | `relaunch` | boolean | no | Stop the running app and rebuild. |
 | `waitSeconds` | integer | no | Return early if still building (default 600). |
 
-## `apply_and_verify`
-
-Hot-reloads/restarts app, awaits frame settle, verifies zero errors, and optionally polls waitFor widget in 1 turn.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `restart` | boolean | no | Hot restart instead of reload. |
-| `waitFor` | string | no | Optional widget key or text to wait for after reload. |
-| `quickSettle` | boolean | no | Settle in <=400ms. |
-| `settleTimeoutMs` | integer | no | Screen settle timeout in ms (default 2000). |
-
 ## `get_state`
 
 Values of Riverpod providers and Blocs/Cubits. Filter with name or query; history:true lists state and route changes with timestamps.
@@ -566,7 +538,7 @@ Values of Riverpod providers and Blocs/Cubits. Filter with name or query; histor
 | `type` | string: riverpod \| bloc | no | Only this kind. |
 | `name` | string | no | Only names containing this. |
 | `query` | string | no | Substring search across state values and names. |
-| `history` | boolean | no |  |
+| `history` | boolean | no | List the last 50 state and route changes with timestamps. |
 | `clear` | boolean | no | Empty the history after returning it: do that before an action to see only its effects. |
 
 ## `set_state`
@@ -650,7 +622,7 @@ Simulates network conditions (slow_3g, offline, chaos errorRate/statusCode, dela
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `condition` | string: normal \| slow_3g \| fast_4g \| offline | no |  |
+| `condition` | string: normal \| slow_3g \| fast_4g \| offline | no | Network profile preset (default: normal). |
 | `delayMs` | integer | no | Up to 60000. |
 | `errorRate` | number | no | Chaos failure rate 0.0-1.0 (e.g. 0.5 for 50% drops). |
 | `statusCode` | integer | no | HTTP status code on failure, e.g. 500, 503, 404. |
@@ -658,17 +630,19 @@ Simulates network conditions (slow_3g, offline, chaos errorRate/statusCode, dela
 
 ## `mock_http_response`
 
-Canned Dio responses or errors (timeout/connection). Single endpoint or batch via mocks:[...]; clear:true resets.
+Mocks Dio responses/errors, batch mocks, or exports recorded traffic.
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `urlPattern` | string | no | Part of the URL, e.g. "/api/users". |
-| `clear` | boolean | no | Remove the mock for urlPattern, or every mock without one. |
-| `statusCode` | integer | no |  |
-| `body` | string | no | Response body as a JSON string, e.g. '{"error":"not found"}'. |
-| `delayMs` | integer | no | Delay before the response or failure (default 0). |
-| `error` | string: timeout \| connection | no | In place of statusCode: the server never answers (timeout) or can't be reached (connection). |
-| `mocks` | array | no | Batch of mocks: [{urlPattern, statusCode, body, delayMs, error}]. |
+| `urlPattern` | string | no | URL substring to match. |
+| `clear` | boolean | no | Clear mock for urlPattern (or all). |
+| `statusCode` | integer | no | HTTP status (default 200). |
+| `body` | string | no | JSON response body string. |
+| `delayMs` | integer | no | Response delay in ms. |
+| `error` | string: timeout \| connection | no | Simulate timeout or connection failure. |
+| `mocks` | array | no | Batch of mock definitions. |
+| `fromRecorded` | boolean | no | Export mocks from recorded Dio logs. |
+| `apply` | boolean | no | Install exported mocks immediately. |
 
 ## `call_custom_tool`
 
@@ -713,18 +687,6 @@ _Read-only._
 
 **Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{passed: bool, check: "text"|"key"|"enabled"|"disabled"|"count"|"none"|"batch", expected?: string, found?: int, reason?: string, total?: int, passedCount?: int}`
 
-## `export_network_mocks`
-
-Exports recorded Dio responses as mock_http_response steps; apply:true installs them.
-
-_Read-only._
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `filter` | string | no | Only URLs containing this. |
-| `statusCode` | integer | no | Use this status instead of the recorded one. |
-| `apply` | boolean | no | Install the mocks now instead of only listing them. |
-
 ## `get_memory_details`
 
 Heap usage and allocation profiles. classes:true lists top classes; diffBaseline:true isolates growth; route/cycle checks leaks.
@@ -764,22 +726,11 @@ dart:io HTTP requests (HttpClient, package:http, Dio). Filter by query, method, 
 | `statusFilter` | integer | no | Only this status code. |
 | `id` | integer | no | Request #number for full details. |
 
-## `locate_source_ast`
-
-Locates widget constructor call in source code (file:line, code snippet, named arguments, start/end file offsets).
-
-_Read-only._
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `key` | string | no | Key, selector or visible text of the widget. |
-| `file` | string | no | File in the app, e.g. "lib/ui/tile.dart". |
-| `line` | integer | no | 1-based line, with file. |
-| `column` | integer | no | 1-based column where the call starts, with file. |
-
 ## `apply_patch_and_verify`
 
 Surgically patches widget in source (wrap, unwrap, replaceCall), hot-reloads, audits health, and auto-rolls back if reload fails.
+
+_Destructive: replaces stored data (needs `--allow-destructive`) or runs app code._
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
@@ -794,28 +745,24 @@ Surgically patches widget in source (wrap, unwrap, replaceCall), hot-reloads, au
 | `timeoutMs` | integer | no | Timeout for waitFor in ms (default 3000). |
 | `patches` | array | no | Batch of patch objects to apply atomically in 1 reload. |
 
-## `replay_flow`
-
-Replays recorded user interactions live on the connected app without writing a test binary.
-
-| Parameter | Type | Required | Description |
-|---|---|---:|---|
-| `delayMs` | integer | no | Delay between steps in ms (default: 300). |
-| `assertRoute` | string | no | Assert that the flow ends on this route. |
-| `assertWidget` | string | no | Assert that this widget key/text is visible after replay. |
-| `exportAsTest` | boolean | no | Write replayed flow as integration_test file. |
-| `testName` | string | no | Test file name in snake_case (e.g. "replayed_flow"). |
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{patchCount: int, fileCount: int, reloaded: bool, rolledBack: bool, overflowCount: int, accessibilityIssueCount: int}`
 
 ## `generate_test`
 
-Records user interactions and writes executable integration_test files (start:true begins recording; name writes and runs test).
+Records/replays user interactions and writes executable integration_test files (start:true begins, replay:true runs live, name writes and runs test).
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `start` | boolean | no |  |
+| `start` | boolean | no | Start fresh test recording from app restart. |
 | `fromCrash` | boolean | no | Write repro test from recent crash. |
 | `name` | string | no | Letters, digits and _. |
 | `run` | boolean | no | Run the written test (default true). |
+| `replay` | boolean | no | Replay recorded interactions live on connected app. |
+| `delayMs` | integer | no | Delay between replayed steps in ms (default: 300). |
+| `assertRoute` | string | no | Assert that replayed flow ends on this route. |
+| `assertWidget` | string | no | Assert this widget key/text is visible after replay. |
+| `exportAsTest` | boolean | no | Write replayed flow as integration_test file. |
+| `testName` | string | no | Test file name in snake_case (with exportAsTest). |
 
 ## `synthesize_golden_test`
 
@@ -827,6 +774,8 @@ Writes and runs golden widget tests across phone, tablet, and desktop viewports.
 | `name` | string | no | lower_snake_case (default from screen). |
 | `viewports` | array | no | Default all three. |
 | `run` | boolean | no | Default true. |
+
+**Structured result** (`structuredContent`, a machine-readable twin of the text; no `outputSchema` is declared): `{file: string, images: [string]}`
 
 ## `scenario`
 
@@ -888,7 +837,7 @@ _Destructive: replaces stored data (needs `--allow-destructive`) or runs app cod
 
 | Parameter | Type | Required | Description |
 |---|---|---:|---|
-| `action` | string: refresh \| sign_out | yes |  |
+| `action` | string: refresh \| sign_out | yes | Auth session action ("refresh" or "sign_out"). |
 | `scope` | string: local \| global \| others | no | For sign_out. |
 
 ## `get_connectivity`

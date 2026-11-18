@@ -134,7 +134,7 @@ cd packages/fp_cli && dart test
                        │ MCP Protocol (JSON-RPC over stdio)
 ┌──────────────────────▼──────────────────────────────┐
 │              fp_server                              │
-│  - 74 MCP tools (see TOOLS.generated.md)            │
+│  - 67 MCP tools (see TOOLS.generated.md)            │
 │  - Modular tool registration via part files          │
 │  - Self-Heal crash detection                        │
 │  - VM Service bridge with auto-reconnect            │

@@ -95,4 +95,22 @@ void main() {
     await expectLater(failed, throwsStateError);
     expect(await next, 'ran');
   });
+
+  test('a stalled operation times out and unblocks the queue', () async {
+    final scheduler = OperationScheduler();
+    final stalled = Completer<void>();
+
+    final timedOut = scheduler.schedule<void>(
+      mutating: true,
+      timeout: const Duration(milliseconds: 20),
+      operation: () => stalled.future,
+    );
+    final next = scheduler.schedule<String>(
+      mutating: true,
+      operation: () async => 'unblocked',
+    );
+
+    await expectLater(timedOut, throwsA(isA<TimeoutException>()));
+    expect(await next, 'unblocked');
+  });
 }

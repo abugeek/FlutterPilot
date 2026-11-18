@@ -40,9 +40,17 @@ Add-Type -Name Win -Namespace FlutterPilot -MemberDefinition '
 [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
 [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+[DllImport("user32.dll")] public static extern IntPtr FindWindowExW(IntPtr p, IntPtr a, IntPtr c, IntPtr t);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+[DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr h, int i);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }'
 $w = [FlutterPilot.Win]
 $h = (Get-Process -Id PID).MainWindowHandle
+$cur = [IntPtr]::Zero
+while (($cur = $w::FindWindowExW([IntPtr]::Zero, $cur, [IntPtr]::Zero, [IntPtr]::Zero)) -ne [IntPtr]::Zero) {
+  [uint32]$wp = 0; [void]$w::GetWindowThreadProcessId($cur, [ref]$wp)
+  if ($wp -eq PID -and ($w::GetWindowLongW($cur, -16) -band 0x10040000) -eq 0x10040000) { $h = $cur; break }
+}
 if ($h -eq [IntPtr]::Zero) { [Console]::Error.WriteLine('no window'); exit 2 }
 if ($w::IsZoomed($h) -or $w::IsIconic($h)) { [void]$w::ShowWindow($h, 9) }
 $d = $w::GetDpiForWindow($h) / 96.0

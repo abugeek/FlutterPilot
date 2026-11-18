@@ -31,53 +31,144 @@ void main() {
     expect(chainStep(const <String, dynamic>{}), isNull);
   });
 
-  test('plain taps, text entries, scrolling, assertions, waits run inside the app', () {
-    expect(inAppChainAction((tool: 'tap_widget', arguments: {'key': 'Save'})), {
-      'action': 'tap',
-      'target': 'Save',
-    });
-    expect(
-      inAppChainAction((
-        tool: 'enter_text',
-        arguments: {'key': 'Title', 'text': 'Milk'},
-      )),
-      {'action': 'enter_text', 'target': 'Title', 'text': 'Milk'},
-    );
-    expect(
-      inAppChainAction((
-        tool: 'scroll_into_view',
-        arguments: {'key': 'BottomItem'},
-      )),
-      {'action': 'scroll_into_view', 'target': 'BottomItem'},
-    );
-    expect(
-      inAppChainAction((
-        tool: 'assert_widget',
-        arguments: {'key': 'SuccessBadge'},
-      )),
-      {'action': 'assert_widget', 'target': 'SuccessBadge'},
-    );
-    expect(
-      inAppChainAction((
-        tool: 'wait_for',
-        arguments: {'key': 'Dialog', 'timeoutMs': 1000},
-      )),
-      {'action': 'wait_for', 'target': 'Dialog', 'timeoutMs': '1000'},
-    );
-    expect(
-      inAppChainAction((
-        tool: 'clear_text',
-        arguments: {'key': 'Title'},
-      )),
-      {'action': 'clear_text', 'target': 'Title'},
-    );
-  });
+  test(
+    'plain taps, text entries, scrolling, assertions, waits run inside the app',
+    () {
+      expect(
+        inAppChainAction((tool: 'tap_widget', arguments: {'key': 'Save'})),
+        {'action': 'tap', 'target': 'Save'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'enter_text',
+          arguments: {'key': 'Title', 'text': 'Milk'},
+        )),
+        {'action': 'enter_text', 'target': 'Title', 'text': 'Milk'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'scroll_into_view',
+          arguments: {'key': 'BottomItem'},
+        )),
+        {'action': 'scroll_into_view', 'target': 'BottomItem'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'assert_widget',
+          arguments: {'key': 'SuccessBadge'},
+        )),
+        {'action': 'assert_widget', 'target': 'SuccessBadge'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'wait_for',
+          arguments: {'key': 'Dialog', 'timeoutMs': 1000},
+        )),
+        {'action': 'wait_for', 'target': 'Dialog', 'timeoutMs': '1000'},
+      );
+      expect(
+        inAppChainAction((tool: 'clear_text', arguments: {'key': 'Title'})),
+        {'action': 'clear_text', 'target': 'Title'},
+      );
+      expect(inAppChainAction((tool: 'enter_text', arguments: {'text': ''})), {
+        'action': 'enter_text',
+        'target': 'focused',
+        'text': '',
+      });
+      expect(
+        inAppChainAction((tool: 'press_key', arguments: {'key': 'enter'})),
+        {'action': 'press_key', 'target': 'enter'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'navigate_to',
+          arguments: {'route': '/settings'},
+        )),
+        {'action': 'navigate_to', 'target': '/settings'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'toggle_checkbox',
+          arguments: {'key': 'Agree', 'value': true},
+        )),
+        {'action': 'toggle_checkbox', 'target': 'Agree', 'value': 'true'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'wait_for',
+          arguments: {'route': '/home', 'timeoutMs': 2000},
+        )),
+        {'action': 'wait_for_route', 'target': '/home', 'timeoutMs': '2000'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'gesture_widget',
+          arguments: {
+            'key': 'FeedList',
+            'gesture': 'swipe',
+            'direction': 'up',
+            'distance': 300,
+          },
+        )),
+        {
+          'action': 'swipe',
+          'target': 'FeedList',
+          'direction': 'up',
+          'distance': '300',
+        },
+      );
+      expect(
+        inAppChainAction((
+          tool: 'gesture_widget',
+          arguments: {'key': 'Card', 'gesture': 'double_tap'},
+        )),
+        {'action': 'double_tap', 'target': 'Card'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'gesture_widget',
+          arguments: {'key': 'Card', 'gesture': 'long_press', 'durationMs': 800},
+        )),
+        {'action': 'long_press', 'target': 'Card', 'durationMs': '800'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'tap_widget',
+          arguments: {'key': 'Card', 'gesture': 'double'},
+        )),
+        {'action': 'double_tap', 'target': 'Card'},
+      );
+      expect(
+        inAppChainAction((
+          tool: 'tap_widget',
+          arguments: {'key': 'Card', 'gesture': 'long', 'durationMs': 700},
+        )),
+        {'action': 'long_press', 'target': 'Card', 'durationMs': '700'},
+      );
+    },
+  );
 
   test('what the in-app chain cannot do goes through the tool', () {
     for (final ChainStep step in [
-      (tool: 'gesture_widget', arguments: {'key': 'Card', 'gesture': 'swipe_left'}),
-      (tool: 'mock_http_response', arguments: {'url': 'https://api.com', 'body': '{}'}),
-      (tool: 'navigate_to', arguments: {'route': '/settings'}),
+      (
+        tool: 'gesture_widget',
+        arguments: {'key': 'Card', 'gesture': 'swipe_left'},
+      ),
+      (
+        tool: 'mock_http_response',
+        arguments: {'url': 'https://api.com', 'body': '{}'},
+      ),
+      (
+        tool: 'navigate_to',
+        arguments: {'route': '/settings', 'action': 'push'},
+      ),
+      (
+        tool: 'press_key',
+        arguments: {
+          'key': 'a',
+          'modifiers': ['ctrl'],
+        },
+      ),
     ]) {
       expect(inAppChainAction(step), isNull, reason: '$step');
     }

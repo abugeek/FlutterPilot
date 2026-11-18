@@ -113,7 +113,7 @@ String _applyAndVerifyPrompt(Map<String, dynamic> args) {
       '\n'
       'Workflow:\n'
       '1. Edit Dart source files.\n'
-      '2. Call `apply_and_verify` to hot reload, wait for settle, and verify error-free state.\n'
+      '2. Call `hot_reload(waitForSettled: true)` to hot reload, wait for settle, and verify error-free state.\n'
       '3. If a RenderFlex overflow is reported, apply the prescriptive fix returned.\n'
       '4. If no errors occur, proceed directly to the next task.'
       '${_focusLine(file, 'the file "$file"')}';
@@ -124,10 +124,10 @@ String _designPolishPrompt(Map<String, dynamic> args) {
   return 'Polish UI design quality, spacing grid, and typography consistency.\n'
       '\n'
       'Workflow:\n'
-      '1. Call `audit_screen_health(designQuality: true)` to identify off-grid padding (not 4/8dp) and typography issues.\n'
+      '1. Call `audit_screen_health(designQuality: true)` to identify off-grid padding (not 4/8dp), typography issues, and theme tokens.\n'
       '2. Call `capture_screenshot(labeled: true)` to visually inspect element alignment with Set-of-Mark numbers.\n'
       '3. Align off-grid paddings to 4dp/8dp multiples in Dart code.\n'
-      '4. Call `apply_and_verify` to confirm design polish.'
+      '4. Call `hot_reload(waitForSettled: true)` to confirm design polish.'
       '${_focusLine(route, 'the route "$route"')}';
 }
 
@@ -135,10 +135,10 @@ String _responsiveMatrixPrompt(Map<String, dynamic> args) {
   return 'Test screen responsiveness across multiple devices in 1 turn.\n'
       '\n'
       'Workflow:\n'
-      '1. Call `simulate_viewport_matrix` to test phone (390x844), tablet (768x1024), and desktop (1280x800) in sequence.\n'
+      '1. Call `audit_screen_health(viewports: ["phone", "tablet", "desktop"])` to test breakpoints in sequence.\n'
       '2. Inspect any failed viewports for RenderFlex overflows or cramped scrollable views.\n'
       '3. Use `Expanded`, `Flexible`, `Wrap` or `SingleChildScrollView` to fix responsive constraints.\n'
-      '4. Call `simulate_viewport_matrix` again to confirm all breakpoints pass.';
+      '4. Call `audit_screen_health(viewports: ["phone", "tablet", "desktop"])` again to confirm all breakpoints pass.';
 }
 
 /// The curated workflow prompts, in `prompts/list` order.

@@ -7,15 +7,22 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
       'hot_reload',
       description:
           'Hot reloads edited .dart files into running app (keeping state). '
-          'restart:true resets state (for main, initState, providers). '
-          'waitForSettled:true waits for frame settlement (default true).',
+          'restart:true resets state; waitForSettled checks settle/errors; '
+          'waitFor awaits widget.',
       inputSchema: ToolInputSchema(
         properties: {
           'restart': JsonSchema.boolean(
             description: 'Hot restart instead of hot reload.',
           ),
           'waitForSettled': JsonSchema.boolean(
-            description: 'Wait for frame settlement (default true).',
+            description:
+                'Wait for frame settlement and verify 0 new errors (default true).',
+          ),
+          'waitFor': JsonSchema.string(
+            description: 'Optional widget key/text to wait for after reload.',
+          ),
+          'settleTimeoutMs': JsonSchema.integer(
+            description: 'Screen settle timeout in ms (default 2000).',
           ),
         },
       ),
@@ -118,9 +125,12 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
           .timeout(const Duration(minutes: 2));
       _selfHealManager.reset();
       context.lastReload = DateTime.now();
-      if (service == 'reloadSources' && p['waitForSettled'] != false) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      }
+      final waitFor = p['waitFor']?.toString();
+      final verifySettled =
+          hadSdk &&
+          (p['waitForSettled'] != false ||
+              p['settleTimeoutMs'] != null ||
+              (waitFor != null && waitFor.isNotEmpty));
       if (service == 'hotRestart' &&
           !await _waitForRestartedApp(vmService, sdk: hadSdk)) {
         return CallToolResult(
@@ -136,6 +146,101 @@ mixin _SelfHealToolsMixin on _FlutterPilotServerBase {
                   'shows what main() is waiting on if it never comes up.',
             ),
           ],
+        );
+      }
+      if (service == 'reloadSources' &&
+          !verifySettled &&
+          p['waitForSettled'] != false) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      if (verifySettled) {
+        final timeoutMs = (p['settleTimeoutMs'] as num?)?.toInt() ?? 2000;
+        await _callExtensionRaw('ext.flutterpilot.waitForAnimation', {
+          'timeoutMs':
+              (p['quickSettle'] == true && timeoutMs > 400 ? 400 : timeoutMs)
+                  .toString(),
+        });
+        final errorRes = await _callExtensionRaw(
+          'ext.flutterpilot.getErrors',
+          {},
+        );
+        final errData = errorRes.data ?? const <String, dynamic>{};
+        final split = errorsByReload(
+          ((errData['errors'] as List?) ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .toList(),
+          context.lastReload,
+        );
+        final stackRes = await _callExtensionRaw(
+          'ext.flutterpilot.getNavigationStack',
+          {},
+        );
+        final route = stackRes.data?['current'] ?? 'unknown';
+        final modeLabel = service == 'hotRestart'
+            ? 'hot restart'
+            : 'hot reload';
+        if (split.since.isNotEmpty) {
+          final errText = split.since
+              .map(
+                (err) =>
+                    '--- Error ---\n${err['exception']}\n'
+                    '${err['widget'] != null ? 'Widget: ${err['widget']}\n' : ''}'
+                    '${err['stackTrace'] ?? ''}',
+              )
+              .join('\n\n');
+          final isOverflow = split.since.any(
+            (err) =>
+                err['exception']?.toString().contains(
+                  'RenderFlex overflowed',
+                ) ==
+                true,
+          );
+          return CallToolResult(
+            isError: true,
+            content: [
+              TextContent(
+                text:
+                    'Applied $modeLabel on route "$route" — '
+                    '${isOverflow ? 'LAYOUT OVERFLOW DETECTED' : 'ERRORS DETECTED'}:\n\n$errText',
+              ),
+            ],
+            structuredContent: {
+              'status': isOverflow ? 'overflow' : 'error',
+              'route': route,
+              'errorCount': split.since.length,
+            },
+          );
+        }
+        if (waitFor != null && waitFor.isNotEmpty) {
+          final waitRes = await _callExtensionRaw(
+            'ext.flutterpilot.waitForWidget',
+            {'key': waitFor, 'timeoutMs': timeoutMs.toString()},
+          );
+          if (waitRes.isError) {
+            return CallToolResult(
+              isError: true,
+              content: [
+                TextContent(
+                  text:
+                      'Reload succeeded cleanly on route "$route", but expected '
+                      'widget "$waitFor" was not found: ${waitRes.errorMessage}',
+                ),
+              ],
+            );
+          }
+        }
+        return CallToolResult(
+          content: [
+            TextContent(
+              text:
+                  'Applied $modeLabel cleanly on route "$route" — 0 errors, UI settled.',
+            ),
+          ],
+          structuredContent: {
+            'status': 'clean',
+            'route': route,
+            'errorCount': 0,
+          },
         );
       }
       return CallToolResult(content: [TextContent(text: successText)]);

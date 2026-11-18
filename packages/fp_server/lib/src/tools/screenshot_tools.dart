@@ -55,8 +55,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       var i = 0;
       while (i < children.length) {
         final current = children[i];
-        final currentType =
-            current is Map ? (current['type'] ?? current['widget']) : null;
+        final currentType = current is Map
+            ? (current['type'] ?? current['widget'])
+            : null;
         var j = i + 1;
         while (j < children.length &&
             children[j] is Map &&
@@ -116,8 +117,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     String query,
   ) {
     final q = query.toLowerCase();
-    final type =
-        (node['type'] ?? node['widget'] ?? '').toString().toLowerCase();
+    final type = (node['type'] ?? node['widget'] ?? '')
+        .toString()
+        .toLowerCase();
     final key = (node['key'] ?? '').toString().toLowerCase();
     final text = (node['text'] ?? '').toString().toLowerCase();
     final selector = (node['selector'] ?? '').toString().toLowerCase();
@@ -181,19 +183,36 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       decoded = base64Decode(base64Str);
       final cropKey = p['key']?.toString();
       if (cropKey != null && cropKey.isNotEmpty) {
-        final info = await _callExtensionRaw(
-          'ext.flutterpilot.inspectWidget',
-          {'key': cropKey},
-        );
+        final info = await _callExtensionRaw('ext.flutterpilot.inspectWidget', {
+          'key': cropKey,
+        });
         final b = info.data?['widget']?['bounds'] as Map?;
         if (b != null) {
           final decodedImg = img.decodeImage(decoded);
           if (decodedImg != null) {
-            final x = ((b['x'] as num).toDouble()).round().clamp(0, decodedImg.width);
-            final y = ((b['y'] as num).toDouble()).round().clamp(0, decodedImg.height);
-            final w = ((b['w'] as num).toDouble()).round().clamp(1, decodedImg.width - x);
-            final h = ((b['h'] as num).toDouble()).round().clamp(1, decodedImg.height - y);
-            final cropped = img.copyCrop(decodedImg, x: x, y: y, width: w, height: h);
+            final x = ((b['x'] as num).toDouble()).round().clamp(
+              0,
+              decodedImg.width,
+            );
+            final y = ((b['y'] as num).toDouble()).round().clamp(
+              0,
+              decodedImg.height,
+            );
+            final w = ((b['w'] as num).toDouble()).round().clamp(
+              1,
+              decodedImg.width - x,
+            );
+            final h = ((b['h'] as num).toDouble()).round().clamp(
+              1,
+              decodedImg.height - y,
+            );
+            final cropped = img.copyCrop(
+              decodedImg,
+              x: x,
+              y: y,
+              width: w,
+              height: h,
+            );
             decoded = Uint8List.fromList(img.encodePng(cropped));
           }
         }
@@ -397,10 +416,13 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       final isHealthy = health['isHealthy'] == true;
       final overflowsList = (health['overflows'] as List?) ?? const [];
       final clippedList = (health['clippedElements'] as List?) ?? const [];
-      final overflows = (health['overflowCount'] as num?)?.toInt() ?? overflowsList.length;
+      final overflows =
+          (health['overflowCount'] as num?)?.toInt() ?? overflowsList.length;
       final a11y = (health['accessibilityIssueCount'] as num?)?.toInt() ?? 0;
       if (isHealthy && overflowsList.isEmpty && clippedList.isEmpty) {
-        summary.writeln('• Health: ✓ Clean (no overflows or small tap targets)');
+        summary.writeln(
+          '• Health: ✓ Clean (no overflows or small tap targets)',
+        );
       } else {
         if (overflowsList.isNotEmpty) {
           for (final ov in overflowsList) {
@@ -409,11 +431,15 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               final px = ov['pixels'] != null ? ' by ${ov['pixels']}px' : '';
               final side = ov['side'] ?? 'edge';
               final src = ov['source'] != null ? ' [${ov['source']}]' : '';
-              summary.writeln('• ⚠️ Layout Overflow: $type overflowed$px on the $side$src');
+              summary.writeln(
+                '• ⚠️ Layout Overflow: $type overflowed$px on the $side$src',
+              );
             }
           }
         } else if (overflows > 0) {
-          summary.writeln('• ⚠️ Layout Overflow: $overflows layout overflow(s)');
+          summary.writeln(
+            '• ⚠️ Layout Overflow: $overflows layout overflow(s)',
+          );
         }
         if (clippedList.isNotEmpty) {
           for (final cl in clippedList.take(3)) {
@@ -434,8 +460,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         ? elements.where((el) {
             if (el is! Map) return false;
             final label = el['text']?.toString().toLowerCase() ?? '';
-            final key =
-                (el['key'] ?? el['identifier'] ?? '').toString().toLowerCase();
+            final key = (el['key'] ?? el['identifier'] ?? '')
+                .toString()
+                .toLowerCase();
             final type = el['type']?.toString().toLowerCase() ?? '';
             return label.contains(queryStr) ||
                 key.contains(queryStr) ||
@@ -529,7 +556,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'key': JsonSchema.string(
             description: 'Optional widget key to crop screenshot to.',
           ),
-          'format': JsonSchema.string(enumValues: ['png', 'jpeg', 'webp']),
+          'format': JsonSchema.string(
+            enumValues: ['png', 'jpeg', 'webp'],
+            description: 'Image encoding format (default: png).',
+          ),
           'scale': JsonSchema.number(description: '0.2–1.0 (default 0.5).'),
           'labeled': JsonSchema.boolean(
             description: 'Overlay numbered badges on interactive elements.',
@@ -561,8 +591,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             isError: true,
           );
         }
+        Uint8List? rawBytes;
         try {
-          _lastScreenshotBytes = base64Decode(rawBase64);
+          rawBytes = base64Decode(rawBase64);
+          _lastScreenshotBytes = rawBytes;
         } catch (_) {}
 
         String finalBase64 = rawBase64;
@@ -577,21 +609,25 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           final b = info.data?['widget']?['bounds'] as Map?;
           if (b != null) {
             try {
-              final rawBytes = base64Decode(rawBase64);
-              final decoded = img.decodeImage(rawBytes);
+              final bytesToDecode = rawBytes ?? base64Decode(rawBase64);
+              final decoded = img.decodeImage(bytesToDecode);
               if (decoded != null) {
-                final x = (((b['x'] as num).toDouble()) * scale)
-                    .round()
-                    .clamp(0, decoded.width);
-                final y = (((b['y'] as num).toDouble()) * scale)
-                    .round()
-                    .clamp(0, decoded.height);
-                final w = (((b['w'] as num).toDouble()) * scale)
-                    .round()
-                    .clamp(1, decoded.width - x);
-                final h = (((b['h'] as num).toDouble()) * scale)
-                    .round()
-                    .clamp(1, decoded.height - y);
+                final x = (((b['x'] as num).toDouble()) * scale).round().clamp(
+                  0,
+                  decoded.width,
+                );
+                final y = (((b['y'] as num).toDouble()) * scale).round().clamp(
+                  0,
+                  decoded.height,
+                );
+                final w = (((b['w'] as num).toDouble()) * scale).round().clamp(
+                  1,
+                  decoded.width - x,
+                );
+                final h = (((b['h'] as num).toDouble()) * scale).round().clamp(
+                  1,
+                  decoded.height - y,
+                );
                 final cropped = img.copyCrop(
                   decoded,
                   x: x,
@@ -609,8 +645,8 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           }
         } else if (format == 'jpeg') {
           try {
-            final rawBytes = base64Decode(rawBase64);
-            final decoded = img.decodeImage(rawBytes);
+            final bytesToDecode = rawBytes ?? base64Decode(rawBase64);
+            final decoded = img.decodeImage(bytesToDecode);
             if (decoded != null) {
               final compressed = img.encodeJpg(decoded, quality: quality);
               finalBase64 = base64Encode(compressed);
@@ -622,14 +658,16 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         }
 
         final marks = (res.data?['marks'] as List?) ?? const [];
-        final marksListStr = marks.map((m) {
-          final markId = m['mark'];
-          final type = m['type'];
-          final key = m['key'];
-          final text = m['text'];
-          final label = key ?? text ?? type;
-          return '[$markId] $type "$label"${key != null ? ' (key: "$key")' : ''}';
-        }).join('\n');
+        final marksListStr = marks
+            .map((m) {
+              final markId = m['mark'];
+              final type = m['type'];
+              final key = m['key'];
+              final text = m['text'];
+              final label = key ?? text ?? type;
+              return '[$markId] $type "$label"${key != null ? ' (key: "$key")' : ''}';
+            })
+            .join('\n');
         final marksText = marks.isEmpty
             ? ''
             : '\n\nSet-of-Mark (SoM) Elements (${marks.length}):\n$marksListStr\n\nInteract with: tap_widget(mark: <number>) or enter_text(mark: <number>, text: "...")';
@@ -690,21 +728,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           }
           return _saveBaseline(p);
         }
-        final Uint8List? baseline;
-        if (comparePrevious) {
-          baseline = _lastScreenshotBytes;
-          if (baseline == null) {
-            return CallToolResult(
-              content: [
-                TextContent(
-                  text:
-                      'No previous screenshot found. Call capture_screenshot or an action first.',
-                ),
-              ],
-              isError: true,
-            );
-          }
-        } else {
+        if (!comparePrevious) {
           if (name == null || name.isEmpty) {
             return CallToolResult(
               content: [
@@ -715,8 +739,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               isError: true,
             );
           }
-          baseline = _screenshotBaselines[_baselineKey(name)];
-          if (baseline == null) {
+          if (_screenshotBaselines[_baselineKey(name)] == null) {
             return CallToolResult(
               content: [
                 TextContent(
@@ -733,9 +756,7 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final scale = (p['scale'] as num?)?.toDouble().clamp(0.2, 1.0) ?? 0.5;
         final res = await _callExtensionRaw(
           'ext.flutterpilot.captureScreenshot',
-          {
-            if (scale < 1.0) 'scale': scale.toString(),
-          },
+          {if (scale < 1.0) 'scale': scale.toString()},
         );
         if (res.isError) return res.toCallToolResult();
         final base64Str = res.data?['data'] as String?;
@@ -758,6 +779,26 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           0.0,
           100.0,
         );
+
+        if (comparePrevious && _lastScreenshotBytes == null) {
+          _lastScreenshotBytes = currentBytes;
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    'Visual comparison PASSED — diff: 0.00% (initial frame captured as previous baseline)',
+              ),
+            ],
+            structuredContent: {
+              'passed': true,
+              'diffPercent': 0.0,
+              'diffPixels': 0,
+            },
+          );
+        }
+        final Uint8List baseline = comparePrevious
+            ? _lastScreenshotBytes!
+            : _screenshotBaselines[_baselineKey(name!)]!;
 
         // Decode both images format-agnostically (PNG, JPEG, etc.) and compare pixel-by-pixel.
         var baselineImg = img.decodeImage(baseline);
@@ -782,18 +823,22 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           );
           final b = info.data?['widget']?['bounds'] as Map?;
           if (b != null) {
-            final x = (((b['x'] as num).toDouble()) * scale)
-                .round()
-                .clamp(0, currentImg.width);
-            final y = (((b['y'] as num).toDouble()) * scale)
-                .round()
-                .clamp(0, currentImg.height);
-            final w = (((b['w'] as num).toDouble()) * scale)
-                .round()
-                .clamp(1, currentImg.width - x);
-            final h = (((b['h'] as num).toDouble()) * scale)
-                .round()
-                .clamp(1, currentImg.height - y);
+            final x = (((b['x'] as num).toDouble()) * scale).round().clamp(
+              0,
+              currentImg.width,
+            );
+            final y = (((b['y'] as num).toDouble()) * scale).round().clamp(
+              0,
+              currentImg.height,
+            );
+            final w = (((b['w'] as num).toDouble()) * scale).round().clamp(
+              1,
+              currentImg.width - x,
+            );
+            final h = (((b['h'] as num).toDouble()) * scale).round().clamp(
+              1,
+              currentImg.height - y,
+            );
             currentImg = img.copyCrop(
               currentImg,
               x: x,
@@ -842,31 +887,47 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         int maxY = 0;
 
         final ignoreStatusBar = p['ignoreStatusBar'] == true;
-        final statusBarHeight =
-            ignoreStatusBar ? (currentImg.height * 0.06).round() : 0;
+        final statusBarHeight = ignoreStatusBar
+            ? (currentImg.height * 0.06).round()
+            : 0;
 
         final rawKeys = p['ignoreKeys'];
         final ignoreKeys = rawKeys is List
             ? rawKeys.map((k) => k.toString()).toList()
             : const <String>[];
-        final maskedBoxes = <({double left, double top, double right, double bottom, String key})>[];
+        final maskedBoxes =
+            <
+              ({
+                double left,
+                double top,
+                double right,
+                double bottom,
+                String key,
+              })
+            >[];
         for (final k in ignoreKeys) {
-          final info = await _callExtensionRaw('ext.flutterpilot.inspectWidget', {'key': k});
+          final info = await _callExtensionRaw(
+            'ext.flutterpilot.inspectWidget',
+            {'key': k},
+          );
           final b = info.data?['widget']?['bounds'] as Map?;
           if (b != null) {
             final x = (b['x'] as num).toDouble() * scale;
             final y = (b['y'] as num).toDouble() * scale;
             final w = (b['w'] as num).toDouble() * scale;
             final h = (b['h'] as num).toDouble() * scale;
-            maskedBoxes.add((left: x, top: y, right: x + w, bottom: y + h, key: k));
+            maskedBoxes.add((
+              left: x,
+              top: y,
+              right: x + w,
+              bottom: y + h,
+              key: k,
+            ));
           }
         }
 
         var total = currentImg.width * (currentImg.height - statusBarHeight);
-        diffImg = currentImg.convert(
-          format: img.Format.uint8,
-          numChannels: 4,
-        );
+        diffImg = currentImg.convert(format: img.Format.uint8, numChannels: 4);
 
         // PNGs may decode as RGB/RGBA and 8- or 16-bit; compare as 8-bit RGBA.
         final baseBytes = baselineImg
@@ -875,46 +936,42 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
         final currBytes = currentImg
             .convert(format: img.Format.uint8, numChannels: 4)
             .toUint8List();
-          for (
-            var i = 0;
-            i + 3 < baseBytes.length && i + 3 < currBytes.length;
-            i += 4
-          ) {
-            final py = (i ~/ 4) ~/ currentImg.width;
-            if (py < statusBarHeight) continue;
-            final px = (i ~/ 4) % currentImg.width;
+        for (
+          var i = 0;
+          i + 3 < baseBytes.length && i + 3 < currBytes.length;
+          i += 4
+        ) {
+          final py = (i ~/ 4) ~/ currentImg.width;
+          if (py < statusBarHeight) continue;
+          final px = (i ~/ 4) % currentImg.width;
 
-            // Check if pixel falls inside any masked key bounding box
-            var isMasked = false;
-            for (final box in maskedBoxes) {
-              if (px >= box.left && px <= box.right && py >= box.top && py <= box.bottom) {
-                isMasked = true;
-                break;
-              }
-            }
-            if (isMasked) continue;
-
-            if (baseBytes[i] != currBytes[i] ||
-                baseBytes[i + 1] != currBytes[i + 1] ||
-                baseBytes[i + 2] != currBytes[i + 2] ||
-                baseBytes[i + 3] != currBytes[i + 3]) {
-              diffPixels++;
-              if (px < minX) minX = px;
-              if (px > maxX) maxX = px;
-              if (py < minY) minY = py;
-              if (py > maxY) maxY = py;
-
-              diffImg.setPixelRgba(
-                px,
-                py,
-                255,
-                0,
-                128,
-                255,
-              );
+          // Check if pixel falls inside any masked key bounding box
+          var isMasked = false;
+          for (final box in maskedBoxes) {
+            if (px >= box.left &&
+                px <= box.right &&
+                py >= box.top &&
+                py <= box.bottom) {
+              isMasked = true;
+              break;
             }
           }
-          diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
+          if (isMasked) continue;
+
+          if (baseBytes[i] != currBytes[i] ||
+              baseBytes[i + 1] != currBytes[i + 1] ||
+              baseBytes[i + 2] != currBytes[i + 2] ||
+              baseBytes[i + 3] != currBytes[i + 3]) {
+            diffPixels++;
+            if (px < minX) minX = px;
+            if (px > maxX) maxX = px;
+            if (py < minY) minY = py;
+            if (py > maxY) maxY = py;
+
+            diffImg.setPixelRgba(px, py, 255, 0, 128, 255);
+          }
+        }
+        diffPercent = total > 0 ? (diffPixels / total) * 100.0 : 0.0;
 
         _lastScreenshotBytes = currentBytes;
 
@@ -993,10 +1050,10 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           'diff:true returns changes since last call.',
       inputSchema: ToolInputSchema(
         properties: {
-          'diff': JsonSchema.boolean(),
-          'rootKey': JsonSchema.string(
-            description: 'Subtree key or selector.',
+          'diff': JsonSchema.boolean(
+            description: 'Return structural tree diff since last call.',
           ),
+          'rootKey': JsonSchema.string(description: 'Subtree key or selector.'),
           'subtree': JsonSchema.string(description: 'Subtree root key.'),
           'query': JsonSchema.string(
             description: 'Filter tree nodes matching key, type, or text.',
@@ -1041,7 +1098,9 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
           params,
         );
         if (res.isError) return res.toCallToolResult();
-        var data = res.data != null ? Map<String, dynamic>.from(res.data!) : null;
+        var data = res.data != null
+            ? Map<String, dynamic>.from(res.data!)
+            : null;
         final query = p['query']?.toString();
         if (query != null && query.isNotEmpty && data != null) {
           if (data['tree'] is Map) {
@@ -1049,9 +1108,19 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
               Map<String, dynamic>.from(data['tree'] as Map),
               query,
             );
-            data['tree'] = filtered ?? <String, dynamic>{'type': 'Empty', 'note': 'No nodes matching "$query"'};
+            data['tree'] =
+                filtered ??
+                <String, dynamic>{
+                  'type': 'Empty',
+                  'note': 'No nodes matching "$query"',
+                };
           } else if (data['children'] is List) {
-            data = _filterWidgetTreeNode(data, query) ?? <String, dynamic>{'type': 'Empty', 'note': 'No nodes matching "$query"'};
+            data =
+                _filterWidgetTreeNode(data, query) ??
+                <String, dynamic>{
+                  'type': 'Empty',
+                  'note': 'No nodes matching "$query"',
+                };
           }
         }
         if (shouldCollapse && data != null) {
@@ -1194,17 +1263,23 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
       callback: (p, e) async {
         final rawKeys = p['keys'];
         if (rawKeys is List && rawKeys.isNotEmpty) {
-          final results = <String, dynamic>{};
-          for (final k in rawKeys) {
-            final keyStr = k.toString();
-            final res = await _callExtensionRaw(
-              'ext.flutterpilot.getWidgetProperties',
-              {'key': keyStr},
-            );
-            results[keyStr] = res.isError
-                ? {'error': res.errorMessage ?? 'Widget not found'}
-                : res.data;
-          }
+          final entries = await Future.wait([
+            for (final k in rawKeys)
+              () async {
+                final keyStr = k.toString();
+                final res = await _callExtensionRaw(
+                  'ext.flutterpilot.getWidgetProperties',
+                  {'key': keyStr},
+                );
+                return MapEntry<String, dynamic>(
+                  keyStr,
+                  res.isError
+                      ? {'error': res.errorMessage ?? 'Widget not found'}
+                      : res.data,
+                );
+              }(),
+          ]);
+          final results = Map<String, dynamic>.fromEntries(entries);
           return CallToolResult(
             content: [TextContent(text: jsonEncode(results))],
             structuredContent: results,
@@ -1221,52 +1296,215 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
     _tool(
       'inspect_widget',
       description:
-          'Where a widget is in source code (file:line), bounds, ancestors, '
-          'layout constraints, styling, and semantic properties.',
+          'Returns widget source file:line, AST, bounds, ancestors, layout, '
+          'style, or properties.',
       inputSchema: ToolInputSchema(
         properties: {
           'key': JsonSchema.string(
             description: 'Key, selector or visible text.',
           ),
-          'x': JsonSchema.number(
-            description: 'X in logical pixels (top-left origin), with y.',
-          ),
-          'y': JsonSchema.number(description: 'Y in logical pixels.'),
+          'x': JsonSchema.number(description: 'X in logical px, with y.'),
+          'y': JsonSchema.number(description: 'Y in logical px.'),
           'layout': JsonSchema.boolean(
             description:
-                'Also each box\'s constraints and size up the ancestors, and why '
-                'it overflows or is 0 wide.',
+                'Include ancestor constraints/sizes and overflow cause.',
           ),
           'style': JsonSchema.boolean(
             description:
-                'Also text size, weight and color, paddings, fills, borders, '
-                'radii and elevation of the widget.',
+                'Include text style, padding, fills, borders, and radii.',
           ),
           'properties': JsonSchema.boolean(
-            description:
-                'Also include semantic properties (isEnabled, text, isChecked, etc.).',
+            description: 'Include semantic properties (isEnabled, text, etc.).',
+          ),
+          'ast': JsonSchema.boolean(
+            description: 'Include constructor AST snippet and offsets.',
+          ),
+          'file': JsonSchema.string(description: 'Source file for AST lookup.'),
+          'line': JsonSchema.integer(
+            description: '1-based line for AST lookup.',
+          ),
+          'column': JsonSchema.integer(
+            description: '1-based column for AST lookup.',
           ),
         },
       ),
       callback: (p, e) async {
+        CallToolResult fail(String s) =>
+            CallToolResult(isError: true, content: [TextContent(text: s)]);
         final target = p['key'] ?? p['target'];
-        final res = await _callExtensionRaw('ext.flutterpilot.inspectWidget', {
-          if (target != null) 'key': target.toString(),
-          if (p['x'] != null) 'x': p['x'].toString(),
-          if (p['y'] != null) 'y': p['y'].toString(),
-          if (p['layout'] == true) 'layout': 'true',
-          if (p['style'] == true) 'style': 'true',
-        });
+        final wantAst = p['ast'] == true || p['file'] != null;
+
+        Future<String?> resolveAppRoot() async {
+          final vm = (await _deviceContextForParameters(p))?.service;
+          final isolateId = vm == null ? null : await _uiIsolateId(vm, null);
+          return isolateId == null
+              ? null
+              : (await _appEntrypoint(vm!, isolateId))?.root;
+        }
+
+        if (wantAst &&
+            p['layout'] != true &&
+            p['style'] != true &&
+            p['properties'] != true) {
+          var file = p['file']?.toString();
+          var line = (p['line'] as num?)?.toInt();
+          var column = (p['column'] as num?)?.toInt();
+          String? type;
+          var isStaticFallback = false;
+          if (file == null) {
+            if (target == null) return fail('Give key, or file and line.');
+            final keyStr = target.toString();
+            final res =
+                await _callExtensionRaw('ext.flutterpilot.inspectWidget', {
+                  'key': keyStr,
+                  if (p['x'] != null) 'x': p['x'].toString(),
+                  if (p['y'] != null) 'y': p['y'].toString(),
+                });
+            final source = !res.isError && res.data?['source'] is Map
+                ? res.data!['source'] as Map
+                : null;
+            final loc = source?['loc']?.toString();
+            final m = loc == null
+                ? null
+                : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
+            if (m != null) {
+              type = source?['type']?.toString();
+              file = m[1]!;
+              line = int.parse(m[2]!);
+              column = int.parse(m[3]!);
+            } else {
+              final appRoot = await resolveAppRoot() ?? Directory.current.path;
+              final searchDir = Directory(path_pkg.join(appRoot, 'lib'));
+              final match = await findWidgetConstructorInProject(
+                searchDir,
+                keyStr,
+              );
+              if (match != null) {
+                file = path_pkg.relative(match.file, from: appRoot);
+                line = match.line;
+                column = match.column;
+                type = match.type;
+                isStaticFallback = true;
+              } else {
+                if (res.isError) return res.toCallToolResult();
+                return fail(
+                  'No source location for "$keyStr": it is not created by '
+                  "the app's code, or this is not a debug build.",
+                );
+              }
+            }
+          }
+          if (line == null) return fail('Give line with file.');
+          var diskPath = file;
+          if (diskPath.startsWith('file://')) {
+            diskPath = Uri.parse(diskPath).toFilePath();
+          }
+          if (!path_pkg.isAbsolute(diskPath)) {
+            final appRoot = await resolveAppRoot() ?? Directory.current.path;
+            diskPath = path_pkg.join(appRoot, diskPath);
+          }
+          final f = File(diskPath);
+          if (!f.existsSync()) return fail('Not found on disk: $diskPath');
+          final sourceText = f.readAsStringSync();
+          final span = constructorSpanAt(sourceText, line, column ?? 1);
+          if (span == null) {
+            return fail(
+              'No widget constructor call starts at $file:$line:${column ?? 1}'
+              '${column == null ? ' (give the column where it starts)' : ''}.',
+            );
+          }
+          var snippet = sourceText.substring(span.offset, span.end);
+          final lines = snippet.split('\n');
+          final cut = lines.length > 80;
+          if (cut) snippet = '${lines.take(80).join('\n')}\n…';
+          final endLine = line + lines.length - 1;
+          final args = span.namedArgs.isEmpty
+              ? 'none'
+              : span.namedArgs.join(', ');
+          return CallToolResult(
+            content: [
+              TextContent(
+                text:
+                    '${type ?? 'Call'} at $file:$line-$endLine '
+                    '(offset ${span.offset}–${span.end}). Named arguments: '
+                    '$args.${cut ? ' Showing 80 of ${lines.length} lines.' : ''}'
+                    '${isStaticFallback ? ' (resolved via offline AST fallback: unmounted/off-screen)' : ''}'
+                    '\n```dart\n$snippet\n```',
+              ),
+            ],
+            structuredContent: {
+              'file': file,
+              'line': line,
+              'endLine': endLine,
+              'offset': span.offset,
+              'end': span.end,
+              'namedArgs': span.namedArgs,
+              'widget': ?type,
+            },
+          );
+        }
+
+        final inspectFuture =
+            _callExtensionRaw('ext.flutterpilot.inspectWidget', {
+              if (target != null) 'key': target.toString(),
+              if (p['x'] != null) 'x': p['x'].toString(),
+              if (p['y'] != null) 'y': p['y'].toString(),
+              if (p['layout'] == true) 'layout': 'true',
+              if (p['style'] == true) 'style': 'true',
+            });
+        final propsFuture = (p['properties'] == true && target != null)
+            ? _callExtensionRaw('ext.flutterpilot.getWidgetProperties', {
+                'key': target.toString(),
+              })
+            : null;
+        final res = await inspectFuture;
+        final propRes = propsFuture == null ? null : await propsFuture;
         if (res.isError) return res.toCallToolResult();
         final data = Map<String, dynamic>.of(res.data ?? const {});
         final error = data.remove('error');
-        if (p['properties'] == true && target != null) {
-          final propRes = await _callExtensionRaw(
-            'ext.flutterpilot.getWidgetProperties',
-            {'key': target.toString()},
-          );
-          if (!propRes.isError && propRes.data != null) {
-            data['properties'] = propRes.data;
+        if (propRes != null && !propRes.isError && propRes.data != null) {
+          data['properties'] = propRes.data;
+        }
+        if (p['ast'] == true) {
+          final source = data['source'] is Map ? data['source'] as Map : null;
+          final loc = source?['loc']?.toString();
+          final m = loc == null
+              ? null
+              : RegExp(r'^(.*):(\d+):(\d+)$').firstMatch(loc);
+          if (m != null) {
+            final appRoot = await resolveAppRoot() ?? Directory.current.path;
+            final rel = m[1]!;
+            final line = int.parse(m[2]!);
+            final column = int.parse(m[3]!);
+            final diskPath = path_pkg.isAbsolute(rel)
+                ? rel
+                : path_pkg.join(appRoot, rel);
+            final f = File(diskPath);
+            if (f.existsSync()) {
+              final span = constructorSpanAt(
+                f.readAsStringSync(),
+                line,
+                column,
+              );
+              if (span != null) {
+                final snippet = f.readAsStringSync().substring(
+                  span.offset,
+                  span.end,
+                );
+                final snippetLines = snippet.split('\n');
+                data['ast'] = {
+                  'file': rel,
+                  'line': line,
+                  'endLine': line + snippetLines.length - 1,
+                  'offset': span.offset,
+                  'end': span.end,
+                  'namedArgs': span.namedArgs,
+                  'snippet': snippetLines.length > 80
+                      ? '${snippetLines.take(80).join('\n')}\n…'
+                      : snippet,
+                };
+              }
+            }
           }
         }
         return CallToolResult(
@@ -1310,23 +1548,24 @@ mixin _ScreenshotToolsMixin on _FlutterPilotServerBase {
             final hint = node['hint']?.toString().toLowerCase() ?? '';
             final val = node['value']?.toString().toLowerCase() ?? '';
             final ident = node['identifier']?.toString().toLowerCase() ?? '';
-            final matchedSelf = label.contains(query) ||
+            final matchedSelf =
+                label.contains(query) ||
                 hint.contains(query) ||
                 val.contains(query) ||
                 ident.contains(query);
-            final children = (node['children'] as List?)
-                ?.whereType<Map<String, dynamic>>()
-                .map(filterNode)
-                .whereType<Map<String, dynamic>>()
-                .toList() ?? [];
+            final children =
+                (node['children'] as List?)
+                    ?.whereType<Map<String, dynamic>>()
+                    .map(filterNode)
+                    .whereType<Map<String, dynamic>>()
+                    .toList() ??
+                [];
             if (matchedSelf || children.isNotEmpty) {
-              return {
-                ...node,
-                if (children.isNotEmpty) 'children': children,
-              };
+              return {...node, if (children.isNotEmpty) 'children': children};
             }
             return null;
           }
+
           final filtered = filterNode(res.data!);
           return CallToolResult(
             content: [TextContent(text: jsonEncode(filtered ?? {}))],

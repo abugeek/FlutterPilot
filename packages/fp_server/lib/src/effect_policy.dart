@@ -213,13 +213,20 @@ const diagnosticClearExtensions = <String>{
 /// forced into the same bucket.
 const _argumentAware = <String, ExtensionPolicy Function(Map<String, dynamic>)>{
   'ext.flutterpilot.getStateHistory': _getStateHistoryPolicy,
+  'ext.flutterpilot.getRebuildStats': _resettableReadPolicy,
+  'ext.flutterpilot.getFrameBudgetProfile': _resettableReadPolicy,
 };
 
 ExtensionPolicy _getStateHistoryPolicy(Map<String, dynamic> args) =>
     _requestsClear(args) ? _diagnosticClear : _read;
 
-bool _requestsClear(Map<String, dynamic> args) {
-  final value = args['clear'];
+ExtensionPolicy _resettableReadPolicy(Map<String, dynamic> args) =>
+    _requestsFlag(args, 'reset') ? _diagnosticClear : _read;
+
+bool _requestsClear(Map<String, dynamic> args) => _requestsFlag(args, 'clear');
+
+bool _requestsFlag(Map<String, dynamic> args, String key) {
+  final value = args[key];
   return value == true || value == 'true';
 }
 
