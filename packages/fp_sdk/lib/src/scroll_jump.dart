@@ -1,3 +1,4 @@
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -81,4 +82,23 @@ Future<Map<String, Object>> jumpToFraction(
     'worstFrameMs': worst,
     'elapsedMs': total.elapsedMilliseconds,
   };
+}
+
+/// Whether [scrollable]'s list lays its rows out at one fixed extent
+/// (itemExtent, prototypeItem, SliverFixedExtentList...): such a list jumps
+/// by arithmetic, so a slow jump there is not the lay-out-every-row cost.
+bool hasFixedExtentList(ScrollableState scrollable) {
+  var fixed = false;
+  void visit(RenderObject ro) {
+    if (fixed) return;
+    if (ro is RenderSliverFixedExtentBoxAdaptor) {
+      fixed = true;
+      return;
+    }
+    ro.visitChildren(visit);
+  }
+
+  final root = scrollable.context.findRenderObject();
+  if (root != null) visit(root);
+  return fixed;
 }

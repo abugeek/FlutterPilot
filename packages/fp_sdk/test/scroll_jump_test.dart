@@ -80,4 +80,22 @@ void main() {
     expect(scrollableFor('Item 3'), same(byList));
     expect(scrollableFor('nothing like this'), isNull);
   });
+  for (final fixed in [true, false]) {
+    testWidgets('reports whether the list has a fixed extent ($fixed)', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView.builder(
+              itemCount: 100,
+              itemExtent: fixed ? 40 : null,
+              itemBuilder: (context, i) => Text('Row $i'),
+            ),
+          ),
+        ),
+      );
+      expect(hasFixedExtentList(scrollableFor(null)!), fixed);
+    });
+  }
 }

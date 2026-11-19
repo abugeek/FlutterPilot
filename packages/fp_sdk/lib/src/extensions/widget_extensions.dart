@@ -244,7 +244,7 @@ extension _WidgetExtensions on FlutterPilot {
   /// Double-taps or long-presses [target]. Shared by doubleTapWidget,
   /// longPressWidget, and executeActionChain.
   static Future<({String status, String? error, Map<String, dynamic>? after})>
-      _performPointGesture(
+  _performPointGesture(
     String target, {
     required String kind,
     Duration duration = const Duration(milliseconds: 600),
@@ -299,12 +299,15 @@ extension _WidgetExtensions on FlutterPilot {
 
   /// Swipes [target] in [direction] by [distance] logical pixels. Shared by
   /// swipeWidget and executeActionChain.
-  static Future<({
-    String status,
-    String? error,
-    bool pullToRefresh,
-    Map<String, dynamic>? after,
-  })> _performSwipe(
+  static Future<
+    ({
+      String status,
+      String? error,
+      bool pullToRefresh,
+      Map<String, dynamic>? after,
+    })
+  >
+  _performSwipe(
     String target,
     String direction,
     double distance, {
@@ -1378,9 +1381,14 @@ extension _WidgetExtensions on FlutterPilot {
               : 'No scrollable at or around "${parameters['key']}".',
         );
       }
+      final fixedExtent = hasFixedExtentList(scrollable);
       final result = await jumpToFraction(scrollable.position, fraction);
       return ServiceExtensionResponse.result(
-        json.encode({'status': 'success', ...result}),
+        json.encode({
+          'status': 'success',
+          'fixedExtent': fixedExtent,
+          ...result,
+        }),
       );
     });
 
@@ -1444,7 +1452,8 @@ extension _WidgetExtensions on FlutterPilot {
     ) async {
       final target = parameters['key'] ?? parameters['target'];
       final direction = parameters['direction'] ?? 'up';
-      final distance = double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
+      final distance =
+          double.tryParse(parameters['distance'] ?? '200') ?? 200.0;
       if (target == null) {
         return ServiceExtensionResponse.error(
           ServiceExtensionResponse.invalidParams,

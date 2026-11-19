@@ -820,9 +820,13 @@ mixin _UiAutomationToolsMixin on _FlutterPilotServerBase {
                     'Jumped to ${p['fraction']} (offset ${d['offset']} of '
                     '${d['maxScrollExtent']}) in ${d['frames']} frame(s), '
                     'worst ${d['worstFrameMs']} ms, ${d['elapsedMs']} ms in '
-                    'all. Frames: ${d['frameMs']}. Several frames or a slow '
-                    'one: the list has no fixed extent and lays out every '
-                    'row on the way (use itemExtent / prototypeItem).',
+                    'all. Frames: ${d['frameMs']}.'
+                    '${d['fixedExtent'] == true ? ' The list has a fixed row '
+                              'extent, so a slow frame here is the rows '
+                              'themselves, not a walk.' : ' Several frames or a '
+                              'slow one: the list has no fixed extent and lays '
+                              'out every row on the way (use itemExtent / '
+                              'prototypeItem).'}',
               ),
             ],
           );
