@@ -1,265 +1,61 @@
-# FlutterPilot Server
+# fp_server
 
-The MCP (Model Context Protocol) bridge between AI agents and your running Flutter app. Exposes a versioned tool set via the VM service; use `get_app_summary(setup: true)` to discover the exact tools available at runtime.
+`fp_server` is FlutterPilot's local, stdio-based MCP server. It connects AI
+coding agents to a running Flutter app through the Dart VM service.
 
-Remote VM-service connections are blocked by default. Use `--allow-remote` only on a trusted network; optionally add `--remote-token` to require an additional token matching the VM-service URI path.
+## Recommended setup
 
-> **What is MCP?** The Model Context Protocol is an open standard for connecting AI models (Claude, Gemini, etc.) to external tools. FlutterPilot Server implements MCP to let AI agents see and control your Flutter app in real-time.
+Use the CLI from your Flutter project:
 
-## Prerequisites
-
-- **Dart SDK** >= 3.11.0
-- **A running Flutter app** with `fp_sdk` initialized
-- **VM Service URI** from `flutter run` output (e.g., `http://127.0.0.1:12345/abcdefg=/`)
-
-## Quick Start
-
-### 1. Run Your Flutter App
 ```bash
+dart pub global activate fp_cli
+fp init
+fp mcp install
 flutter run
 ```
 
-From the output, copy the **Observatory debugger** URI:
-```
-An Observatory debugger and profiler on ... is available at: http://127.0.0.1:54321/abc123=/
-```
+`fp init` adds `fp_sdk` and any supported plugins it detects. Add the wiring it
+prints, then restart the app. Without `fp_sdk`, the server can inspect an app
+but cannot drive it.
 
-### 2. Start the MCP Server
-```bash
-dart run packages/fp_server/bin/fp_server.dart \
-  --uri http://127.0.0.1:54321/abc123=/
-```
+The server is launched by the MCP client using the project configuration.
+`fp mcp install` can configure Claude Code, Cursor, VS Code, Codex, Gemini CLI,
+Antigravity, Zed, opencode, Junie, Kiro, and Roo Code.
 
-**That's it!** The server is now listening on **stdin/stdout** for MCP commands.
+## Run from a checkout
 
-### 3. Connect Your AI Agent (Optional)
-
-For **Claude Desktop**:
-```json
-{
-  "mcpServers": {
-    "flutterpilot": {
-      "command": "dart",
-      "args": [
-        "run",
-        "/path/to/FlutterPilot/packages/fp_server/bin/fp_server.dart",
-        "--uri",
-        "http://127.0.0.1:54321/abc123=/"
-      ]
-    }
-  }
-}
-```
-
-For **Cursor IDE**:
-Add to `.cursor/settings.json`:
-```json
-{
-  "mcpServers": {
-    "flutterpilot": {
-      "command": "dart",
-      "args": ["run", "packages/fp_server/bin/fp_server.dart", "--uri", "<vm-uri>"]
-    }
-  }
-}
-```
-
----
-
-## Command-Line Options
-
-| Flag | Required | Default | Description |
-|------|----------|---------|-------------|
-| `--uri <uri>` | ❌ No | auto | VM Service URI of your running app (auto-discovered via DTD or `.dart_tool/` if omitted) |
-| `--project-root <path>`, `-p` | ❌ No | `cwd` | The Flutter app's folder, to find the app `flutter run` started there |
-| `--allow-destructive` | ❌ No | false | Allow tools that change app data or call real services (secure storage writes, Supabase sign-out, Firebase events). SQL stays read-only. |
-| `--timeout <ms>` | ❌ No | 10000 | Tool call timeout in milliseconds |
-| `--tools core\|all` | ❌ No | `all` | Which tools to list. `core`: a short set (29 names) for a client that counts tools across every server it runs; `all` (default): every tool that works for the app. Always a subset: a zero-code app sees fewer. |
-
-### Examples
+For server development, start a Flutter app and run:
 
 ```bash
-# Basic — read-only mode
-dart run packages/fp_server/bin/fp_server.dart \
-  --uri http://127.0.0.1:12345/xyz=/
-
-# With the app folder given explicitly
-dart run packages/fp_server/bin/fp_server.dart \
-  --uri http://127.0.0.1:12345/xyz=/ \
-  --project-root /path/to/my-flutter-project
-
-# With destructive SQL enabled (for write operations)
-dart run packages/fp_server/bin/fp_server.dart \
-  --uri http://127.0.0.1:12345/xyz=/ \
-  --allow-destructive
-
-# Via Melos (from monorepo root)
-melos run server:run -- --uri http://127.0.0.1:12345/xyz=/
+cd packages/fp_server
+dart run bin/fp_server.dart --project-root /path/to/your_flutter_app
 ```
 
----
+The server uses the current project directory if `--project-root` is omitted.
+You can pass `--uri <vm-service-uri>` to connect to a specific running app.
+Run `dart run bin/fp_server.dart --help` for server options.
 
-## MCP Tools Reference
+## Tools and safety
 
-67 tools; every parameter is in [TOOLS.generated.md](../../TOOLS.generated.md)
-(generated from the running server). An app is shown only the tools that can
-work for it: plugin tools once the app registers that plugin, `native_*` on
-iOS simulators (with idb) and Android (over adb), 15 tools for apps without
-`fp_sdk`.
-Families of similar tools are one tool with a parameter (e.g. `tap_widget`
-`gesture: "double"`, `wait_for` `route: ...`, `hot_reload` `restart: true`).
+Current tool inventory: 67 tools; the server lists only those supported by the
+connected app's SDK, plugins, and platform. The
+[generated reference](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md)
+documents their names and parameters.
 
-| Area | Tools |
-|---|---|
-| Connection & fleet | `connect_app`, `register_device`, `switch_device`, `list_connected_devices` |
-| Seeing the app | `get_app_summary` (`setup`), `get_widget_tree` (`diff`), `get_interactive_elements`, `get_widget_properties`, `inspect_widget` (source file:line, `layout`), `get_semantics_tree`, `capture_screenshot`, `get_navigation_stack` |
-| Acting | `tap_widget` (`gesture`, `waitFor`), `enter_text`, `press_key` (`"back"`), `fill_form`, `execute_action_chain`, `scroll_into_view`, `gesture_widget` (`gesture`: swipe / drag / pinch / focus / slide), `toggle_checkbox`, `navigate_to` |
-| Checking | `assert_widget`, `wait_for`, `compare_screenshot` (`save`), `audit_screen_health` (layout + accessibility: labels, contrast, reading order), `generate_test` (record a flow, write it as an integration_test, run it), `verify_feature` (acceptance criteria → pass/fail report with evidence) |
-| Rendering | `set_app_settings` (theme, locale, textScale, keyboardInset, orientation, windowSize, debug overlays) |
-| Errors & logs | `get_errors` (`report`), `get_debug_logs` |
-| Code changes | `hot_reload` (`restart`) |
-| Performance | `profile_frame_budget`, `profile_action` (CPU and janky frames per action), `get_memory_details` (`classes`, leak check with `cycle`), `get_http_profile` (`id`: headers, bodies) |
-| State (Riverpod/Bloc) | `get_state` (`history`: the recent changes in order), `set_state`, `scenario` (save/load a named start state: route, preferences, Drift/sqflite rows, Hive boxes, mocks, state) |
-| Network (Dio) | `get_network_logs`, `mock_http_response`, `simulate_network` |
-| Plugins | `mock_platform_channel` (answer a plugin's native calls, deliver its events, list the calls the app made) |
-| Storage | `exec_sql_query` (Drift/sqflite), `get_hive_contents`, `get_shared_preferences`, `set_shared_preference`, `get_secure_storage`, `set_secure_storage_key` |
-| Backends | `get_supabase_auth`, `query_supabase_table`, `supabase_session`, `get_firebase_auth`, `query_firestore`, `get_connectivity` |
-| App-specific | `call_custom_tool` |
-| iOS simulator, Android | `native_describe_screen`, `native_tap`, `native_text`, `native_button`, `native_screenshot`, `native_open_app` |
+VM-service connections to remote hosts are blocked by default. Only enable
+remote access on a trusted network. Tools that can change app data or call
+external services require `--allow-destructive`; leave it disabled unless
+your development or test workflow needs those operations.
 
-System permission dialogs ("Allow MyApp to send you notifications?", camera,
-location) are not in the Flutter tree: `native_describe_screen` lists their
-buttons with tap points and `native_tap` presses one, on an iOS simulator
-(points) or Android (screen pixels). The tools are listed only while the
-active device is one of those. **Not covered: macOS and Windows desktop
-apps** — a macOS privacy prompt (camera, microphone, App Management) can only
-be answered by a person, once per app; on a desktop target, grant it by hand
-or test the flow on a simulator/emulator.
+## Requirements
 
----
+- Dart SDK 3.11 or later.
+- A running Flutter app. Add `fp_sdk` for UI interaction and app capabilities.
+- An MCP client that can launch a local stdio server.
 
-## Configuration for MCP Clients
-
-### Claude Desktop
-
-Edit `~/.claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "flutterpilot": {
-      "command": "dart",
-      "args": [
-        "run",
-        "/absolute/path/to/FlutterPilot/packages/fp_server/bin/fp_server.dart",
-        "--uri",
-        "http://127.0.0.1:54321/abc123=/"
-      ]
-    }
-  }
-}
-```
-
-### VS Code with Cursor Extension
-
-1. Install **FlutterPilot VS Code** extension (from Marketplace)
-2. Run your app: `flutter run`
-3. Click **"Connect FlutterPilot"** in VS Code sidebar
-4. Extension auto-starts server, connects AI chat
-
-### Programmatic (Custom MCP Client)
-
-Use the `mcp-py` or `mcp-js` SDK:
-
-```python
-import mcp
-client = mcp.StdioMcpClient("dart", [
-    "run",
-    "fp_server.dart",
-    "--uri", "http://127.0.0.1:54321/abc=/"
-])
-
-# Call tool
-result = client.call_tool("capture_screenshot", {})
-print(result)  # {'resource': {'uri': 'data:image/png;base64,...', ...}}
-```
-
----
-
-## Important Notes
-
-### MCP Protocol & Logging
-
-**CRITICAL:** The server uses **stdin/stdout** for MCP JSON-RPC protocol. All logging MUST go to **stderr**, never `print()` or stdout.
-
-The SDK initializes:
-```
-FlutterPilot initialized 🚀
-```
-
-All tool outputs are JSON. All logging goes to stderr.
-
-### Tool Timeouts
-
-- Default timeout: **10 seconds** per tool call
-- Screenshots may take up to 500ms
-- Database queries timeout after 10s
-- Hanging VM service calls are interrupted
-
-### Crash Detection (Self-Heal)
-
-The server listens to the VM service. If your app crashes:
-1. Server auto-captures full diagnostic (screenshot, error, state)
-2. Server sends `CRITICAL APP CRASH: SELF-HEAL REQUEST` to stderr
-3. Connected AI agent sees notification
-4. AI can analyze and apply fixes via hot reload
-
-If the app dies in native code (an Objective-C, Swift or Kotlin exception,
-or a signal), the next tool's error says so, with the exception message.
-About 20 s later, once the OS has written the crash report, it adds the
-frames where the exception was thrown and the report's path. This works for
-macOS, the iOS simulator and Android (`adb`); a physical iPhone keeps its
-crash reports.
-
----
-
-## Troubleshooting
-
-### "VM Service URI not found"
-- Ensure app was started with `flutter run` (not `--release`)
-- Copy full VM Service URI from flutter run output
-- Format: `http://127.0.0.1:PORT/TOKEN=/`
-
-### "Tool timeout exceeded"
-- App may be unresponsive or blocked
-- Screenshots timeout after 500ms
-- Increase timeout: `--timeout 15000` (15 seconds)
-
-### "exec_sql_query is read-only"
-- Only SELECT, WITH, PRAGMA and EXPLAIN run; change data through the app's UI
-
----
-
-### "Tool 'x' is disabled" or a tool is missing
-Only the tools that can work for the connected app are enabled; `get_app_summary(setup: true)` shows why. `simulate_network` (normal, slow_3g, fast_4g, offline; http, dart:io and Dio) needs `fp_sdk` in the app; `get_network_logs` and `mock_http_response` need `fp_dio`; `exec_sql_query` needs `fp_drift` or `fp_sqflite`. Offline without the SDK: switch the device's network off, or `mock_http_response(error: "connection")` per URL.
-
-### Unattended iOS simulator runs
-A swipe sent through the simulator control asks the user to approve each time. Scrolling by key does not: `scroll_into_view(key)`, `gesture_widget(gesture: "swipe", key, direction)` and `tap_widget` (which scrolls first) go through FlutterPilot's own connection.
-
-### `launch_app(device: <UDID>)` on a running simulator
-Attaches to the app already running there in about a second, with no rebuild; `relaunch: true` rebuilds.
-
-### Seeing a draft survive navigation
-Set `FlutterPilot.draftSummary = () => 'cart: 3 items, customer Acme';` in the app and every action response ends with `Draft: ...`.
-
-## Performance Tips
-
-1. **Parallel queries** — Server batches requests (e.g., `Future.wait` for multiple tools)
-2. **Screenshot caching** — Don't call `capture_screenshot` more than once per second
-3. **Selective tree walks** — Use `get_widget_properties` for single widgets, not full `get_widget_tree`
-4. **Avoid hot reload in loops** — Each reload takes ~2 seconds
-
----
+See the [FlutterPilot repository](https://github.com/abugeek/FlutterPilot)
+for the CLI, SDK, plugins, setup guide, and example app.
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE)
+MIT. See the [license](https://github.com/abugeek/FlutterPilot/blob/main/LICENSE).

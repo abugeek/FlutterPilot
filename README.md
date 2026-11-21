@@ -2,649 +2,110 @@
 
 [![CI](https://github.com/abugeek/FlutterPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/abugeek/FlutterPilot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Flutter](https://img.shields.io/badge/Flutter-%E2%89%A53.0-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-%5E3.11-0175C2?logo=dart)](https://dart.dev)
 
-**FlutterPilot** is an MCP (Model Context Protocol) toolkit that gives AI agents runtime control over Flutter applications. Powered by the Dart VM service, it enables autonomous testing, self-healing crashes, network chaos mocking, visual regression diffing, and AI-native development workflows.
+FlutterPilot connects AI coding agents to a running Flutter app through the
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/). Agents can
+inspect the UI and runtime, drive interactions, check behavior, and test
+failure cases without relying on screen coordinates.
 
-> **See it work:** [`site/index.html`](site/index.html) walks through a recorded session on the example app (a missing offline message found, located, fixed with hot reload and checked, with the real tool output and before/after screenshots).
+## Get started
 
-> **Why FlutterPilot?** Standard Flutter has limited built-in support for AI-driven development. FlutterPilot bridges that gap with a broad, versioned tool set for screenshots with visual diffs, UI automation with live visual ripples, state inspection, error recovery, network mocking & latency simulation, full DevTools-level deep inspection, and multi-device fleet testing — across Riverpod, Bloc, Drift, Hive, Supabase, GoRouter, Firebase, Connectivity, and Secure Storage. Call `get_app_summary(setup: true)` to see the connected app's plugins.
+Install the CLI, then run these commands from your Flutter project:
 
-## 🚀 Quick Start (Choose Your Workflow)
-
-### Option A: The 1-Command CLI Workflow (Recommended)
 ```bash
-# 1. Install CLI globally:
 dart pub global activate fp_cli
-# Or from local checkout during development:
-# dart pub global activate --source path ./packages/fp_cli
-
-# 2. In your Flutter project root, add the SDK + matching plugins (fp_* deps)
-#    and FlutterPilot.initialize() to main.dart. It prints the one wiring line
-#    each plugin needs (e.g. dio.interceptors.add(DioPilotInterceptor())).
-fp init            # or: fp init --local /path/to/FlutterPilot
-
-# 3. Add the FlutterPilot server to your agent's MCP config (Claude Code,
-#    Cursor, VS Code, Codex, Gemini CLI, Antigravity, Zed, opencode, Junie,
-#    Kiro, Roo Code — the ones the project uses; --client to choose, see
-#    "MCP Setup"). Compiles the server; other servers are kept.
-#    Also adds the official Dart MCP server for the code side (--no-dart to skip).
+cd path/to/your_flutter_app
+fp init
 fp mcp install
-
-# 4. Run the app; the server finds it (flutter run, your IDE, or):
-fp dev
-
-# Something missing? Checks the setup and the running app, prints fixes:
-fp doctor
-```
-
-> Note: Both `fp` and `flutterpilot` commands are available globally once `fp_cli` is activated.
-
-### Option B: Zero-Code Mode (No App Changes Required)
-Connect FlutterPilot MCP Server to **any existing Flutter app** to inspect it:
-widget tree, screenshots, errors with source lines, logs, hot reload/restart,
-theme and debug-paint toggles, memory and HTTP profiles. Driving the app
-(taps, text entry, navigation, assertions) needs the SDK (Option A); without
-it those tools are not listed.
-```bash
-# Run any vanilla Flutter app (the server finds it through the Dart Tooling Daemon):
 flutter run
-
-# Start the MCP server (finds the app in the current folder, the MCP client's
-# workspace folders, or -p <app folder>):
-dart run packages/fp_server/bin/fp_server.dart
 ```
 
-### Option C: Manual SDK Integration
-```yaml
-# pubspec.yaml
-dependencies:
-  fp_sdk: ^0.1.0
-  # or from git:
-  # fp_sdk:
-  #   git:
-  #     url: https://github.com/abugeek/FlutterPilot.git
-  #     path: packages/fp_sdk
-```
-In `main.dart`:
-```dart
-import 'package:fp_sdk/fp_sdk.dart';
-
-void main() {
-  FlutterPilot.initialize();
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
-}
-```
-
----
-
-## 🔌 MCP Setup (any IDE)
-
-FlutterPilot is a local (stdio) MCP server: any client that can start one can
-use it. It has no HTTP transport, so agents that only take a remote MCP URL
-can't.
-
-`fp mcp install` (in the app folder) writes the project's config
-for the clients below — the ones the project already uses, or `--client
-<name>` (repeatable; `--client all`). Run it again after pulling FlutterPilot
-changes — it recompiles the server.
-
-| `--client` | Client | File it writes | Checked |
-|---|---|---|---|
-| `claude` | Claude Code | `.mcp.json` | the e2e drives an app through it |
-| `opencode` | opencode | `opencode.json` (`mcp`, `type: local`) | `opencode mcp list`: connected |
-| `codex` | Codex CLI / IDE | `.codex/config.toml` (`[mcp_servers.flutterpilot]`) | `codex mcp list` reads the entry; Codex uses a project config only in a trusted project |
-| `gemini` | Gemini CLI | `.gemini/settings.json` | `gemini mcp list` reads the entry; it starts project servers only in a trusted folder |
-| `cursor` | Cursor | `.cursor/mcp.json` | format from its docs; not tried in the app |
-| `vscode` | VS Code (Copilot agent mode) | `.vscode/mcp.json` (`servers`, `type: stdio`) | format from its docs; not tried in the app |
-| `antigravity` | Antigravity | `.agents/mcp_config.json` | format from its docs; not tried in the app |
-| `zed` | Zed | `.zed/settings.json` (`context_servers`) | format from its docs; not tried in the app |
-| `junie` | JetBrains Junie | `.junie/mcp/mcp.json` | format from its docs; not tried in the app |
-| `kiro` | Kiro | `.kiro/settings/mcp.json` | format from its docs; not tried in the app |
-| `roo` | Roo Code | `.roo/mcp.json` | format from its docs; not tried in the app |
-
-Clients with only a user-level config (Claude Desktop's
-`claude_desktop_config.json`, Windsurf, Cline) and anything else: `mcp
-install` prints the entry to paste. A config file with comments (JSONC) is
-left alone, with the entry to add.
-
-If your client doesn't fetch the tool list again when the server says it
-changed (FlutterPilot lists a plugin's tools once the app registers the
-plugin), add `--static-tools` (`fp mcp install --static-tools`):
-every tool is listed from the start, and one that can't work on the
-connected app says why when called.
-
-A client that counts tools across every server it runs can ask for the short
-set instead (checked 2026-10-14: Cursor's docs state no tool limit; VS Code's
-Copilot allows 128 tools per request; Claude Code no fixed cap):
-`fp mcp install --tools core` writes `--tools core`, and
-`fp doctor` shows which profile each config uses. `all` is the
-default; `--tools core` is a subset that still has to work for the app (a
-zero-code app sees fewer), and it refuses a step that names a tool it does
-not list.
-
-By hand:
-Build the server once (fast startup, no `dart` on the IDE's PATH needed):
-```bash
-cd packages/fp_server && dart compile exe bin/fp_server.dart -o build/fp_server
-```
-
-Then add it to your IDE's MCP config (Trae, Cursor, Windsurf, Claude Desktop use this `mcpServers` shape).
-Use absolute paths; `-p` is your Flutter app's root:
-```json
-{
-  "mcpServers": {
-    "flutterpilot": {
-      "command": "/ABSOLUTE/PATH/FlutterPilot/packages/fp_server/build/fp_server",
-      "args": ["-p", "/ABSOLUTE/PATH/your_flutter_app"]
-    }
-  }
-}
-```
-- Add `"--allow-destructive"` to `args` to allow state/storage writes.
-- Without compiling: `"command": "/path/to/flutter/bin/dart", "args": ["run", "/ABSOLUTE/PATH/.../packages/fp_server/bin/fp_server.dart", "-p", "..."]` (slower start).
-- VS Code (Copilot agent mode) reads `.vscode/mcp.json` in the app's folder,
-  with `"servers"` and `"type": "stdio"`:
-  ```json
-  {
-    "servers": {
-      "flutterpilot": {
-        "type": "stdio",
-        "command": "/ABSOLUTE/PATH/FlutterPilot/packages/fp_server/build/fp_server",
-        "args": ["-p", "${workspaceFolder}"]
-      }
-    }
-  }
-  ```
-- Claude Code: `claude mcp add flutterpilot -- /ABSOLUTE/PATH/.../packages/fp_server/build/fp_server -p /ABSOLUTE/PATH/your_flutter_app`
-- Run the app with `flutter run`, from your IDE, or with `fp dev`: the server finds it through the Dart Tooling Daemon they register it with, or the URI file `fp dev` writes (`--vmservice-out-file=.dart_tool/flutterpilot_vm_uri`). Otherwise pass the URI `flutter run` prints to `connect_app`.
-- `-p` is optional when the client shares its workspace folders (MCP roots) and the app is in one of them, up to 3 levels deep (monorepos); with several apps running, the most recently launched wins.
-- **With the official Dart MCP server** (`dart mcp-server`): `mcp install` adds it as `dart` with `--disable flutter,dart_tooling_daemon`, so the agent gets one of each — Dart's analyzer, symbols (`lsp`) and pub, FlutterPilot's running-app tools (its hot reload, runtime errors, widget inspector and Flutter Driver overlap FlutterPilot's). A Dart MCP server you already have is kept, with that advice.
-- Rebuild the executable after pulling server changes.
-
-## 📋 What You Get
-
-### MCP Tools
-
-The full, always-current list with every parameter is
-**[TOOLS.generated.md](TOOLS.generated.md)** (generated from the server's
-registrations): 67 tools, of which an app sees only the ones that can work
-for it — plugin tools once it registers that plugin (a Dio-only app sees 43).
-Families are one tool with a parameter, not one tool per variant. The ones
-you'll use most:
-
-**Orientation** — `get_app_summary` (call first: route, tappable elements,
-errors, logs, window visibility), `get_interactive_elements`,
-`get_widget_tree` (`diff: true` for what changed), `get_widget_properties`,
-`inspect_widget` (the file:line that draws a widget; `layout: true` for why
-it overflows or is 0 wide; `style: true` for text sizes, weights, colors,
-paddings, borders and radii), `capture_screenshot`.
-
-**Driving the UI** — `tap_widget` (`gesture`: double / long / secondary;
-`waitFor`: a widget to wait for), `enter_text` (`""` clears), `press_key`
-(`"back"` for system back), `gesture_widget` (`gesture`: swipe / drag /
-pinch / focus / slide),
-`scroll_into_view`, `toggle_checkbox`.
-Batch known sequences with `execute_action_chain` (steps are tool calls,
-with `wait_for` / `assert_widget` between them) or `fill_form`. Every action reports
-its own result — route change, what appeared/disappeared, tappable elements
-now, new errors — so you rarely need a follow-up read.
-
-**Verifying** — `assert_widget` (text, key, enabled, type + count),
-`wait_for` (widget, route, animations, state, frames), `compare_screenshot`
-(`save: true` for the baseline), `audit_screen_health` (overflows, tap
-targets, unlabeled controls, text contrast, screen reader order).
-
-**Navigation & environment** — `navigate_to` (deep links, go_router
-push/replace), `get_navigation_stack`, `set_app_settings` (theme, locale,
-text scale, a simulated keyboard inset, orientation, desktop window size,
-debug overlays), `hot_reload` (`restart: true`).
-
-**Errors** — `get_errors` (`report: true`: exception, your source line,
-culprit widget, route, recent requests), `get_debug_logs`.
-
-**Network** — `mock_http_response` (`error: "timeout"` / `"connection"` to
-fail one URL; `clear: true` to remove),
-`simulate_network`, `get_network_logs` (Dio plugin), `get_http_profile`
-(any `dart:io` client; `id` for one request's headers and bodies).
-
-**Plugins without the hardware** — `mock_platform_channel` answers a
-plugin's native calls (location, permissions, camera) with a value or a
-PlatformException, delivers EventChannel events (a scanned barcode), and
-with no argument lists the calls the app made.
-
-**Start states** — `scenario` saves and loads a named state: route,
-preferences, Drift/sqflite rows and Hive boxes, mocks, simple
-Riverpod/Bloc values.
-
-**Performance** — `profile_frame_budget`, `profile_action` (CPU
-profile of one tap/scroll with file:line, and why its slow frames were slow), `get_memory_details`
-(`classes: true` for the top classes; `cycle` + `times` for a leak check
-with retaining paths).
-
-**State & storage (plugins)** — Riverpod and Bloc `get_state` /
-`set_state`, go_router (in the navigation tools),
-SharedPreferences, `exec_sql_query` (Drift or sqflite, read-only), Hive /
-Hive CE `get_hive_contents`, Supabase (`get_supabase_auth`,
-`query_supabase_table`, `supabase_session`), Firebase
-(`get_firebase_auth`, `query_firestore`), secure_storage and connectivity.
-Field-tested on real apps: Riverpod, go_router, Dio, sqflite,
-SharedPreferences, connectivity, Bloc, Drift, Hive CE, secure_storage,
-Supabase and Firebase (Auth + Firestore, on the local emulators).
-
-**Devices** — `connect_app`, `list_connected_devices`, `register_device`,
-`switch_device`: one server drives several running apps (e.g. iOS simulator,
-Android emulator, Chrome), one active device at a time (`switch_device`
-moves between them; `hot_reload`, `get_debug_logs` and the rest act on the
-active one). `launch_app(device: ...)` on a device with no app yet starts one
-alongside the others, each with its own `flutter run`, log
-(`.dart_tool/flutterpilot_run.<device>.log`) and fleet entry named after the
-device. A `flutterpilot/launch.json` takes the device through a placeholder,
-with a default for calls that pass none:
-`{"command": ["./scripts/run.sh", "-d", "${device}"], "device": "macos"}`.
-
-### MCP Resources (live context without a tool call)
-
-Alongside tools, the server exposes **standard MCP resources** so an agent or
-IDE client (Cursor, Claude Desktop, Antigravity, Zed) can attach live app
-context and re-read it on demand — without invoking a tool or paying for the
-round-trip. Resources add **nothing** to `tools/list`, so the token budget an
-agent pays before it calls anything is unchanged. The server advertises
-`resources: {listChanged: true, subscribe: true}` and notifies clients when an
-app connects, disconnects, or a device is registered.
-
-| Resource | MIME type | Contents |
-|---|---|---|
-| `flutterpilot://app/summary` | `application/json` | Connection state, active device, platform, build mode, current route, error count. |
-| `flutterpilot://app/errors` | `application/json` | Uncaught exceptions and layout overflows with file locations and a freshness marker. |
-| `flutterpilot://app/widget-tree` | `text/plain` | Compact widget hierarchy of the current screen. |
-| `flutterpilot://app/logs` | `text/plain` | Recent console output, merged with the SDK's pre-connection buffer. |
-| `flutterpilot://devices` | `application/json` | Registered devices with their VM-service address and active status. |
-
-With no app connected, each app-scoped resource returns a graceful
-`{"connected": false, "message": "No Flutter app currently connected"}` (or the
-text equivalent) instead of an error.
-
-Beyond the fixed resources, the server registers two **dynamic resource
-templates** (RFC 6570). A client discovers them through
-`resources/templates/list` and reads one by expanding the URI; they add nothing
-to `tools/list` either, and answer a finer question than a whole-tree or
-whole-stack read:
-
-| Template | MIME type | Contents |
-|---|---|---|
-| `flutterpilot://app/widgets/{key}` | `application/json` | One widget's properties, its compact subtree and every key beneath it. `{"found": false, "key": …}` when the key is not on screen. |
-| `flutterpilot://app/routes/{path}` | `application/json` | The route stack and current route, plus, with go_router, the matched route and its path/query parameters. `current` means the route on screen. |
-
-Because the server declares `subscribe`, a client can also **subscribe** to one:
-`resources/subscribe` claims a URI, and the server then pushes
-`notifications/resources/updated` for it when the app hot-reloads or restarts,
-navigates, raises an uncaught error or overflow, connects or disconnects, or a
-device is registered — so an attached summary or error list stays current
-without polling. `resources/unsubscribe` stops the pushes.
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│              AI Agent (Claude, Cursor)               │
-└──────────────────────┬──────────────────────────────┘
-                       │ MCP Protocol (JSON-RPC/stdio)
-┌──────────────────────▼──────────────────────────────┐
-│          fp_server (modular)                        │
-│  • MCP tools grouped by area (lib/src/tools/)        │
-│  • Each app is shown only the tools that work        │
-│  • Auto crash detection → AI notification            │
-│  • VM Service bridge with auto-reconnect             │
-└──────────────────────┬──────────────────────────────┘
-                       │ VM Service Extensions
-┌──────────────────────▼──────────────────────────────┐
-│          fp_sdk (in-app, modular)                    │
-│  • 43+ service extensions across 5 modules           │
-│  • Widget tree inspection via Element walking        │
-│  • Screenshot capture (RenderRepaintBoundary)        │
-│  • Error/nav/interaction tracking                    │
-├─────────────┬──────────┬──────────┬────────┬────────┤
-│ BlocPlugin │RiverpodP │DioPlugin │DriftPl│HivePlugin
-│   (Bloc)   │(Riverpod)│(Network) │(DB)   │(Storage)
-│            │          │          │       │SharedPref
-├─────────────┼──────────┼──────────┼────────┼────────┤
-│ Supabase   │GoRouter  │Connectiv │Firebase│SecureSt │
-│  (Auth)    │ (Routes) │ (Network)│(Crash) │(Encrypt)│
-└─────────────┴──────────┴──────────┴────────┴────────┘
-```
-
----
-
-## 📦 Core & Plugin Packages
-
-### Core (Required)
-- **`fp_sdk`** (v0.1.0) — Zero external dependencies. Just Flutter + `meta`.
-- **`fp_server`** (v0.1.0) — MCP bridge to your app.
-- **`fp_cli`** (v0.1.0) — 1-command init, dev runner (`fp dev`), and diagnostics (`fp doctor`).
-
-### Plugins (Optional — Add Only What You Need)
-- **`fp_riverpod`** — Inspect/inject Riverpod providers
-- **`fp_bloc`** — Inspect/inject Bloc/Cubit state
-- **`fp_dio`** — View all HTTP requests/responses, mock endpoints
-- **`fp_drift`** — Query SQLite databases via SQL
-- **`fp_sqflite`** — Raw SQLite query execution and inspection
-- **`fp_hive`** — Inspect Hive key-value storage
-- **`fp_shared_preferences`** — Inspect/edit SharedPreferences
-- **`fp_supabase`** — Auth state, session, realtime channels
-- **`fp_gorouter`** — Route state, config, history, programmatic navigation
-- **`fp_connectivity`** — Network status, history, simulated offline
-- **`fp_firebase`** — Firebase Auth user and Firestore reads (as the app sees them)
-- **`fp_secure_storage`** — Encrypted key-value inspection (auto-redacted)
-
----
-
-## 🛠️ Integration Guide
-
-### For Existing Flutter Projects
-
-#### Step 1: Add Dependencies
-```bash
-cd your-flutter-project
-fp init   # detects Riverpod/Bloc/Dio/Drift/sqflite/... and adds matching plugins
-flutter pub get
-```
-Plugins do nothing until wired up — `init` prints the exact line for each one.
-If the app has a macOS runner, `init` also adds the `network.client`
-entitlement (sandboxed macOS apps can't make HTTP requests without it) and
-turns the app sandbox off in `macos/Runner/DebugProfile.entitlements`. Hot
-reload copies the new code into the app's container folder, and macOS blocks
-that unless the agent or terminal has App Management permission. Release builds
-stay sandboxed. In a debug build, files the app saves then go to
-`~/Library/Application Support/<bundle id>` instead of the container. Only
-macOS desktop apps need this; iOS, Android and web don't. To keep the sandbox
-in debug builds, set it back to `<true/>` and allow the program that runs
-`flutter run` under System Settings > Privacy & Security > App Management.
-`fp doctor` checks the wiring (SDK initialized, each plugin used,
-macOS network entitlement, MCP config) and, while the app runs, that the SDK
-and every plugin registered — with the exact fix for anything missing.
-
-#### Step 2: Initialize SDK
-```dart
-// main.dart
-import 'package:fp_sdk/fp_sdk.dart';
-
-void main() {
-  FlutterPilot.initialize();  // Before runApp!
-  runApp(MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorObservers: [NavigationTracker()],  // Track routes
-      home: MyHome(),
-    );
-  }
-}
-```
-
-#### Step 3: Add Plugin Observers (Optional)
-```dart
-// If using Riverpod:
-ProviderScope(
-  observers: [RiverpodPilotObserver()],
-  child: MyApp(),
-)
-
-// If using Bloc:
-MultiBlocProvider(
-  providers: [
-    BlocProvider(create: (_) => MyBloc()),
-  ],
-  child: MyApp(),
-)
-// Note: Bloc plugin auto-registers via VM extension
-
-// If using Dio:
-final dio = Dio();
-dio.interceptors.add(DioPilotInterceptor());
-
-// If using SharedPreferences:
-final prefs = await SharedPreferences.getInstance();
-SharedPrefsPilotInspector.register(prefs);
-
-// If using Hive:
-final myBox = await Hive.openBox('myData');
-HivePilotInspector.registerBox(myBox);
-
-// If using Supabase:
-await Supabase.initialize(url: '...', anonKey: '...');
-SupabasePilotInspector.register(Supabase.instance.client);
-
-// If using GoRouter:
-final router = GoRouter(routes: [...]);
-GoRouterPilotInspector.register(router);
-
-// If using connectivity_plus:
-ConnectivityPilotInspector.register();
-
-// If using Firebase Auth / Firestore:
-await Firebase.initializeApp(...);
-FirebasePilotInspector.register(
-  auth: FirebaseAuth.instance,
-  firestore: FirebaseFirestore.instance,
-);
-
-// If using flutter_secure_storage:
-const storage = FlutterSecureStorage();
-SecureStoragePilotInspector.register(storage);
-```
-
-#### Step 4: Run App & Server
-```bash
-# Terminal 1: Run the app (or use: fp dev)
-flutter run
-
-# Terminal 2: Copy the VM Service URI from Terminal 1 output, then run server
-dart run packages/fp_server/bin/fp_server.dart \
-  --uri http://127.0.0.1:12345/abcdefg=/
-```
-
-#### Step 5: Connect Your AI Agent
-Use FlutterPilot in Claude Desktop, Cursor, or any MCP-compatible IDE:
-
-**For Claude Desktop** (`~/.claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "flutterpilot": {
-      "command": "dart",
-      "args": [
-        "run",
-        "/path/to/FlutterPilot/packages/fp_server/bin/fp_server.dart",
-        "--uri",
-        "http://127.0.0.1:12345/abcdefg=/"
-      ]
-    }
-  }
-}
-```
-
-**That's it!** The AI can now:
-- See your app (screenshots)
-- Tap buttons, fill forms, navigate
-- Read widget state, errors, network logs
-- Suggest and apply fixes
-- Write integration tests
-
----
-
-## 🔥 Key Features in Depth
-
-### 1. **Autonomous Testing**
-```dart
-// The agent drives the flow with tap_widget / enter_text / fill_form,
-// checks each step with assert_widget, and writes the testWidgets block
-// from the steps it took.
-```
-
-### 2. **Self-Healing Crashes**
-```
-Your app crashes while navigating.
-↓ 
-Server auto-captures: screenshot, widget tree, error, state, stack trace
-↓
-Server emits: "🚨 CRITICAL APP CRASH: SELF-HEAL REQUEST"
-↓
-AI sees notification, analyzes bug, suggests/implements fix
-↓
-Hot reload applied, app recovers
-```
-
-### 3. **Widget-Level Automation**
-```dart
-// Instead of tapping at (250, 450), which breaks on other screen sizes:
-await mcp.call('tap_widget', {'key': 'submitButton'});
-
-// Or with assertions:
-await mcp.call('assert_widget', {'key': 'submitButton', 'enabled': true});
-```
-
-### 4. **State Injection**
-```dart
-// AI can directly set Riverpod/Bloc state at runtime:
-await mcp.call('set_state', {
-  'type': 'riverpod',
-  'name': 'userProvider',
-  'value': {'id': 1, 'name': 'Alice'}
-});
-```
-
-### 5. **Full Semantics Tree Access**
-```dart
-// AI understands accessibility tree (labels, roles, bounds):
-await mcp.call('get_semantics_tree');
-// Returns VoiceOver/TalkBack structure for blind user testing
-```
-
----
-
-## 📖 Full Documentation
-
-- **[SDK API Reference](packages/fp_sdk/README.md)** — Service extensions, custom tools, state injection
-- **[Server & Tools Guide](packages/fp_server/README.md)** — Tool descriptions, MCP config, prerequisites
-- **[Contributing Guide](CONTRIBUTING.md)** — Development setup, code style, architecture details
-- **[Example App](examples/flutter_pilot_example)** — a small todo app (Dio, Riverpod, go_router, shared_preferences) and a walkthrough of the bug → mock → fix → verify loop
-- **[Tool Reference](TOOLS.generated.md)** — every tool and parameter, generated from the server
-
----
-
-## 🎓 Real-World Use Cases
-
-### Use Case 1: AI-Powered Test Generation
-1. Manually explore your app, clicking around
-2. FlutterPilot records every tap, text entry, scroll
-3. AI converts to `testWidgets` code
-4. **Result:** Weeks of manual test writing → minutes
-
-### Use Case 2: Autonomous Bug Fixing
-1. App crashes in production
-2. QA immediately captures crash + context via FlutterPilot
-3. AI analyzes screenshot, error, state, and suggests fix
-4. Hot reload applied, app recovers
-5. **Result:** Faster debugging, self-healing apps
-
-### Use Case 3: Cross-Device Testing
-1. Run same app on iPhone + Android simulators simultaneously
-2. Run one FlutterPilot server instance per device
-3. AI tests both in parallel (form filling, animations, layout)
-4. **Result:** Visual regression detected automatically
-
-### Use Case 4: Accessibility Testing
-1. Call `get_semantics_tree` to get VoiceOver/TalkBack structure
-2. AI validates all labels, roles, bounds
-3. Calls `set_app_settings(textScale: 2.0)` to test large text
-4. **Result:** WCAG compliance verified programmatically
-
----
-
-## ⚡ Performance
-
-- **SDK overhead:** ~2% (lightweight service extensions only)
-- **Screenshot:** ~500ms (native RenderRepaintBoundary)
-- **Widget tree JSON:** ~100ms for 500-widget app
-- **Tap simulation:** <50ms
-- **Tool timeout:** 10-15 seconds (configurable)
-
----
-
-## 🔐 Authentication & Credentials
-
-**FlutterPilot requires zero accounts, zero logins, and zero credentials of its own.**
-
-It is a development tool — the MCP server connects directly to your app's Dart VM (same machine, same debug session). No cloud service involved.
-
-### Plugin Auth Model
-
-Plugin packages wrap your already-initialized, already-authenticated SDK instances:
-
-```dart
-// Your app already initializes Supabase — FlutterPilot just wraps it:
-await Supabase.initialize(url: '...', anonKey: '...');
-SupabasePilotInspector.register(Supabase.instance.client); // no extra login
-```
-
-FlutterPilot never connects to Supabase, Firebase, or any other external service on its own.
-
-### ⚠️ Tools That Make Real External Calls
-
-One **mutating** plugin tool makes real API calls to an external service via the SDK instance you passed in, and only with `--allow-destructive`:
-
-| Tool | Side Effect |
-|------|-------------|
-| `supabase_session(action: "sign_out")` | Calls `client.auth.signOut()` — signs out the real session |
-| `supabase_session(action: "refresh")` | Calls `client.auth.refreshSession()` — rotates tokens |
-
-> **Recommendation:** Only use these tools in development/test environments against non-production Supabase instances. All other FlutterPilot tools are read-only and safe to use in any environment.
-
-### ⚠️ Destructive Storage Tools
-
-`set_secure_storage_key(delete: true)` without a `key` wipes **all** secure storage. It requires `confirm="DELETE_ALL"` to proceed:
-
-```
-# Deletes one key
-set_secure_storage_key(key: "session_token", delete: true)
-
-# Requires explicit confirmation — deletes everything
-set_secure_storage_key(delete: true, confirm: "DELETE_ALL")
-```
-
----
-
-## 🤝 Contributing
-
-FlutterPilot is open source! We welcome:
-- Bug reports
-- Feature requests
-- Tool contributions (email AI agents are always hungry for more context)
-- Plugin contributions (Getx, Provider, Supabase, Firebase, etc.)
-- Documentation improvements
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and guidelines.
-
----
-
-## 📜 License
-
-MIT — see [LICENSE](LICENSE). Free for personal and commercial use.
-
----
-
-## 🙌 Credits
-
-Built with ❤️ for Flutter developers who want to level up their AI-native development workflow.
-
-**Questions?** Open an issue on [GitHub](https://github.com/abugeek/FlutterPilot).
-
-**Want to extend?** See the [Contributing Guide](CONTRIBUTING.md) — adding a new tool takes ~30 minutes.
+`fp init` adds the SDK and plugins it detects, then prints the app wiring those
+plugins need. Add that wiring and restart the app. `fp mcp install` configures
+the MCP clients used by the project. Run `fp doctor` to check the setup.
+
+Once connected, ask your agent to inspect the running app. It should start with
+`get_app_summary` to learn the current screen and available capabilities.
+
+## Choose an integration
+
+| Need | Use |
+|---|---|
+| Set up FlutterPilot in an app | `fp init` |
+| Connect an AI coding agent | `fp mcp install` |
+| Check the app and MCP setup | `fp doctor` |
+| Inspect UI without changing the app | Connect the server without `fp_sdk`; only inspection tools are available |
+| Add integrations manually | Add `fp_sdk` and only the plugins your app uses |
+
+FlutterPilot runs as a local stdio MCP server. It is not a hosted MCP URL.
+`fp mcp install` supports Claude Code, Cursor, VS Code, Codex, Gemini CLI,
+Antigravity, Zed, opencode, Junie, Kiro, and Roo Code. For a smaller tool list,
+use `fp mcp install --tools core`. For clients that do not refresh tools when
+the app connects, use `fp mcp install --static-tools`.
+
+## What agents can do
+
+- Inspect screens, widgets, navigation, accessibility semantics, and runtime
+  errors.
+- Tap, type, scroll, navigate, and check expected UI states.
+- Record a user flow as an integration test or verify acceptance criteria.
+- Compare screenshots, audit screen health, and profile performance.
+- Mock HTTP responses and network conditions.
+- Inspect supported app state, storage, and backend SDKs.
+- Connect multiple running devices and repeat a flow across them.
+
+The server lists tools according to the connected app's capabilities. The
+[generated tool reference](TOOLS.generated.md) has the current names,
+parameters, and behavior. The [agent guide](skills/flutterpilot/SKILL.md)
+describes reliable workflows for using them.
+
+Current tool inventory: 67 tools; each app receives only the tools it supports.
+
+## Packages
+
+The initial release contains 15 packages, published separately to pub.dev.
+Install only what you need; `fp init` can detect and add matching integrations.
+
+| Package | Adds |
+|---|---|
+| [`fp_sdk`](packages/fp_sdk/) | In-app runtime inspection and control |
+| [`fp_cli`](packages/fp_cli/) | `fp` / `flutterpilot` setup and diagnostics commands |
+| [`fp_server`](packages/fp_server/) | MCP server for connecting agents to running apps |
+| [`fp_riverpod`](packages/plugins/fp_riverpod/) | Riverpod state inspection and updates |
+| [`fp_bloc`](packages/plugins/fp_bloc/) | Bloc/Cubit state inspection and updates |
+| [`fp_dio`](packages/plugins/fp_dio/) | Dio request inspection, response mocking, and network simulation |
+| [`fp_drift`](packages/plugins/fp_drift/) | Drift database inspection |
+| [`fp_sqflite`](packages/plugins/fp_sqflite/) | sqflite database inspection |
+| [`fp_hive`](packages/plugins/fp_hive/) | Hive and Hive CE storage inspection |
+| [`fp_shared_preferences`](packages/plugins/fp_shared_preferences/) | SharedPreferences inspection |
+| [`fp_gorouter`](packages/plugins/fp_gorouter/) | GoRouter route inspection and navigation |
+| [`fp_connectivity`](packages/plugins/fp_connectivity/) | Connectivity state and history |
+| [`fp_firebase`](packages/plugins/fp_firebase/) | Firebase Auth and Firestore inspection |
+| [`fp_supabase`](packages/plugins/fp_supabase/) | Supabase auth and data inspection |
+| [`fp_secure_storage`](packages/plugins/fp_secure_storage/) | Secure storage inspection with redaction |
+
+## Development and safety
+
+FlutterPilot is intended for development and testing, not production builds.
+The SDK is inactive in release mode. The server connects to the Dart VM service,
+which should only be exposed on trusted networks; remote connections are
+blocked by default. Keep destructive operations disabled unless a test needs
+them, and use non-production app data when enabling them.
+
+## Documentation
+
+- [Complete tool reference](TOOLS.generated.md)
+- [Agent workflows](skills/flutterpilot/SKILL.md)
+- [CLI guide](packages/fp_cli/README.md)
+- [SDK guide](packages/fp_sdk/README.md)
+- [MCP server guide](packages/fp_server/README.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Contributing](CONTRIBUTING.md)
+- [Example app](examples/flutter_pilot_example/)
+- [Release process](RELEASING.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE).

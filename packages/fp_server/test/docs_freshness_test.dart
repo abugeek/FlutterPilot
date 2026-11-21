@@ -100,10 +100,10 @@ void main() {
     }
 
     agrees('CLAUDE.md', RegExp(r'exposing (\d+) MCP tools'));
-    agrees('README.md', RegExp(r'registrations\): (\d+) tools'));
+    agrees('README.md', RegExp(r'Current tool inventory: (\d+) tools'));
     agrees(
       'packages/fp_server/README.md',
-      RegExp(r'^(\d+) tools;', multiLine: true),
+      RegExp(r'Current tool inventory: (\d+) tools'),
     );
     agrees('CONTRIBUTING.md', RegExp(r'(\d+) MCP tools'));
   });
