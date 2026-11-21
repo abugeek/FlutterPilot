@@ -1,5 +1,5 @@
 name: fp_secure_storage
-description: "Secure storage inspector plugin for FlutterPilot — exposes encrypted key-value storage contents to AI agents with optional redaction."
+description: "FlutterPilot plugin for flutter_secure_storage to inspect stored keys with redaction and manage values during Flutter testing."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,7 +8,7 @@ topics:
   - flutter
   - security
   - mcp
-  - ai
+  - storage
   - debugging
 
 environment:

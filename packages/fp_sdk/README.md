@@ -1,8 +1,8 @@
 # fp_sdk
 
-The FlutterPilot SDK adds runtime inspection and control to a Flutter app in
-debug sessions. The MCP server uses it to inspect widgets, read errors, drive
-the UI, and verify behavior.
+A Flutter SDK for AI agents to inspect, drive, test, and debug a running app
+during development. The MCP server uses it to inspect widgets, read errors,
+drive the UI, and verify behavior.
 
 ## Install
 

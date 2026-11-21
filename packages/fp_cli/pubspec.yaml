@@ -1,15 +1,15 @@
 name: fp_cli
-description: "Official CLI for FlutterPilot — 1-command init, dev runner, and diagnostics for AI-driven Flutter development."
+description: "FlutterPilot CLI for Flutter apps: initialize the SDK and plugins, configure MCP clients, and run setup and runtime diagnostics."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
 issue_tracker: https://github.com/abugeek/FlutterPilot/issues
 topics:
   - flutter
+  - dart
   - cli
   - mcp
   - ai
-  - devtools
 
 environment:
   sdk: ^3.11.0

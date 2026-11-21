@@ -4,10 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Dart](https://img.shields.io/badge/Dart-%5E3.11-0175C2?logo=dart)](https://dart.dev)
 
-FlutterPilot connects AI coding agents to a running Flutter app through the
-[Model Context Protocol (MCP)](https://modelcontextprotocol.io/). Agents can
-inspect the UI and runtime, drive interactions, check behavior, and test
-failure cases without relying on screen coordinates.
+FlutterPilot is a local [Model Context Protocol (MCP)](https://modelcontextprotocol.io/)
+server and Flutter SDK for AI agents. It lets agents inspect, drive, test, and
+debug running Flutter apps through Flutter's Dart VM service.
 
 ## Get started
 

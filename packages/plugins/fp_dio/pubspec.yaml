@@ -1,5 +1,5 @@
 name: fp_dio
-description: "Dio network inspector plugin for FlutterPilot — exposes HTTP traffic to AI agents."
+description: "FlutterPilot plugin for Dio to inspect HTTP requests, mock responses, and simulate network conditions during Flutter app testing."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,7 +8,7 @@ topics:
   - flutter
   - dio
   - mcp
-  - ai
+  - http
   - debugging
 
 environment:

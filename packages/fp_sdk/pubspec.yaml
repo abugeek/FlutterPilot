@@ -1,5 +1,5 @@
 name: fp_sdk
-description: "Core FlutterPilot SDK for AI-native runtime introspection of Flutter applications."
+description: "Flutter SDK for AI agents to inspect, drive, test, and debug running Flutter apps through the Dart VM service."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -9,7 +9,7 @@ topics:
   - mcp
   - ai
   - debugging
-  - devtools
+  - testing
 
 environment:
   sdk: ^3.11.0

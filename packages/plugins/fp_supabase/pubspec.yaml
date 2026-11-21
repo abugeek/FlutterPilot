@@ -1,5 +1,5 @@
 name: fp_supabase
-description: "Supabase inspector plugin for FlutterPilot — exposes auth state, realtime subscriptions, and sync status to AI agents."
+description: "FlutterPilot plugin for supabase_flutter to inspect auth sessions and query data using the app's Supabase client and row-level security."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,8 +8,8 @@ topics:
   - flutter
   - supabase
   - mcp
-  - ai
-  - debugging
+  - database
+  - authentication
 
 environment:
   sdk: ^3.11.0

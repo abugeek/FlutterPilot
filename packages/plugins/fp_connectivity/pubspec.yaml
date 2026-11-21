@@ -1,5 +1,5 @@
 name: fp_connectivity
-description: "Connectivity inspector plugin for FlutterPilot — exposes network status and connectivity history to AI agents."
+description: "FlutterPilot plugin for connectivity_plus to inspect network connectivity status and history in running Flutter apps."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,7 +8,7 @@ topics:
   - flutter
   - connectivity
   - mcp
-  - ai
+  - network
   - debugging
 
 environment:

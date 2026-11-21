@@ -1,5 +1,5 @@
 name: fp_sqflite
-description: "sqflite database inspector plugin for FlutterPilot — exposes SQL queries to AI agents."
+description: "FlutterPilot plugin for sqflite to inspect SQLite tables and query app data during Flutter development and testing."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -9,7 +9,6 @@ topics:
   - sqflite
   - sqlite
   - mcp
-  - ai
   - database
 
 environment:

@@ -1,5 +1,5 @@
 name: fp_server
-description: "MCP server bridge for FlutterPilot — connects AI agents to Flutter app runtime."
+description: "FlutterPilot's local MCP server connects AI agents to inspect, drive, test, and debug running Flutter apps."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -9,7 +9,7 @@ topics:
   - mcp
   - ai
   - debugging
-  - devtools
+  - testing
 
 environment:
   sdk: ^3.11.0

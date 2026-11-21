@@ -1,5 +1,5 @@
 name: fp_drift
-description: "Drift database inspector plugin for FlutterPilot — exposes SQL queries to AI agents."
+description: "FlutterPilot plugin for Drift to inspect SQLite databases and query app data during Flutter development and testing."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,7 +8,7 @@ topics:
   - flutter
   - drift
   - mcp
-  - ai
+  - sqlite
   - database
 
 environment:

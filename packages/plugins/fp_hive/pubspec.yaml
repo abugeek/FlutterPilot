@@ -1,5 +1,5 @@
 name: fp_hive
-description: "Hive / Hive CE storage inspector plugin for FlutterPilot — exposes box contents to AI agents."
+description: "FlutterPilot plugin for Hive and Hive CE to inspect key-value boxes in a running Flutter app."
 version: 0.1.0
 homepage: https://github.com/abugeek/FlutterPilot
 repository: https://github.com/abugeek/FlutterPilot
@@ -8,7 +8,7 @@ topics:
   - flutter
   - hive
   - mcp
-  - ai
+  - storage
   - database
 
 environment:
