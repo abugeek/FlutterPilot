@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0
 
 - **Breaking:** `swipe_widget`, `drag_widget`, `pinch_zoom`, `focus_widget` and
   `set_slider_value` are now one `gesture_widget(key, gesture: swipe | drag |
@@ -315,7 +315,7 @@
   Windows; GitHub Actions runs the full 748-test server suite on
   `windows-latest`.
 
-## 0.1.0
+### Initial server feature set
 
 - Initial release
 - Core SDK with 20+ service extensions for AI-native Flutter introspection

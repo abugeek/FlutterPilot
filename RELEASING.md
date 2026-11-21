@@ -1,49 +1,99 @@
-# Releasing FlutterPilot to pub.dev
+# Publish FlutterPilot 0.1.0
 
-All 15 packages are released together with one version number (the SDK,
-12 plugins, the server, the CLI). Publishing is permanent: a version can be
-retracted but never deleted or re-uploaded.
+FlutterPilot's first pub.dev release contains 15 packages: the SDK, 12
+plugins, the MCP server, and the CLI. All packages use version `0.1.0`.
+Published versions cannot be replaced or deleted, so publish only after every
+check passes.
 
-## Check
+## Validate
+
+Run from the repository root with a clean worktree:
 
 ```bash
+dart run tool/package_test_runner.dart
 dart run tool/publish_check.dart
 ```
 
-It dry-runs every package in publish order and fails on any warning. Commit
-first: uncommitted changes are a warning. The plugins show a hint about
-`pubspec_overrides.yaml`. That's expected: pub.dev has no `fp_sdk`
-yet, so the check points them at the checkout's.
+The test runner fails if a package is missing its test dependencies or if any
+suite fails. The publish checker runs a dry run for all 15 packages in
+dependency order. Plugin dry runs temporarily point `fp_sdk` at this checkout;
+the actual plugin releases resolve the hosted `fp_sdk`.
 
-## Version bump (later releases)
+Confirm all package manifests and changelogs describe `0.1.0`. Every package
+name must be available to the pub.dev account that will publish it.
 
-Set the same `version:` in all 15 `pubspec.yaml` files, the plugins'
-`fp_sdk: ^x.y.z` constraint, and `flutterpilotVersion` in
-`packages/fp_cli/lib/src/version.dart` (a test keeps it equal to
-the CLI's pubspec). Add a CHANGELOG entry to each package.
+## Sign in
 
-## Publish (in this order)
+Use the Google account that should own the packages:
 
 ```bash
-dart pub login   # once, with the account that should own the packages
-cd packages/fp_sdk && flutter pub publish && cd -
-for p in packages/plugins/*/; do (cd "$p" && flutter pub publish); done
-cd packages/fp_server && dart pub publish && cd -
-cd packages/fp_cli && dart pub publish && cd -
+dart pub login
 ```
 
-The SDK comes first because the plugins depend on it. Wait until it shows on
-pub.dev before publishing a plugin. The server and CLI come last.
+Choose the account or verified publisher before publishing. A verified
+publisher requires a domain you control; pub.dev can transfer packages to it
+after an initial account publication.
 
-Consider creating a verified publisher on pub.dev first and transferring
-the packages to it.
+## Publish
 
-## After publishing
+Publish `fp_sdk` first. Wait until its page is available on pub.dev before
+publishing plugins, because each plugin depends on the hosted SDK. Publish each
+package separately and inspect pub's file list before confirming.
 
-- `flutterpilot init` now uses pub.dev by itself. Its default `--source
-  auto` checks whether `fp_sdk` is there, so nothing needs
-  changing.
-- `dart pub global activate fp_cli` installs the CLI. Its `mcp
-  install` builds the server from a small package depending on
-  `fp_server` in `~/.flutterpilot/server`.
-- Tag the release: `git tag v0.1.0 && git push origin v0.1.0`.
+```bash
+cd packages/fp_sdk && flutter pub publish
+```
+
+Then publish the 12 plugins, one at a time:
+
+```bash
+cd packages/plugins/fp_bloc && flutter pub publish
+cd ../fp_connectivity && flutter pub publish
+cd ../fp_dio && flutter pub publish
+cd ../fp_drift && flutter pub publish
+cd ../fp_firebase && flutter pub publish
+cd ../fp_gorouter && flutter pub publish
+cd ../fp_hive && flutter pub publish
+cd ../fp_riverpod && flutter pub publish
+cd ../fp_secure_storage && flutter pub publish
+cd ../fp_shared_preferences && flutter pub publish
+cd ../fp_sqflite && flutter pub publish
+cd ../fp_supabase && flutter pub publish
+cd ../../fp_server && dart pub publish
+cd ../fp_cli && dart pub publish
+```
+
+Verify every package page and version after publishing. In a clean Flutter
+project, confirm the new-user workflow:
+
+```bash
+dart pub global activate fp_cli
+fp init
+fp mcp install
+flutter run
+```
+
+`fp init` selects hosted packages once `fp_sdk` is available. It detects
+supported integrations and prints any plugin wiring the app still needs.
+
+## Replace the old GitHub pre-release
+
+The existing GitHub `v0.1.0` pre-release points to legacy package names and
+older source. After the packages publish and the release commit is pushed,
+replace that release and tag with the current source:
+
+```bash
+gh release delete v0.1.0 --cleanup-tag --yes
+git tag -fa v0.1.0 -m "FlutterPilot 0.1.0"
+git push origin v0.1.0
+```
+
+Create a non-prerelease GitHub release for `v0.1.0` with notes describing the
+15 packages, the MCP/CLI setup, and the current tool inventory.
+
+## Later releases
+
+Bump all 15 package versions together. Update plugin constraints on `fp_sdk`,
+`flutterpilotVersion` in `packages/fp_cli/lib/src/version.dart`, and each
+package changelog. Run both validation commands above before publishing the
+new versions.

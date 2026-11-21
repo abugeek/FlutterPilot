@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0
 
 - `flutterpilot smoke` launches the app (`-d <device>`, `--relaunch` to build
   again, `--no-launch` to use the running one), visits the current screen and
@@ -37,7 +37,7 @@
   (`../FlutterPilot/packages/...` instead of `..\FlutterPilot\...`), so
   `path_not_posix` no longer fires and analyze stays clean.
 
-## 0.1.0
+### Initial CLI commands
 
 - First release: `flutterpilot init` (adds the SDK, matching plugins and the
   macOS network entitlement), `mcp install` (MCP config for Claude Code,

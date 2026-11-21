@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.0
 
 - The device screen stays on while an agent drives the app (a real phone no
   longer dims and locks mid-test), and goes back to the OS timeout 10 minutes
@@ -86,7 +86,7 @@
 - **Form Inspection**: `ext.flutterpilot.fillForm` tracks and reports
   unresolved field selectors in structured `failedFields`.
 
-## 0.1.0
+### Initial SDK features
 
 - Initial release
 - Core SDK with 20+ service extensions for AI-native Flutter introspection

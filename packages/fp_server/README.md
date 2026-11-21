@@ -40,7 +40,8 @@ Run `dart run bin/fp_server.dart --help` for server options.
 Current tool inventory: 67 tools; the server lists only those supported by the
 connected app's SDK, plugins, and platform. The
 [generated reference](https://github.com/abugeek/FlutterPilot/blob/main/TOOLS.generated.md)
-documents their names and parameters.
+documents their names and parameters. Use `--tools core` to select a short set
+(29 names) for MCP clients that benefit from a smaller tool list.
 
 VM-service connections to remote hosts are blocked by default. Only enable
 remote access on a trusted network. Tools that can change app data or call
